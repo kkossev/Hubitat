@@ -1,1 +1,6 @@
 # Hubitat
+
+This is a repository for my things related to Hubitat Elevation hub https://hubitat.com/ 
+
+"Virtual Dimmer and Timer.groovy" - driver for virtual device that combines the Capabilities of a standard virtual switch and virtual dimmer with the capabilities of a 
+  'Timed Session',  that can be started and stopped by a RM4 rule or a WebCore piston.
