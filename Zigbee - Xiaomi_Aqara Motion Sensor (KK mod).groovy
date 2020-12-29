@@ -18,6 +18,8 @@
  *
  *  NOTE: This is an auto-generated file and most comments have been removed!
  *
+ *********************************** (KK mod) ***********************************
+ *
  */
 
 // BEGIN:getDefaultImports()
@@ -29,7 +31,7 @@ import java.security.MessageDigest
 import hubitat.helper.HexUtils
 
 metadata {
-	definition (name: "Zigbee - Xiaomi/Aqara Motion Sensor", namespace: "oh-lalabs.com", author: "Markus Liljergren", filename: "zigbee-xiaomi-aqara-motion-sensor", importUrl: "https://raw.githubusercontent.com/markus-li/Hubitat/release/drivers/expanded/zigbee-xiaomi-aqara-motion-sensor-expanded.groovy") {
+	definition (name: "Zigbee - Xiaomi/Aqara Motion Sensor (KK mod)", namespace: "kkossev", author: "Markus Liljergren", filename: "Zigbee - Xiaomi_Aqara Motion Sensor (KK mod)", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/cb294a1c2cc1c0b1992dad6fe520b8d84e4760c3/Zigbee%20-%20Xiaomi_Aqara%20Motion%20Sensor%20(KK%20mod).groovy") {
         // BEGIN:getDefaultMetadataCapabilitiesForZigbeeDevices()
         capability "Sensor"
         capability "PresenceSensor"
@@ -433,16 +435,16 @@ private boolean logging(message, level) {
         switch (logLevelLocal) {
         case 1:  
             if (level >= 1 && level < 99) {
-                log.debug "$message"
+                if (debugLogging) log.debug "$message"
                 didLogging = true
             } else if (level == 100) {
-                log.info "$message"
+                if (debugLogging) log.info "$message"
                 didLogging = true
             }
         break
         case 100:  
             if (level == 100 ) {
-                log.info "$message"
+                if (debugLogging) log.info "$message"
                 didLogging = true
             }
         break
