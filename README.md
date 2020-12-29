@@ -7,7 +7,10 @@ This is a repository for my things related to Hubitat Elevation hub https://hubi
   'Timed Session',  that can be started and stopped by a RM4 rule or a WebCore piston.
 
 "Eurotronic Spirit Z-Wave Plus TRV" 
-  Just another driver ... based on other's work and my experiments and tests.
+  Expiremental driver for my needs ... based on other's work and my experiments and tests.
+  
+"Aeotec eTRV (KK mod)"
+  Modification of Simon's driver : https://community.hubitat.com/t/etrv-aeotec-radiator-thermostat-and-eurotronic-spirit-z-wave-thermostats/48935 
   
 "Zigbee - Xiaomi/Aqara Motion Sensor (KK mod)"
  Modification of Markus Liljergren driver - some DEBUG messages are supresed by debugLogging key.
