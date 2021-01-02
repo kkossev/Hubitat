@@ -26,6 +26,54 @@
 		 *		- Thermostat Mode 0x0B eco() added 
 		 *		- command setThermostatMode("off") now calls off() - was dvcon()
 		 *		- once a hour batteryV1.batteryGet() is called
+         *
+         * Version 1.6.0.2 01/02/2021
+         * 		- added "simulateCool" option (default is false) - Enable / Disable Cooling Capability simulation
+         *		- fixed isStateChange: true in many events ...
+		 *		- pollValve() added 
+		 *		- when valve report is received, thermostatOperatingState is changed depending on the simulateCool option:
+		 *			- if simulateCool is true : 
+		 *				- when valve is closed : 
+		 *					- if in cool or off mode ->cooling , otherwise -> idle
+		 *					- if in cool or off mode ->cooling 
+		 *				- when valve is open :  heating
+		 *			- if simulateCool is false : off
+		 *				- when valve is closed : 
+		 *					- if in dvc mode -> off , otherwise -> idle
+		 *					- if in cool or off mode ->cooling 
+		 *				- when valve is open :  heating
+		 *      - thermostatsetpointv2.ThermostatSetpointReport major changes ..
+		 *		- basicv1.BasicReport : 
+		 *			- when 'emergency heat' mode is reported, then if simulateCool is true -> thermostatOperatingState = "heating"; else '"boost"'
+		 *			- when  'off' mode is reported, then if simulateCool is true -> thermostatMode = "cool" and thermostatOperatingState = "cooling"; else thermostatMode = "Switched off" and thermostatOperatingState = "frost"
+		 * 			- when 'direct valve contol mode' mode is reported, then thermostatMode = "dvc"
+		 *		- thermostatmodev2.ThermostatModeReport : 
+		 *			- when 'MODE_OFF' mode is reported, then if simulateCool is true -> thermostatMode = "cool"; else thermostatMode = "off"
+		 *			- when 'MODE_HEAT' mode is reported, then if lastEurotronicModeSet == "auto" -> thermostatMode = "auto"; else thermostatMode = "heat"
+		 *			- when 'MODE_COOL' mode is reported, then ThermostatMode = "cool"
+		 *			- when 'MODE_AUTO' mode is reported, then ThermostatMode = "auto"
+		 *			- when 'MODE_ENERGY_SAVE_HEAT' mode is reported, then ThermostatMode = "eco"
+		 *			- when '15' mode is reported, then ThermostatMode = "emergencyHeat"
+		 *			- when '31' mode is reported, then ThermostatMode = "dvc"
+		 *		- thermostatmodev2.ThermostatModeSupportedReport: "auto", "off", "heat", "emergency heat", "eco", "dvcon" modes are repored. If simulateCool -> also "cool"
+		 *		- coolingSetpoint(temp) : if simulateCool -> send "coolingSetpoint" event; else -> send nextCoolingSetpoint, coolingSetpoint, thermostatSetpoint, thermostatTemperatureSetpoint events !!
+		 *		- emergencyHeat() : sends "emergencyHeat" event and switches EUrotronic into (mode: 15 )
+		 *		- heat() : sends "thermostatMode", value: "heat"; changes Eurotronic thermostatModeSet(mode: 1)        // EUROTRONIC_MODE_HEAT
+		 *		- auto() : thermostatModeSet(mode: 1 )    // EUROTRONIC_MODE_HEAT
+		 *		- off() :  sends "thermostatMode", value: "off'; sends "thermostatOperatingState", value: "off; changes Eurotronic thermostatModeSet(mode: 0)    //EUROTRONIC_MODE_OFF
+		 *		- cool() - added new command that performs off() in both simulateCool == true  or == false ..
+		 *		- eco() : thermostatModeSet(mode: 11 )    // EUROTRONIC_MODE_ECO_ENERGY_HEAT
+		 *		- on() : auto(); 
+		 *		- dvcon() ((31) EUROTRONIC_MODE_DIRECT_VALVE_CONTROL): 
+		 *			- if simulateCool -> thermostatMode", value: "cool; thermostatOperatingState = "cooling" ; setLevel(0)     // close the valve!
+		 *			- else -> thermostatMode = 'dvc'; thermostatOperatingState = "dvc" ;  setLevel(0)     // close the valve!
+		 *		- ecoon() mode: 11)        //EUROTRONIC_MODE_ECO_ENERGY_HEAT; sendEvent(name: "ecoMode", value: "on",
+		 *		- ecooff() -> auto(); 	sendEvent(name: "ecoMode", value: "off"
+		 *		- setThermostatMode(String) :  
+		 *			- "cool" now performs (off())  (was ecoOn()); 
+		 *			- added "dvc": (dvcon()); added "emergency heat":  (emergencyHeat())
+		 *		- added setThermostatFanMode(mode) simulation .. 
+		 * 		- added updateSetPoints ( heatingSP, cooliningSP ) // used by Thermostat Controller app?
 		 */
 
 		metadata {
@@ -37,11 +85,17 @@
 				capability "Notification"
 				capability "Switch"
 				capability "Switch Level"
-				capability "Temperature Measurement"
+				capability "TemperatureMeasurement"    //"Temperature Measurement"
                 capability "Thermostat"
 				capability "Configuration"
 				capability "Health Check"
 				capability "Refresh"
+                //
+		        capability "ThermostatCoolingSetpoint"	// KK - check if needed - adds setSpeed ..
+		        capability "ThermostatSetpoint"			// KK - check if needed
+		        capability "TemperatureMeasurement"		// KK - check if needed
+		        capability "ThermostatMode"             // KK - check if needed
+             	//
 
 				command "booston"
 				command "boostoff"
@@ -54,7 +108,9 @@
 				command "dvcon"
 				command "dvcoff"
 				command "poll"
+				command "pollValve"
 				command "resetBatteryReplacedDate"
+                command "setTemperature", [number]
                 
 				attribute "minHeatingSetpoint", "number" // google / amazon
 				attribute "maxHeatingSetpoint", "number" // google / amazon
@@ -81,13 +137,59 @@
 				// 0x40 = Thermostat Mode
 				// 0x43 = Thermostat Setpoint v3
 				// 0x86 = Version v1
+                // 0x6C = Supervision V1
+                // 0x7A = Firmware Update Md V6
 			}
 		
 				main "temperature"
 				details(["temperature", "boostMode", "ecoMode", "lock", "frost", "dvcMode", "battery", "configure", "refresh", "trv", "setValve"])
-				}
+    	}
 			
-			
+
+
+        final EUROTRONIC_MODE_OFF = 0                       // 0x00  No heating. Only frost protection ?
+        final EUROTRONIC_MODE_HEAT = 1                      // 0x01  The room temperature will be kept at the configured comfortable level.
+        final EUROTRONIC_MODE_ECO_ENERGY_HEAT = 11          // 0x0B eco mode. The room temperature will be lowered to the configured setpoint in order to save energy.
+        final EUROTRONIC_MODE_FULL_POWER = 15               // 0x0F Boost mode for 5 minutes 
+        final EUROTRONIC_MODE_DIRECT_VALVE_CONTROL = 31     // 0x1F Switches into direct valve control mode. The valve opening percentage can be controlled using the Switch multilevel command class.
+
+/*
+
+ class hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport {
+     Short mode
+     static Short MODE_AUTO = 3
+     static Short MODE_AUTO_CHANGEOVER = 10
+     static Short MODE_AUXILIARY_HEAT = 4
+     static Short MODE_AWAY = 13
+     static Short MODE_COOL = 2
+     static Short MODE_DRY_AIR = 8
+     static Short MODE_ENERGY_SAVE_COOL = 12
+     static Short MODE_ENERGY_SAVE_HEAT = 11
+     static Short MODE_FAN_ONLY = 6
+     static Short MODE_FURNACE = 7
+     static Short MODE_HEAT = 1
+     static Short MODE_MOIST_AIR = 9
+     static Short MODE_OFF = 0
+     static Short MODE_RESUME = 5
+
+*/
+
+/*      hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport  mapping vs Eurotronic modes : 
+
+        Eurotronic                           hubitat.zwave.commands           Mode                    operatingState        commands
+        =====================                ===================              ================        ===============       ==========
+        EUROTRONIC_MODE_OFF = 0              MODE_OFF = 0                     "off"                   "cooling"             off()
+        EUROTRONIC_MODE_HEAT = 1             MODE_HEAT = 1                    "heat"                  "heating"             auto() ???
+        n/a                                  MODE_COOL = 2                    "cool"                  "ccoling"
+        EUROTRONIC_MODE_HEAT = 1             MODE_AUTO = 3                    "auto"                                        auto()                            
+        EUROTRONIC_MODE_FULL_POWER = 15      MODE_AUXILIARY_HEAT = 4          "emergencyHheat"
+        EUROTRONIC_MODE_ECO_ENERGY_HEAT = 11 MODE_ENERGY_SAVE_HEAT = 11       "eco" 
+                                             MODE_ENERGY_SAVE_COOL = 12
+        EUROTRONIC_MODE_DIRECT_VALVE_CONTROL = 31  n/a                       "dvc"
+*/
+
+
+
 			//options for InvertLCD
 			def LCDinvertOptions = [:]
 				LCDinvertOptions << ["0" : "No"] // 0x00
@@ -193,6 +295,9 @@
 				input name: "refreshRate", type: "enum", title: "Refresh rate", options: rates, description: "Select refresh rate", defaultValue: "5", required: false
 				// custom parameter
 				input name: "pushNot", type: "enum", title: "Push notifications (system Events)", options: pushOptions, description: "Enable / Disable push", required: false
+				// custom parameter KK
+                input(name: "simulateCool", type: "bool", title: "Simulate cooling capabiities", description: "Enable / Disable Cooling Capability simulation" , defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
+
 			}
 			
 		// parse events into attributes
@@ -253,7 +358,6 @@
 
 			log.info "Protection State - ${eventValue}"
 			sendEvent(name: "lastCheckin", value: new Date())
-            return
 		}
 
 		//Valve
@@ -261,35 +365,68 @@
 			def event = []
 			event << createEvent(name:"level", value: cmd.value, unit:"%", isStateChange: true, displayed: true)
 			
-			log.info "Report Received : Valve open ${cmd.value}%"
-            
+			log.info "switchmultilevelv3 report received : Valve is open ${cmd.value}%"
             // KK: change the thermostatOperatingState depending on the valve fully closed or partially open..
-     		def map2 = [:]
-			if(cmd.value == 0){
-				map2.value = "idle" 
-			}else{
-        		map2.value = "heating" 
-			}
-			map2.name = "thermostatOperatingState"
-    		map2.isStateChange = true
-			log.info (map2)
-			sendEvent(map2)
             
-            //sendEvent(name: "lastCheckin", value: new Date())	// KK
-			return event
+            
+            if ( simulateCool == true ) {
+	     		def map2 = [:]
+               // map2.type = "digital"
+				map2.name = "thermostatOperatingState"
+	    		map2.isStateChange = true
+				if(cmd.value == 0){
+                    if (state.lastEurotronicModeSet == "cool" || state.lastEurotronicModeSet == "off" ) {
+                        map2.value = "cooling" 
+        			    log.info "Setting thermostatOperatingState to cooling !"
+                    }
+                    else {
+                        map2.value = "idle" 
+        			    log.info "Setting thermostatOperatingState to IDLE !"
+                    }
+				}
+                else {
+	        		map2.value = "heating" 
+        			log.info "Setting thermostatOperatingState to HEAT !"
+				}
+				map2.name = "thermostatOperatingState"
+				sendEvent(map2)
+			}
+			else {
+	     		def map2 = [:]
+               // map2.type = "digital"
+				map2.name = "thermostatOperatingState"
+	    		map2.isStateChange = true
+				if(cmd.value == 0){
+                    if (state.lastEurotronicModeSet == "dvcon") {
+                        map2.value = "off" 
+        			    log.info "Setting thermostatOperatingState to off (dvc) !"
+                    }
+                    else {
+                        map2.value = "idle" 
+        			    log.info "Setting thermostatOperatingState to IDLE !"
+                    }
+				}
+                else {
+	        		map2.value = "heating" 
+        			log.info "Setting thermostatOperatingState to HEAT !"
+				}
+				map2.name = "thermostatOperatingState"
+				sendEvent(map2)
+			}
+            
+            if ( event )
+			    return event
 		}
 
 		//Temperature
 		def zwaveEvent(hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelReport cmd) {
 			def map = [ value: cmd.scaledSensorValue.toString(), displayed: true ]
 			def value = cmd.scaledSensorValue.toString()
-					map.name = "temperature"
-					map.unit = cmd.scale == 1 ? "F" : "C"
-					map.isStateChange = true    // KK						   
-					state.temperature = cmd.scaledSensorValue //.toString()
-
+			map.name = "temperature"
+			map.unit = cmd.scale == 1 ? "F" : "C"
+			map.isStateChange = true    // KK
+			state.temperature = cmd.scaledSensorValue //.toString()
 			log.info "Report Received : $cmd"
-            //sendEvent(name: "lastCheckin", value: new Date())	//KK
 			createEvent(map)
 		}
 
@@ -297,42 +434,49 @@
 	def zwaveEvent(hubitat.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) { //	Parsed ThermostatSetpointReport(precision: 2, reserved01: 0, scale: 0, scaledValue: 21.00, setpointType: 1, size: 2, value: [8, 52])
 		def event = []
 		def currentState = device.currentValue("thermostatOperatingState")
-        // log.debug "setpointType = " + cmd.setpointType + " currentState = " + currentState
+        log.info "# thermostatsetpointv2.ThermostatSetpointReport received while in thermostatOperatingState = ${currentState} "
  		state.scale = cmd.scale	// So we can respond with same format later, see setHeatingSetpoint()
 		state.precision = cmd.precision
 		def radiatorSetPoint = cmd.scaledValue
         
-        if (cmd.setpointType == 1) { //this is the standard heating setpoint
-            if  (currentState != "eco") {
-			    event << createEvent(name: "nextHeatingSetpoint", value: radiatorSetPoint, unit: getTemperatureScale(), displayed: true)
-			    event << createEvent(name: "heatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																				   
-			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint, unit: getTemperatureScale(),  displayed: false)
-			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C", displayed: false)
-                log.info "Regular Setpoint Report Received : ${cmd}"              
-            }
-		}
-		
-		if (cmd.setpointType == 11) { // this is eco heat setting on this device
-            if (currentState == "eco") {
-			    event << createEvent(name: "nextHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange = true, displayed: true)
+        switch (cmd.setpointType) {
+            case 1:                  //  SETPOINT_TYPE_HEATING_1 - this is the standard heating setpoint
+                log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}"
+			    event << createEvent(name: "nextHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)
 			    event << createEvent(name: "heatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
-			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange = true, displayed: false)
-			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange = true, displayed: false)
-                log.info "Eco Setpoint Report Received : ${cmd}"    
-            }
-		}
-        
-        if (cmd.setpointType == 3)  {            // Ignore Type 3 reports which are unused
-		    // log.info "Setpoint Report Received : ${cmd}"
+			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: false)
+			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange: true, displayed: false)
+                break
+            case 11:                 // SETPOINT_TYPE_ENERGY_SAVE_HEATING - this is eco heat setting on this device
+                log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}"
+			    event << createEvent(name: "ecoHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
+                break
+            case 2: // SETPOINT_TYPE_COOLING_1
+                log.warn "thermostatsetpointv2.ThermostatSetpointReport setpointType==2 Received : ${cmd} !!!!!!!!!"
+			    event << createEvent(name: "nextCoolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)
+			    event << createEvent(name: "coolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
+			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: false)
+			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange: true, displayed: false)
+                log.warn "!! set: nextCoolingSetpoint, coolingSetpoint, thermostatSetpoint, thermostatTemperatureSetpoint !!"
+                break
+            case 3:                  // SETPOINT_TYPE_NOT_SUPPORTED1, but Eurotronic is sending it? 
+                if ( cmd.setpointType == 3) {log.warn "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received : ${cmd} !!!!!!!!!" }
+                break
+            default :
+                log.error "!!!!!!!!!!!!!!!!!!!!!!!!! thermostatsetpointv2.ThermostatSetpointReport UNKNOWN setpointType = ${cmd.setpointType} Received : ${cmd} !!!!!!!!!!!!!!!"
+                break
         }
-        
         if (event)
 		    return event
 	}
 
+
+
 		//Basic Operating State
 		def zwaveEvent(hubitat.zwave.commands.basicv1.BasicReport cmd){
-			def event = [ ]
+    
+            log.warn "basicv1.BasicReporT Received : ${cmd}"
+            def event = [ ]
 			if (cmd.value == 255) { //255 - 0xFF = normal mode
 				state.thermostatMode = "auto"
 				state.thermostatOperatingState = "heating"
@@ -340,7 +484,12 @@
 			}
 			if (cmd.value == 240){ //240 - 0xF0 = Boost
 				state.thermostatMode = "boost"
-				state.thermostatOperatingState = "boost"
+				if ( simulateCool == true ) {
+					state.thermostatOperatingState = "heating"                // KK was "boost"
+				}
+				else {
+					state.thermostatOperatingState = "boost"
+				}
 				state.switch = "on"
 			}
 			if (cmd.value == 0){ //0 - 0x00 = eco
@@ -349,81 +498,95 @@
 				state.switch = "on"
 			}
 			if (cmd.value == 15){ //15 - 0x0F = off
-				state.thermostatMode = "Switched off"
-				state.thermostatOperatingState = "frost"
+				if ( simulateCool == true ) {
+					state.thermostatMode = "cool"              	              // KK was "Switched off" 
+					state.thermostatOperatingState = "cooling"                   //KK was "frost"
+				}
+				else
+				{
+					state.thermostatMode = "Switched off"
+					state.thermostatOperatingState = "frost"
+				}
 				state.switch = "off"
 			}
 			if (cmd.value == 254){     //254 - 0xFE = direct valve contol mode
-				state.thermostatMode = "off"
+				state.thermostatMode = "dvc"
 				state.thermostatOperatingState = "Direct Valve Control"
 				state.switch = "on"
 			}
 
-			event << createEvent(name: "thermostatMode", value: state.thermostatMode, isStateChange = true, displayed: true)
-			event << createEvent(name: "thermostatOperatingState", value: state.thermostatOperatingState, isStateChange = true, displayed: true)
-			event << createEvent(name: "switch", value: state.switch, isStateChange = true, displayed: true)
+			event << createEvent(name: "thermostatMode", value: state.thermostatMode, isStateChange: true, displayed: true)
+			event << createEvent(name: "thermostatOperatingState", value: state.thermostatOperatingState, isStateChange: true, displayed: true)
+			event << createEvent(name: "switch", value: state.switch, isStateChange: true, displayed: true)
 				
-			log.info "Report Received : ${cmd}, ${state.thermostatMode}, ${state.thermostatOperatingState}"
-			sendEvent(name: "lastCheckin", value: new Date())
             return event
 		}
 
-		//Thermostat Mode / Operating State
+
+		//Thermostat Mode
 		def zwaveEvent(hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport cmd ) {
-			def event = []
-			if (cmd.mode == 1){ //1 normal heat 0x01
-				state.thermostatMode = "auto"
-				//state.thermostatOperatingState = "heating"
-				state.switch = "on"
-			}
-			if (cmd.mode == 15){ //15 Boost 0x0F
-				state.thermostatMode = "heat"
-				//state.thermostatOperatingState = "boost"
-				state.switch = "on"
-			}
-			if (cmd.mode == 11){ //11 eco 11 0x0B
-				state.thermostatMode = "eco"
-				//state.thermostatOperatingState = "eco"
-				state.switch = "on"
-			}
-			if (cmd.mode == 0){ // 0 off 0x00
-				state.thermostatMode = "switched off"
-				//state.thermostatOperatingState = "frost"
-				state.switch = "off"
-			}
-			if (cmd.mode == 31){ // 31 dvc 0xFE
-				state.thermostatMode = "off"
-				//state.thermostatOperatingState = "Direct Valve Control"
-				state.switch = "on"
-			}
-			event << createEvent(name: "thermostatMode", value: state.thermostatMode, displayed: true)
-			//event << createEvent(name: "thermostatOperatingState", value: state.thermostatOperatingState, displayed: true)
-			event << createEvent(name: "switch", value: state.switch, displayed: true)
-				
-			log.info "Report Received (thermostatmodev2.ThermostatModeReport): ${cmd}, ${state.thermostatMode}, ${state.thermostatOperatingState}"
-			//sendEvent(name: "lastCheckin", value: new Date())
-            return event
+            log.debug "* Received thermostatmodev2.ThermostatModeReport : ${cmd.mode}"
+	        def mapThermostatMode = [:]
+	        switch (cmd.mode) {
+		        case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_OFF:        // 0
+                if (state.lastEurotronicModeSet == "cool" ) {
+                    mapThermostatMode.value = "cool"
+                }
+                else {
+    			    mapThermostatMode.value = "off"
+                }
+			    break
+		    case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_HEAT:           // 1
+                if ( state.lastEurotronicModeSet == "auto" ) {
+    			    mapThermostatMode.value = "auto"
+                }
+                else {
+    			    mapThermostatMode.value = "heat"
+                }
+			    break
+		    case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_COOL:            // 2
+			    mapThermostatMode.value = "cool"
+			    break
+		    case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_AUTO:            // 3
+			    mapThermostatMode.value = "auto"
+			    break
+            case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_ENERGY_SAVE_HEAT:    // 11  EUROTRONIC_MODE_ECO_ENERGY_HEAT = 11  
+			    mapThermostatMode.value = "eco"
+                break
+		    case 15:                                                                               // non-standard ....
+			    mapThermostatMode.value = "emergencyHeat"
+			    break
+		    case 31:                                                                               // non-standard ....
+			    mapThermostatMode.value = "dvc"
+			    break
+            default :
+                log.error "!!!!!!!!!! thermostatmodev2.ThermostatModeReport unsupported mode ${cmd.mode} !!!!!!!!!!!!"
+                break
+	        }
+	        mapThermostatMode.name = "thermostatMode"
+            mapThermostatMode.isStateChange = true
+	        mapThermostatMode
 		}
 
 		//Supported Modes
 		def zwaveEvent(hubitat.zwave.commands.thermostatmodev2.ThermostatModeSupportedReport cmd) {
 			// log.trace "$cmd"
 			def supportedModes = []
+            //state.supportedModes = [auto, off, heat, emergencyHeat, eco, dvcon, cool] // basic modes prior to details from device
+
 			supportedModes << "auto" 
 			supportedModes << "off"
 			supportedModes << "heat" 
-			//supportedModes << "cool" 
-            supportedModes << "eco"
-
+			supportedModes << "emergency heat" 
+			supportedModes << "eco" 
+			supportedModes << "dvcon" 
+			// KK - check !
+			if ( simulateCool == true ){
+				supportedModes << "cool" 
+			}
             state.supportedModes = supportedModes 
-			  
 			sendEvent(name: "supportedModes", value: supportedModes, isStateChange: true, displayed: false)
 			log.info "Report Received thermostatmodev2: $cmd, Thermostat supported modes : $supportedModes"
-            //sendEvent(name: "lastCheckin", value: new Date())	//KK
-										 
-									  
-											  
-			   
 		}
 
 
@@ -443,11 +606,10 @@
 			}
 
 			log.info "Notification Report : $cmd"
-            //sendEvent(name: "lastCheckin", value: new Date())	//KK
 		}
 
 		private processPowerMgtNot(cmd) {
-			def descriptionText
+			def descriptionText = "unknown"
 			if (cmd.eventParameter == []) {
 				descriptionText = "New batteries"
 			} else {
@@ -466,7 +628,7 @@
 		}
 		
 		private processSystemNot(cmd) {
-			def descriptionText
+			def descriptionText = "unknown"
 			if (cmd.eventParameter == []) {
 				descriptionText = "Cleared"
 			} else {
@@ -838,6 +1000,19 @@
 		}
 
 		def setCoolingSetpoint(temp){
+			if ( simulateCool == true ){
+	            log.warn " setCoolingSetpoint $temp"
+	            sendEvent(name: "coolingSetpoint", value: temp, unit: getTemperatureScale(), isStateChange: true, displayed: true)																																				   
+			}
+			else {
+           		def event = []
+			    event << createEvent(name: "nextCoolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)
+			    event << createEvent(name: "coolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
+			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: false)
+			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange: true, displayed: false)
+			}
+            if (event)
+       			secureSequence(event)
 		}
 
 		def setHeatingSetpoint(Double degrees) { //Double added
@@ -855,14 +1030,13 @@
 			if (device.currentValue("thermostatMode") != "eco") {
 				cmds << zwave.thermostatSetpointV2.thermostatSetpointSet(precision: precision, scale: deviceScale, scaledValue: degrees, setpointType: 1)
 				cmds << zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
-                log.trace "Setting Temp to ${degrees},  $cmds"
+                log.trace "###def setHeatingSetpoint(Double degrees) was called ### ->Setting Temp to ${degrees},  $cmds"
 			}
 			if (device.currentValue("thermostatMode") == "eco") {
 				cmds << zwave.thermostatSetpointV2.thermostatSetpointSet(precision: precision, scale: deviceScale, scaledValue: ecoTemp, setpointType: 11)
 				cmds << zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 11)
-                log.trace "Setting Eco Temp to ${ecoTemp},  $cmds"
+                log.warn "Setting Eco Temp to ${ecoTemp},  $cmds"
 			}
-					
 			secureSequence(cmds)
 		}
 
@@ -903,25 +1077,43 @@
 			auto()
 		}
 
+
+
+
         // Thermostat Mode 0x0F : Full Power. Switches into Boost mode (Quick heat). Spirit Z-Wave Plus heats the room up as fast as possible. 
         // The mode is left automatically after 5 minutes or earlier if requested by the user(via Z-Wave or locally on the device).
-		def heat() { 
+		def emergencyHeat() { 
+            state.lastEurotronicModeSet = "emergencyHeat"
+            log.trace "... setting emergencyHeat() mode ..."
 			def cmds = []
-			sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0x0F)
+			sendEvent(name: "thermostatMode", value: "emergencyHeat", isStateChange: true, displayed: true)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 15)        // 0x0F
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
-			// log.trace "heat On $cmds"
 			secureSequence(cmds)
 		}
 
-					 
+
+        def heat() {
+            state.lastEurotronicModeSet = "heat"
+            log.trace "... setting heat() mode ..."
+			def cmds = []
+			sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, displayed: true)
+            sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, displayed: true)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 1)        // EUROTRONIC_MODE_HEAT
+			cmds << zwave.thermostatModeV2.thermostatModeGet()
+			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
+			secureSequence (cmds)        
+        }
+
 
         // Thermostat Mode 0x01 : Switches into comfort heating mode. The room temperature will be kept at the configured comfortable level. 
 		def auto(){ //Comfort
+            state.lastEurotronicModeSet = "auto"
 			def cmds = []
 			sendEvent(name: "thermostatMode", value: "auto", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 1)
+            sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, displayed: true)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 1 )    // EUROTRONIC_MODE_HEAT
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
 			// log.trace "auto $cmds" 
@@ -930,21 +1122,37 @@
 
         // Thermostat Mode 0x00 : off. No heating. Only frost protection.
 		def off() {    //KK mode:0 )
-			//froston()    //KK
+			log.warn "... sending off()..." 
             def cmds = []
-			sendEvent(name: "thermostatMode", value: "off", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0)
+            state.lastEurotronicModeSet = "off"
+            sendEvent(name: "thermostatMode", value: "off", isStateChange: true, displayed: true)
+            sendEvent(name: "thermostatOperatingState", value: "off", isStateChange: true, displayed: true)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0)    //EUROTRONIC_MODE_OFF
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
-			// log.trace "auto $cmds" 
 			secureSequence (cmds)
 		}
+
+        // simulate cool() command !
+        // Thermostat Mode 0x00 : off. No heating. Only frost protection. + operaringState "cooling"  ... :) 
+		def cool() {    //KK mode:0 
+            state.lastEurotronicModeSet = "cool"
+            if ( simulateCool == true ) {
+                off()
+			}
+			else {
+                off()    // for now - do the same as in simulateCool mode ...
+			}
+		}
     
+
+
         // Thermostat Mode 0x0B : Energy Heat. Switches into energy save heating mode. The room temperature will be lowered to the configured setpoint in order to save energy..
 		def eco() {   
+            state.lastEurotronicModeSet = "eco"
             def cmds = []
 			sendEvent(name: "thermostatMode", value: "eco", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 11)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 11 )    // EUROTRONIC_MODE_ECO_ENERGY_HEAT
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
 			// log.trace "auto $cmds" 
@@ -952,13 +1160,16 @@
 		}
 
 		def on(){
-			frostoff()
+            auto()
+            state.lastEurotronicModeSet = "on"
+
 		}
 
 		def froston(){ //taken from switchoff new app / frost tile classic
+            state.lastEurotronicModeSet = "froston"
 			def cmds = []
 			sendEvent(name: "thermostatMode", value: "switched off", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0)    //EUROTRONIC_MODE_OFF
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
 			// log.trace "froston $cmds" 
@@ -967,37 +1178,68 @@
 		 
 		def frostoff(){
 			auto()
+            state.lastEurotronicModeSet = "frostoff"
 		}
+
 			
 		def dvcon() { //taken from Mode off new app
+            state.lastEurotronicModeSet = "dvcon"
 			def cmds = []
-
-			sendEvent(name: "thermostatMode", value: "off", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 31)
+            
+			if ( simulateCool == true ){
+				sendEvent(name: "thermostatMode", value: "cool", isStateChange: true, displayed: true) 
+			}
+			else {
+				sendEvent(name: "thermostatMode", value: "dvc", isStateChange: true, displayed: true)
+			}
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 31 )        //  0x1F (31) EUROTRONIC_MODE_DIRECT_VALVE_CONTROL
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
-
-			// log.trace "DVC On : $cmds"
+			log.warn "DVC On : $cmds"
 			secureSequence(cmds)
-			
+		    if ( simulateCool == true ){ 
+	            def map2 = [:]
+				map2.value = "cooling" 
+				map2.name = "thermostatOperatingState"
+	    		map2.isStateChange = true
+				log.info (map2)
+				sendEvent(map2)
+                setLevel(0)     // close the valve!
+            
+			}
+			else {
+	            def map2 = [:]
+				map2.value = "dvc" 
+				map2.name = "thermostatOperatingState"
+	    		map2.isStateChange = true
+				log.info (map2)
+				sendEvent(map2)
+                setLevel(0)     // close the valve!
+			}
+            secureSequence(cmds)
 		}
 		  
 		def dvcoff(){
 			auto()
+            state.lastEurotronicModeSet = "auto"
 		}
 		  
 		def ecoon() { 
+            state.lastEurotronicModeSet = "eco"
 			def cmds = []
 			sendEvent(name: "thermostatMode", value: "eco", isStateChange: true, displayed: true)
-			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 11)
+			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 11)        //EUROTRONIC_MODE_ECO_ENERGY_HEAT
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 11)
 			// log.trace "Eco/Cool $cmds"
 			secureSequence(cmds)
+			sendEvent(name: "ecoMode", value: "on", isStateChange: true, displayed: true)
 		}
 		 
 		def ecooff(){
 			auto()
+            state.lastEurotronicModeSet = "auto"
+			sendEvent(name: "ecoMode", value: "off", isStateChange: true, displayed: true)
 		}
 		 	 
 		def setThermostatMode(String) {
@@ -1011,11 +1253,21 @@
 					(auto())
 					break
 				case "cool":
-					(ecoon())
+					(off())     
 					break
 				case "off":
-					(off())        // KK
+					(off()) 
 					break
+                case "dvc":
+                    (dvcon())
+                    break
+                case "emergency heat":
+                    (emergencyHeat())
+                    break
+                default :
+                    log.error "!!!!setThermostatMode ${String} ERROR !!!!!!!"
+                    break
+                
 				}
 		}
 			
@@ -1028,10 +1280,36 @@
 				cmds << zwave.switchMultilevelV3.switchMultilevelSet(value: nextLevel)
 				cmds << zwave.switchMultilevelV3.switchMultilevelGet()
 						
-				// log.trace "Executing 'setLevel' : $cmds"
+				log.warn "Executing 'setLevel' : $cmds"
 				secureSequence(cmds)
 		}
 
+
+        // simulate Fan Control ...
+        def setThermostatFanMode(mode) {
+            sendEvent(name:"thermostatFanMode", value: mode, displayed: false, isStateChange:true)
+            log.trace "setThermostatFanMode $mode"
+        }
+
+
+        //
+        //  TODO  updateSetPoints(heatingSetpoint, coolingSetpoint)  // used by Thermostat Controller app !!!!!!!!!!!
+        // 
+        def updateSetPoints ( heatingSP, cooliningSP ) {
+            log.warn "...updateSetPoints ${heatingSP} ${cooliningSP} was called!"
+            if ( heatingSP ) {
+                updateHeatingSetpoint( heatingSP )
+            }
+            if ( cooliningSP ) {
+                updateCoolingSetpoint( coolingSP )
+            }
+        }
+
+        def setTemperature ( double tmp ) {
+            log.warn "...setTemperature ${tmp} was called!"
+        }
+                
+                
 		//Refresh (Momentary)
 		def refresh() {
 			log.trace "refresh"
@@ -1043,7 +1321,9 @@
 		}
 			
 		def configure() {
-			state.supportedModes = [off, heat, eco, Boost, dvc] // basic modes prior to details from device
+			//state.supportedModes = [off, heat, eco, Boost, dvc] // basic modes prior to details from device
+            state.supportedModes = [auto, off, heat, "emergency heat", eco, dvc, cool] // basic modes prior to details from device
+            state.lastEurotronicModeSet = "unknown"
 			setDeviceLimits()
 
             if (!device.currentState('batteryLastReplaced')?.value)
@@ -1144,6 +1424,13 @@
 			refresh()
 		}
 		
+        def pollValve() {
+            log.debug "polling Valve only!"
+			def cmds = []
+      		cmds << zwave.switchMultilevelV3.switchMultilevelGet()	// valve position
+    		secureSequence (cmds)
+        }
+
 		def poll() { // If you add the Polling capability to your device type, this command will be called approximately every 5 minutes to check the device's state
 			// log.debug "polling"
 			def cmds = []
