@@ -74,28 +74,66 @@
 		 *			- added "dvc": (dvcon()); added "emergency heat":  (emergencyHeat())
 		 *		- added setThermostatFanMode(mode) simulation .. 
 		 * 		- added updateSetPoints ( heatingSP, cooliningSP ) // used by Thermostat Controller app?
+         *
+         * Version 1.6.0.3 01/10/2021
+         *      - when simulateCool is true, mode 'off' will return thermostatOperatingState 'cooling' ( expected by Thermostat Manager app ... )
+         *    - added experimenta capabilities : ThermostatOperatingState
+         *     - added "logEnable" parameter
+         *     - added type: "physical" to z-wave events received
+         *     - "lastCheckin" events commented out
+         *     - report z-wave event reveived refactored
+         *     - setHeatingSetpoint() - request and get the valve reading after 5 seconds!
+         *     - Off() ->  sends "thermostatOperatingState" event "idle" or "cooling" when  simulateCool == true ( was sending óff'mode in the previous version
+         *     - setThermostatMode() - added "eco" mode in the list
+         *     - poll() - removed thermostatSetpointGet(setpointType: 11) every hour and batteryV1.batteryGet() 
+         *
+         * TODO: option: filter out duplicate events?
+         * TODO: do not send all the different setpoins every 15 minutes!
+         * TODO: round nextHeatingSetpoint( 22.222222222222 )
+         * TODO: add 'Calibrate' command : OFF-> Emergency-> OFF -> old mode; buffer the received commands while calibrating and execute later!
+         * TODO: default polling time to be 15 minutes ( now is 5? )
+         * TODO: add statistics - do we have answer on each z-wave command sent to the TRV?
+         * TODO: check why ecoMode is ON?
+         * TODO: default ECO temperature to be 18 degrees
+         *
 		 */
 
 		metadata {
 			definition (name: "Aeotec eTRV (KK mod)", namespace: "kkossev", author: "Patrick Wogan and Scruffy-SJB", cstHandler: true, ocfDeviceType: "oic.d.thermostat", vid: "generic-thermostat-1") {
-				capability "Actuator"
-				capability "Sensor"
-				capability "Battery"
-				// capability "Lock"
-				capability "Notification"
-				capability "Switch"
-				capability "Switch Level"
-				capability "TemperatureMeasurement"    //"Temperature Measurement"
-                capability "Thermostat"
-				capability "Configuration"
-				capability "Health Check"
-				capability "Refresh"
+				capability "Actuator"               //
+				capability "Sensor"                 //
+				capability "Battery"                // battery - NUMBER
+				// capability "Lock"                // lock - ENUM ["locked", "unlocked with timeout", "unlocked", "unknown"]; lock() unlock()
+				capability "Notification"           // deviceNotification(text); text required (STRING) - Notification text
+				capability "Switch"                 // switch - ENUM ["on", "off"]; off()on()
+				capability "Switch Level"           // level - NUMBER; setLevel(level, duration); level required (NUMBER) - Level to set (0 to 100); duration optional (NUMBER) - Transition duration in seconds
+				capability "TemperatureMeasurement" // temperature - NUMBER
+                capability "Thermostat"             // coolingSetpoint - NUMBER; heatingSetpoint - NUMBER; schedule - JSON_OBJECT; supportedThermostatFanModes - ENUM ["on", "circulate", "auto"]
+                                                    // supportedThermostatModes - ENUM ["auto", "off", "heat", "emergency heat", "cool"]; temperature - NUMBER
+                                                    // thermostatFanMode - ENUM ["on", "circulate", "auto"]; thermostatMode - ENUM ["auto", "off", "heat", "emergency heat", "cool"]
+                                                    // thermostatOperatingState - ENUM ["heating", "pending cool", "pending heat", "vent economizer", "idle", "cooling", "fan only"]
+                                                    // thermostatSetpoint - NUMBER
+                                                    // auto(); cool(); emergencyHeat(); fanAuto(); fanCirculate(); fanOn(); heat(); off()
+                                                    // setCoolingSetpoint(temperature); temperature required (NUMBER) - Cooling setpoint in degrees
+                                                    // setHeatingSetpoint(temperature); temperature required (NUMBER) - Heating setpoint in degrees
+                                                    // setSchedule(JSON_OBJECT); JSON_OBJECT (JSON_OBJECT) - JSON_OBJECT
+                                                    // setThermostatFanMode(fanmode); fanmode required (ENUM) - Fan mode to set    
+                                                    // setThermostatMode(thermostatmode); thermostatmode required (ENUM) - Thermostat mode to set
+				capability "Configuration"        // configure()
+				capability "Health Check"        // checkInterval - NUMBER; ping()
+				capability "Refresh"                // refresh()
+                // capability "Initialize"        //initialize()
+                // capability "Polling"            //poll()
                 //
-		        capability "ThermostatCoolingSetpoint"	// KK - check if needed - adds setSpeed ..
-		        capability "ThermostatSetpoint"			// KK - check if needed
+		        capability "ThermostatCoolingSetpoint"	// coolingSetpoint - NUMBER; setCoolingSetpoint(temperature); temperature required (NUMBER) - Cooling setpoint in degrees
+                //capability "ThermostatFanMode"        // thermostatFanMode - ENUM ["auto", "circulate", "on"]; fanAuto(), fanCirculate(), fanOn(), setThermostatFanMode(fanmode), fanmode required (ENUM) - Fan mode to set
+                // capability "ThermostatHeatingSetpoint"    // heatingSetpoint - NUMBER; setHeatingSetpoint(temperature); temperature required (NUMBER) - Heating setpoint in degrees
+		        capability "ThermostatSetpoint"			// thermostatSetpoint - NUMBER
 		        capability "TemperatureMeasurement"		// KK - check if needed
-		        capability "ThermostatMode"             // KK - check if needed
-             	//
+		        capability "ThermostatMode"             // thermostatMode - ENUM ["heat", "cool", "emergency heat", "auto", "off"]; auto(), cool(), emergencyHeat(), heat(), off(), setThermostatMode(thermostatmode), thermostatmode required (ENUM) - Thermostat mode to set
+                capability "ThermostatOperatingState"    // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
+                // capability "ThermostatSchedule"        // schedule - JSON_OBJECT; setSchedule(JSON_OBJECT); JSON_OBJECT (JSON_OBJECT) - JSON_OBJECT
+             	//capability "Valve"                    // valve - ENUM ["open", "closed"]; close(); open()
 
 				command "booston"
 				command "boostoff"
@@ -297,6 +335,9 @@
 				input name: "pushNot", type: "enum", title: "Push notifications (system Events)", options: pushOptions, description: "Enable / Disable push", required: false
 				// custom parameter KK
                 input(name: "simulateCool", type: "bool", title: "Simulate cooling capabiities", description: "Enable / Disable Cooling Capability simulation" , defaultValue: false, submitOnChange: true, displayDuringSetup: false, required: false)
+                // debug OFF
+                input name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true
+
 
 			}
 			
@@ -314,7 +355,7 @@
 					result += zwaveEvent(cmd)
 	//				log.debug "Parsed ${cmd} to ${result.inspect()}"
 				} else {
-					log.debug "Non-parsed event: ${description}"
+					log.warn "Non-parsed event: ${description}"
 				}
 			}
 			return result
@@ -322,7 +363,7 @@
 			
 		//Battery
 	def zwaveEvent(hubitat.zwave.commands.batteryv1.BatteryReport cmd) {
-		def map = [ name: "battery", unit: "%" ]
+		def map = [ name: "battery", unit: "%", type: "physical" ]
 		
         if (cmd.batteryLevel == 0xFF) {  // Special value for low battery alert
 			map.value = 1
@@ -334,7 +375,7 @@
 		}
         
         state.lastBatteryReport = new Date().time           // Store time of last battery report
-		log.info "Report Received : $cmd"
+        if ( logEnable ) { log.debug "Report Received : $cmd" }
 		createEvent(map)
 	}
 
@@ -353,114 +394,117 @@
 			}
             
 			if (device.currentValue("lock") != eventValue) {
-			    sendEvent(name: "lock", value: eventValue, displayed: true)
+			    sendEvent(name: "lock", value: eventValue, type: "physical", isStateChange: true, dispayed: true)
 			}
 
-			log.info "Protection State - ${eventValue}"
-			sendEvent(name: "lastCheckin", value: new Date())
+            if ( logEnable ) { log.info "Protection State - ${eventValue}" }
+			//sendEvent(name: "lastCheckin", value: new Date())
 		}
 
-		//Valve
+
+		//Valve report z-wave event reveived
 		def zwaveEvent(hubitat.zwave.commands.switchmultilevelv3.SwitchMultilevelReport cmd){
-			def event = []
-			event << createEvent(name:"level", value: cmd.value, unit:"%", isStateChange: true, displayed: true)
-			
 			log.info "switchmultilevelv3 report received : Valve is open ${cmd.value}%"
-            // KK: change the thermostatOperatingState depending on the valve fully closed or partially open..
             
+			def event = []
+			//event << createEvent(name:"level", value: cmd.value, unit:"%", isStateChange: true, displayed: true)
+            sendEvent(name:"level", value: cmd.value, unit:"%", type: "physical", isStateChange: true, displayed: true)
+			
+            // KK: potentially change the thermostatOperatingState depending on whether the valve was reired to be fully closed or partially open..
+
+            def currentState = device.currentValue("thermostatOperatingState")
+            if ( logEnable ) { log.trace "Thermostat thermostatOperatingState state WAS : $currentState" }
+            def isReportedValveOpen = cmd.value != 0 ? true : false 
+            if ( logEnable ) { log.trace "isReportedValveOpen : $isReportedValveOpen" }
             
-            if ( simulateCool == true ) {
-	     		def map2 = [:]
-               // map2.type = "digital"
-				map2.name = "thermostatOperatingState"
-	    		map2.isStateChange = true
-				if(cmd.value == 0){
-                    if (state.lastEurotronicModeSet == "cool" || state.lastEurotronicModeSet == "off" ) {
-                        map2.value = "cooling" 
-        			    log.info "Setting thermostatOperatingState to cooling !"
+            def map2 = [:]
+            map2.type = "digital"
+            map2.name = "thermostatOperatingState"
+            map2.value = null
+	    	map2.isStateChange = true
+            
+            //possible STANDARD thermostatOperatingState - ENUM ["heating", "pending cool", "pending heat", "vent economizer", "idle", "cooling", "fan only"]
+            switch ( device.currentValue("thermostatOperatingState") ) {
+                case "idle" :
+                case "off" :
+                    if ( isReportedValveOpen ) {
+                        map2.value = "heating" 
+                        if ( logEnable ) {log.info "After Valve reprot was received: now changing the thermostatOperatingState to HEATING !"}
                     }
-                    else {
+                    break
+                case "heating" :
+                    if ( !isReportedValveOpen ) {
                         map2.value = "idle" 
-        			    log.info "Setting thermostatOperatingState to IDLE !"
+                        if ( logEnable ) { log.info "After Valve reprot was received: now changing the thermostatOperatingState to IDLE !" }
                     }
-				}
-                else {
-	        		map2.value = "heating" 
-        			log.info "Setting thermostatOperatingState to HEAT !"
-				}
-				map2.name = "thermostatOperatingState"
-				sendEvent(map2)
-			}
-			else {
-	     		def map2 = [:]
-               // map2.type = "digital"
-				map2.name = "thermostatOperatingState"
-	    		map2.isStateChange = true
-				if(cmd.value == 0){
-                    if (state.lastEurotronicModeSet == "dvcon") {
-                        map2.value = "off" 
-        			    log.info "Setting thermostatOperatingState to off (dvc) !"
+                    break
+                case "cooling" :    // if COOL is simulated..
+                    if ( isReportedValveOpen ) {
+                        // should NOT HAPPEN
+                        map2.value = "heating" 
+                        log.error "After Valve reprot was received WHILE IN COOLIING STATE: now changing the thermostatOperatingState to HEATING !"
                     }
-                    else {
-                        map2.value = "idle" 
-        			    log.info "Setting thermostatOperatingState to IDLE !"
-                    }
-				}
-                else {
-	        		map2.value = "heating" 
-        			log.info "Setting thermostatOperatingState to HEAT !"
-				}
-				map2.name = "thermostatOperatingState"
-				sendEvent(map2)
-			}
+                    break
+                default : 
+                    log.error "After Valve reprot was received: UNSUPPORTED thermostatOperatingState ${device.currentValue("thermostatOperatingState")}!"
+            }
             
-            if ( event )
-			    return event
+            if ( map2.value != null ) {
+			    return map2
+            }
+            else {
+                if ( logEnable ) { log.debug "no change of thermostatOperatingState after Valve reprot was received" }
+            }
+                
 		}
+
 
 		//Temperature
 		def zwaveEvent(hubitat.zwave.commands.sensormultilevelv5.SensorMultilevelReport cmd) {
+            if ( logEnable ) { log.debug "Report Received : $cmd" }
 			def map = [ value: cmd.scaledSensorValue.toString(), displayed: true ]
 			def value = cmd.scaledSensorValue.toString()
 			map.name = "temperature"
 			map.unit = cmd.scale == 1 ? "F" : "C"
+            map.type = "physical"
 			map.isStateChange = true    // KK
 			state.temperature = cmd.scaledSensorValue //.toString()
-			log.info "Report Received : $cmd"
 			createEvent(map)
+            log.info "Temperature is $value"
+            map
 		}
 
 	//Thermostat SetPoint
 	def zwaveEvent(hubitat.zwave.commands.thermostatsetpointv2.ThermostatSetpointReport cmd) { //	Parsed ThermostatSetpointReport(precision: 2, reserved01: 0, scale: 0, scaledValue: 21.00, setpointType: 1, size: 2, value: [8, 52])
 		def event = []
 		def currentState = device.currentValue("thermostatOperatingState")
-        log.info "# thermostatsetpointv2.ThermostatSetpointReport received while in thermostatOperatingState = ${currentState} "
+        if ( logEnable ) { log.info "# thermostatsetpointv2.ThermostatSetpointReport received while in thermostatOperatingState = ${currentState} " }
  		state.scale = cmd.scale	// So we can respond with same format later, see setHeatingSetpoint()
 		state.precision = cmd.precision
 		def radiatorSetPoint = cmd.scaledValue
         
         switch (cmd.setpointType) {
             case 1:                  //  SETPOINT_TYPE_HEATING_1 - this is the standard heating setpoint
-                log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}"
-			    event << createEvent(name: "nextHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)
-			    event << createEvent(name: "heatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
-			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: false)
-			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange: true, displayed: false)
+                if ( logEnable ) { log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}" }
+			    event << createEvent(name: "nextHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), /*isStateChange: true, */ displayed: true)
+			    event << createEvent(name: "heatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), type: "physical", isStateChange: true, displayed: true)																																						  
+			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), /*isStateChange: true, */ displayed: false)
+			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C", /*isStateChange: true,*/ displayed: false)
                 break
             case 11:                 // SETPOINT_TYPE_ENERGY_SAVE_HEATING - this is eco heat setting on this device
-                log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}"
-			    event << createEvent(name: "ecoHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
+                if ( logEnable ) { log.info "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received, currentState ${currentState}" }
+			    event << createEvent(name: "ecoHeatingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), type: "physical", isStateChange: true, displayed: true)																																						  
                 break
             case 2: // SETPOINT_TYPE_COOLING_1
-                log.warn "thermostatsetpointv2.ThermostatSetpointReport setpointType==2 Received : ${cmd} !!!!!!!!!"
+                if ( logEnable ) { log.warn "thermostatsetpointv2.ThermostatSetpointReport setpointType==2 Received : ${cmd} !!!!!!!!!" }
 			    event << createEvent(name: "nextCoolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)
-			    event << createEvent(name: "coolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: true)																																						  
+			    event << createEvent(name: "coolingSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), type: "physical", isStateChange: true, displayed: true)																																						  
 			    event << createEvent(name: "thermostatSetpoint", value: radiatorSetPoint.toString(), unit: getTemperatureScale(), isStateChange: true, displayed: false)
 			    event << createEvent(name: "thermostatTemperatureSetpoint", value: radiatorSetPoint.toString(), unit: "C",isStateChange: true, displayed: false)
                 log.warn "!! set: nextCoolingSetpoint, coolingSetpoint, thermostatSetpoint, thermostatTemperatureSetpoint !!"
                 break
             case 3:                  // SETPOINT_TYPE_NOT_SUPPORTED1, but Eurotronic is sending it? 
-                if ( cmd.setpointType == 3) {log.warn "thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received : ${cmd} !!!!!!!!!" }
+                if ( cmd.setpointType == 3) {log.warn "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! thermostatsetpointv2.ThermostatSetpointReport setpointType==3 Received : ${cmd} !!!!!!!!!" }
                 break
             default :
                 log.error "!!!!!!!!!!!!!!!!!!!!!!!!! thermostatsetpointv2.ThermostatSetpointReport UNKNOWN setpointType = ${cmd.setpointType} Received : ${cmd} !!!!!!!!!!!!!!!"
@@ -525,8 +569,9 @@
 
 		//Thermostat Mode
 		def zwaveEvent(hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport cmd ) {
-            log.debug "* Received thermostatmodev2.ThermostatModeReport : ${cmd.mode}"
+            if ( logEnable ) { log.debug "* Received thermostatmodev2.ThermostatModeReport : ${cmd.mode}" }
 	        def mapThermostatMode = [:]
+            mapThermostatMode.type = "physical"
 	        switch (cmd.mode) {
 		        case hubitat.zwave.commands.thermostatmodev2.ThermostatModeReport.MODE_OFF:        // 0
                 if (state.lastEurotronicModeSet == "cool" ) {
@@ -585,8 +630,9 @@
 				supportedModes << "cool" 
 			}
             state.supportedModes = supportedModes 
-			sendEvent(name: "supportedModes", value: supportedModes, isStateChange: true, displayed: false)
-			log.info "Report Received thermostatmodev2: $cmd, Thermostat supported modes : $supportedModes"
+			sendEvent(name: "supportedModes", value: supportedModes, isStateChange: true, type: "physical", displayed: false)
+			sendEvent(name: "supportedThermostatModes", value: supportedModes, isStateChange: true, type: "digital", displayed: false)
+            if ( logEnable ) { log.debug "Report Received thermostatmodev2: $cmd, Thermostat supported modes : $supportedModes" }
 		}
 
 
@@ -663,13 +709,13 @@
 				result << sendEvent(descriptionText: "Associating $device.displayName in group ${cmd.groupingIdentifier}")
 				result << response(zwave.associationV1.associationSet(groupingIdentifier:cmd.groupingIdentifier, nodeId:zwaveHubNodeId))
 			}
-			log.info "Report Received : $cmd"
+			log.warn "Report Received : $cmd"
 			result
 		}
 
 		//
 		def zwaveEvent(hubitat.zwave.commands.securityv1.SecurityMessageEncapsulation	 cmd) { // Devices that support the Security command class can send messages in an encrypted form; they arrive wrapped in a SecurityMessageEncapsulation command and must be unencapsulated
-			log.debug "raw secEncap $cmd"
+            if ( logEnable ) { log.debug "raw secEncap $cmd" }
 			state.sec = 1
 			def encapsulatedCommand = cmd.encapsulatedCommand ([0x20: 1, 0x80: 1, 0x70: 1, 0x72: 1, 0x31: 5, 0x26: 3, 0x75: 1, 0x40: 2, 0x43: 2, 0x86: 1, 0x71: 3, 0x98: 2, 0x7A: 1 ]) 
 
@@ -693,11 +739,11 @@
 			if (cmd.productTypeId) { updateDataValue("productTypeId", cmd.productTypeId.toString()) }
 			if (cmd.productId) { updateDataValue("productId", cmd.productId.toString()) }
 			if (cmd.manufacturerId){ updateDataValue("manufacturerId", cmd.manufacturerId.toString()) }
-			log.info "Report Received : $cmd"
+			log.debug "Report Received : $cmd"
 		}
 
 		def zwaveEvent(hubitat.zwave.commands.configurationv2.ConfigurationReport cmd ) {
-			log.info "Report Received : $cmd"
+            if ( logEnable ) { log.debug "Report Received : $cmd" }
 			def events = []
 
 			switch (cmd.parameterNumber) {
@@ -737,7 +783,7 @@
 		}
 		
 		def zwaveEvent(hubitat.zwave.commands.versionv1.VersionReport cmd) {
-			log.debug "Version Report: $cmd"
+            if ( logEnable ) { log.debug "Version Report: $cmd" }
 			def zWaveLibraryTypeDisp  = String.format("%02X",cmd.zWaveLibraryType)
 			def zWaveLibraryTypeDesc  = ""
 			switch(cmd.zWaveLibraryType) {
@@ -995,7 +1041,7 @@
 		def buffSetpoint(data) {
 			def key = "value"
 			def nextTemp = data[key]
-			//log.debug " buff nextTemp is $nextTemp"
+            if ( logEnable ) { log.debug " buff nextTemp is $nextTemp" }
 			setHeatingSetpoint(nextTemp)
 		}
 
@@ -1037,6 +1083,10 @@
 				cmds << zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 11)
                 log.warn "Setting Eco Temp to ${ecoTemp},  $cmds"
 			}
+            // added KK - get the valve reading after 3 seconds!
+			runIn (05, pollValve)
+
+            
 			secureSequence(cmds)
 		}
 
@@ -1126,7 +1176,12 @@
             def cmds = []
             state.lastEurotronicModeSet = "off"
             sendEvent(name: "thermostatMode", value: "off", isStateChange: true, displayed: true)
-            sendEvent(name: "thermostatOperatingState", value: "off", isStateChange: true, displayed: true)
+            if ( simulateCool == true ) {
+                sendEvent(name: "thermostatOperatingState", value: "cooling", isStateChange: true, displayed: true)
+            }
+            else {
+                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, displayed: true)
+            }
 			cmds << zwave.thermostatModeV2.thermostatModeSet(mode: 0)    //EUROTRONIC_MODE_OFF
 			cmds << zwave.thermostatModeV2.thermostatModeGet()
 			cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)
@@ -1264,6 +1319,9 @@
                 case "emergency heat":
                     (emergencyHeat())
                     break
+                case "eco":
+                    (eco())
+                    break
                 default :
                     log.error "!!!!setThermostatMode ${String} ERROR !!!!!!!"
                     break
@@ -1312,7 +1370,7 @@
                 
 		//Refresh (Momentary)
 		def refresh() {
-			log.trace "refresh"
+			log.trace "refresh() command called"
 			poll()
 		}
 
@@ -1385,7 +1443,8 @@
  			}
 
 		def updated() {
-		sendEvent(name: "checkInterval", value: 2 * 15 * 60 + 2 * 60, displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID])
+            log.warn "updated()..."
+		    sendEvent(name: "checkInterval", value: 2 * 15 * 60 + 2 * 60, displayed: false, data: [protocol: "zwave", hubHardwareId: device.hub.hardwareID])
 			if (!state.updatedLastRanAt || new Date().time >= state.updatedLastRanAt + 2000) {
 				state.updatedLastRanAt = new Date().time
 				unschedule(refresh)
@@ -1432,7 +1491,7 @@
         }
 
 		def poll() { // If you add the Polling capability to your device type, this command will be called approximately every 5 minutes to check the device's state
-			// log.debug "polling"
+			log.debug "polling..."
 			def cmds = []
 			
 				if (!state.lastBatteryReport) {
@@ -1444,6 +1503,7 @@
 						cmds << zwave.batteryV1.batteryGet()
                     }
 				}
+            /*
 				
 				//once an hour ask for everything
 				if (!state.extra || (new Date().time) - state.extra > (60*60000)) {			// minutes * millseconds these settings shouldnt be needs as device should send response at time of update
@@ -1454,13 +1514,17 @@
 	            	cmds << zwave.batteryV1.batteryGet()
 					state.extra = new Date().time
 				}
+*/
 				cmds <<	zwave.sensorMultilevelV1.sensorMultilevelGet()	// get temp
 				cmds << zwave.switchMultilevelV3.switchMultilevelGet()	// valve position
 				cmds <<	zwave.thermostatModeV1.thermostatModeGet()		// get mode
 				cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 1)	// get heating setpoint
-                cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 11)	// get heating setpoint
-				// log.trace "POLL $cmds"
-				secureSequence (cmds)
+            
+                //cmds <<	zwave.thermostatSetpointV2.thermostatSetpointGet(setpointType: 11)	// get heating setpoint            // KK - dupicates the reports !!
+				// log.debug "POLL $cmds"
+                if (cmds) {
+				    secureSequence (cmds)
+                }
 			}
 
 		def setDeviceLimits() { // for google and amazon compatability
@@ -1500,3 +1564,13 @@
 		        return 0d
 	        }
         }																								
+
+
+    def installed() {
+        log.warn "installed()..."
+        //configure()
+        //runIn(1800,logsOff)
+    }
+
+
+
