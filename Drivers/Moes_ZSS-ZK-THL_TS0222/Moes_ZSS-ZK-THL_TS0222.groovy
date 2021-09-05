@@ -24,7 +24,7 @@
 import hubitat.zigbee.zcl.DataType
 import groovy.json.JsonOutput
 metadata {
-    definition (name: "Moes ZSS-ZK-THL sensor (TS0222)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Moes_ZSS-ZK-THL_TS0222.groovy") {
+    definition (name: "Moes ZSS-ZK-THL sensor (TS0222)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/Moes_ZSS-ZK-THL_TS0222.groovy") {
         capability "Configuration"
         capability "Battery"
         capability "Refresh"
