@@ -18,7 +18,8 @@
 * for the specific language governing permissions and limitations under the License.
 *
 * Version Control:
-* 1.0.0  2021-09-05 kkossev            Initial version
+* 1.0.0  2021-09-05 kkossev    Initial version
+* 1.1.0  2021-09-05 kkossev    Filter Zero Readings option added (default:true)
 *
 */
 import hubitat.zigbee.zcl.DataType
@@ -41,6 +42,7 @@ metadata {
         input ("txtEnable", "bool", title: "Enable description text logging", defaultValue: true)
         input ("tempOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", displayDuringSetup: false)
         input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "*..*", displayDuringSetup: false)
+        input ("filterZero", "bool", title: "Filter zero readings", defaultValue: true)
     }
 }
 
@@ -63,8 +65,8 @@ def parse(String description) {
                 rawValue = rawValue + ((humidityOffset ?: 0) as float)
                 rawValue =  ((float)rawValue).trunc(1)
             
-				if (rawValue > 100 || rawValue < 0){
-					log.warn "$device.displayName Ignored humidity value: $rawValue"
+				if (rawValue > 100 || rawValue <= 0){
+					log.warn "$device.displayName ignored humidity value: $rawValue"
 				} else {
 					sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
 					if (txtEnable) log.info "$device.displayName humidity changed to $rawValue"
@@ -75,9 +77,13 @@ def parse(String description) {
 				def rawEncoding = Integer.parseInt(descMap.encoding, 16)
 				def rawLux = Integer.parseInt(descMap.value,16)
 				def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
-				if (getDataValue("model") == "lumi.sensor_motion.aq2") lux = rawLux
-				sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
-				if (txtEnable) log.info "$device.displayName illuminance changed to $lux"
+            
+				if (lux < 0.01f) {
+					log.warn "$device.displayName ignored illuminance value: $lux"
+				} else {
+				    sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
+				    if (txtEnable) log.info "$device.displayName illuminance changed to $lux"
+				}            
 			}
         // temperature
 		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
@@ -90,7 +96,7 @@ def parse(String description) {
 				if (temperatureOffset == null) temperatureOffset = "0"
 				def offsetrawValue = (rawValue  + Float.valueOf(temperatureOffset))
 				rawValue = offsetrawValue
-				if (rawValue > 200 || rawValue < -200){
+				if (rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f) ){
 					log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
 				} else {
 					sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
@@ -168,20 +174,20 @@ private Map getBatteryResult(rawValue) {
 
 def refresh() {
     if (logEnable) log.debug "refreshing Moes ZSS-ZK-THL battery status"
-     return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021)+
+     return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021) /*+
         zigbee.readAttribute(0x0402, 0x0000)+
         zigbee.readAttribute(0x0405, 0x0000) + 
-        zigbee.readAttribute(0x0400, 0x0000)
+        zigbee.readAttribute(0x0400, 0x0000) */
 }
 
 def configure() {
     if (logEnable) log.debug "Configuring Moes ZSS-ZK-THL Reporting and Bindings"
     
     return refresh() +
+        zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3000, 3600, 0x1) /*+
         zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 3000, 3600, 1*100) +
         zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 3000, 3600, 0x1) +
-        zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3000, 3600, 0x1) +
-        zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15)
+        zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15) */
 }
 
 private logDebug(msg) {
