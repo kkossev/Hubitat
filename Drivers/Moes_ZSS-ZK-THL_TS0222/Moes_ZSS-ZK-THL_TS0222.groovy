@@ -7,7 +7,7 @@
 * Information:
 * https://www.moeshouse.com/collections/zigbee/products/zigbee-smart-brightness-thermometer-real-time-light-sensitive-temperature-and-humidity-detector 
 *
-* Credits: some code sections borrowed from WooBooung, chirpy 
+* Credits: code sections borrowed from WooBooung, chirpy, Markus Liljergren 
 *
 * Licensing:
 * Copyright 2021 Krassimir Kossev.
@@ -20,10 +20,14 @@
 * Version Control:
 * 1.0.0  2021-09-05 kkossev    Initial version
 * 1.1.0  2021-09-05 kkossev    Filter Zero Readings option added (default:true)
+* 1.1.1  2021-09-05 kkossev    filterZero bug fix :) 
+* 1.2.0  2021-09-05 kkossev    Added bindings for both endPoint 1 and endPoint 2 for humidity,temperature and illuminance clusters; delay 1..2 seconds!
 *
 */
 import hubitat.zigbee.zcl.DataType
 import groovy.json.JsonOutput
+import hubitat.helper.HexUtils
+
 metadata {
     definition (name: "Moes ZSS-ZK-THL sensor (TS0222)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/Moes_ZSS-ZK-THL_TS0222.groovy") {
         capability "Configuration"
@@ -65,7 +69,7 @@ def parse(String description) {
                 rawValue = rawValue + ((humidityOffset ?: 0) as float)
                 rawValue =  ((float)rawValue).trunc(1)
             
-				if (rawValue > 100 || rawValue <= 0){
+				if ((rawValue > 100 || rawValue <= 0) && filterZero ) {
 					log.warn "$device.displayName ignored humidity value: $rawValue"
 				} else {
 					sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
@@ -78,7 +82,7 @@ def parse(String description) {
 				def rawLux = Integer.parseInt(descMap.value,16)
 				def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
             
-				if (lux < 0.01f) {
+				if (lux < 0.01f && filterZero) {
 					log.warn "$device.displayName ignored illuminance value: $lux"
 				} else {
 				    sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
@@ -96,7 +100,7 @@ def parse(String description) {
 				if (temperatureOffset == null) temperatureOffset = "0"
 				def offsetrawValue = (rawValue  + Float.valueOf(temperatureOffset))
 				rawValue = offsetrawValue
-				if (rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f) ){
+				if ((rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f)) && filterZero ){
 					log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
 				} else {
 					sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
@@ -183,12 +187,44 @@ def refresh() {
 def configure() {
     if (logEnable) log.debug "Configuring Moes ZSS-ZK-THL Reporting and Bindings"
     
+    bindAndRetrieveT1SensorData();
+    
     return refresh() +
         zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3000, 3600, 0x1) /*+
         zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 3000, 3600, 1*100) +
         zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 3000, 3600, 0x1) +
         zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15) */
 }
+
+void bindAndRetrieveT1SensorData() {
+    ArrayList<String> cmd = []
+
+    String endpoint = '01'
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
+    
+    endpoint = '02'
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
+
+    cmd += zigbee.readAttribute(0x0400, 0x0000)
+    cmd += zigbee.readAttribute(0x0402, 0x0000)
+    cmd += zigbee.readAttribute(0x0405, 0x0000)
+    sendZigbeeCommands(cmd)
+}
+
+void sendZigbeeCommands(ArrayList<String> cmd) {
+    if (logEnable) log.debug "sendZigbeeCommands(cmd=$cmd)"
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
+    cmd.each {
+            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
+    }
+    sendHubCommand(allActions)
+}
+
+
 
 private logDebug(msg) {
 	if (settings?.logEnable) log.debug "${msg}"
