@@ -4,7 +4,7 @@
   "packages": [
     {
       "id": "e6eedb98-4f18-404a-9f46-42ce5e9612db",
-      "name": "Moes_ZSS-ZK-THL_TS0222",
+      "name": "Moes ZSS-ZK-THL_TS0222",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/packageManifest.json",
       "description": "Moes ZSS-ZK-THL illuminance, temperature, humidity sensor model TS0222 (_TYZB01_kvwjujy9) driver for Hubitat",
