@@ -1,0 +1,16 @@
+{
+  "packageName": "Moes ZSS-ZK-THL_TS0222",
+  "author": "Krassimir Kossev",
+  "version": "1.2.0",
+  "minimumHEVersion": "1.0.0",
+  "dateReleased": "2019-09-05",
+  "drivers": [
+    {
+      "id": "e6880c42-66c5-49b1-a3d9-2fab3aadb86b",
+      "name": "Moes ZSS-ZK-THL sensor (TS0222)",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/Moes_ZSS-ZK-THL_TS0222.groovy",
+      "required": true
+    }
+  ]
+}

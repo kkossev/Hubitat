@@ -22,7 +22,6 @@
 * 1.1.0  2021-09-05 kkossev    Filter Zero Readings option added (default:true)
 * 1.1.1  2021-09-05 kkossev    filterZero bug fix :) 
 * 1.2.0  2021-09-05 kkossev    Added bindings for both endPoint 1 and endPoint 2 for humidity,temperature and illuminance clusters; delay 1..2 seconds!
-* 1.3.0  2021-09-08 kkossev    Added binding for genTime cluster ( 0x000A )
 *
 */
 import hubitat.zigbee.zcl.DataType
@@ -204,16 +203,11 @@ void bindAndRetrieveT1SensorData() {
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
-
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x000A {${device.zigbeeId}} {}", "delay 1189",]    // genTime
     
     endpoint = '02'
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
     cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
-
-    endpoint = '00'
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x8021 {${device.zigbeeId}} {}", "delay 1186",]    // configuration
 
     cmd += zigbee.readAttribute(0x0400, 0x0000)
     cmd += zigbee.readAttribute(0x0402, 0x0000)
@@ -235,4 +229,3 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
 private logDebug(msg) {
 	if (settings?.logEnable) log.debug "${msg}"
 }
-
