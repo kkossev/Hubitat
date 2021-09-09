@@ -1,8 +1,8 @@
 {
   "packageName": "Moes ZSS-ZK-THL_TS0222",
   "author": "Krassimir Kossev",
-  "version": "1.3.0",
-  "minimumHEVersion": "1.3.0",
+  "version": "1.2.1",
+  "minimumHEVersion": "1.2.1",
   "dateReleased": "2021-09-08",
   "drivers": [
     {
