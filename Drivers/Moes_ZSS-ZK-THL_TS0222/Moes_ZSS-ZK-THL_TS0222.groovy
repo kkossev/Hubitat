@@ -22,7 +22,7 @@
 * 1.1.0  2021-09-05 kkossev    Filter Zero Readings option added (default:true)
 * 1.1.1  2021-09-05 kkossev    filterZero bug fix :) 
 * 1.2.0  2021-09-05 kkossev    Added bindings for both endPoint 1 and endPoint 2 for humidity,temperature and illuminance clusters; delay 1..2 seconds!
-* 1.3.0  2021-09-08 kkossev    Added binding for genTime cluster ( 0x000A )
+* 1.2.1  2021-09-08 kkossev    Added binding for genTime cluster ( 0x000A )
 *
 */
 import hubitat.zigbee.zcl.DataType
