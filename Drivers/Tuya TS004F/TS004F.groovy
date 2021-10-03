@@ -1,5 +1,5 @@
 /**
- *	Copyright 2021 kkossev
+ *  Experimental TS004F driver for Hubitat Elevation hub. Version 2.0.0 works only when the device is paired to Tuya hub first !!!
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -10,10 +10,10 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- *  Hubitat Elevation TS004F driver. The inital version was based on ST DH "Zemismart Button", namespace: "SangBoy", author: "YooSangBeom"
+ *  The inital version was based on ST DH "Zemismart Button", namespace: "SangBoy", author: "YooSangBeom"
  * 
  * ver. 1.0.0 2021-05-08 kkossev     - SmartThings version 
- * ver. 2.0.0 2021-10-03 kkossev     - First working version for Hubitat in 'Scene Control'mode
+ * ver. 2.0.0 2021-10-03 kkossev     - First version for Hubitat in 'Scene Control'mode - AFTER PAIRING FIRST to Tuya Zigbee gateway!
  *
  */
 
