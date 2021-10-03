@@ -23,8 +23,9 @@
 * 1.1.1  2021-09-05 kkossev    filterZero bug fix :) 
 * 1.2.0  2021-09-05 kkossev    Added bindings for both endPoint 1 and endPoint 2 for humidity,temperature and illuminance clusters; delay 1..2 seconds!
 * 1.2.1  2021-09-08 kkossev    Added binding for genTime cluster ( 0x000A )
-* 1.2.2  2021-09-08 kkossev    Reporting interval changed to 3600, 28800
-* 
+* 1.2.2  2021-09-08 kkossev    Reporting interval changed to 3600, 28800 
+* 1.2.3  2021-10-02 kkossev    Removed any clusters bindings and reporting configurations!
+*
 */
 import hubitat.zigbee.zcl.DataType
 import groovy.json.JsonOutput
@@ -179,26 +180,33 @@ private Map getBatteryResult(rawValue) {
 }
 
 def refresh() {
-    if (logEnable) log.debug "refreshing Moes ZSS-ZK-THL battery status"
+    if (logEnable) log.debug "SKIPPING refreshing Moes ZSS-ZK-THL battery status"
+    return
+/*    
      return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021) +
         zigbee.readAttribute(0x0402, 0x0000)+
         zigbee.readAttribute(0x0405, 0x0000) + 
         zigbee.readAttribute(0x0400, 0x0000) 
+*/
 }
 
 def configure() {
-    if (logEnable) log.debug "Configuring Moes ZSS-ZK-THL Reporting and Bindings"
-    
+    if (logEnable) log.debug "SKIPPING Configuring Moes ZSS-ZK-THL Reporting and Bindings"
+    return
+/*    
     bindAndRetrieveT1SensorData();
-    
-    return refresh() +
-        zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, 28800, 0x1) /*+
-        zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 3000, 3600, 1*100) +
-        zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 3000, 3600, 0x1) +
-        zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15) */
+*/      
+//    return refresh() +
+//        zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 1800, 28800, 0x1) /*+
+//        zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 3000, 3600, 1*100) +
+//        zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 3000, 3600, 0x1) +
+//        zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15) */
+  
 }
 
 void bindAndRetrieveT1SensorData() {
+    return
+/*    
     ArrayList<String> cmd = []
 
     String endpoint = '01'
@@ -221,6 +229,7 @@ void bindAndRetrieveT1SensorData() {
     cmd += zigbee.readAttribute(0x0402, 0x0000)
     cmd += zigbee.readAttribute(0x0405, 0x0000)
     sendZigbeeCommands(cmd)
+*/
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
