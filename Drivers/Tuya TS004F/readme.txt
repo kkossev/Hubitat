@@ -1,4 +1,4 @@
-Good news.. :(
+Good news.. :)
 
 I am not 100% sure why, but after sending quickly a magic sequence of read attributes commands during the pairing process, now it works for me even when the battery was taken out for a long time,.
 
