@@ -14,6 +14,7 @@
  * 
  * ver. 1.0.0 2021-05-08 kkossev     - SmartThings version 
  * ver. 2.0.0 2021-10-03 kkossev     - First version for Hubitat in 'Scene Control'mode - AFTER PAIRING FIRST to Tuya Zigbee gateway!
+ * ver. 2.1.0 2021-10-20 kkossev     - typos fixed; button wrong event names bug fixed; extended debug logging; added experimental switchToDimmerMode command
  *
  */
 
@@ -24,12 +25,12 @@ metadata {
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
-	//capability "ReleasableButton"
 
     capability "Initialize"
     capability "Configuration"
       
-    command "swicthIntoSceneMode"
+    command "switchToSceneMode"
+    command "switchToDimmerMode"
 
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
     }
@@ -50,11 +51,11 @@ def parse(String description) {
     
 	if (event) {
         result = event
-        //if (logEnable) log.debug "sendEvent $event"
+        if (logEnable) log.debug "sendEvent $event"
     }
     else if (description?.startsWith("catchall")) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
-        //if (logEnable) log.debug "catchall descMap: $descMap"
+        if (logEnable) log.debug "catchall descMap: $descMap"
         def buttonState = "unknown"
         // TS004F in scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "03" ) {
@@ -75,7 +76,7 @@ def parse(String description) {
         //
         if (buttonNumber != 0 ) {
             if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
-                //if (logEnable) log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"
+                if (logEnable) log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"
                 runInMillis(DEBOUNCE_TIME, buttonDebounce)    // restart the debouncing timer again
                 return null 
             }
@@ -93,7 +94,7 @@ def parse(String description) {
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
 	        def descriptionText = "button $buttonNumber was $buttonState"
-	        event = [name: "button", value: buttonState, data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, displayed: true]
+	        event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true]
             if (txtEnable) log.info "$descriptionText"
         }
         
@@ -148,7 +149,7 @@ def parse(String description) {
     } // if read attr
     else {
         log.warn "DID NOT PARSE MESSAGE for description : $description"
-		log.debug zigbee.parseDescriptionAsMap(description)
+		// ????????????????????????????? log.debug zigbee.parseDescriptionAsMap(description)
 	}
     return result
 }
@@ -168,13 +169,7 @@ def installed()
 {
   	initialize()
     def numberOfButtons = 4
-    sendEvent(name: "supportedButtonValues", value: ["pushed", "held" /*,"double","up","up_hold","down_hold" */].encodeAsJSON(), displayed: false)
     sendEvent(name: "numberOfButtons", value: numberOfButtons , displayed: false)
-    // Initialize default states
-    numberOfButtons.times 
-    {
-        sendEvent(name: "button", value: "pushed", data: [buttonNumber: it+1], displayed: false)
-    }
 }
 
 def initialize() {
@@ -190,12 +185,17 @@ def updated()
 
 
 def buttonDebounce(button) {
-    //if (logEnable) log.warn "debouncing button ${state.lastButtonNumber}"
+    if (logEnable) log.warn "debouncing button ${state.lastButtonNumber}"
     state.lastButtonNumber = 0
 }
 
 
-def swicthIntoSceneMode ()
+def switchToSceneMode ()
 {
      zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01)        // magic
+}
+
+def switchToDimmerMode ()
+{
+     zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)       
 }
