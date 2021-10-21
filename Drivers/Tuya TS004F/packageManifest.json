@@ -1,0 +1,16 @@
+{
+  "packageName": "Tuya Scene Switch TS004F",
+  "author": "Krassimir Kossev",
+  "version": "1.0",
+  "minimumHEVersion": "2.2.0",
+  "dateReleased": "2021-10-20",
+  "drivers": [
+    {
+      "id": "0135dcaf-2335-457f-bda3-ffdaa2249d2e",
+      "name": "Tuya Scene Switch TS004F",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy",
+      "required": true
+    }
+  ]
+}
