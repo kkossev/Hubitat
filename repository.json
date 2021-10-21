@@ -17,7 +17,7 @@
       "name": "Tuya Scene Switch TS004F",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/packageManifest.json",
-      "description": "Tuya TS004F driver for Hubitat Elevation".
+      "description": "Tuya TS004F driver for Hubitat Elevation",
       "tags": [
         "Zigbee"
       ]
