@@ -1,6 +1,5 @@
 /**
- *  Experimental TS004F driver for Hubitat Elevation hub. Version 2.0.0 works only when the device is paired to Tuya hub first !!!
- *                                                        Version 2.2.0 is still to be proven that works in different environments ...?
+ *  Scene switch TS004F driver for Hubitat Elevation hub.
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -11,13 +10,14 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- *  The inital version was based on ST DH "Zemismart Button", namespace: "SangBoy", author: "YooSangBeom"
+ *  The inital version was based on ST DH "Zemismart Button", namespace: SangBoy, author: YooSangBeom
  * 
  * ver. 1.0.0 2021-05-08 kkossev     - SmartThings version 
  * ver. 2.0.0 2021-10-03 kkossev     - First version for Hubitat in 'Scene Control'mode - AFTER PAIRING FIRST to Tuya Zigbee gateway!
  * ver. 2.1.0 2021-10-20 kkossev     - typos fixed; button wrong event names bug fixed; extended debug logging; added experimental switchToDimmerMode command
  * ver. 2.1.1 2021-10-20 kkossev     - numberOfButtons event bug fix; 
- * ver. 2.2.0 2021-10-20 kkossev     - somehow works even after removing the battery???
+ * ver. 2.2.0 2021-10-20 kkossev     - First succesfuly working version with HE!
+ * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
  *
  */
 
@@ -36,13 +36,10 @@ metadata {
     capability "Initialize"
     capability "Configuration"
       
-    //command "switchToSceneMode"
-    //command "switchToDimmerMode"
-    //command "readAttributes"
-
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
     }
     preferences {
+        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: false)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
     }
@@ -51,7 +48,7 @@ metadata {
 // Constants
 @Field static final Integer DIMMER_MODE = 0
 @Field static final Integer SCENE_MODE  = 1
-
+@Field static final Integer DEBOUNCE_TIME = 900
 
 
 // Parse incoming device messages to generate events
@@ -66,7 +63,7 @@ def parse(String description) {
     }
 	def result = []
     def buttonNumber = 0
-    final  DEBOUNCE_TIME = 900
+//    final  DEBOUNCE_TIME = 900
     
 	if (event) {
         result = event
@@ -76,18 +73,18 @@ def parse(String description) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
         //if (logEnable) log.debug "catchall descMap: $descMap"
         def buttonState = "unknown"
-        // when TS004F in scene switch mode!
+        // when TS004F initialized in Scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "03" ) {
- 	        buttonNumber = 1
+ 	        buttonNumber = reverseButton==true ? 3 : 1
         }
         else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "04" ) {
-  	        buttonNumber = 2
+  	        buttonNumber = reverseButton==true  ? 4 : 2
         }
         else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "02" ) {
-            buttonNumber = 3
+            buttonNumber = reverseButton==true  ? 2 : 3
         }
         else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "01" ) {
-   	        buttonNumber = 4
+   	        buttonNumber = reverseButton==true  ? 1 : 4
         }
         else if (descMap.clusterInt == 0x8021 && descMap.sourceEndpoint == "00") {
             if (descMap.data[1]=="00") {
@@ -171,7 +168,6 @@ def parse(String description) {
             default:
                 if (logEnable) {
                     log.warn "UNPROCESSED cluster ${descMap?.cluster} !!! descMap : ${descMap} ######## description = ${description}"
-                    //         zigbee.enrollResponse()
                 }
                 break
         }
