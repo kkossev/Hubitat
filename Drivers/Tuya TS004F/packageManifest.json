@@ -1,9 +1,9 @@
 {
   "packageName": "Tuya Scene Switch TS004F",
   "author": "Krassimir Kossev",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "minimumHEVersion": "1.0.0",
-  "dateReleased": "2021-10-20",
+  "dateReleased": "2021-10-23",
   "drivers": [
     {
       "id": "0135dcaf-2335-457f-bda3-ffdaa2249d2e",
