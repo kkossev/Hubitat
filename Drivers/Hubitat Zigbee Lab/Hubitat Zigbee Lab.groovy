@@ -14,8 +14,9 @@
  *  The inital version was based on ST DH "Zemismart Button", namespace: SangBoy, author: YooSangBeom
  * 
  * ver. 1.0.0 2021-10-24 kkossev  - first dummy version
+ * ver. 1.0.1 2021-10-25 kkossev  - 
  *
- */
+*/
 
 //import com.zsmartsystems.zigbee.dongle.ember.EmberNcp
 //import com.zsmartsystems.zigbee.sniffer.internal.silabs
@@ -41,9 +42,10 @@ metadata {
     command "zdoBind"
     command "zdoUnbind"
     command "raw"
-    command "heCmd"
+    command "zigbeeCommand"
     command "heCr"
-    command "heRattr"
+    command "readAiiribute"
+    command "readAttributesTS004F"
     command "heGrp"
     command "test"
     command "test2"
@@ -53,12 +55,13 @@ metadata {
     command "zclGlobal"
 
       
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "ANY", model: "ANY", deviceJoinName: "Hubitat Zigbee Lab"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_bngwdjsr", model: "ANY", deviceJoinName: "Hubitat Zigbee Lab"
     }
     preferences {
         input (name: "traceEnable", type: "bool", title: "Enable trace logging", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
+        input (name: "rawCommands", type: "bool", title: "Send raw commands where applicable", defaultValue: false)
     }
 }
 
@@ -71,6 +74,259 @@ metadata {
 // Parse incoming device messages to generate events
 // example : https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/advancedZigbeeCTbulb.groovy 
 //
+//parsers
+void parse(String description) {
+    Map descMap = zigbee.parseDescriptionAsMap(description)
+    if (logEnable) log.debug "descMap:${descMap}"
+    String status
+
+    if (descMap.clusterId != null && descMap.profileId == "0104") {
+        if (descMap.isClusterSpecific == false) { //global commands
+            processGlobalCommand(descMap)
+        } else { //cluster specific
+            switch (descMap.clusterId) {
+                case "0004": //group
+                    processGroupCommand(descMap)
+                    break
+                case "0006": 
+                    log.info "cluster: ${descMap.clusterId} command: ${descMap.command}"
+                    break
+                default :
+                    if (logEnable) log.warn "skipped cluster specific command cluster:${descMap.clusterId}, command:${descMap.command}, data:${descMap.data}"
+            }
+        }
+        return
+    ////////////////////////////////////////////////////////   zdo commands ////////////////////////////////////////////
+    } else if (descMap.profileId == "0000") { //zdo
+        switch (descMap.clusterId) {
+            case "8005" : //endpoint response
+                def endpointCount = descMap.data[4]
+                def endpointList = descMap.data[5]
+                log.info "zdo command: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${endpointCount}  endpointList = ${endpointList}"
+                break
+            case "8004" : //simple descriptor response
+                log.info "zdo command: cluster: ${descMap.clusterId} (simple descriptor response)"
+                break
+            case "8034" : //leave response
+                log.info "zdo command: cluster: ${descMap.clusterId} (leave response)"
+                break
+            case "8021" : //bind response
+                log.info "zdo command: cluster: ${descMap.clusterId} (bind response)"
+                break
+            case "8022" : //unbind request
+                log.info "zdo command: cluster: ${descMap.clusterId} (unbind request)"
+                break
+            case "0013" : //"device announce"
+                log.info "zdo command: cluster: ${descMap.clusterId} (device announce)"
+                if (logEnable) log.trace "device announce..."
+            /*
+                String currentState = device.currentValue("switch") ?: "on"
+                String opt = powerRestore ?: pwrRstOpts.defaultValue
+                List<String> cmds = configAttributeReporting()
+                if ((opt == "last" && currentState == "off") || (opt == "off")) {
+                    cmds.addAll(zigbee.off(0))
+                }
+                sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+                String currentAddress = descMap.data[2] + descMap.data[1]
+                if (currentAddress != state.lastAddress) {
+                    if (txtEnable) log.info "address changed! new:${currentAddress}, old:${state.lastAddress}, checking group membership status..."
+                    state.lastAddress = currentAddress
+                    runIn(4,getGroups)
+                }
+*/
+                break
+            default :
+                if (logEnable) log.warn "skipped UNKNOWN zdo cluster: ${descMap.clusterId}"
+        }
+        return
+    }
+
+    List<Map> additionalAttributes = []
+    additionalAttributes.add(["attrId":descMap.attrId, "value":descMap.value, "encoding":descMap.encoding])
+    if (descMap.additionalAttrs) additionalAttributes.addAll(descMap.additionalAttrs)
+    parseAttributes(descMap.cluster, descMap.endpoint, additionalAttributes, descMap.command)
+}
+
+private void parseAttributes(String cluster, String endPoint, List<Map> additionalAttributes, String command){
+    //if (logEnable) log.warn "parseAttributes cluster:${cluster}"
+    additionalAttributes.each{
+        switch (cluster) {
+            case "0000" :
+                switch (it.attrId) {
+                    case "0000" :
+                        log.info "parseAttributes: ZLC version: ${it.value}"        // default 0x03
+                        break
+                    case "0001" :
+                        log.info "parseAttributes: Applicaiton version: ${it.value}"    // For example, 0b 01 00 0001 = 1.0.1, where 0x41 is 1.0.1
+                        break                                                            // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-lighting-dimmer-swith-access-standard?id=K9ik6zvlvbqyw 
+                    case "0002" : 
+                        log.info "parseAttributes: Stack version: ${it.value}"        // default 0x02
+                    case "0003" : 
+                        log.info "parseAttributes: HW version: ${it.value}"        // default 0x01
+                    case "0004" :
+                        log.info "parseAttributes: Manufacturer name: ${it.value}"
+                        break
+                    case "0005" :
+                        log.info "parseAttributes: Model Identifier: ${it.value}"
+                        break
+                    case "0007" :
+                        log.info "parseAttributes: Power Source: ${it.value}"        // enum8-0x30 default 0x03
+                        break
+                    case "4000" :    //software build
+                        updateDataValue("softwareBuild",it.value ?: "unknown")
+                        break
+                    case "FFFD" :    // Cluster Revision (Tuya specific)
+                        log.info "parseAttributes: Cluster Revision 0xFFFD: ${it.value}"    //uint16 -0x21 default 0x0001
+                        break
+                    case "FFFE" :    // Tuya specific
+                        log.info "parseAttributes: Tuya specific 0xFFFE: ${it.value}"
+                        break
+                    default :
+                        if (logEnable) log.warn "parseAttributes cluster:${cluster} UNKNOWN  attrId ${it.attrId} value:${it.value}"
+                }
+                break
+            case "0001" :
+                log.warn "parseAttributes: cluster ${cluster}"
+                break
+            case "0006" :
+                switch (it.attrId) {
+                    case "8004" :        // Tuya TS004F
+                        def mode = it.value=="00" ? "Dimmer" : it.value=="01" ? "Scene Switch" : "UNKNOWN " + it.value.ToString()
+                        if (logEnable) log.info "parseAttributes cluster:${cluster} attrId ${it.attrId} TS004F mode: ${mode}"
+                        break
+                    default :
+                        if (logEnable) log.warn "parseAttributes cluster:${cluster} UNKNOWN  attrId ${it.attrId} value:${it.value}"
+                }
+                break
+            case "0008" :
+                if (logEnable) log.warn "parseAttributes cluster:${cluster} attrId ${it.attrId} value:${it.value}"
+                break
+            case "0300" :
+                if (logEnable) log.warn "parseAttributes cluster:${cluster} attrId ${it.attrId} value:${it.value}"
+/*            
+                if (it.attrId == "0007") { //color temperature
+                    if (state.checkPhase == 4) {
+                        state.ct.min = myredHexToCt(zigbee.swapOctets(it.value))
+                        runOptionTest(5)
+                    } else if (state.checkPhase == 5) {
+                        state.ct.max = myredHexToCt(zigbee.swapOctets(it.value))
+                        runOptionTest(10)
+                    }
+                    sendColorTempEvent(zigbee.swapOctets(it.value))
+                } //else log.trace "skipped color, attribute:${it.attrId}, value:${it.value}"
+*/
+                break
+            default :
+                if (logEnable) {
+                    String respType = (command == "0A") ? "reportResponse" : "readAttributeResponse"
+                    log.warn "parseAttributes: skipped:${cluster}:${it.attrId}, value:${it.value}, encoding:${it.encoding}, respType:${respType}"
+                }
+        }
+    }
+}
+
+private void processGroupCommand(Map descMap) {
+    String status = descMap.data[0]
+    String group
+    if (state.groups == null) state.groups = []
+
+    switch (descMap.command){
+        case "00" : //add group response
+            if (status in ["00","8A"]) {
+                group = descMap.data[1] + descMap.data[2]
+                if (group in state.groups) {
+                    if (txtEnable) log.info "group membership refreshed"
+                } else {
+                    state.groups.add(group)
+                    if (txtEnable) log.info "group membership added"
+                }
+            } else {
+                log.warn "${device.displayName}'s group table is full, unable to add group..."
+            }
+            break
+        case "03" : //remove group response
+            group = descMap.data[1] + descMap.data[2]
+            state.groups.remove(group)
+            if (txtEnable) log.info "group membership removed"
+            break
+        case "02" : //group membership response
+            Integer groupCount = hexStrToUnsignedInt(descMap.data[1])
+            if (groupCount == 0 && state.groups != []) {
+                List<String> cmds = []
+                state.groups.each {
+                    cmds.addAll(zigbee.command(0x0004,0x00,[:],0,"${it} 00"))
+                    if (txtEnable) log.warn "update group:${it} on device"
+                }
+                sendHubCommand(new hubitat.device.HubMultiAction(delayBetween(cmds,500), hubitat.device.Protocol.ZIGBEE))
+            } else {
+                //get groups and update state...
+                Integer crntByte = 0
+                for (int i = 0; i < groupCount; i++) {
+                    crntByte = (i * 2) + 2
+                    group = descMap.data[crntByte] + descMap.data[crntByte + 1]
+                    if ( !(group in state.groups) ) {
+                        state.groups.add(group)
+                        if (txtEnable) log.info "group added to local list"
+                    } else {
+                        if (txtEnable) log.debug "group already exists in local list..."
+                    }
+                }
+            }
+            break
+        default :
+            if (txtEnable) log.warn "skipped group command:${descMap}"
+    }
+}
+
+
+private void processGlobalCommand(Map descMap) {
+            switch (descMap.command) {
+                case "01" : //read attribute response
+                    log.warn "processGlobalCommand read attribute response descMap:${descMap}"
+                    switch (descMap.clusterId) {
+                        case "E001" : /// tuya specific
+                            log.info "processGlobalCommand ${descMap.clusterId} (read attribute response) clusterId: ${descMap.clusterId} data:${descMap.data}"
+                            break
+                        default :
+                            log.warn "processGlobalCommand ${descMap.clusterId} (read attribute response) UNKNOWN clusterId: ${descMap.clusterId} data:${descMap.data}"
+                    }
+                    break
+                case "04" : //write attribute response
+                    log.info "processGlobalCommand writeAttributeResponse cluster: ${descMap.clusterId} status:${descMap.data[0]}"
+                    break
+                case "0B" ://command response
+                    String clusterCmd = descMap.data[0]
+                    status =  descMap.data[1]
+                    switch (descMap.clusterId) {
+                        case "0300" :
+                            log.info "processGlobalCommand ${descMap.clusterId} (command response) clusterId: ${descMap.clusterId} status:${status}"
+                            break
+                        case "0006" :
+                            log.info "processGlobalCommand ${descMap.clusterId} (command response) clusterId: ${descMap.clusterId} clusterCmd: ${clusterCmd}"
+                            break
+                        case "0008" :
+                            def cmd = clusterCmd=="01" ? "startLevelChange" : clusterCmd=="03" ? "stopLevelChange" : clusterCmd=="04" ? "move with on off" : clusterCmd=="00" ? "move" : "UNKNOWN"
+                            log.info "processGlobalCommand ${descMap.clusterId} (command response) clusterId: ${descMap.clusterId} clusterCmd: ${clusterCmd} ${cmd}"
+                            break
+                        case "E001" :    // Tuya
+                            log.info "processGlobalCommand ${descMap.clusterId} (command response) clusterId: ${descMap.clusterId} data:${descMap.data}"
+                            break
+                        default :
+                            if (txtEnable) log.warn "skipped GlobalCommand response cluster: ${descMap.clusterId} : ${descMap}"
+                    }
+                    if (status == "82") {
+                        if (logEnable) log.warn "unsupported general command cluster:${descMap.clusterId}, command:${clusterCmd}"
+                    }
+                    break
+                default :
+                    if (logEnable) log.warn "skipped global command cluster:${descMap.clusterId}, command:${descMap.command}, data:${descMap.data}"
+            }
+
+}
+
+
+
+/*
 def parse(String description) {
     //if (logEnable) log.debug "description is $description"
 	def event = null
@@ -204,6 +460,9 @@ def parse(String description) {
     return result
 }
 
+*/
+
+
 
 def refresh() {
 }
@@ -221,7 +480,7 @@ def installed()
 }
 
 def initialize() {
-    readAttributes()
+    readAttributesTS004F()
     def numberOfButtons = 4
     sendEvent(name: "numberOfButtons", value: numberOfButtons , displayed: false)
     state.lastButtonNumber = 0
@@ -250,7 +509,7 @@ def switchToDimmerMode()
 }
 
 
-def readAttributes() {
+def readAttributesTS004F() {
     Map dummy = [:]
     ArrayList<String> cmd = []
     
@@ -312,6 +571,16 @@ he raw
     
 }
 
+
+def zigbeeCommand() {
+    if (rawCommands==true) {
+        heCmd()
+    }
+    else {
+        // zigbee.command( .... )
+    }
+}
+
 def heCmd() {
     // example : https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/GenericZigbeeRGBWBulb.groovy
     // example : "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0300 0x06 {${hexHue} ${hexSat} ${intTo16bitUnsignedHex(rate / 100)}}", "delay ${rate + 400}",
@@ -320,15 +589,6 @@ def heCmd() {
 
 def heCr() {
     // example : "he cr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0300 0 0x0008 1 0xFFFE {}", "delay 200",
-}
-
-def heRattr() {
-    // example : https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/GenericZigbeeRGBWBulb.groovy
-    // example : "he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0300 0x0000 {}", "delay 200",
-    // example : def commandtosend = "HE wattr 0x${device.deviceNetworkId} 8 0x000 0x010 0x42 {10"+packed+"}" // SAMPLELIGHT_ENDPOINT is defined as 8 in device code // the 10 on the end means 16 bytes length
-    //    ^^^^^^^^^^^check if working? 
-
-    
 }
 
 def heWattr() {
@@ -369,7 +629,26 @@ def writeAttribute() {
 def readAiiribute() {
     // example : https://community.hubitat.com/t/zigbee-writing-hex-string-with-he-wattr/38051/2?u=kkossev
     // example : zigbee.readAttribute(0x0000,0x0401,[mfgCode: "0x115F"])
+    
+    if (rawCommands==true) {
+        heRattr()
+    }
+    else {
+        // zigbee.readAttribute( .... )
+    }
+    
 }
+
+def heRattr() {
+    // example : https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/GenericZigbeeRGBWBulb.groovy
+    // example : "he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0300 0x0000 {}", "delay 200",
+    // example : def commandtosend = "HE wattr 0x${device.deviceNetworkId} 8 0x000 0x010 0x42 {10"+packed+"}" // SAMPLELIGHT_ENDPOINT is defined as 8 in device code // the 10 on the end means 16 bytes length
+    //    ^^^^^^^^^^^check if working? 
+}
+
+
+
+
 
 def activeEndpoints() {
     Map dummy = [:]
@@ -391,7 +670,17 @@ def test()
     //  send  cmd 20 data 3 to cluster 00C0
     // "he raw ${device.deviceNetworkId} 0 ${device.endpointId} 0x00C0 {11 00 20 03 00} {0xC216}
     // he raw [16 bit address] [source endpoint] [destination endpoint] [cluster id] {[payload]} {[profile id]}
-    cmd += "he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0x0006 {09 01 13 14 15}"
+    
+    
+    
+    // touchlink - reset to factory defaults
+    cmd += "he raw ${device.deviceNetworkId} 1 1 0x1000 {11 00 07 01 00 00 00} {0x0104}"
+    
+    
+    
+    
+    
+    //cmd += "he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0x1000 {09 01 40 00 00 01 01}  {0x0104}"
     //        11 -> Frame Control Field
     //        12 -> ???
     //        13 -> Command
@@ -666,8 +955,75 @@ https://www.nxp.com/docs/en/user-guide/JN-UG-3101.pdf
 https://www.drdsnell.com/projects/hubitat/drivers/AlmondClick.groovy
 ^^^^^^^^^^^^^ big list of Zigbee clusters ^^^^^^^^^^^^^^^^
 
+https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/environmentSensor.groovy
+^^^^^^^^^^^^^ temp/humidity/illuminance/pressure parsing sample
+
+https://github.com/iharyadi/hubitat/blob/master/Environment%20SensorEx/Environment%20SensorEX.groovy
+https://github.com/iharyadi/hubitat/blob/master/Environment%20SensorEx/Environment%20SensorEX.groovy
+^^^^^^^^ getLQITable() ^^^^^^^^^^^^^^^^^^^^^^
+
+https://community.hubitat.com/t/is-zigbee-a-con-overpriced/21887/121?u=kkossev
+The second tuple in the raw description is the application profile, 0104 is zha, C05E is zll
+
+
+
 
 
 */
 
 
+
+/* 
+
+=================== Tuya ====================
+Basic cluster 
+
+Commands:
+ID	    Name	                    Direction	Description
+0x00	Reset to factory defaults	C->S	    Recieve command
+
+
+
+
+Touchlink commisioning cluster
+================================
+Attributes (server):
+ID	    Name	        Data type	Range	        Default value
+0xFFFD	ClusterRevision	uint16-0x21	0x0000-0xffff	0x0001
+
+Attributes (client):
+ID	    Name	        Data type	Range	        Default value
+0xFFFD	ClusterRevision	uint16-0x21	0x0000-0xffff	0x0001
+
+Commands (server)
+ID	    Name	                    Direction	    Description
+0x00	Scan request	            C->S	        Recieve command
+0x02	Device information request	C->S	        Recieve command
+0x06	Identify request	        C->S	        Recieve command
+0x07	Reset to factory new request	C->S	    Recieve command
+0x14	Network join end device request	C->S	    Recieve command
+0x01	Scan response	            S->C	        Send command
+0x03	Device information response	S->C	        Send command
+0x40	Endpoint information	    S->C	        Send command
+0x41	Get group identifiers response	S->C	    Send command
+0x42	Get endpoint list response	S->C	        Send command
+
+Commands (client):
+ID	    Name	                    Direction	Description
+0x00	Scan request	            C->S	Send command
+0x02	Device information request	C->S	Send command
+0x06	Identify request	        C->S	Send command
+0x07	Reset to factory new request	C->S	Send command
+0x10	Network start request	    C->S	Send command
+0x12	Network join router request	C->S	Send command
+0x14	Network join end device	    C->S	Send command
+0x01	Scan response	            S->C	Recieve command
+0x03	Device information response	S->C	Recieve command
+0x11	Network start response	    S->C	Recieve command
+0x13	Network join router response	S->C	Recieve command
+0x15	Network join end device response	S->C	Recieve command
+0x40	Endpoint information	    S->C	Recieve command
+0x41	Get group identifiers response	S->C	Recieve command
+0x42	Get endpoint list response	S->C	Recieve command
+
+*/
