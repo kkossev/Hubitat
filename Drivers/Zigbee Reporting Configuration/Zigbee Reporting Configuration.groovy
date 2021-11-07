@@ -14,7 +14,8 @@
  * 
  *  Based on various other drivers including Hubitat crew examples, David McPaul, Markus Liljergren and many others
  * 
- *  ver. 1.0.0 2021-11-07 kkossev  - first version (temperature and humidity configuration)
+ *  ver. 1.0.0 2021-11-07 kkossev  - first version (temperature and humidity configuration when the device awakes)
+ *  ver. 1.0.1 2021-11-07 kkossev  - added sendConfigurationToDeviceNow
  *
 */
 public static String version()	  { return "v1.0.0" }
@@ -32,7 +33,8 @@ import java.util.concurrent.*
 // Field annotation makes these variables global to the class
 @Field static java.util.concurrent.Semaphore mutex = new java.util.concurrent.Semaphore(1)
 @Field static def queueMap = [:]
-@Field static def counter
+@Field static def displayCounter
+@Field static def timeoutCounter
 
 metadata {
     definition (name: "Zigbee Reporting Configuration", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Reporting%20Configuration/Zigbee%20Reporting%20Configuration.groovy" ) {
@@ -42,11 +44,9 @@ metadata {
 	capability "PressureMeasurement"            // pressure - NUMBER, unit: Pa || psi ???
 	capability "Battery"
         
-	//capability "Refresh"
     capability "Initialize"
-    //capability "Configuration"
 
-    attribute   "_1", "string"
+    attribute   "_1", "string"        // when defined as attributes, will be shown on top of the 'Current States' list ...
     attribute   "_2", "string"
     attribute   "_3", "string"
   
@@ -67,9 +67,9 @@ metadata {
         [name: "Minimum measurement change (Pa)", type: "ENUM", constraints: ["10", "1", "50", "100", "500", "1000", "10000"  ], description: "Select Minimum measurement change to be reported (Pa)"]
     ]
 */
-    command "sendConfigurationToDevice"
+    command "sendConfigurationToDeviceWhenAwake"
+    command "sendConfigurationToDeviceNow"
     command "getDeviceInfo"
-    //command "resetToDefaults"
     //command "identify" //,  [[name: "identify", type: "STRING", description: "flash a light with a period of 0.5 seconds"]]
     //command "test"
 
@@ -87,7 +87,6 @@ metadata {
                 defaultValue: 5, required: true
 */
 //            input name: 'loggingDuration', type: 'enum', title: '<b>Enable Logging?</b>', description: '<div><i>Automatically disables after selected time.</i></div><br>', options: [0: 'Disabled', 1800: '30 Minutes', 3600: '1 Hour', 86400: '24 Hours'], defaultValue: 0
-//            input name: "xxx", type: "STRING", title: "Enable description text logging", defaultValue: "tst"
     }
 }
 
@@ -218,14 +217,14 @@ private void parseAttributes(Map descMap, String cluster, String endPoint, List<
                         def text = "received batteryVoltageEvent: ${it.value}"
                         log.info "${device.displayName} ${text}"
                         updateCurrentStates(" "," ",text)
-                        stopStateCounter()
+                        stopDisplayCounter()
                         break
                     case "0021" :
                         batteryPercentageEvent(Integer.parseInt(descMap.value, 16))
                         def text = "received batteryPercentageEvent: ${it.value}"
                         log.info "${device.displayName} ${text}"
                         updateCurrentStates(" "," ",text)
-                        stopStateCounter()
+                        stopDisplayCounter()
                         break
                     default :
                         if (logEnable) log.warn "parseAttributes cluster:${cluster} UNKNOWN  attrId ${it.attrId} value:${it.value}"
@@ -370,12 +369,14 @@ private void processGlobalCommand(Map descMap) {
                             def text = "received Temperature Configuration command response status:${status}"
                             log.debug "${device.displayName} ${text}"
                             updateCurrentStates(" "," ",text)
+                            stopDisplayCounter()
                             break
                         case "0405" : // Humidity Configuration response
                             log.info "processGlobalCommand ${descMap.clusterId} (<b>Humidity Configuration</b> command response) clusterId: ${descMap.clusterId} status:${status}"
                             def text = "received Humidity Configuration command response status:${status}"
                             log.debug "${device.displayName} ${text}"
                             updateCurrentStates(" "," ",text)
+                            stopDisplayCounter()
                             break
                         default :
                             if (txtEnable) log.warn "skipped GlobalCommand Configuration response cluster: ${descMap.clusterId} : ${descMap}"
@@ -586,9 +587,9 @@ def test() {
 
 
 def updateCurrentStates(_1=" ", _2=" ", _3= " ") {
-    sendEvent(name: "_1", value: _1, isStateChange: false)    
-    sendEvent(name: "_2", value: _2, isStateChange: false)    
-    sendEvent(name: "_3", value: _3, isStateChange: false)        
+    if (_1 != "") {sendEvent(name: "_1", value: _1, isStateChange: false)}
+    if (_2 != "") {sendEvent(name: "_2", value: _2, isStateChange: false)}
+    if (_3 != "") {sendEvent(name: "_3", value: _3, isStateChange: false)}       
 }
 
 void resetToDefaults() {
@@ -627,8 +628,7 @@ def initialize() {
     if (logEnable) {log.debug "Zigbee Reporting Configuration initialize()"}
     state.clear()
     updateCurrentStates()
-    //state.counter = 0
-    counter = 0
+    displayCounter = timeoutCounter = 0
     if (repairAggressive==true) {
     	List<String> cmds = []
 
@@ -652,26 +652,50 @@ def updated()
     if (logEnable) {log.debug "Zigbee Reporting Configuration updated()"}
 }
 
-def startStateCounter() {
-    //state.counter=1
-    counter=1
-    runInMillis(1000, updateStateCounter)
-}
-def stopStateCounter() {
-    //state.counter=0
-    counter=0
+def startDisplayCounter() {
+    displayCounter = 1
+    runInMillis(1000, updateDisplayCounter)
 }
 
-def updateStateCounter() {
-    if (counter != 0) {
-        //def sCounter = "Waiting... ${state.counter}"
-        def sCounter = "Waiting... ${counter}"
-        sendEvent(name: "_2", value: sCounter, isStateChange: false)    
-        //state.counter = state.counter + 1
-        counter = counter + 1
-        runInMillis(1000, updateStateCounter)
+def stopDisplayCounter() {
+    displayCounter = 0
+    timeoutCounter = 0
+}
+
+def updateDisplayCounter() {
+    if (displayCounter != 0) {
+        def sCounter = "Waiting... ${displayCounter}"
+        sendEvent(name: "_2", value: sCounter)    
+        displayCounter = displayCounter + 1
+        runInMillis(1000, updateDisplayCounter)
     }
 }
+
+
+def startTimeoutCounter(int timeout) {
+    timeoutCounter = timeout
+    runInMillis(1000, updateTimeoutCounter)
+}
+
+def stopTimeoutCounter() {
+    timeoutCounter = 0
+}
+
+def updateTimeoutCounter() {
+    if (timeoutCounter > 0) {
+        if (traceEnable==true) {log.trace "timeoutCounter = ${timeoutCounter}"}
+        timeoutCounter = timeoutCounter - 1
+        if (timeoutCounter > 0) {
+            runInMillis(1000, updateTimeoutCounter)
+        }
+        else {
+            if (traceEnable==true) {log.warn "TIMEOUT!"}
+            updateCurrentStates("", " ", "TIMEOUT!")
+            stopDisplayCounter()
+        }
+    }
+}
+
 
 
 def intTo16bitUnsignedHex(value) {
@@ -688,7 +712,7 @@ void addToQueue(String command) {
     def text = "queued command " + queueMap.get(device.displayName)
     log.info "${device.displayName} ${text}"
     updateCurrentStates(text, " ", "please, wake up the device... ")
-    startStateCounter()
+    startDisplayCounter()
 }
 
 String removeFromQueue() {
@@ -749,7 +773,7 @@ List<String> getConfigureCmds() {
         tMin = Integer.parseInt(ta[0]); 
         tMax = Integer.parseInt(ta[1]); 
         tDelta = Integer.parseInt(ta[2]); 
-        log.debug "tMin = ${tMin};  tMax = ${tMax};  tDelta = ${tDelta}"
+        if (traceEnable==true) {log.trace "tMin = ${tMin};  tMax = ${tMax};  tDelta = ${tDelta}"}
         cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, tMin, tMax, tDelta, [:], 200)  // Configure temperature
         //List configureReporting(Integer clusterId, Integer attributeId, Integer dataType, Integer minReportTime, Integer maxReportTime, Integer reportableChange = null, Map additionalParams=[:], int delay = STANDARD_DELAY_INT)
     }
@@ -763,34 +787,13 @@ List<String> getConfigureCmds() {
         hMin = Integer.parseInt(ta[0]); 
         hMax = Integer.parseInt(ta[1]); 
         hDelta = Integer.parseInt(ta[2]); 
-        log.debug "hMin = ${hMin};  hMax = ${hMax};  hDelta = ${hDelta}"
+        if (traceEnable==true) {log.trace "hMin = ${hMin};  hMax = ${hMax};  hDelta = ${hDelta}"}
         cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, hMin, hMax, hDelta, [:], 200)  // Configure humidity
         //List configureReporting(Integer clusterId, Integer attributeId, Integer dataType, Integer minReportTime, Integer maxReportTime, Integer reportableChange = null, Map additionalParams=[:], int delay = STANDARD_DELAY_INT)
     }
     else {
         log.warn "state.humConfig is NULL, skipping humidity reporting configuration"
     }
-    
-	
-    
-    
-    
-    
-  // cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, ${state.tempConfig}, [:], 500)  // Configure temperature 
-  //  cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure temperature - Report every minute, 1 second if any change
-    
-/*    
-	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 300, 3600, 100, [:], 500)  // Configure Pressure - Report once per hour
-	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, 300, 3600, 100, [:], 500)  // Configure Humidity - Report once per hour
-	// Lumi does not report 0x0001
-	if (device.getDataValue("manufacturer") == "LUMI") {
-		cmds += zigbee.configureReporting(0x0000, 0xFF01, DataType.UINT8, 0, 21600, 1, [:], 500)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-	} else {
-		cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 500)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-		cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 500)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
-	}
-*/
-    
 	return cmds
 }
 
@@ -811,7 +814,7 @@ void sendDelayedCmds() {
 		} else if (command == "identify") {
 			sendZigbeeCommands(getIdentifyCmds(), 500)
 		}
-        stopStateCounter()
+        stopDisplayCounter()    // ??????
 	}
 }
 
@@ -858,8 +861,17 @@ void identify() {
 	//log.info "${device.displayName} queued command identify"
 }
 
-void sendConfigurationToDevice() {
+void sendConfigurationToDeviceWhenAwake() {
     addToQueue("reconfigure")
+}
+
+void sendConfigurationToDeviceNow() {
+    def text = "trying to send reconfigure command NOW"
+    log.debug "${device.displayName} ${text}"
+    updateCurrentStates(text, " ",  " ")    
+    sendZigbeeCommands(getConfigureCmds())
+    startDisplayCounter()
+    startTimeoutCounter(10)
 }
 
 
