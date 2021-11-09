@@ -1,0 +1,173 @@
+/**
+ *  Zigbee Metering Plug driver for Hubitat Elevation - Power, Energy, Voltage, Amperage
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *  for the specific language governing permissions and limitations under the License.
+ *
+ * 
+ *  Based on "SmartThings/iquix" DH
+ * 
+ *
+ *  ver. 1.0.0 2021-11-09 kkossev  - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
+ *
+ */
+import hubitat.zigbee.zcl.DataType
+
+metadata {
+    definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
+        capability "EnergyMeter"
+        capability "PowerMeter"
+        capability "CurrentMeter"
+        capability "Actuator"
+        capability "Switch"
+        capability "Refresh"
+        capability "Health Check"
+        capability "Sensor"
+        capability "Configuration"
+
+        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
+        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
+        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Blitzwolf BW-SHP13  
+        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+    }
+    preferences {
+        input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
+    }
+}
+
+def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
+def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
+
+def parse(String description) {
+    if (logEnable) {log.debug "description is $description"}
+    def event = zigbee.getEvent(description)
+    def powerDiv = 1
+    def energyDiv = 100
+    def currentDiv = 1000
+
+    if (event) {
+        //log.info "event enter:$event"
+        if (event.name== "power") {
+            event.value = event.value/powerDiv
+            event.unit = "W"
+        } else if (event.name== "energy") {
+            event.value = event.value/energyDiv
+            event.unit = "kWh"
+        }
+        if (txtEnable) {log.info "${event.name} = $event.value"} 
+        sendEvent(event)
+        if (event.name== "switch") {
+            //TODO: if switch changes previous state - refresh!
+        }
+    } else {
+        List result = []
+        def descMap = zigbee.parseDescriptionAsMap(description)
+        if (logEnable) {log.debug "Desc Map: $descMap"}
+
+        List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value]]
+        descMap.additionalAttrs.each {
+            attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value]
+        }
+
+        attrData.each {
+                def map = [:]
+                if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
+                        map.name = "power"
+                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
+                        map.unit = "W"
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
+                        map.name = "voltage"
+                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
+                        map.unit = "V"
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
+                        map.name = "amperage "
+                        map.value = zigbee.convertHexToInt(it.value)/currentDiv
+                        map.unit = "A"
+                }
+                else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
+                        map.name = "energy"
+                        map.value = zigbee.convertHexToInt(it.value)/energyDiv
+                        map.unit = "kWh"
+                }
+                else {
+                    //log.warn "^^^^ UNRPOCESSED! ^^^^"
+                }
+
+                if (map) {
+                    if (txtEnable) {log.info "${map.name} = ${map.value} ${map.unit}"}
+                    result << createEvent(map)
+                }
+                if (logEnable) {log.debug "Parse returned $map"}
+        }
+        return result
+    }
+}
+
+def off() {
+    def cmds = zigbee.off()
+    if (device.getDataValue("model") == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])
+    }
+    return cmds
+}
+
+
+def on() {
+    def cmds = zigbee.on()
+    if (device.getDataValue("model") == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])
+    }
+    return cmds
+}
+
+/**
+ * PING is used by Device-Watch in attempt to reach the Device
+ * */
+def ping() {
+    return refresh()
+}
+
+
+def refresh() {
+    if (logEnable) {log.debug "refresh"}
+    zigbee.onOffRefresh() +
+    zigbee.electricMeasurementPowerRefresh() +
+    zigbee.readAttribute(0x0702, 0x0000) + 
+    zigbee.readAttribute(0x0B04, 0x0505) +      // voltage
+    zigbee.readAttribute(0x0B04, 0x0508)        // current
+}
+
+def configure() {
+    // this device will send instantaneous demand and current summation delivered every 1 minute
+    sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+    log.debug "Configuring Reporting"
+    if (device.getDataValue("model") == "TS0121") {
+        unschedule()
+        runEvery1Minute(refresh)    // was powerRefresh
+    }    
+    return refresh() +
+           zigbee.onOffConfig() +
+           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +
+           //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
+}
+
+def powerRefresh() {
+    def cmds = zigbee.electricMeasurementPowerRefresh()
+    cmds.each{
+        sendHubCommand(new hubitat.device.HubMultiAction(delayBetween(cmds,200), hubitat.device.Protocol.ZIGBEE))
+    }
+}
+
+void sendZigbeeCommands(List<String> cmds) {
+    if (logEnable) {log.debug "${device.displayName} sendZigbeeCommands received : ${cmds}"}
+	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+}
