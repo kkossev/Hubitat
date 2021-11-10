@@ -14,9 +14,11 @@
  *  Based on "SmartThings/iquix" DH
  * 
  *
- *  ver. 1.0.0 2021-11-09 kkossev  - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
+ *  ver. 1.0.0 2021-11-09 kkossev - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
+ *  ver. 1.0.1 2021-11-10 kkossev - "amperage" attribute name bug fix; added "pollingInterval" preference
  *
  */
+import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 metadata {
@@ -37,20 +39,21 @@ metadata {
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
-        input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
+                   range: "10..3600", defaultValue: 60)
     }
 }
 
-def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
-def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
+// Constants
+@Field static final Integer powerDiv = 1
+@Field static final Integer energyDiv = 100
+@Field static final Integer currentDiv = 1000
 
 def parse(String description) {
     if (logEnable) {log.debug "description is $description"}
     def event = zigbee.getEvent(description)
-    def powerDiv = 1
-    def energyDiv = 100
-    def currentDiv = 1000
 
     if (event) {
         //log.info "event enter:$event"
@@ -65,6 +68,10 @@ def parse(String description) {
         sendEvent(event)
         if (event.name== "switch") {
             //TODO: if switch changes previous state - refresh!
+            if (state.switch != event.value ) {
+                if (logEnable) {log.trace "switch state changed from <b>${state.switch}</b> to <b>${event.value}</b>"}
+                state.switch = event.value
+            }
         }
     } else {
         List result = []
@@ -82,6 +89,10 @@ def parse(String description) {
                         map.name = "power"
                         map.value = zigbee.convertHexToInt(it.value)/powerDiv
                         map.unit = "W"
+                        if (state.power != map.value ) {
+                            if (logEnable) {log.trace "power changed from <b>${state.power}</b> to <b>${map.value}</b>"}
+                            state.power = map.value
+                        }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
                         map.name = "voltage"
@@ -89,7 +100,7 @@ def parse(String description) {
                         map.unit = "V"
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
-                        map.name = "amperage "
+                        map.name = "amperage"
                         map.value = zigbee.convertHexToInt(it.value)/currentDiv
                         map.unit = "A"
                 }
@@ -139,6 +150,8 @@ def ping() {
 
 def refresh() {
     if (logEnable) {log.debug "refresh"}
+    runIn( pollingInterval.value, refresh)
+    
     zigbee.onOffRefresh() +
     zigbee.electricMeasurementPowerRefresh() +
     zigbee.readAttribute(0x0702, 0x0000) + 
@@ -147,12 +160,16 @@ def refresh() {
 }
 
 def configure() {
+    state.clear()
+    state.power = "unknown"
+    state.switch = "unknown"
     // this device will send instantaneous demand and current summation delivered every 1 minute
     sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     log.debug "Configuring Reporting"
     if (device.getDataValue("model") == "TS0121") {
         unschedule()
-        runEvery1Minute(refresh)    // was powerRefresh
+        //runEvery1Minute(refresh)    // was powerRefresh
+        runIn( pollingInterval.value, refresh)
     }    
     return refresh() +
            zigbee.onOffConfig() +
