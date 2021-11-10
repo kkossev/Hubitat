@@ -1,9 +1,9 @@
 {
   "packageName": "Tuya Zigbee Metering Plug",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minimumHEVersion": "2.2.0",
-  "dateReleased": "2021-11-09",
+  "dateReleased": "2021-11-10",
   "drivers": [
     {
       "id": "c418ee54-b6b3-4e3e-b695-3347f27910f6",
