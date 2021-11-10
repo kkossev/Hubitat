@@ -21,6 +21,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "db071ec7-157f-4397-a63c-18f2a3b16bec",
+      "name": "Tuya Zigbee Metering Plug",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/packageManifest.json",
+      "description": "Tuya Zigbee Metering Plug driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
