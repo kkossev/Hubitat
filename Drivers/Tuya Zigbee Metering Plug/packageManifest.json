@@ -1,0 +1,16 @@
+{
+  "packageName": "Tuya Zigbee Metering Plug",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.0",
+  "dateReleased": "2021-11-09",
+  "drivers": [
+    {
+      "id": "c418ee54-b6b3-4e3e-b695-3347f27910f6",
+      "name": "Tuya Zigbee Metering Plug",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug",
+      "required": false
+    }
+  ]
+}
