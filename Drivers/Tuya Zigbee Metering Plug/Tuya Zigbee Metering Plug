@@ -15,7 +15,8 @@
  * 
  *
  *  ver. 1.0.0 2021-11-09 kkossev - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
- *  ver. 1.0.1 2021-11-10 kkossev - "amperage" attribute name bug fix; added "pollingInterval" preference
+ *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
+ *  ver. 1.1.0 2021-11-10 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *
  */
 import groovy.transform.Field
@@ -23,15 +24,22 @@ import hubitat.zigbee.zcl.DataType
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
-        capability "EnergyMeter"
-        capability "PowerMeter"
-        capability "CurrentMeter"
-        capability "Actuator"
-        capability "Switch"
-        capability "Refresh"
-        capability "Health Check"
+        capability "EnergyMeter"          // energy - NUMBER, unit:kWh
+        capability "PowerMeter"           // power - NUMBER, unit:W
+        capability "CurrentMeter"         // amperage - NUMBER, unit:A
+        capability "VoltageMeasurement"   // voltage - NUMBER, unit:V; frequency - NUMBER, unit:Hz
+        capability "Actuator"    
+        capability "Switch"               // switch - ENUM ["on", "off"]; off(); on()
+        capability "Outlet"               // switch - ENUM ["on", "off"]; off(); on()
+        capability "Refresh"              // refresh()
+        capability "Health Check"         // checkInterval - NUMBER; ping()
         capability "Sensor"
-        capability "Configuration"
+        capability "Configuration"        // configure()
+        capability "PresenceSensor"       // ENUM ["present", "not present"]
+        capability "Polling"              // poll()
+        //capability "SignalStrength"       // lqi - NUMBER; rssi - NUMBER
+        //capability "PowerSource"          // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
@@ -41,8 +49,11 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
+        input (name: "autoPollingEnabled", type: "bool", title: "<b>Enable automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
+        if (autoPollingEnabled?.value==true) {
+            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: 60)
+        }
     }
 }
 
@@ -50,6 +61,7 @@ metadata {
 @Field static final Integer powerDiv = 1
 @Field static final Integer energyDiv = 100
 @Field static final Integer currentDiv = 1000
+@Field static final Integer presenceCountTreshold = 3
 
 def parse(String description) {
     if (logEnable) {log.debug "description is $description"}
@@ -57,6 +69,7 @@ def parse(String description) {
 
     if (event) {
         //log.info "event enter:$event"
+        setPresent()
         if (event.name== "power") {
             event.value = event.value/powerDiv
             event.unit = "W"
@@ -68,9 +81,9 @@ def parse(String description) {
         sendEvent(event)
         if (event.name== "switch") {
             //TODO: if switch changes previous state - refresh!
-            if (state.switch != event.value ) {
-                if (logEnable) {log.trace "switch state changed from <b>${state.switch}</b> to <b>${event.value}</b>"}
-                state.switch = event.value
+            if (state.lastSwitchState != event.value ) {
+                if (logEnable) {log.trace "switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
+                state.lastSwitchState = event.value
             }
         }
     } else {
@@ -89,9 +102,9 @@ def parse(String description) {
                         map.name = "power"
                         map.value = zigbee.convertHexToInt(it.value)/powerDiv
                         map.unit = "W"
-                        if (state.power != map.value ) {
-                            if (logEnable) {log.trace "power changed from <b>${state.power}</b> to <b>${map.value}</b>"}
-                            state.power = map.value
+                        if (state.lastPower != map.value ) {
+                            if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${map.value}</b>"}
+                            state.lastPower = map.value
                         }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
@@ -147,11 +160,8 @@ def ping() {
     return refresh()
 }
 
-
-def refresh() {
-    if (logEnable) {log.debug "refresh"}
-    runIn( pollingInterval.value, refresh)
-    
+// Sends refresh / readAttribute commands to the plug
+def poll() {
     zigbee.onOffRefresh() +
     zigbee.electricMeasurementPowerRefresh() +
     zigbee.readAttribute(0x0702, 0x0000) + 
@@ -159,17 +169,39 @@ def refresh() {
     zigbee.readAttribute(0x0B04, 0x0508)        // current
 }
 
+def refresh() {
+    if (logEnable) {log.debug "refresh"}
+    poll()
+}
+
+def autoPoll() {
+    if (logEnable) {log.debug "autoPoll()"}
+    checkIfNotPresent()
+    if (autoPollingEnabled?.value==true) {
+        runIn( pollingInterval.value, autoPoll)
+    }
+    poll()    
+}
+
+// Called when preferences are saved
+def updated(){
+    if (logEnable) {log.debug "updated() : Saved preferences"}
+    configure()
+}
+
+
 def configure() {
     state.clear()
-    state.power = "unknown"
-    state.switch = "unknown"
+    state.lastPower = "unknown"
+    state.lastSwitchState = "unknown"
+    state.lastPresenceState = "unknown"
+    state.notPresentCounter = 0
     // this device will send instantaneous demand and current summation delivered every 1 minute
     sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     log.debug "Configuring Reporting"
     if (device.getDataValue("model") == "TS0121") {
         unschedule()
-        //runEvery1Minute(refresh)    // was powerRefresh
-        runIn( pollingInterval.value, refresh)
+        runIn( pollingInterval.value, autoPoll)
     }    
     return refresh() +
            zigbee.onOffConfig() +
@@ -177,10 +209,33 @@ def configure() {
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
 }
 
+// not used !
 def powerRefresh() {
     def cmds = zigbee.electricMeasurementPowerRefresh()
     cmds.each{
         sendHubCommand(new hubitat.device.HubMultiAction(delayBetween(cmds,200), hubitat.device.Protocol.ZIGBEE))
+    }
+}
+
+// called when anything was received from the Zigbee device in parse() method..
+//
+def setPresent() {
+    if (state.lastPresenceState != "present") {
+    	sendEvent(name: "presence", value: "present") 
+        state.lastPresenceState = "present"
+    }
+    state.notPresentCounter = 0
+}
+
+// called from autoPoll()
+//
+def checkIfNotPresent() {
+    state.notPresentCounter = state.notPresentCounter + 1
+    if (state.notPresentCounter > presenceCountTreshold) {
+        if (state.lastPresenceState != "not present") {
+	        sendEvent(name: "presence", value: "not present")
+            state.lastPresenceState = "not present"
+        }
     }
 }
 
