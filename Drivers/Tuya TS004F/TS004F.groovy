@@ -18,6 +18,7 @@
  * ver. 2.1.1 2021-10-20 kkossev     - numberOfButtons event bug fix; 
  * ver. 2.2.0 2021-10-20 kkossev     - First succesfuly working version with HE!
  * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
+ * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
  *
  */
 
@@ -32,6 +33,7 @@ metadata {
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
+    capability "Battery"
 
     capability "Initialize"
     capability "Configuration"
@@ -63,7 +65,6 @@ def parse(String description) {
     }
 	def result = []
     def buttonNumber = 0
-//    final  DEBOUNCE_TIME = 900
     
 	if (event) {
         result = event
@@ -71,29 +72,22 @@ def parse(String description) {
     }
     else if (description?.startsWith("catchall")) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
-        //if (logEnable) log.debug "catchall descMap: $descMap"
+        if (logEnable) log.debug "catchall descMap: $descMap"
         def buttonState = "unknown"
         // when TS004F initialized in Scene switch mode!
-        if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "03" ) {
- 	        buttonNumber = reverseButton==true ? 3 : 1
-        }
-        else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "04" ) {
-  	        buttonNumber = reverseButton==true  ? 4 : 2
-        }
-        else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "02" ) {
-            buttonNumber = reverseButton==true  ? 2 : 3
-        }
-        else if (descMap.clusterInt == 0x0006 && descMap.sourceEndpoint == "01" ) {
-   	        buttonNumber = reverseButton==true  ? 1 : 4
-        }
-        else if (descMap.clusterInt == 0x8021 && descMap.sourceEndpoint == "00") {
-            if (descMap.data[1]=="00") {
-                if (logEnable) {log.debug "binding confirmation received"}
+        if (descMap.clusterInt == 0x0006 && descMap.command == "FD") {
+            if (descMap.sourceEndpoint == "03") {
+     	        buttonNumber = reverseButton==true ? 3 : 1
             }
-            else {
-                if (logEnable) {log.warn "binding confirmation ERROR ${descMap.data[1]}"}
+            else if (descMap.sourceEndpoint == "04") {
+      	        buttonNumber = reverseButton==true  ? 4 : 2
             }
-            if (logEnable) {log.debug "catchall descMap: $descMap"}
+            else if (descMap.sourceEndpoint == "02") {
+                buttonNumber = reverseButton==true  ? 2 : 3
+            }
+            else if (descMap.sourceEndpoint == "01") {
+       	        buttonNumber = reverseButton==true  ? 1 : 4
+            }
         }
         else {
             if (logEnable) {log.warn "unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
@@ -130,54 +124,11 @@ def parse(String description) {
             runInMillis(DEBOUNCE_TIME, buttonDebounce)
 	    } 
 	} // if catchall
-    
-    else if (description?.startsWith("read attr -")) {
-        //if (logEnable) log.debug "processing cluster ${descMap?.cluster}"
-        switch(descMap?.cluster) {
-            case "0000":
-                switch (descMap?.attrId) {
-                    case "0001":
-                    if (logEnable) {log.debug "Application ID Received ${descMap?.value}"}
-                        //updateApplicationId(msgMap['value'])
-                        break
-                    case "0004":
-                        if (logEnable) {log.debug("Manufacturer Name Received ${descMap?.value}")}
-                        //updateManufacturer(msgMap['value'])
-                        break
-                    case "0005":
-                        if (logEnable) {log.debug("Model Name Received ${descMap?.value}")}
-                        //setCleanModelName(newModelToSet=msgMap["value"])
-                        break
-                    default:
-                        break
-                }
-                break
-            case "0001":    // battery reporting
-                if (descMap.commandInt != 0x07) {
-                    if (logEnable) {log.debug("processing read attr: cluster 0x001 (Power Configuration)")}
-                    if (descMap.attrInt == 0x0021) {
-                        getBatteryPercentageResult(Integer.parseInt(descMap?.value,16))
-                    } else {
-                        getBatteryResult(Integer.parseInt(descMap?.value, 16))
-                    }                    
-                }
-                else {
-                    if (logEnable) {log.warn("UNPROCESSED battery reporting because escMap.commandInt == 0x07 ????")}
-                }
-                break
-            default:
-                if (logEnable) {
-                    log.warn "UNPROCESSED cluster ${descMap?.cluster} !!! descMap : ${descMap} ######## description = ${description}"
-                }
-                break
-        }
-    } // if read attr
     else {
         if (logEnable) {log.warn "DID NOT PARSE MESSAGE for description : $description"}
 	}
     return result
 }
-
 
 def refresh() {
 }
@@ -187,7 +138,6 @@ def configure() {
 	if (logEnable) log.debug "Configuring device ${device.getDataValue("model")} in Scene Switch mode..."
     initialize()
 }
-
 
 def installed() 
 {
@@ -206,12 +156,10 @@ def updated()
     if (logEnable) {log.debug "updated()"}
 }
 
-
 def buttonDebounce(button) {
     if (logEnable) log.warn "debouncing button ${state.lastButtonNumber}"
     state.lastButtonNumber = 0
 }
-
 
 def switchToSceneMode()
 {
@@ -223,26 +171,47 @@ def switchToDimmerMode()
      zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)   
 }
 
+def buttonEvent(buttonNumber, buttonState) {
+
+    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true]
+    if (txtEnable) {log.info "$event.descriptionText"}
+    sendEvent(event)
+}
+
+def push(buttonNumber) {
+    buttonEvent(buttonNumber, "pushed")
+}
+
+def doubleTap(buttonNumber) {
+    buttonEvent(buttonNumber, "doubleTapped")
+}
+
+def hold(buttonNumber) {
+    buttonEvent(buttonNumber, "held")
+}
 
 def readAttributes() {
-    Map dummy = [:]
     ArrayList<String> cmd = []
-    
-    cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], dummy, delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
-    cmd += zigbee.readAttribute(0x0006, 0x8004, dummy, delay=50)    // success / 0x00
-    cmd += zigbee.readAttribute(0xE001, 0xD011, dummy, delay=50)    // Unsupported attribute (0x86)
-    cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], dummy, delay=50)    // Battery voltage + Battery Percentage Remaining
-    cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, dummy, delay=50)        // switch into Scene Mode !
-    cmd += zigbee.readAttribute(0x0006, 0x8004, dummy, delay=50)
+    cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
+    cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)                      // success / 0x00
+    cmd += zigbee.readAttribute(0xE001, 0xD011, [:], delay=50)                      // Unsupported attribute (0x86)
+    cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [:], delay=50)            // Battery voltage + Battery Percentage Remaining
+    cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
+    cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
+    //
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    //
     sendZigbeeCommands(cmd)
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
-    if (logEnable) {log.debug "sendZigbeeCommands(cmd=$cmd)"}
+    if (logEnable) {log.trace "sendZigbeeCommands(cmd=$cmd)"}
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
     sendHubCommand(allActions)
 }
-
