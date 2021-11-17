@@ -1,9 +1,10 @@
 {
   "packageName": "Tuya Scene Switch TS004F",
   "author": "Krassimir Kossev",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "minimumHEVersion": "1.0.0",
   "dateReleased": "2021-10-23",
+  "releaseNotes": "2.2.0 2021-10-20 - First succesfuly working version with HE!\n2.2.1 - added 'Reverse button order' preference option\n2.2.2 - added battery reporting capability; added button push() doubleTapped() and held() handlers for use in Hubutat Dashboards",
   "drivers": [
     {
       "id": "0135dcaf-2335-457f-bda3-ffdaa2249d2e",
