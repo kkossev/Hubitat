@@ -1,5 +1,6 @@
 /**
- *  Hubitat Zigbee Lab driver.
+ *  Zigbee Lab HE driver
+ *
  *  This is a HE driver to consolidate all my experimental Zigbee protocol bits and pieces from my production drivers into a single test driver code.
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -11,15 +12,14 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- *  The inital version was based on ST DH "Zemismart Button", namespace: SangBoy, author: YooSangBeom
  * 
  * ver. 1.0.0 2021-10-24 kkossev  - first dummy version
- * ver. 1.0.1 2021-10-25 kkossev  - 
+ * ver. 1.0.1 2021-11-18 kkossev  - even more messy stuff
  *
 */
+public static String version()	  { return "v1.0.1" }
 
-//import com.zsmartsystems.zigbee.dongle.ember.EmberNcp
-//import com.zsmartsystems.zigbee.sniffer.internal.silabs
+
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
@@ -31,12 +31,27 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
 
 metadata {
-    definition (name: "Hubitat Zigbee Lab", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Hubitat%20Zigbee%20Lab/Hubitat%20Zigbee%20Lab.groovy" ) {
+    definition (name: "Zigbee Lab", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Lab/Zigbee%20Lab.groovy" ) {
       
-	capability "Refresh"
-    capability "Initialize"
-    capability "Configuration"
+		capability "Refresh"
+    	capability "Initialize"
+    	capability "Configuration"
+        capability "EnergyMeter"          // energy - NUMBER, unit:kWh
+        capability "PowerMeter"           // power - NUMBER, unit:W
+        capability "CurrentMeter"         // amperage - NUMBER, unit:A
+        capability "VoltageMeasurement"   // voltage - NUMBER, unit:V; frequency - NUMBER, unit:Hz
+        capability "Actuator"    
+        capability "Switch"               // switch - ENUM ["on", "off"]; off(); on()
+        capability "Outlet"               // switch - ENUM ["on", "off"]; off(); on()
+        capability "Health Check"         // checkInterval - NUMBER; ping()
+        capability "Sensor"
+        capability "Configuration"        // configure()
+        capability "PresenceSensor"       // ENUM ["present", "not present"]
+        capability "Polling"              // poll()
+        //capability "SignalStrength"       // lqi - NUMBER; rssi - NUMBER
+        //capability "PowerSource"          // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
 
+    attribute   "driver", "string"
   
     command "activeEndpoints"
     command "zdoBind"
@@ -44,31 +59,44 @@ metadata {
     command "raw"
     command "zigbeeCommand"
     command "heCr"
-    command "readAiiribute"
+    command "configureReporting"
+    command "resetReportingToFactoryDefaults"
+// command "playSoundByName", [[name: "Sound Name", type: "STRING", description: "Sound object name"], [name: "Set Volume", type: "NUMBER", description: "Sets the volume before playing the message"],[name: "Restore Volume", type: "NUMBER", description: "Restores the volume after playing"]]
+//        command "playTellStory", [[name: "Set Volume", type: "NUMBER", description: "Sets the volume before playing the message"],[name: "Restore Volume", type: "NUMBER", description: "Restores the vo        
+    command "readAttribute", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"], [name: "Attribute", type: "STRING", description: "Attribute (Hex)", defaultValue : "0002"]]
     command "readAttributesTS004F"
     command "heGrp"
     command "test"
     command "test2"
+    command "heCmd"
     command "leaveAndRejoin"
     command "enrollResponse"
     command "getClusters"
     command "zclGlobal"
 
       
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_bngwdjsr", model: "ANY", deviceJoinName: "Hubitat Zigbee Lab"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_ANY_", model: "ANY", deviceJoinName: "Hubitat Zigbee Lab"
     }
     preferences {
         input (name: "traceEnable", type: "bool", title: "Enable trace logging", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
         input (name: "rawCommands", type: "bool", title: "Send raw commands where applicable", defaultValue: false)
+        if (autoPollingEnabled?.value==true) {
+            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
+                   range: "10..3600", defaultValue: 60)
+        }
     }
 }
+
 
 // Constants
 @Field static final Integer DIMMER_MODE = 0
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 900
+@Field static final Integer powerDiv = 1
+@Field static final Integer energyDiv = 100
+@Field static final Integer currentDiv = 1000
 
 
 // Parse incoming device messages to generate events
@@ -190,6 +218,14 @@ private void parseAttributes(String cluster, String endPoint, List<Map> addition
                 break
             case "0006" :
                 switch (it.attrId) {
+                    /*
+                        // https://github.com/zigpy/zha-device-handlers/pull/1105/commits/3af7d9776b90f275b068bb91e00e8e0633bef1ef
+                            attributes = OnOff.attributes.copy()
+                    attributes.update({0x8002: ("power_on_state", TZBPowerOnState)})
+                    attributes.update({0x8001: ("backlight_mode", SwitchBackLight)})
+                    attributes.update({0x8002: ("power_on_state", PowerOnState)})
+                    attributes.update({0x8004: ("switch_mode", SwitchMode)})
+                    */
                     case "8004" :        // Tuya TS004F
                         def mode = it.value=="00" ? "Dimmer" : it.value=="01" ? "Scene Switch" : "UNKNOWN " + it.value.ToString()
                         if (logEnable) log.info "parseAttributes cluster:${cluster} attrId ${it.attrId} TS004F mode: ${mode}"
@@ -289,6 +325,11 @@ private void processGlobalCommand(Map descMap) {
                             break
                         default :
                             log.warn "processGlobalCommand ${descMap.clusterId} (read attribute response) UNKNOWN clusterId: ${descMap.clusterId} data:${descMap.data}"
+                            def status = descMap.data[2]
+                            def hexValue = descMap.data[1] + descMap.data[0] 
+                            if (status == "86") {
+                                log.warn "Unsupported Attributte ${hexValue}"
+                            }
                     }
                     break
                 case "04" : //write attribute response
@@ -465,6 +506,11 @@ def parse(String description) {
 
 
 def refresh() {
+    def comment = "Hubitat Zigbee Lab"
+    state.comment = comment
+    def attr = "test attribure"
+    sendEvent(name: "attribute1", value: attr)
+    updateDataValue('attribute1', attr)
 }
 
 
@@ -480,10 +526,11 @@ def installed()
 }
 
 def initialize() {
-    readAttributesTS004F()
+   // readAttributesTS004F()
     def numberOfButtons = 4
     sendEvent(name: "numberOfButtons", value: numberOfButtons , displayed: false)
     state.lastButtonNumber = 0
+    configureReporting()
 }
 
 def updated() 
@@ -508,8 +555,51 @@ def switchToDimmerMode()
      zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)   
 }
 
+def configureReporting(  ) {
+    Integer endpointId = 1
+    ArrayList<String> cmd = []
+    
+    // List configureReporting(Integer clusterId, Integer attributeId, Integer dataType, Integer minReportTime, Integer maxReportTime, Integer reportableChange = null, Map additionalParams=[:], int delay = STANDARD_DELAY_INT)
+    // was (                                0x0402,             0x0000,             0x29,                 60,              3600,             20,                         [:],                     52)
+    cmd += zigbee.configureReporting(0x0402, 0x0000, 0x29, 1, 120, 1, [:], 52)        // was (0x0402, 0x0000, 0x29, 60, 3600, 20, [:], 52)
+    cmd += zigbee.configureReporting(0x0405, 0x0000, 0x29, 1, 120, 1, [:], 53)        // was (0x0405, 0x0000, 0x29, 60, 3600, 200, [:], 53)   
+
+    cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021])
+    cmd += zigbee.readAttribute(0x0402, 0x0000)
+    cmd += zigbee.readAttribute(0x0405, 0x0000)
+    
+    log.trace "configureReporting : ${cmd}"
+    sendZigbeeCommands(cmd)
+}
+
+def resetReportingToFactoryDefaults() {
+    return getResetToDefaultsCmds()
+}
+
+List<String> getResetToDefaultsCmds() {
+	List<String> cmds = []
+
+	cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 0xFFFF, null, [:], 500)	// Reset Battery Voltage reporting to default
+	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 0xFFFF, null, [:], 500)	// Reset Battery % reporting to default
+	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 0, 0xFFFF, null, [:], 500)	// Reset Temperature reporting to default (looks to be 1/2 hr reporting)
+	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 0, 0xFFFF, null, [:], 500)	// Reset Pressure reporting to default (looks to be 1/2 hr reporting)
+	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 0, 0xFFFF, null, [:], 500)   // Reset Humidity reporting to default (looks to be 1/2 hr reporting)
+
+	//cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}"
+	//cmds += "he cr 0x${device.deviceNetworkId} 0x01 0x0001 0x0020 0x20 0xFFFF 0x0000 {0000}"
+	//cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}"
+	//cmds += "he cr 0x${device.deviceNetworkId} 0x01 0x0001 0x0021 0x20 0xFFFF 0x0000 {0000}"
+	//cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}"
+	//cmds += "he cr 0x${device.deviceNetworkId} 0x01 0x0402 0x0000 0x29 0xFFFF 0x0000 {0000}"
+	//cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}"
+	//cmds += "he cr 0x${device.deviceNetworkId} 0x01 0x0405 0x0000 0x21 0xFFFF 0x0000 {0000}"
+
+	return cmds
+}
+
 
 def readAttributesTS004F() {
+return
     Map dummy = [:]
     ArrayList<String> cmd = []
     
@@ -521,10 +611,19 @@ def readAttributesTS004F() {
     cmd += zigbee.readAttribute(0x0006, 0x8004, dummy, delay=50)
     //
     // or  // "zdo bind 0x${device.deviceNetworkId} 1 1 0x0001 {${device.zigbeeId}} {}", "delay 50" ??????????
+    /*
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+*/
+        for (endpoint = 1; endpoint <= 4; endpoint++)
+    {
+        cmd += ["zdo bind ${device.deviceNetworkId} ${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", 
+                "delay 1000", 
+                "he cr 0x${device.deviceNetworkId} ${endpoint} 6 0 16 0 900 {}", "delay 50", 
+                "delay 1000"]
+    }
     //cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}"    // Bind the outgoing level cluster from remote to hub, so the hub receives messages when Dim Up/Down buttons pushed
     //cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}"    // Bind the incoming battery info cluster from remote to hub, so the hub receives battery updates
     //
@@ -541,10 +640,170 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
 }
 
 
+def parsePowerEnergy(String description) {
+    if (logEnable) {log.debug "description is $description"}
+    def event = zigbee.getEvent(description)
+
+    if (event) {
+        //log.info "event enter:$event"
+        setPresent()
+        if (event.name== "power") {
+            event.value = event.value/powerDiv
+            event.unit = "W"
+        } else if (event.name== "energy") {
+            event.value = event.value/energyDiv
+            event.unit = "kWh"
+        }
+        if (txtEnable) {log.info "${event.name} = $event.value"} 
+        sendEvent(event)
+        if (event.name== "switch") {
+            //TODO: if switch changes previous state - refresh!
+            if (state.lastSwitchState != event.value ) {
+                if (logEnable) {log.trace "switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
+                state.lastSwitchState = event.value
+            }
+        }
+    } else {
+        List result = []
+        def descMap = zigbee.parseDescriptionAsMap(description)
+        if (logEnable) {log.debug "Desc Map: $descMap"}
+
+        List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value]]
+        descMap.additionalAttrs.each {
+            attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value]
+        }
+
+        attrData.each {
+                def map = [:]
+                if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
+                        map.name = "power"
+                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
+                        map.unit = "W"
+                        if (state.lastPower != map.value ) {
+                            if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${map.value}</b>"}
+                            state.lastPower = map.value
+                        }
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
+                        map.name = "voltage"
+                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
+                        map.unit = "V"
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
+                        map.name = "amperage"
+                        map.value = zigbee.convertHexToInt(it.value)/currentDiv
+                        map.unit = "A"
+                }
+                else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
+                        map.name = "energy"
+                        map.value = zigbee.convertHexToInt(it.value)/energyDiv
+                        map.unit = "kWh"
+                }
+                else {
+                    //log.warn "^^^^ UNRPOCESSED! ^^^^"
+                }
+
+                if (map) {
+                    if (txtEnable) {log.info "${map.name} = ${map.value} ${map.unit}"}
+                    result << createEvent(map)
+                }
+                if (logEnable) {log.debug "Parse returned $map"}
+        }
+        return result
+    }
+}
+
+
+def off() {
+    def cmds = zigbee.off()
+    if (device.getDataValue("model") == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])
+    }
+    return cmds
+}
+
+def on() {
+    def cmds = zigbee.on()
+    if (device.getDataValue("model") == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])
+    }
+    return cmds
+}
+
+/**
+ * PING is used by Device-Watch in attempt to reach the Device
+ * */
+def ping() {
+    return refresh()
+}
+
+// Sends refresh / readAttribute commands to the plug
+def poll() {
+    zigbee.onOffRefresh() +
+    zigbee.electricMeasurementPowerRefresh() +
+    zigbee.readAttribute(0x0702, 0x0000) + 
+    zigbee.readAttribute(0x0B04, 0x0505) +      // voltage
+    zigbee.readAttribute(0x0B04, 0x0508)        // current
+}
+
+// not used !
+def powerRefresh() {
+    def cmds = zigbee.electricMeasurementPowerRefresh()
+    cmds.each{
+        sendHubCommand(new hubitat.device.HubMultiAction(delayBetween(cmds,200), hubitat.device.Protocol.ZIGBEE))
+    }
+}
+
+def refresh() {
+    if (logEnable) {log.debug "refresh"}
+    poll()
+
+}
+
+def autoPoll() {
+    if (logEnable) {log.debug "autoPoll()"}
+    checkIfNotPresent()
+    if (autoPollingEnabled?.value==true) {
+        runIn( pollingInterval.value, autoPoll)
+    }
+    poll()    
+}
+
+// Called when preferences are saved
+def updated(){
+    if (logEnable) {log.debug "updated() : Saved preferences"}
+    configure()
+}
+
+void sendZigbeeCommands(List<String> cmds) {
+    if (logEnable) {log.debug "${device.displayName} sendZigbeeCommands received : ${cmds}"}
+	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+}
+
+
+
 /* =================================================== test commands ================================================= */
 
 def zdoBind() {
     // example: "zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 200",
+    
+    
+
+    // from https://github.com/RichardLaxton/Hubitat/blob/main/Ikuu%20Mercator%20GPO%20with%20Power%20Reporting.groovy
+     def cmd = []
+    for (endpoint = 1; endpoint <= 4; endpoint++)
+    {
+        cmd += ["zdo bind ${device.deviceNetworkId} ${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", 
+                "delay 1000", 
+                "he cr 0x${device.deviceNetworkId} ${endpoint} 6 0 16 0 900 {}", "delay 50", 
+                "delay 1000"]
+    }
+    //cmd += powerConfig()
+    //cmd += refresh()
+    
+    return cmd
+
+    
 }
 
 def zdoUnbind() {
@@ -578,6 +837,7 @@ def zigbeeCommand() {
     }
     else {
         // zigbee.command( .... )
+         heCmd()
     }
 }
 
@@ -585,6 +845,19 @@ def heCmd() {
     // example : https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/GenericZigbeeRGBWBulb.groovy
     // example : "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0300 0x06 {${hexHue} ${hexSat} ${intTo16bitUnsignedHex(rate / 100)}}", "delay ${rate + 400}",
     // example :  "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 1 {}","delay 200",
+    
+    Map dummy = [:]
+    ArrayList<String> cmd = []
+    // example : https://community.hubitat.com/t/discover-zigbee-active-endpoints/44950/3?u=kkossev
+    // ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
+    //cmd += "he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"
+    
+    cmd += "he raw  0x${device.deviceNetworkId} 0x${device.endpointId} 0x0000 4 {}"
+    
+    sendZigbeeCommands(cmd)    
+    
+    
+    //"he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 1 {}","delay 200"
 }
 
 def heCr() {
@@ -626,17 +899,20 @@ def writeAttribute() {
 }
 
 
-def readAiiribute() {
+def readAttribute (String cluster, String attrId) {
     // example : https://community.hubitat.com/t/zigbee-writing-hex-string-with-he-wattr/38051/2?u=kkossev
     // example : zigbee.readAttribute(0x0000,0x0401,[mfgCode: "0x115F"])
     
+    log.trace "cluster=${cluster} attrId=${attrId}"
+    def test
     if (rawCommands==true) {
         heRattr()
     }
     else {
-        // zigbee.readAttribute( .... )
+        test = zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt(attrId), hubitat.helper.HexUtils.hexStringToInt(cluster))
+        log.trace "test=${test}"
     }
-    
+    return test
 }
 
 def heRattr() {
@@ -717,8 +993,16 @@ def test2() {
 
     
 	def cmds = new ArrayList<String>()
+    /*
 	cmds.add("he raw ${device.deviceNetworkId} 0 ${device.endpointId} 0x00F6 {11 00 FC 01} {0xC216}")    // version information request
 	cmds.add("he raw ${device.deviceNetworkId} 0 ${device.endpointId} 0x00EE {11 00 01 01} {0xC216}")    // power control operating mode nudge ( I dont think we need this)
+*/
+    
+    		//zcl global write [cluster:2] [attributeId:2] [type:4] [data:-1]
+    // https://community.hubitat.com/t/went-back-to-smarthings-but-came-back/10629/144
+    String hubZigbeeId = swapEndianHex(device.hub.zigbeeEui)
+	cmds.add("zcl global write 0x500 0x10 0xf0 {${hubZigbeeId}}")
+	cmds.add("send 0x${device.deviceNetworkId} 0x08 1")
     // {0xC216} = Profile: AlertMe (0xc216)
     
 	sendZigbeeCommands(cmds)
@@ -726,6 +1010,40 @@ def test2() {
 }
 
 def leaveAndRejoin() {
+    // https://github.com/zigpy/zigpy/issues/831
+    //
+    //   Mgmt_Leave_req = 0x0034
+    //
+    // ZDOCmd.Mgmt_Leave_req: (("DeviceAddress", t.EUI64), ("Options", t.bitmap8)),
+    //    ZDOCmd.Mgmt_Permit_Joining_req: (
+    //    ("PermitDuration", t.uint8_t),
+    //    ("TC_Significant", t.Bool),
+    //),
+    //Defined in zigpy/types/named.py
+    //class EUI64(basic.FixedList, item_type=basic.uint8_t, length=8):
+    //
+    /*
+        ZDOCmd.Mgmt_Leave_req: (
+        (
+            lambda addr, DeviceAddress, Options: c.ZDO.MgmtLeaveReq.Req(
+                DstAddr=addr.address,
+                IEEE=DeviceAddress,
+                RemoveChildren_Rejoin=c.zdo.LeaveOptions(Options),
+            )
+        )
+    */
+    //
+    // check also https://github.com/zigpy/zigpy/blob/a19a2a063d5edacb46722aeb56d538badd37fcc0/zigpy/zdo/types.py
+    //
+    /*
+
+        const payload: Events.DeviceLeavePayload = {
+            networkAddress: nwk,
+            ieeeAddr: `0x${ieee.toString('hex')}`,
+        };
+
+*/
+    
     def cmds = new ArrayList<String>()
     log.debug "${device} : Sending leaveAndRejoin to Device zigbeeId= ${device.zigbeeId} endpointId =${device.endpointId}"
     
@@ -753,7 +1071,7 @@ Frame Control Field: 0x1209, Frame Type: Command, Discover Route: Suppress, Secu
     // "he raw ${device.deviceNetworkId} 0 ${device.endpointId} 0x00C0 {11 00 20 03 00} {0xC216}
    // cmds += "he raw 0x${device.deviceNetworkId} 0x01 0x01 0x0006  ${device.zigbeeId} 0x0000 {FF 12 04 14 15}"
     
-    cmds += "he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0x0034 {19 01 04 60}"
+    cmds += "he raw 0x${device.deviceNetworkId} 1 1 0x0034 ${device.zigbeeId} 0 {19 01 04 60}"
 
 
     
@@ -834,6 +1152,60 @@ def zclGlobal() {
             
             
 }
+
+
+/*
+Tuya ManufacturerSpecificCluster
+================================
+    // https://github.com/zigpy/zigpy/discussions/823#discussioncomment-1539469
+
+tuya is using 0xEF00 for there DP commands to TS0601 devices (tunneling MQTT commands to there cloud).
+
+"Normal" tuya Zigbee devices:
+Manufactur cluster:
+
+0xE000 Not known
+0xE001 Not known
+0xE002 is being used in some sensors with attribute:
+0xD00A: ("alarm_temperature_man", t.uint16_t),
+0xD00B: ("alarm_temperature_min", t.uint16_t),
+0xD00C: ("alarm_humidity_max", t.uint16_t),
+0xD00E: ("alarm_humidity_min", t.uint16_t),
+0xD00F: ("alarm_humidity", ValueAlarm),
+0x00 Min alarm
+0x01 Max alarm
+0x02 Amarm off
+0xD006: ("temperature_humidity", ValueAlarm),
+0x00 Min alarm
+0x01 Max alarm
+0x02 Amarm off
+0xD010: {"unknown", t.uint8_t},
+Extra "custom attribute added to ZCL cluster:
+
+0x0006 OnOff Cluster
+0x8001 Back Light Mode (t.enum8)
+0x00 BL Mode 0
+0x01 BL Mode 1
+0x02 BL Mode 2
+0x8002 Power On State (t.enum8)
+0x00 = Off
+0x01 = On
+0x02 = Last state
+0x8004 Switch Operation Mode (t.enum8)
+0x00 = Command Mode (Light OnOff / Dimmer commands)
+0x01 = Event Mode (tuya "scene" commands)
+
+*/
+
+
+/*  other Tuya specifics 
+=========================================================
+
+https://github.com/MattWestb/zha-device-handlers/blob/678de0ca19ebae9f6de170adf2bffb1ece16d4f3/zhaquirks/tuya/ts130f.py#L29-L38
+
+
+
+*/
 
 
 
@@ -940,6 +1312,15 @@ private byte[] reverseArray(byte[] array) {
     return array
 }
 
+
+/* ================================= another TS004F model ????
+
+        fingerprint: [{modelID: 'TS004F', manufacturerName: '_TZ3000_pcqjmcud'}],
+        model: 'YSR-MINI-Z',
+        vendor: 'TuYa',
+        description: '2 in 1 Dimming remote control and scene control',
+
+*/
 
 
 /* ********************************** bookmarks  ************************
