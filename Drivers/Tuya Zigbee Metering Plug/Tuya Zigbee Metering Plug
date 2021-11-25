@@ -16,7 +16,8 @@
  *
  *  ver. 1.0.0 2021-11-09 kkossev - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
  *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
- *  ver. 1.1.0 2021-11-10 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
+ *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
+ *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *
  */
 import groovy.transform.Field
@@ -43,8 +44,9 @@ metadata {
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
-        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Blitzwolf BW-SHP13  
+        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0B04, E000, E001", outClusters: "0019, 000A", manufacturer: "_TZ3000_cphmq0q7", model: "TS011F",  deviceJoinName: "Tuya Outlet TS011F" //TS011F    
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
@@ -80,7 +82,7 @@ def parse(String description) {
         if (txtEnable) {log.info "${event.name} = $event.value"} 
         sendEvent(event)
         if (event.name== "switch") {
-            //TODO: if switch changes previous state - refresh!
+            //TODO: if the switch changes its previous state - refresh!
             if (state.lastSwitchState != event.value ) {
                 if (logEnable) {log.trace "switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
                 state.lastSwitchState = event.value
