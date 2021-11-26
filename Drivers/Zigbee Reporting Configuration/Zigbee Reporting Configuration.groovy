@@ -19,6 +19,7 @@
  *  ver. 1.1.0 2021-11-08 kkossev  - TODO !!!!!!!!!!!!!!!!!!!!reporting configuration settings moved from Commands into Preferencies section
  *                                 - TODO !!!!!!!!!!!!  added reading of the device Reporting parameters; the actually read values are put as default preferencies...
  *
+ *  *** development branch ***
 */
 public static String version()	  { return "v1.1.0" }
 
