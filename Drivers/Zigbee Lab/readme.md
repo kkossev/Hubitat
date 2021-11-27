@@ -1,1 +1,0 @@
-# Zigbee protocol tests
