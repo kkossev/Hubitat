@@ -19,6 +19,7 @@
  * ver. 2.2.0 2021-10-20 kkossev     - First succesfuly working version with HE!
  * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
  * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
+ * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  *
  */
 
@@ -39,6 +40,7 @@ metadata {
     capability "Configuration"
       
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "Tuya Remote TS004F"
     }
     preferences {
         input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: false)
