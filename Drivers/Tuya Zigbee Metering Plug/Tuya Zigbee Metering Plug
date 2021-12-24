@@ -18,6 +18,7 @@
  *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
+ *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint
  *
  */
 import groovy.transform.Field
@@ -25,28 +26,26 @@ import hubitat.zigbee.zcl.DataType
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
-        capability "EnergyMeter"          // energy - NUMBER, unit:kWh
-        capability "PowerMeter"           // power - NUMBER, unit:W
-        capability "CurrentMeter"         // amperage - NUMBER, unit:A
-        capability "VoltageMeasurement"   // voltage - NUMBER, unit:V; frequency - NUMBER, unit:Hz
+        capability "EnergyMeter"
+        capability "PowerMeter"
+        capability "CurrentMeter"
+        capability "VoltageMeasurement"
         capability "Actuator"    
-        capability "Switch"               // switch - ENUM ["on", "off"]; off(); on()
-        capability "Outlet"               // switch - ENUM ["on", "off"]; off(); on()
-        capability "Refresh"              // refresh()
-        capability "Health Check"         // checkInterval - NUMBER; ping()
+        capability "Switch"
+        capability "Outlet"
+        capability "Refresh"
+        capability "Health Check"
         capability "Sensor"
-        capability "Configuration"        // configure()
-        capability "PresenceSensor"       // ENUM ["present", "not present"]
-        capability "Polling"              // poll()
-        //capability "SignalStrength"       // lqi - NUMBER; rssi - NUMBER
-        //capability "PowerSource"          // powerSource - ENUM ["battery", "dc", "mains", "unknown"]
-
+        capability "Configuration"
+        capability "PresenceSensor"
+        capability "Polling"
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
         fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0B04, E000, E001", outClusters: "0019, 000A", manufacturer: "_TZ3000_cphmq0q7", model: "TS011F",  deviceJoinName: "Tuya Outlet TS011F" //TS011F    
+        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0B04, E000, E001", outClusters: "0019, 000A", manufacturer: "_TZ3000_w0qqde0g", model: "TS011F",  deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
