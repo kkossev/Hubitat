@@ -16,17 +16,15 @@
  *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
- *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint
- *  ver. 1.2.0 2021-12-24 kkossev - (dev. branch) - fingerprint inClusters correction
+ *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
+ *  ver. 1.2.0 2021-12-26 kkossev - (dev. branch) - major refactoring..
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() {
-    return "1.2.0"
-}
+def version() { "1.2.0" }
 
 
 metadata {
@@ -41,15 +39,15 @@ metadata {
         capability "Refresh"
         capability "Health Check"
         capability "Sensor"
-        capability "Configuration"
+        capability "Initialize"
+        //capability "Configuration"
         capability "PresenceSensor"
         capability "Polling"
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
-        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
     }
@@ -70,6 +68,11 @@ metadata {
 @Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 60
+@Field static String UNKNOWN = "UNKNOWN"
+
+// 
+//@Field static String destinationEP = "01"
+//@Field static String model = "UNKNOWN"
 
 def parse(String description) {
     if (logEnable) {log.debug "description is $description"}
@@ -145,18 +148,34 @@ def parse(String description) {
 }
 
 def off() {
-    def cmds = zigbee.off()
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])
+    def cmds = zigbee.off()    // default, works for HY0105
+
+    if (state.model == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])    // as per iquix code
+    }
+    else if (state.model == "TS0121" || state.model == "TS011F") {
+        cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 0 {}" ] 
+    }
+    else {
+        cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 0 {}" ] 
+        log.warn " Device model is unknown: ${state.model}, destinationEP = ${state.destinationEP}"
     }
     return cmds
 }
 
 
 def on() {
-    def cmds = zigbee.on()
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])
+    def cmds = zigbee.on()    // default, works for HY0105
+
+    if (state.model == "HY0105") {
+        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])    // as per iquix code
+    }
+    else if (state.model == "TS0121" || state.model == "TS011F") {
+        cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 1 {}" ] 
+    }
+    else {
+        cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 1 {}" ] 
+        log.warn " Device model is unknown: ${state.model}"
     }
     return cmds
 }
@@ -172,9 +191,9 @@ def ping() {
 def poll() {
     zigbee.onOffRefresh() +
     zigbee.electricMeasurementPowerRefresh() +
-    zigbee.readAttribute(0x0702, 0x0000) + 
-    zigbee.readAttribute(0x0B04, 0x0505) +      // voltage
-    zigbee.readAttribute(0x0B04, 0x0508)        // current
+    zigbee.readAttribute(0x0702, 0x0000, [destEndpoint: 0x01]) + 
+    zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint: 0x01]) +      // voltage
+    zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint: 0x01])        // current
 }
 
 def refresh() {
@@ -194,25 +213,16 @@ def autoPoll() {
     poll()    
 }
 
-// Called when preferences are saved
-def updated(){
-    if (logEnable) {log.debug "updated() : Saved preferences"}
-    //configure()
-}
-
 
 def configure() {
-    state.clear()
-    state.lastPower = "unknown"
-    state.lastSwitchState = "unknown"
-    state.lastPresenceState = "unknown"
-    state.notPresentCounter = 0
+    log.debug " configure().."
+    log.info ""    
     // this device will send instantaneous demand and current summation delivered every 1 minute
     sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
     log.debug "Configuring Reporting"
-    if (device.getDataValue("model") == "TS0121") {
+    if (state.model == "TS0121" || state.model == "TS011F") {
         unschedule()
-        runIn( pollingInterval.value, autoPoll)
+        runIn( defaultPollingInterval, autoPoll)
     }    
     return refresh() +
            zigbee.onOffConfig() +
@@ -220,43 +230,80 @@ def configure() {
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
 }
 
+
+// This method is called when the preferences of a device are updated.
+def updated(){
+    log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")}"
+    log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
+    if (logEnable==true) {
+        runIn(1800,logsOff)    // turn off debug logging after 30 minutes
+        log.info "Debug logging will be automatically switched off after 30 minutes!"
+    }
+    if (autoPollingEnabled==true) {
+        log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
+    }
+    else {
+        log.info "Auto polling is <b>disabled</b>"
+    }
+        
+    
+    
+    
+    //configure()
+}
+
+
 void initializeVars() {
+    log.debug "initializeVars()..."
     state.clear()
     state.lastPower = "unknown"
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
     
-    def mm = getDataValue("model")
+    device.updateSetting("logEnable", false)    
+    device.updateSetting("txtEnable", true)    
+    device.updateSetting("autoPollingEnabled", true)    
+    device.updateSetting("pollingInterval", defaultPollingInterval)    
+    
+    def mm = device.getDataValue("model")
     if ( mm != null) {
-        model = mm
-        log.trace " model = ${model}"
+        state.model = mm
+        log.trace " model = ${state.model}"
     }
     else {
         log.warn " Model not found, please re-pair the device!"
-        model = "unknown"
+        state.model = UNKNOWN
     }
 
     def ep = device.getEndpointId()
     if ( ep  != null) {
-        destinationEP = ep
-        log.trace " destinationEP = ${destinationEP}"
+        state.destinationEP = ep
+        log.trace " destinationEP = ${state.destinationEP}"
     }
     else {
         log.warn " Destination End Point not found, please re-pair the device!"
-        destinationEP = "01"
+        state.destinationEP = "01"    // fallback
     }    
     
 }
 
+def initialize() {
+    log.info "Initialize..."
+    initializeVars()
+    updated()
+    configure()
+}
+
+// This method is called when the device is first created.
 def installed() {
     log.info "Installed..."
-    initializeVars()
-    configure()
+    initialize()
 }
 
 void uninstalled() {
     log.info "Uninstalled..."
+    unschedule()     //Unschedule any existing schedules
 }
 
 // not used !
@@ -285,6 +332,7 @@ def checkIfNotPresent() {
         if (state.lastPresenceState != "not present") {
 	        sendEvent(name: "presence", value: "not present")
             state.lastPresenceState = "not present"
+            log.warn "not present!"
         }
     }
 }
@@ -294,6 +342,13 @@ void sendZigbeeCommands(List<String> cmds) {
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
+def logsOff(){
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
+
 def test()
 {
+    log.debug "testing..."
 }
