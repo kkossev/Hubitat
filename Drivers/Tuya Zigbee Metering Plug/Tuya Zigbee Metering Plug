@@ -1,5 +1,5 @@
 /**
- *  Zigbee Metering Plug driver for Hubitat Elevation - Power, Energy, Voltage, Amperage
+ *  Tuya Zigbee Metering Plug driver for Hubitat Elevation - Power, Energy, Voltage, Amperage
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -10,19 +10,24 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * 
- *  Based on "SmartThings/iquix" DH
- * 
+ *  The inital version was based on "SmartThings/iquix" DHT
  *
  *  ver. 1.0.0 2021-11-09 kkossev - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
  *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint
+ *  ver. 1.2.0 2021-12-24 kkossev - (dev. branch) - fingerprint inClusters correction
  *
  */
+import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
+
+def version() {
+    return "1.2.0"
+}
+
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
@@ -44,8 +49,9 @@ metadata {
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_g5xawfcq", model: "TS0121",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
-        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0B04, E000, E001", outClusters: "0019, 000A", manufacturer: "_TZ3000_cphmq0q7", model: "TS011F",  deviceJoinName: "Tuya Outlet TS011F" //TS011F    
-        fingerprint profileId: "0104", inClusters: "0000, 0003, 0004, 0005, 0006, 0702, 0B04, E000, E001", outClusters: "0019, 000A", manufacturer: "_TZ3000_w0qqde0g", model: "TS011F",  deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
@@ -53,7 +59,7 @@ metadata {
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Enable automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value==true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
-                   range: "10..3600", defaultValue: 60)
+                   range: "10..3600", defaultValue: defaultPollingInterval)
         }
     }
 }
@@ -63,6 +69,7 @@ metadata {
 @Field static final Integer energyDiv = 100
 @Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
+@Field static final Integer defaultPollingInterval = 60
 
 def parse(String description) {
     if (logEnable) {log.debug "description is $description"}
@@ -179,7 +186,10 @@ def autoPoll() {
     if (logEnable) {log.debug "autoPoll()"}
     checkIfNotPresent()
     if (autoPollingEnabled?.value==true) {
-        runIn( pollingInterval.value, autoPoll)
+        if ( pollingInterval != null ) 
+            runIn( pollingInterval.value, autoPoll)
+        esle
+            runIn( defaultPollingInterval, autoPoll)
     }
     poll()    
 }
@@ -187,7 +197,7 @@ def autoPoll() {
 // Called when preferences are saved
 def updated(){
     if (logEnable) {log.debug "updated() : Saved preferences"}
-    configure()
+    //configure()
 }
 
 
@@ -208,6 +218,45 @@ def configure() {
            zigbee.onOffConfig() +
            zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
+}
+
+void initializeVars() {
+    state.clear()
+    state.lastPower = "unknown"
+    state.lastSwitchState = "unknown"
+    state.lastPresenceState = "unknown"
+    state.notPresentCounter = 0
+    
+    def mm = getDataValue("model")
+    if ( mm != null) {
+        model = mm
+        log.trace " model = ${model}"
+    }
+    else {
+        log.warn " Model not found, please re-pair the device!"
+        model = "unknown"
+    }
+
+    def ep = device.getEndpointId()
+    if ( ep  != null) {
+        destinationEP = ep
+        log.trace " destinationEP = ${destinationEP}"
+    }
+    else {
+        log.warn " Destination End Point not found, please re-pair the device!"
+        destinationEP = "01"
+    }    
+    
+}
+
+def installed() {
+    log.info "Installed..."
+    initializeVars()
+    configure()
+}
+
+void uninstalled() {
+    log.info "Uninstalled..."
 }
 
 // not used !
@@ -243,4 +292,8 @@ def checkIfNotPresent() {
 void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.debug "${device.displayName} sendZigbeeCommands received : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+}
+
+def test()
+{
 }
