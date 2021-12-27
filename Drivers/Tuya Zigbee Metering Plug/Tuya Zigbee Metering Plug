@@ -43,6 +43,7 @@ metadata {
         //capability "Configuration"
         capability "PresenceSensor"
         capability "Polling"
+        command "initialize"
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
@@ -70,21 +71,18 @@ metadata {
 @Field static final Integer defaultPollingInterval = 60
 @Field static String UNKNOWN = "UNKNOWN"
 
-// 
-//@Field static String destinationEP = "01"
-//@Field static String model = "UNKNOWN"
 
 def parse(String description) {
-    if (logEnable) {log.debug "description is $description"}
+    if (logEnable) {log.debug "description is $description \n\n"}
     def event = zigbee.getEvent(description)
 
     if (event) {
-        //log.info "event enter:$event"
+        if (logEnable) log.debug "event enter:$event"
         setPresent()
-        if (event.name== "power") {
+        if (event.name == "power") {
             event.value = event.value/powerDiv
             event.unit = "W"
-        } else if (event.name== "energy") {
+        } else if (event.name == "energy") {
             event.value = event.value/energyDiv
             event.unit = "kWh"
         }
@@ -97,17 +95,18 @@ def parse(String description) {
                 state.lastSwitchState = event.value
             }
         }
-    } else {
+    } // if event
+    else {
         List result = []
         def descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) {log.debug "Desc Map: $descMap"}
-
-        List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value]]
-        descMap.additionalAttrs.each {
-            attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value]
-        }
-
-        attrData.each {
+        if (descMap.attrId != null ) {
+            // attribute report received
+            List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value]]
+            descMap.additionalAttrs.each {
+                attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value]
+            }
+            attrData.each {
                 def map = [:]
                 if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
                         map.name = "power"
@@ -134,7 +133,7 @@ def parse(String description) {
                         map.unit = "kWh"
                 }
                 else {
-                    //log.warn "^^^^ UNRPOCESSED! ^^^^"
+                    log.warn "vvvv UNRPOCESSED ATTRIBUTE report! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
                 }
 
                 if (map) {
@@ -142,9 +141,46 @@ def parse(String description) {
                     result << createEvent(map)
                 }
                 if (logEnable) {log.debug "Parse returned $map"}
+            
+            } // for each attribute
+        } // if attribute report
+        else if (descMap.profileId == "0000") { //zdo
+            switch (descMap.clusterId) {
+                case "8021" : //bind response
+                    log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                    break
+                default :
+                    log.warn "vvvv UNRPOCESSED ZDO command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            }
+        } // zdo command
+        else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
+            switch (descMap.command) {
+                case "01" : //read attribute response
+                    log.warn "processGlobalCommand ${descMap.clusterId} (read attribute response) UNKNOWN clusterId: ${descMap.clusterId} data:${descMap.data}"
+                    def status = descMap.data[2]
+                    def hexValue = descMap.data[1] + descMap.data[0] 
+                    if (status == "86") {
+                        log.warn "Unsupported Attributte ${hexValue}"
+                    }
+                    break
+                case "07" : // Configure Reporting Response
+                    log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+                    // Status: Unreportable Attribute (0x8c)
+                    break
+                case "0B" : // ZCL Default Response
+                    log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                    // 0702 - energy
+                    // Cluster: Electrical Measurement (0x0b04)
+                    break
+                default :
+                    log.warn "vvvv UNRPOCESSED global command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            }
+        } // global command
+        else {
+            log.warn "vvvv UNRPOCESSED UNKNOWN command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
         return result
-    }
+    } // descMap
 }
 
 def off() {
@@ -153,6 +189,7 @@ def off() {
     if (state.model == "HY0105") {
         cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])    // as per iquix code
     }
+    /*
     else if (state.model == "TS0121" || state.model == "TS011F") {
         cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 0 {}" ] 
     }
@@ -160,6 +197,7 @@ def off() {
         cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 0 {}" ] 
         log.warn " Device model is unknown: ${state.model}, destinationEP = ${state.destinationEP}"
     }
+*/
     return cmds
 }
 
@@ -170,6 +208,7 @@ def on() {
     if (state.model == "HY0105") {
         cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])    // as per iquix code
     }
+    /*
     else if (state.model == "TS0121" || state.model == "TS011F") {
         cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 1 {}" ] 
     }
@@ -177,6 +216,7 @@ def on() {
         cmds = [ "he cmd 0x${device.deviceNetworkId} 0x${state.destinationEP} 0x0006 1 {}" ] 
         log.warn " Device model is unknown: ${state.model}"
     }
+*/
     return cmds
 }
 
@@ -191,9 +231,9 @@ def ping() {
 def poll() {
     zigbee.onOffRefresh() +
     zigbee.electricMeasurementPowerRefresh() +
-    zigbee.readAttribute(0x0702, 0x0000, [destEndpoint: 0x01]) + 
-    zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint: 0x01]) +      // voltage
-    zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint: 0x01])        // current
+    zigbee.readAttribute(0x0702, 0x0000/*, [destEndpoint: 0x01]*/) + 
+    zigbee.readAttribute(0x0B04, 0x0505/*, [destEndpoint: 0x01]*/) +      // voltage
+    zigbee.readAttribute(0x0B04, 0x0508/*, [destEndpoint: 0x01]*/)        // current
 }
 
 def refresh() {
@@ -225,8 +265,8 @@ def configure() {
         runIn( defaultPollingInterval, autoPoll)
     }    
     return refresh() +
-           zigbee.onOffConfig() +
-           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +
+           zigbee.onOffConfig() +    // Maximum Interval: 600 seconds
+           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
 }
 
@@ -240,9 +280,11 @@ def updated(){
         log.info "Debug logging will be automatically switched off after 30 minutes!"
     }
     if (autoPollingEnabled==true) {
+        runIn( pollingInterval.value, autoPoll)
         log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
     }
     else {
+        unschedule(autoPoll)
         log.info "Auto polling is <b>disabled</b>"
     }
         
