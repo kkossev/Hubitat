@@ -73,28 +73,45 @@ metadata {
 
 
 def parse(String description) {
-    if (logEnable) {log.debug "description is $description \n\n"}
+    if (logEnable==true) {log.debug "description is $description \n\n"}
     def event = zigbee.getEvent(description)
 
     if (event) {
-        if (logEnable) log.debug "event enter:$event"
+        if (logEnable==true) log.debug "Event enter: $event"
         setPresent()
-        if (event.name == "power") {
-            event.value = event.value/powerDiv
-            event.unit = "W"
-        } else if (event.name == "energy") {
-            event.value = event.value/energyDiv
-            event.unit = "kWh"
+        switch (event.name) {
+            case "switch" :
+                if (description?.startsWith("catchall") && state.model != "TS011F") {
+                    if (logEnable) {log.debug "Ignored catchall event for model ${state.model}: ${description}"} 
+                    return null
+                }
+                else {
+                    event.type = state.isDigital ? "digital" : "physical"
+                    if (state.isRefreshRequest == true) 
+                        event.descriptionText = "${device.displayName} switch is ${event.value}"
+                    else
+                        event.descriptionText = "${device.displayName} was turned ${event.value} [${event.type}]"
+                    //TODO: if the switch changes its previous state - refresh!
+                    if (state.lastSwitchState != event.value ) {
+                        if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
+                        state.lastSwitchState = event.value
+                    }
+                    if (txtEnable) {log.info "${event.descriptionText}"} 
+                }
+                break
+            case "power" :
+                event.value = event.value/powerDiv
+                event.unit = "W"
+                break
+            case "energy" :
+                event.value = event.value/energyDiv
+                event.unit = "kWh"
+                break
+            default :
+                if (txtEnable) {log.info "received ${event.name} = $event.value"} 
+                break
         }
-        if (txtEnable) {log.info "${event.name} = $event.value"} 
-        sendEvent(event)
-        if (event.name== "switch") {
-            //TODO: if the switch changes its previous state - refresh!
-            if (state.lastSwitchState != event.value ) {
-                if (logEnable) {log.trace "switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
-                state.lastSwitchState = event.value
-            }
-        }
+        return event
     } // if event
     else {
         List result = []
@@ -137,7 +154,7 @@ def parse(String description) {
                 }
 
                 if (map) {
-                    if (txtEnable) {log.info "${map.name} = ${map.value} ${map.unit}"}
+                    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
                     result << createEvent(map)
                 }
                 if (logEnable) {log.debug "Parse returned $map"}
@@ -211,9 +228,24 @@ def parseZHAcommand( Map descMap) {
             // Status: Unreportable Attribute (0x8c)
             break
         case "0B" : // ZCL Default Response
-            log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
-            // 0702 - energy
-            // Cluster: Electrical Measurement (0x0b04)
+            def status = descMap.data[1]
+            if (status != "00") {
+                switch (descMap.clusterId) {
+                    case "0B04" : // Electrical Measurement
+                        log.warn "Electrical measurement is not supported -> Power, Voltage and Amperage polling will be diabled."
+                        state.powerMeasurementSupported = false
+                        state.voltageMeasurementSupported = false
+                        state.currentMeasurementSupported = false
+                        break
+                    case "0702" : // Energy
+                        log.warn "Energy measurement is not supported -> Energy polling will be diabled."
+                        state.energyMeasurementSupported = false
+                        break
+                    default :
+                        log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                        break
+                }
+            }
             break
         default :
             log.warn "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
@@ -221,6 +253,8 @@ def parseZHAcommand( Map descMap) {
 }
 
 def off() {
+    state.isDigital = true
+    if (logEnable) {log.debug "Switching ${device.displayName} Off"}
     def cmds = zigbee.off()    // default, works for HY0105
 
     if (state.model == "HY0105") {
@@ -235,11 +269,14 @@ def off() {
         log.warn " Device model is unknown: ${state.model}, destinationEP = ${state.destinationEP}"
     }
 */
+    runIn( 1, isDigitalClear)
     return cmds
 }
 
 
 def on() {
+    state.isDigital = true
+    if (logEnable) {log.debug "Switching ${device.displayName} On"}
     def cmds = zigbee.on()    // default, works for HY0105
 
     if (state.model == "HY0105") {
@@ -254,7 +291,16 @@ def on() {
         log.warn " Device model is unknown: ${state.model}"
     }
 */
+    runIn( 1, isDigitalClear)
     return cmds
+}
+
+def isDigitalClear() {
+    state.isDigital = false
+}
+
+def isRefreshRequestClear() {
+    state.isRefreshRequest = false
 }
 
 /**
@@ -277,6 +323,8 @@ def poll() {
         cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     if (state.energyMeasurementSupported == true)
         cmds += zigbee.readAttribute(0x0702, 0x0000)        // energy
+    state.isRefreshRequest = true
+    runIn( 3, isRefreshRequestClear)
     return cmds
 }
 
@@ -290,7 +338,7 @@ def autoPoll() {
     checkIfNotPresent()
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) 
-            runIn( pollingInterval.value, autoPoll)
+            runIn( pollingInterval/*.value*/, autoPoll)
         esle
             runIn( defaultPollingInterval, autoPoll)
     }
@@ -351,6 +399,8 @@ void initializeVars() {
     state.currentMeasurementSupported = true
     state.powerMeasurementSupported = true
     state.energyMeasurementSupported = true
+    state.isDigital = true
+    state.isRefreshRequest = true
     
     
     device.updateSetting("logEnable", false)    
