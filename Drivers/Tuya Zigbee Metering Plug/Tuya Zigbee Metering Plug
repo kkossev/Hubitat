@@ -17,7 +17,7 @@
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
- *  ver. 1.2.0 2021-12-26 kkossev - (dev. branch) - major refactoring..
+ *  ver. 1.2.0 2021-12-28 kkossev - (dev. branch) - major refactoring..
  *
  */
 import groovy.json.*
@@ -133,7 +133,7 @@ def parse(String description) {
                         map.unit = "kWh"
                 }
                 else {
-                    log.warn "vvvv UNRPOCESSED ATTRIBUTE report! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+                    log.warn "Unprocessed attribute report: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
                 }
 
                 if (map) {
@@ -145,42 +145,79 @@ def parse(String description) {
             } // for each attribute
         } // if attribute report
         else if (descMap.profileId == "0000") { //zdo
-            switch (descMap.clusterId) {
-                case "8021" : //bind response
-                    log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
-                    break
-                default :
-                    log.warn "vvvv UNRPOCESSED ZDO command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
-            }
-        } // zdo command
+            parseZDOcommand(descMap)
+        } 
         else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
-            switch (descMap.command) {
-                case "01" : //read attribute response
-                    log.warn "processGlobalCommand ${descMap.clusterId} (read attribute response) UNKNOWN clusterId: ${descMap.clusterId} data:${descMap.data}"
-                    def status = descMap.data[2]
-                    def hexValue = descMap.data[1] + descMap.data[0] 
-                    if (status == "86") {
-                        log.warn "Unsupported Attributte ${hexValue}"
-                    }
-                    break
-                case "07" : // Configure Reporting Response
-                    log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
-                    // Status: Unreportable Attribute (0x8c)
-                    break
-                case "0B" : // ZCL Default Response
-                    log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
-                    // 0702 - energy
-                    // Cluster: Electrical Measurement (0x0b04)
-                    break
-                default :
-                    log.warn "vvvv UNRPOCESSED global command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
-            }
-        } // global command
+            parseZHAcommand(descMap)
+        } 
         else {
-            log.warn "vvvv UNRPOCESSED UNKNOWN command! vvvv cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            log.warn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
         return result
     } // descMap
+}
+
+def parseZDOcommand( Map descMap) {
+    switch (descMap.clusterId) {
+        case "8021" : //bind response
+            log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        default :
+            log.warn "Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+def parseZHAcommand( Map descMap) {
+    switch (descMap.command) {
+        case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
+            def status = descMap.data[2]
+            def attrId = descMap.data[1] + descMap.data[0] 
+            if (status == "86") {
+                switch (descMap.clusterId) {
+                    case "0B04" : // Electrical Measurement attribute is not supported!
+                        switch (attrId) {
+                            case "0505" :    // Voltage
+                                log.warn "Voltage measurement is not supported -> Voltage polling will be diabled."
+                                state.voltageMeasurementSupported = false
+                                break
+                            case "0508" :     // Current
+                                log.warn "Current measurement is not supported !-> Current polling will be diabled."
+                                state.currentMeasurementSupported = false
+                                break
+                            case "050B" :     // Power
+                                log.warn "Power measurement is not supported! -> Power polling will be diabled."
+                                state.powerMeasurementSupported = false
+                                break
+                            default :
+                                log.warn "Read attribute response: unsupported Attributte ${attrId} for Electrical Measurement cluster ${descMap.clusterId}"
+                                break
+                        }
+                        break
+                    case "0702" : // Simple Metering Cluster
+                        log.warn "Energy measurement is not supported! -> Energy polling will be diabled."
+                        state.energyMeasurementSupported = false
+                        break
+                    default :
+                        log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}"
+                        break
+                }
+            } // if status 86
+            else {
+                log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+            }
+            break
+        case "07" : // Configure Reporting Response
+            log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            // Status: Unreportable Attribute (0x8c)
+            break
+        case "0B" : // ZCL Default Response
+            log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            // 0702 - energy
+            // Cluster: Electrical Measurement (0x0b04)
+            break
+        default :
+            log.warn "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
 }
 
 def off() {
@@ -229,11 +266,18 @@ def ping() {
 
 // Sends refresh / readAttribute commands to the plug
 def poll() {
-    zigbee.onOffRefresh() +
-    zigbee.electricMeasurementPowerRefresh() +
-    zigbee.readAttribute(0x0702, 0x0000/*, [destEndpoint: 0x01]*/) + 
-    zigbee.readAttribute(0x0B04, 0x0505/*, [destEndpoint: 0x01]*/) +      // voltage
-    zigbee.readAttribute(0x0B04, 0x0508/*, [destEndpoint: 0x01]*/)        // current
+    if (logEnable) {log.debug "polling.."}
+    List<String> cmds = []
+    cmds = zigbee.onOffRefresh()                            // switch
+    if (state.powerMeasurementSupported == true) 
+        cmds += zigbee.electricMeasurementPowerRefresh()    // Power ( cluster 0B04, attr. 050B )
+    if (state.voltageMeasurementSupported == true)
+        cmds += zigbee.readAttribute(0x0B04, 0x0505)        // voltage
+    if (state.currentMeasurementSupported == true)
+        cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
+    if (state.energyMeasurementSupported == true)
+        cmds += zigbee.readAttribute(0x0702, 0x0000)        // energy
+    return cmds
 }
 
 def refresh() {
@@ -302,6 +346,12 @@ void initializeVars() {
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
+    
+    state.voltageMeasurementSupported = true
+    state.currentMeasurementSupported = true
+    state.powerMeasurementSupported = true
+    state.energyMeasurementSupported = true
+    
     
     device.updateSetting("logEnable", false)    
     device.updateSetting("txtEnable", true)    
