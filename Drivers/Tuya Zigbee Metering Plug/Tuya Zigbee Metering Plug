@@ -17,7 +17,7 @@
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
- *  ver. 1.2.0 2021-12-28 kkossev - (dev. branch) - major refactoring..
+ *  ver. 1.2.0 2021-12-28 kkossev - (dev. branch) - major refactoring and new features added
  *
  */
 import groovy.json.*
@@ -28,7 +28,7 @@ def version() { "1.2.0" }
 
 
 metadata {
-    definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
+    definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
         capability "EnergyMeter"
         capability "PowerMeter"
         capability "CurrentMeter"
@@ -69,6 +69,9 @@ metadata {
 @Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 60
+@Field static final Integer debouncingTimer = 300
+@Field static final Integer digitalTimer = 1000
+@Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
 
@@ -81,8 +84,11 @@ def parse(String description) {
         setPresent()
         switch (event.name) {
             case "switch" :
-                if (description?.startsWith("catchall") && state.model != "TS011F") {
-                    if (logEnable) {log.debug "Ignored catchall event for model ${state.model}: ${description}"} 
+                //log.trace "device.latestState value = ${device.currentState('switch', true).value}"
+                // some plugs send only catchall events, some only readattr reports, but some fire both..
+                if (state.switchDebouncing==true && event.value==state.lastSwitchState) {
+                    if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
+                    runInMillis( debouncingTimer, switchDebouncingClear)
                     return null
                 }
                 else {
@@ -94,23 +100,28 @@ def parse(String description) {
                     //TODO: if the switch changes its previous state - refresh!
                     if (state.lastSwitchState != event.value ) {
                         if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
-                        state.lastSwitchState = event.value
                     }
-                    if (txtEnable) {log.info "${event.descriptionText}"} 
+                    state.switchDebouncing = true
+                    state.lastSwitchState = event.value
+                    runInMillis( debouncingTimer, switchDebouncingClear)
                 }
                 break
-            case "power" :
+            // for smart plugs that can be configured to fire atimaticallty power and energy events ..
+            case "power" :    
                 event.value = event.value/powerDiv
                 event.unit = "W"
+                event.descriptionText = "${device.displayName} ${event.name} is ${event.value}"
                 break
             case "energy" :
                 event.value = event.value/energyDiv
                 event.unit = "kWh"
                 break
             default :
-                if (txtEnable) {log.info "received ${event.name} = $event.value"} 
+                if (txtEnable) {log.info "received <b>unhandled event</b> ${event.name} = $event.value"} 
                 break
         }
+        //log.trace "event.descriptionText = ${event.descriptionText}"
+        if (txtEnable) {log.info "${event.descriptionText}"}
         return event
     } // if event
     else {
@@ -176,7 +187,13 @@ def parse(String description) {
 
 def parseZDOcommand( Map descMap) {
     switch (descMap.clusterId) {
-        case "8021" : //bind response
+        case "0006" :
+            log.info "Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
+            break
+        case "0013" : // device announcement
+            log.info "Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            break
+        case "8021" : // bind response
             log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         default :
@@ -198,7 +215,7 @@ def parseZHAcommand( Map descMap) {
                                 state.voltageMeasurementSupported = false
                                 break
                             case "0508" :     // Current
-                                log.warn "Current measurement is not supported !-> Current polling will be diabled."
+                                log.warn "Current measurement is not supported -> Current polling will be diabled."
                                 state.currentMeasurementSupported = false
                                 break
                             case "050B" :     // Power
@@ -269,7 +286,7 @@ def off() {
         log.warn " Device model is unknown: ${state.model}, destinationEP = ${state.destinationEP}"
     }
 */
-    runIn( 1, isDigitalClear)
+    runInMillis( digitalTimer, isDigitalClear)
     return cmds
 }
 
@@ -291,17 +308,16 @@ def on() {
         log.warn " Device model is unknown: ${state.model}"
     }
 */
-    runIn( 1, isDigitalClear)
+    runInMillis( digitalTimer, isDigitalClear)
     return cmds
 }
 
-def isDigitalClear() {
-    state.isDigital = false
-}
+def isDigitalClear() { state.isDigital = false }
 
-def isRefreshRequestClear() {
-    state.isRefreshRequest = false
-}
+def isRefreshRequestClear() { state.isRefreshRequest = false }
+
+def switchDebouncingClear() { state.switchDebouncing = false }
+
 
 /**
  * PING is used by Device-Watch in attempt to reach the Device
@@ -324,7 +340,7 @@ def poll() {
     if (state.energyMeasurementSupported == true)
         cmds += zigbee.readAttribute(0x0702, 0x0000)        // energy
     state.isRefreshRequest = true
-    runIn( 3, isRefreshRequestClear)
+    runInMillis( refreshTimer, isRefreshRequestClear)             // 3 seconds
     return cmds
 }
 
@@ -338,7 +354,7 @@ def autoPoll() {
     checkIfNotPresent()
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) 
-            runIn( pollingInterval/*.value*/, autoPoll)
+            runIn( pollingInterval, autoPoll)
         esle
             runIn( defaultPollingInterval, autoPoll)
     }
@@ -372,7 +388,7 @@ def updated(){
         log.info "Debug logging will be automatically switched off after 30 minutes!"
     }
     if (autoPollingEnabled==true) {
-        runIn( pollingInterval.value, autoPoll)
+        runIn( pollingInterval/*.value*/, autoPoll)
         log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
     }
     else {
@@ -401,6 +417,8 @@ void initializeVars() {
     state.energyMeasurementSupported = true
     state.isDigital = true
     state.isRefreshRequest = true
+    state.switchDebouncing = false
+
     
     
     device.updateSetting("logEnable", false)    
