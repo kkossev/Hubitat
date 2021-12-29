@@ -371,7 +371,7 @@ def autoPoll() {
 // This method is called unconditionally during the initial pairing, immediately after Installed() method!
 def configure() {
     log.debug " configure().."
-    return /*refresh() +*/
+    return refresh() +
            zigbee.onOffConfig() +    // Maximum Interval: 600 seconds
            zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
