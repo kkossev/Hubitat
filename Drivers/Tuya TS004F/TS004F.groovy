@@ -20,7 +20,7 @@
  * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
  * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
- * ver. 2.3.0 2021-12-05 kkossev (development/feature/TS0041 branch!) - added support for 'Tuya YSB22 TS0041'
+ * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  *
  */
 
@@ -32,7 +32,7 @@ import groovy.json.JsonOutput
 metadata {
     definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy" ) {
       
-	capability "Refresh"
+capability "Refresh"
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
