@@ -18,6 +18,7 @@
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
  *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
+ *  ver. 1.2.1 2021-12-29 kkossev - AlwaysOn option
  *
  */
 import groovy.json.*
@@ -58,6 +59,7 @@ metadata {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
+        input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
     }
 }
 
@@ -284,12 +286,16 @@ def parseZHAcommand( Map descMap) {
 }
 
 def off() {
-    state.isDigital = true
-    if (logEnable) {log.debug "Switching ${device.displayName} Off"}
-    def cmds = zigbee.off()    // default, works for HY0105
-
-    runInMillis( digitalTimer, isDigitalClear)
-    return cmds
+    if (alwaysOn == true) {
+        log.warn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
+    }
+    else {
+        state.isDigital = true
+        if (logEnable) {log.debug "Switching ${device.displayName} Off"}
+        def cmds = zigbee.off()    // default, works for HY0105
+        runInMillis( digitalTimer, isDigitalClear)
+        return cmds
+    }
 }
 
 def on() {
@@ -352,7 +358,7 @@ def poll() {
 }
 
 def refresh() {
-    if (logEnable) {log.debug "refresh"}
+    if (logEnable) {log.debug "refresh()..."}
     poll()
 }
 
@@ -362,7 +368,7 @@ def autoPoll() {
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) 
             runIn( pollingInterval, autoPoll)
-        esle
+        else
             runIn( defaultPollingInterval, autoPoll)
     }
     poll()    
@@ -371,10 +377,12 @@ def autoPoll() {
 // This method is called unconditionally during the initial pairing, immediately after Installed() method!
 def configure() {
     log.debug " configure().."
-    return refresh() +
-           zigbee.onOffConfig() +    // Maximum Interval: 600 seconds
-           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
+    List<String> cmds = []
+    cmds += refresh()
+    cmds += zigbee.onOffConfig()    // Maximum Interval: 600 seconds
+    cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
+    sendZigbeeCommands(cmds)
 }
 
 
@@ -423,6 +431,7 @@ void initializeVars() {
     device.updateSetting("logEnable", true)    
     device.updateSetting("txtEnable", true)    
     device.updateSetting("autoPollingEnabled", true)    
+    device.updateSetting("alwaysOn", false)    
     device.updateSetting("pollingInterval", defaultPollingInterval)    
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -444,19 +453,28 @@ void initializeVars() {
     }    
 }
 
+def logInitializeRezults() {
+    log.info "${device.displayName} voltageMeasurementSupported = ${state.voltageMeasurementSupported}"
+    log.info "${device.displayName} currentMeasurementSupported = ${state.currentMeasurementSupported}"
+    log.info "${device.displayName} powerMeasurementSupported   = ${state.powerMeasurementSupported}"
+    log.info "${device.displayName} energyMeasurementSupported  = ${state.energyMeasurementSupported}"
+    log.info "${device.displayName} Initialization finished"
+}
+
 def initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
     initializeVars()
     updated()
     configure()
+    runIn( 12, logInitializeRezults)
 }
 
 // This method is called when the device is first created.
 def installed() {
     log.info "${device.displayName} Installed()..."
     initializeVars()
-    runIn( 3, initialize)
+    runIn( 1, initialize)
     log.debug "calling initialize() after 3 seconds..."
 }
 
