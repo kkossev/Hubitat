@@ -1,5 +1,5 @@
 /**
- *  Zigbee Metering Plug driver for Hubitat Elevation - Power, Energy, Voltage, Amperage
+ *  Tuya Zigbee Metering Plug driver for Hubitat Elevation - Power, Energy, Voltage, Amperage
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -10,22 +10,24 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * 
- *  Based on "SmartThings/iquix" DH
- * 
+ *  The inital version was based on "SmartThings/iquix" DHT
  *
  *  ver. 1.0.0 2021-11-09 kkossev - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds
  *  ver. 1.0.1 2021-11-10 kkossev - added 'pollingInterval' preference; 'amperage' attribute name bug fix; 
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
- *  ver. 1.1.2 2021-12-26 kkossev - added Tuya / Neo NAS-WR01 fingerprint
+ *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
+ *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
  *
  */
+import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
+def version() { "1.2.0" }
+
 metadata {
-    definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy" ) {
+    definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
         capability "EnergyMeter"
         capability "PowerMeter"
         capability "CurrentMeter"
@@ -36,14 +38,15 @@ metadata {
         capability "Refresh"
         capability "Health Check"
         capability "Sensor"
-        capability "Configuration"
+        capability "Initialize"
         capability "PresenceSensor"
         capability "Polling"
+        command "initialize"
 
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
         fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
     }
@@ -53,7 +56,7 @@ metadata {
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Enable automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value==true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
-                   range: "10..3600", defaultValue: 60)
+                   range: "10..3600", defaultValue: defaultPollingInterval)
         }
     }
 }
@@ -63,43 +66,81 @@ metadata {
 @Field static final Integer energyDiv = 100
 @Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
+@Field static final Integer defaultPollingInterval = 60
+@Field static final Integer debouncingTimer = 300
+@Field static final Integer digitalTimer = 1000
+@Field static final Integer refreshTimer = 3000
+@Field static String UNKNOWN = "UNKNOWN"
+
 
 def parse(String description) {
-    if (logEnable) {log.debug "description is $description"}
+    if (logEnable==true) {log.debug "description is $description \n\n"}
     def event = zigbee.getEvent(description)
 
     if (event) {
-        //log.info "event enter:$event"
+        if (logEnable==true) log.debug "Event enter: $event"
         setPresent()
-        if (event.name== "power") {
-            event.value = event.value/powerDiv
-            event.unit = "W"
-        } else if (event.name== "energy") {
-            event.value = event.value/energyDiv
-            event.unit = "kWh"
+        switch (event.name) {
+            case "switch" :
+                if (state.switchDebouncing==true && event.value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
+                    if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
+                    runInMillis( debouncingTimer, switchDebouncingClear)
+                    return null
+                }
+                else {
+                    event.type = state.isDigital ? "digital" : "physical"
+                    if (state.isRefreshRequest == true) {
+                        event.descriptionText = "${device.displayName} switch is ${event.value}"
+                    }
+                    else {
+                        event.descriptionText = "${device.displayName} was turned ${event.value} [${event.type}]"
+                    }
+                    if (state.lastSwitchState != event.value ) {
+                        if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
+                            if (autoPollingEnabled == true) {
+                                runInMillis(5000, pollPower)
+                                runIn( pollingInterval, autoPoll) // restart polling interval timer
+                            }
+                    }
+                    state.switchDebouncing = true
+                    state.lastSwitchState = event.value
+                    runInMillis( debouncingTimer, switchDebouncingClear)
+                }
+                break
+            // for smart plugs that can be configured to fire atimaticallty power and energy events ..
+            case "power" :    
+                event.value = event.value/powerDiv
+                event.unit = "W"
+                event.descriptionText = "${device.displayName} ${event.name} is ${event.value}"
+                break
+            case "energy" :
+                event.value = event.value/energyDiv
+                event.unit = "kWh"
+                break
+            default :
+                if (txtEnable) {log.info "received <b>unhandled event</b> ${event.name} = $event.value"} 
+                break
         }
-        if (txtEnable) {log.info "${event.name} = $event.value"} 
-        sendEvent(event)
-        if (event.name== "switch") {
-            //TODO: if the switch changes its previous state - refresh!
-            if (state.lastSwitchState != event.value ) {
-                if (logEnable) {log.trace "switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
-                state.lastSwitchState = event.value
-            }
-        }
-    } else {
+        //log.trace "event.descriptionText = ${event.descriptionText}"
+        if (txtEnable) {log.info "${event.descriptionText}"}
+        return event
+    } // if event
+    else {
         List result = []
         def descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) {log.debug "Desc Map: $descMap"}
-
-        List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value]]
-        descMap.additionalAttrs.each {
-            attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value]
-        }
-
-        attrData.each {
+        if (descMap.attrId != null ) {
+            // attribute report received
+            List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
+            descMap.additionalAttrs.each {
+                attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
+            }
+            attrData.each {
                 def map = [:]
-                if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
+                if (it.status == "86") {
+                    disableUnsupportedAttribute(descMap.cluster, it.attrId)
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
                         map.name = "power"
                         map.value = zigbee.convertHexToInt(it.value)/powerDiv
                         map.unit = "W"
@@ -124,50 +165,190 @@ def parse(String description) {
                         map.unit = "kWh"
                 }
                 else {
-                    //log.warn "^^^^ UNRPOCESSED! ^^^^"
+                    log.warn "Unprocessed attribute report: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
                 }
 
                 if (map) {
-                    if (txtEnable) {log.info "${map.name} = ${map.value} ${map.unit}"}
+                    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
                     result << createEvent(map)
                 }
                 if (logEnable) {log.debug "Parse returned $map"}
+            
+            } // for each attribute
+        } // if attribute report
+        else if (descMap.profileId == "0000") { //zdo
+            parseZDOcommand(descMap)
+        } 
+        else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
+            parseZHAcommand(descMap)
+        } 
+        else {
+            log.warn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
         return result
+    } // descMap
+}
+
+
+def parseZDOcommand( Map descMap) {
+    switch (descMap.clusterId) {
+        case "0006" :
+            log.info "Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
+            break
+        case "0013" : // device announcement
+            log.info "Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            break
+        case "8005" : // endpoint response
+            def endpointCount = descMap.data[4]
+            def endpointList = descMap.data[5]
+            log.info "Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${endpointCount}  endpointList = ${endpointList}"
+            break
+        case "8021" : // bind response
+            log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        default :
+            log.warn "Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+def disableUnsupportedAttribute(String clusterId, String attrId) {
+    switch (clusterId) {
+        case "0B04" : // Electrical Measurement attribute is not supported!
+            switch (attrId) {
+                case "0505" :    // Voltage
+                    log.warn "Voltage measurement is not supported -> Voltage polling will be diabled."
+                    state.voltageMeasurementSupported = false
+                    break
+                case "0508" :     // Current
+                    log.warn "Current measurement is not supported -> Current polling will be diabled."
+                    state.currentMeasurementSupported = false
+                    break
+                case "050B" :     // Power
+                    log.warn "Power measurement is not supported! -> Power polling will be diabled."
+                    state.powerMeasurementSupported = false
+                    break
+                default :
+                    log.warn "Read attribute response: unsupported Attributte ${attrId} for Electrical Measurement cluster ${clusterId}"
+                    break
+            }
+            break
+        case "0702" : // Simple Metering Cluster
+            log.warn "Energy measurement is not supported! -> Energy polling will be diabled."
+            state.energyMeasurementSupported = false
+            break
+        default :
+            log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}"
+            break
+    }
+}
+
+def parseZHAcommand( Map descMap) {
+    switch (descMap.command) {
+        case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
+            def status = descMap.data[2]
+            def attrId = descMap.data[1] + descMap.data[0] 
+            if (status == "86") {
+                disableUnsupportedAttribute(descMap.clusterId, attrId)
+            }
+            else {
+                log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+            }
+            break
+        case "07" : // Configure Reporting Response
+            log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            // Status: Unreportable Attribute (0x8c)
+            break
+        case "0B" : // ZCL Default Response
+            def status = descMap.data[1]
+            if (status != "00") {
+                switch (descMap.clusterId) {
+                    case "0B04" : // Electrical Measurement
+                        log.warn "Electrical measurement is not supported -> Power, Voltage and Amperage polling will be diabled."
+                        state.powerMeasurementSupported = false
+                        state.voltageMeasurementSupported = false
+                        state.currentMeasurementSupported = false
+                        break
+                    case "0702" : // Energy
+                        log.warn "Energy measurement is not supported -> Energy polling will be diabled."
+                        state.energyMeasurementSupported = false
+                        break
+                    default :
+                        log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                        break
+                }
+            }
+            break
+        default :
+            log.warn "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
 }
 
 def off() {
-    def cmds = zigbee.off()
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x00, "", [destEndpoint: 0x02])
-    }
+    state.isDigital = true
+    if (logEnable) {log.debug "Switching ${device.displayName} Off"}
+    def cmds = zigbee.off()    // default, works for HY0105
+
+    runInMillis( digitalTimer, isDigitalClear)
     return cmds
 }
-
 
 def on() {
-    def cmds = zigbee.on()
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(zigbee.ONOFF_CLUSTER, 0x01, "", [destEndpoint: 0x02])
-    }
+    state.isDigital = true
+    if (logEnable) {log.debug "Switching ${device.displayName} On"}
+    def cmds = zigbee.on()    // default, works for HY0105
+
+    runInMillis( digitalTimer, isDigitalClear)
     return cmds
 }
 
-/**
- * PING is used by Device-Watch in attempt to reach the Device
- * */
+def isDigitalClear() { state.isDigital = false }
+
+def isRefreshRequestClear() { state.isRefreshRequest = false }
+
+def switchDebouncingClear() { state.switchDebouncing = false }
+
+
+
+// * PING is used by Device-Watch in attempt to reach the Device
 def ping() {
     return refresh()
 }
 
+def pollPower() {
+    if (logEnable) {log.debug "pollPower().."}
+    List<String> cmds = []
+    if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
+        cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
+    }
+    else {
+        cmds += zigbee.electricMeasurementPowerRefresh()    // just power
+    }
+    state.isRefreshRequest = true
+    runInMillis( refreshTimer, isRefreshRequestClear)       // 3 seconds
+    return cmds
+}
+
 // Sends refresh / readAttribute commands to the plug
 def poll() {
-    zigbee.onOffRefresh() +
-    zigbee.electricMeasurementPowerRefresh() +
-    zigbee.readAttribute(0x0702, 0x0000) + 
-    zigbee.readAttribute(0x0B04, 0x0505) +      // voltage
-    zigbee.readAttribute(0x0B04, 0x0508)        // current
+    if (logEnable) {log.debug "polling.."}
+    List<String> cmds = []
+    cmds = zigbee.onOffRefresh()                            // switch
+    if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
+        cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
+    }
+    else {
+        if (state.powerMeasurementSupported == true) 
+            cmds += zigbee.electricMeasurementPowerRefresh()    // Power ( cluster 0B04, attr. 050B )
+        if (state.voltageMeasurementSupported == true)
+            cmds += zigbee.readAttribute(0x0B04, 0x0505)        // voltage
+        if (state.currentMeasurementSupported == true)
+            cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
+    }    
+    if (state.energyMeasurementSupported == true)
+        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy
+    state.isRefreshRequest = true
+    runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
+    return cmds
 }
 
 def refresh() {
@@ -179,35 +360,109 @@ def autoPoll() {
     if (logEnable) {log.debug "autoPoll()"}
     checkIfNotPresent()
     if (autoPollingEnabled?.value==true) {
-        runIn( pollingInterval.value, autoPoll)
+        if ( pollingInterval != null ) 
+            runIn( pollingInterval, autoPoll)
+        esle
+            runIn( defaultPollingInterval, autoPoll)
     }
     poll()    
 }
 
-// Called when preferences are saved
-def updated(){
-    if (logEnable) {log.debug "updated() : Saved preferences"}
-    configure()
+// This method is called unconditionally during the initial pairing, immediately after Installed() method!
+def configure() {
+    log.debug " configure().."
+    return /*refresh() +*/
+           zigbee.onOffConfig() +    // Maximum Interval: 600 seconds
+           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
+           //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
 }
 
 
-def configure() {
+// This method is called when the preferences of a device are updated.
+def updated(){
+    log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")}"
+    log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
+    if (logEnable==true) {
+        runIn(1800, logsOff)    // turn off debug logging after 30 minutes
+        log.info "Debug logging will be automatically switched off after 30 minutes!"
+    }
+    else {
+        unschedule(logsOff)
+    }
+
+    if (autoPollingEnabled?.value==true) {
+        if ( pollingInterval != null ) {
+            runIn( pollingInterval, autoPoll)
+            log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
+        }
+        else {
+            runIn( defaultPollingInterval, autoPoll)
+        }
+    }
+    else {
+        unschedule(autoPoll)
+        log.info "Auto polling is <b>disabled</b>"
+    }
+}
+
+
+void initializeVars() {
+    log.debug "${device.displayName} UnitializeVars()..."
     state.clear()
     state.lastPower = "unknown"
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
-    // this device will send instantaneous demand and current summation delivered every 1 minute
-    sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
-    log.debug "Configuring Reporting"
-    if (device.getDataValue("model") == "TS0121") {
-        unschedule()
-        runIn( pollingInterval.value, autoPoll)
+    state.voltageMeasurementSupported = true
+    state.currentMeasurementSupported = true
+    state.powerMeasurementSupported = true
+    state.energyMeasurementSupported = true
+    state.isDigital = true
+    state.isRefreshRequest = true
+    state.switchDebouncing = false
+    device.updateSetting("logEnable", true)    
+    device.updateSetting("txtEnable", true)    
+    device.updateSetting("autoPollingEnabled", true)    
+    device.updateSetting("pollingInterval", defaultPollingInterval)    
+    def mm = device.getDataValue("model")
+    if ( mm != null) {
+        state.model = mm
+        log.trace " model = ${state.model}"
+    }
+    else {
+        log.warn " Model not found, please re-pair the device!"
+        state.model = UNKNOWN
+    }
+    def ep = device.getEndpointId()
+    if ( ep  != null) {
+        state.destinationEP = ep
+        log.trace " destinationEP = ${state.destinationEP}"
+    }
+    else {
+        log.warn " Destination End Point not found, please re-pair the device!"
+        state.destinationEP = "01"    // fallback
     }    
-    return refresh() +
-           zigbee.onOffConfig() +
-           zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +
-           //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
+}
+
+def initialize() {
+    log.info "${device.displayName} Initialize()..."
+    unschedule()
+    initializeVars()
+    updated()
+    configure()
+}
+
+// This method is called when the device is first created.
+def installed() {
+    log.info "${device.displayName} Installed()..."
+    initializeVars()
+    runIn( 3, initialize)
+    log.debug "calling initialize() after 3 seconds..."
+}
+
+void uninstalled() {
+    log.info "${device.displayName} Uninstalled()..."
+    unschedule()     //Unschedule any existing schedules
 }
 
 // not used !
@@ -218,8 +473,7 @@ def powerRefresh() {
     }
 }
 
-// called when anything was received from the Zigbee device in parse() method..
-//
+// called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
     if (state.lastPresenceState != "present") {
     	sendEvent(name: "presence", value: "present") 
@@ -229,13 +483,13 @@ def setPresent() {
 }
 
 // called from autoPoll()
-//
 def checkIfNotPresent() {
     state.notPresentCounter = state.notPresentCounter + 1
     if (state.notPresentCounter > presenceCountTreshold) {
         if (state.lastPresenceState != "not present") {
 	        sendEvent(name: "presence", value: "not present")
             state.lastPresenceState = "not present"
+            log.warn "not present!"
         }
     }
 }
@@ -243,4 +497,16 @@ def checkIfNotPresent() {
 void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.debug "${device.displayName} sendZigbeeCommands received : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+}
+
+def logsOff(){
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
+
+def test()
+{
+    log.debug "testing..."
+      
 }

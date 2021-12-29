@@ -19,12 +19,15 @@
  * ver. 2.2.0 2021-10-20 kkossev     - First succesfuly working version with HE!
  * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
  * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
+ * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
+ * ver. 2.3.0 2021-12-05 kkossev (development/feature/TS0041 branch!) - added support for 'Tuya YSB22 TS0041'
  *
  */
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
 import hubitat.device.HubMultiAction
+import groovy.json.JsonOutput
 
 metadata {
     definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy" ) {
@@ -33,15 +36,22 @@ metadata {
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
+   	capability "ReleasableButton"
+        
     capability "Battery"
 
     capability "Initialize"
     capability "Configuration"
       
+    fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
+    fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_vp6clf9d", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
+    fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_tk3s5tyg", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
+        
     }
     preferences {
-        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: false)
+        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
     }
@@ -95,10 +105,12 @@ def parse(String description) {
         }
         //
         if (buttonNumber != 0 ) {
-            if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
-                if (logEnable) {log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
-                runInMillis(DEBOUNCE_TIME, buttonDebounce)    // restart the debouncing timer again
-                return null 
+            if (device.getDataValue("model") == "TS004F") {
+                if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
+                    if (logEnable) {log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
+                    runInMillis(DEBOUNCE_TIME, buttonDebounce)    // restart the debouncing timer again
+                    return null 
+                }
             }
             state.lastButtonNumber = buttonNumber
             if (descMap.data[0] == "00")
@@ -121,7 +133,9 @@ def parse(String description) {
         if (event) {
             //if (logEnable) {log.debug "Creating event: ${event}"}
 		    result = createEvent(event)
-            runInMillis(DEBOUNCE_TIME, buttonDebounce)
+            if (device.getDataValue("model") == "TS004F") {
+                runInMillis(DEBOUNCE_TIME, buttonDebounce)
+            }
 	    } 
 	} // if catchall
     else {
@@ -146,8 +160,22 @@ def installed()
 
 def initialize() {
     readAttributes()
-    def numberOfButtons = 4
-    sendEvent(name: "numberOfButtons", value: numberOfButtons , displayed: false)
+    def numberOfButtons
+    def supportedValues
+    if (device.getDataValue("model") == "TS0041") {
+    	numberOfButtons = 1
+        supportedValues = ["pushed", "double", "held"]
+    }
+    else if (device.getDataValue("model") == "TS004F") {
+    	numberOfButtons = 4
+        supportedValues = ["pushed", "double", "held", "release"]
+    }
+    else {
+    	numberOfButtons = 4	// unknown
+        supportedValues = ["pushed", "double", "held", "release"]
+    }
+    sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
+    sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
     state.lastButtonNumber = 0
 }
 
