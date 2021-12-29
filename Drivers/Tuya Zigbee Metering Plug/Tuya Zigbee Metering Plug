@@ -17,7 +17,7 @@
  *  ver. 1.1.0 2021-11-12 kkossev - added 'PresenceSensor' capability; the automatic polling can be switched off.
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
- *  ver. 1.2.0 2021-12-28 kkossev - (dev. branch) - major refactoring and new features added
+ *  ver. 1.2.0 2021-12-29 kkossev - (dev. branch) - major refactoring and optimizations
  *
  */
 import groovy.json.*
@@ -39,7 +39,6 @@ metadata {
         capability "Health Check"
         capability "Sensor"
         capability "Initialize"
-        //capability "Configuration"
         capability "PresenceSensor"
         capability "Polling"
         command "initialize"
@@ -250,7 +249,7 @@ def parseZHAcommand( Map descMap) {
             def attrId = descMap.data[1] + descMap.data[0] 
             if (status == "86") {
                 disableUnsupportedAttribute(descMap.clusterId, attrId)
-            } // if status 86
+            }
             else {
                 log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
             }
@@ -293,7 +292,6 @@ def off() {
     return cmds
 }
 
-
 def on() {
     state.isDigital = true
     if (logEnable) {log.debug "Switching ${device.displayName} On"}
@@ -310,9 +308,8 @@ def isRefreshRequestClear() { state.isRefreshRequest = false }
 def switchDebouncingClear() { state.switchDebouncing = false }
 
 
-/**
- * PING is used by Device-Watch in attempt to reach the Device
- * */
+
+// * PING is used by Device-Watch in attempt to reach the Device
 def ping() {
     return refresh()
 }
@@ -320,7 +317,6 @@ def ping() {
 def pollPower() {
     if (logEnable) {log.debug "pollPower().."}
     List<String> cmds = []
-    
     if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
@@ -328,7 +324,7 @@ def pollPower() {
         cmds += zigbee.electricMeasurementPowerRefresh()    // just power
     }
     state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)             // 3 seconds
+    runInMillis( refreshTimer, isRefreshRequestClear)       // 3 seconds
     return cmds
 }
 
@@ -337,7 +333,6 @@ def poll() {
     if (logEnable) {log.debug "polling.."}
     List<String> cmds = []
     cmds = zigbee.onOffRefresh()                            // switch
-    
     if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
@@ -349,11 +344,10 @@ def poll() {
         if (state.currentMeasurementSupported == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     }    
-
     if (state.energyMeasurementSupported == true)
-        cmds += zigbee.readAttribute(0x0702, 0x0000)        // energy
+        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy
     state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)             // 3 seconds
+    runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
     return cmds
 }
 
@@ -377,15 +371,6 @@ def autoPoll() {
 // This method is called unconditionally during the initial pairing, immediately after Installed() method!
 def configure() {
     log.debug " configure().."
-    // this device will send instantaneous demand and current summation delivered every 1 minute
-    sendEvent(name: "checkInterval", value: 2 * 60 + 10 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
-    //log.debug "Configuring Reporting"
-    /*
-    if (state.model == "TS0121" || state.model == "TS011F") {
-        unschedule()
-        runIn( defaultPollingInterval, autoPoll)
-    }
-    */
     return /*refresh() +*/
            zigbee.onOffConfig() +    // Maximum Interval: 600 seconds
            zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
@@ -418,11 +403,6 @@ def updated(){
         unschedule(autoPoll)
         log.info "Auto polling is <b>disabled</b>"
     }
-        
-    
-    
-    
-    //configure()
 }
 
 
@@ -433,7 +413,6 @@ void initializeVars() {
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
-    
     state.voltageMeasurementSupported = true
     state.currentMeasurementSupported = true
     state.powerMeasurementSupported = true
@@ -441,14 +420,10 @@ void initializeVars() {
     state.isDigital = true
     state.isRefreshRequest = true
     state.switchDebouncing = false
-
-    
-    
     device.updateSetting("logEnable", true)    
     device.updateSetting("txtEnable", true)    
     device.updateSetting("autoPollingEnabled", true)    
     device.updateSetting("pollingInterval", defaultPollingInterval)    
-    
     def mm = device.getDataValue("model")
     if ( mm != null) {
         state.model = mm
@@ -458,7 +433,6 @@ void initializeVars() {
         log.warn " Model not found, please re-pair the device!"
         state.model = UNKNOWN
     }
-
     def ep = device.getEndpointId()
     if ( ep  != null) {
         state.destinationEP = ep
@@ -468,7 +442,6 @@ void initializeVars() {
         log.warn " Destination End Point not found, please re-pair the device!"
         state.destinationEP = "01"    // fallback
     }    
-    
 }
 
 def initialize() {
@@ -500,8 +473,7 @@ def powerRefresh() {
     }
 }
 
-// called when anything was received from the Zigbee device in parse() method..
-//
+// called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
     if (state.lastPresenceState != "present") {
     	sendEvent(name: "presence", value: "present") 
@@ -511,7 +483,6 @@ def setPresent() {
 }
 
 // called from autoPoll()
-//
 def checkIfNotPresent() {
     state.notPresentCounter = state.notPresentCounter + 1
     if (state.notPresentCounter > presenceCountTreshold) {
@@ -537,6 +508,5 @@ def logsOff(){
 def test()
 {
     log.debug "testing..."
-  
-    
+      
 }
