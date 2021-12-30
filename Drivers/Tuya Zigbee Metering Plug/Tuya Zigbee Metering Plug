@@ -233,16 +233,46 @@ def parseZDOcommand( Map descMap ) {
         case "0013" : // device announcement
             log.info "Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             break
+        case "8004" : // simple descriptor response
+            log.info "Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+            parseSimpleDescriptorResponse( descMap )
+            break
         case "8005" : // endpoint response
-            def endpointCount = descMap.data[4]
-            def endpointList = descMap.data[5]
-            log.info "Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${endpointCount}  endpointList = ${endpointList}"
+            log.info "Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}"
             break
         case "8021" : // bind response
             log.info "Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         default :
             log.warn "Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+def parseSimpleDescriptorResponse(Map descMap) {
+    //log.info "Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+    log.info "Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
+    def inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
+    def inputClusterList = ""
+    for (int i in 1..inputClusterCount) {
+        inputClusterList += descMap.data[13+(i-1)*2] + descMap.data[12+(i-1)*2] + ","
+    }
+    inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
+    log.info "Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
+    if (getDataValue("inClusters") != inputClusterList)  {
+        log.warn "inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
+        updateDataValue("inClusters", inputClusterList)
+    }
+    
+    def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12+inputClusterCount*2])
+    def outputClusterList = ""
+    for (int i in 1..outputClusterCount) {
+        outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+    }
+    outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
+    log.info "Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
+    if (getDataValue("outClusters") != outputClusterList)  {
+        log.warn "outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
+        updateDataValue("outClusters", outputClusterList)
     }
 }
 
