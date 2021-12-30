@@ -19,7 +19,7 @@
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
  *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
  *  ver. 1.2.1 2021-12-29 kkossev - added AlwaysOn option
- *  ver. 1.3.0 2021-12-29 kkossev - "HIKING TOMZN DDS238-2 TS0601_din" on/off support
+ *  ver. 1.3.0 2021-12-31 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *
  */
 import groovy.json.*
@@ -80,55 +80,26 @@ metadata {
 def parse(String description) {
     if (logEnable==true) {log.debug "description is $description \n\n"}
     def event = zigbee.getEvent(description)
-
+    setPresent()
     if (event) {
         if (logEnable==true) log.debug "Event enter: $event"
-        setPresent()
         switch (event.name) {
             case "switch" :
-                if (state.switchDebouncing==true && event.value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
-                    if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
-                    runInMillis( debouncingTimer, switchDebouncingClear)
-                    return null
-                }
-                else {
-                    event.type = state.isDigital ? "digital" : "physical"
-                    if (state.isRefreshRequest == true) {
-                        event.descriptionText = "${device.displayName} switch is ${event.value}"
-                    }
-                    else {
-                        event.descriptionText = "${device.displayName} was turned ${event.value} [${event.type}]"
-                    }
-                    if (state.lastSwitchState != event.value ) {
-                        if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${event.value}</b>"}
-                            if (autoPollingEnabled == true) {
-                                runInMillis(5000, pollPower)
-                                runIn( pollingInterval, autoPoll) // restart polling interval timer
-                            }
-                    }
-                    state.switchDebouncing = true
-                    state.lastSwitchState = event.value
-                    runInMillis( debouncingTimer, switchDebouncingClear)
-                }
+                switchEvent( event.value )
                 break
             // for smart plugs that can be configured to fire atimaticallty power and energy events ..
             case "power" :    
-                event.value = event.value/powerDiv
-                event.unit = "W"
-                event.descriptionText = "${device.displayName} ${event.name} is ${event.value}"
+                powerEvent(event.value/powerDiv)
                 break
             case "energy" :
-                event.value = event.value/energyDiv
-                event.unit = "kWh"
+                energyEvent(event.value/energyDiv)
                 break
             default :
-                if (txtEnable) {log.info "received <b>unhandled event</b> ${event.name} = $event.value"} 
+                if (txtEnable) {log.warn "received <b>unhandled event</b> ${event.name} = $event.value"} 
                 break
         }
-        //log.trace "event.descriptionText = ${event.descriptionText}"
-        if (txtEnable) {log.info "${event.descriptionText}"}
-        return event
-    } // if event
+        return null //event
+    }
     else {
         List result = []
         def descMap = zigbee.parseDescriptionAsMap(description)
@@ -145,39 +116,25 @@ def parse(String description) {
                     disableUnsupportedAttribute(descMap.cluster, it.attrId)
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
-                        map.name = "power"
-                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
-                        map.unit = "W"
+                        powerEvent(zigbee.convertHexToInt(it.value)/powerDiv)
                         if (state.lastPower != map.value ) {
                             if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${map.value}</b>"}
                             state.lastPower = map.value
                         }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
-                        map.name = "voltage"
-                        map.value = zigbee.convertHexToInt(it.value)/powerDiv
-                        map.unit = "V"
+                        voltageEvent(zigbee.convertHexToInt(it.value)/powerDiv)
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
-                        map.name = "amperage"
-                        map.value = zigbee.convertHexToInt(it.value)/currentDiv
-                        map.unit = "A"
+                        amperageEvent(zigbee.convertHexToInt(it.value)/currentDiv)
                 }
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
-                        map.name = "energy"
-                        map.value = zigbee.convertHexToInt(it.value)/energyDiv
-                        map.unit = "kWh"
+                        energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
                 else {
                     log.warn "Unprocessed attribute report: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
                 }
-
-                if (map) {
-                    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-                    result << createEvent(map)
-                }
-                if (logEnable) {log.debug "Parse returned $map"}
-            
+                //if (logEnable) {log.debug "Parse returned $map"}
             } // for each attribute
         } // if attribute report
         else if (descMap.profileId == "0000") { //zdo
@@ -189,11 +146,38 @@ def parse(String description) {
         else {
             log.warn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
-        return result
+        return null //result
     } // descMap
 }
 
-def switchEvent() {
+def switchEvent( value ) {
+    def map = [:] 
+    if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
+        if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
+        runInMillis( debouncingTimer, switchDebouncingClear)
+        return null
+    }
+    map.type = state.isDigital ? "digital" : "physical"
+    if (state.lastSwitchState != value ) {
+        if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
+        if (autoPollingEnabled == true) {
+            runInMillis(5000, pollPower)
+            runIn( pollingInterval, autoPoll) // restart polling interval timer
+        }
+        state.switchDebouncing = true
+        state.lastSwitchState = value
+        runInMillis( debouncingTimer, switchDebouncingClear)
+    }
+    map.name = "switch"
+    map.value = value
+    if (state.isRefreshRequest == true) {
+        map.descriptionText = "${device.displayName} switch is ${value}"
+    }
+    else {
+        map.descriptionText = "${device.displayName} was turned ${value} [${map.type}]"
+    }
+    if (txtEnable) {log.info "${map.descriptionText}"}
+    sendEvent(map)
 }
 
 def voltageEvent( voltage ) {
@@ -219,6 +203,15 @@ def amperageEvent( amperage ) {
     map.name = "amperage"
     map.value = amperage
     map.unit = "A"
+    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+def energyEvent( energy ) {
+    def map = [:] 
+    map.name = "energy"
+    map.value = energy
+    map.unit = "kWh"
     if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
@@ -326,17 +319,10 @@ def parseZHAcommand( Map descMap) {
                         def cmd = descMap.data[0]+descMap.data[2]
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
                             case "0001" : // switch
-                                map.name = "switch"
-                                map.value = value
-                                if (value==0) {
-                                    map.value = "off"
-                                } else if (value==1) {
-                                    map.value = "on"
-                                } else {
-                                    map.value = value
-                                    log.warn "Tuya switch report unknown value ${value}"
-                                }
-                                log.warn "switch value is ${value}  data.size() = ${descMap.data.size()}"
+                                switchEvent(value==0 ? "off" : "on")
+                                break
+                            case "0011" : // Energy
+                                energyEvent(value/100)
                                 break
                             case "0012" : // Amperage
                                 amperageEvent(value/1000)
@@ -351,17 +337,12 @@ def parseZHAcommand( Map descMap) {
                                 log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}${descMap.data[2]}${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
                                 break
                         }
-                        //if (map != null) {
-                          //  sendEvent(map)
-                            //log.trace "sending event ${map}"
-                       // }
                         break
                     default :
                         log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
                         break
-                }
-                
-            }
+                } // switch (descMap.clusterId)
+            }  //command is read attribute response
             break
         case "07" : // Configure Reporting Response
             log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
@@ -418,8 +399,6 @@ private int getAttributeValue(ArrayList _data) {
     }
     return retValue
 }
-
-
 
 def off() {
     if (alwaysOn == true) {
@@ -668,3 +647,4 @@ def test()
     log.debug "testing..."
       
 }
+
