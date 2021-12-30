@@ -18,7 +18,8 @@
  *  ver. 1.1.1 2021-11-25 kkossev - added Tuya Outlet TS011F fingerprint
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
  *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
- *  ver. 1.2.1 2021-12-29 kkossev - AlwaysOn option
+ *  ver. 1.2.1 2021-12-29 kkossev - added AlwaysOn option
+ *  ver. 1.3.0 2021-12-29 kkossev - "HIKING TOMZN DDS238-2 TS0601_din" on/off support
  *
  */
 import groovy.json.*
@@ -50,6 +51,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
@@ -191,8 +193,39 @@ def parse(String description) {
     } // descMap
 }
 
+def switchEvent() {
+}
 
-def parseZDOcommand( Map descMap) {
+def voltageEvent( voltage ) {
+    def map = [:] 
+    map.name = "voltage"
+    map.value = voltage
+    map.unit = "V"
+    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+def powerEvent( power ) {
+    def map = [:] 
+    map.name = "power"
+    map.value = power
+    map.unit = "W"
+    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+def amperageEvent( amperage ) {
+    def map = [:] 
+    map.name = "amperage"
+    map.value = amperage
+    map.unit = "A"
+    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+
+
+def parseZDOcommand( Map descMap ) {
     switch (descMap.clusterId) {
         case "0006" :
             log.info "Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
@@ -239,7 +272,7 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
             state.energyMeasurementSupported = false
             break
         default :
-            log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}"
+            log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
             break
     }
 }
@@ -253,7 +286,51 @@ def parseZHAcommand( Map descMap) {
                 disableUnsupportedAttribute(descMap.clusterId, attrId)
             }
             else {
-                log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+                switch (descMap.clusterId) {
+                    case "EF00" :
+                        //log.warn "Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
+                        def attribute = getAttribute(descMap.data)
+                        def value = getAttributeValue(descMap.data)
+                        //log.trace "attribute=${attribute} value=${value}"
+                        def map = [:]
+                        def cmd = descMap.data[0]+descMap.data[2]
+                        switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
+                            case "0001" : // switch
+                                map.name = "switch"
+                                map.value = value
+                                if (value==0) {
+                                    map.value = "off"
+                                } else if (value==1) {
+                                    map.value = "on"
+                                } else {
+                                    map.value = value
+                                    log.warn "Tuya switch report unknown value ${value}"
+                                }
+                                log.warn "switch value is ${value}  data.size() = ${descMap.data.size()}"
+                                break
+                            case "0012" : // Amperage
+                                amperageEvent(value/1000)
+                                break
+                            case "0013" : // Power
+                                powerEvent(value/10)
+                                break
+                            case "0014" : // Voltage
+                                voltageEvent(value/10)
+                                break
+                            default :
+                                log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}${descMap.data[2]}${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
+                                break
+                        }
+                        //if (map != null) {
+                          //  sendEvent(map)
+                            //log.trace "sending event ${map}"
+                       // }
+                        break
+                    default :
+                        log.warn "Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+                        break
+                }
+                
             }
             break
         case "07" : // Configure Reporting Response
@@ -285,6 +362,35 @@ def parseZHAcommand( Map descMap) {
     }
 }
 
+private String getAttribute(ArrayList _data) {
+    String retValue = ""
+    if (_data.size() >= 5) {
+        if (_data[2] == "01" && _data[3] == "01" && _data[4] == "00") {
+            retValue = "switch"
+        }
+        else if (_data[2] == "02" && _data[3] == "02" && _data[4] == "00") {
+            retValue = "level"
+        }
+    }
+    return retValue
+}
+
+private int getAttributeValue(ArrayList _data) {
+    int retValue = 0
+    
+    if (_data.size() >= 6) {
+        int dataLength = _data[5] as Integer
+        int power = 1;
+        for (i in dataLength..1) {
+            retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
+            power = power * 256
+        }
+    }
+    return retValue
+}
+
+
+
 def off() {
     if (alwaysOn == true) {
         log.warn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
@@ -292,7 +398,10 @@ def off() {
     else {
         state.isDigital = true
         if (logEnable) {log.debug "Switching ${device.displayName} Off"}
-        def cmds = zigbee.off()    // default, works for HY0105
+        def cmds = zigbee.off()
+        if (state.model == "TS0601") {
+            cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
+        }
         runInMillis( digitalTimer, isDigitalClear)
         return cmds
     }
@@ -301,8 +410,10 @@ def off() {
 def on() {
     state.isDigital = true
     if (logEnable) {log.debug "Switching ${device.displayName} On"}
-    def cmds = zigbee.on()    // default, works for HY0105
-
+    def cmds = zigbee.on()
+    if (state.model == "TS0601") {
+        cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
+    }
     runInMillis( digitalTimer, isDigitalClear)
     return cmds
 }
@@ -521,7 +632,6 @@ def logsOff(){
     log.warn "debug logging disabled..."
     device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
-
 
 def test()
 {
