@@ -54,13 +54,14 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
-        input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "autoPollingEnabled", type: "bool", title: "<b>Enable automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value==true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
+        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Optimize polling and logging. Recommended value is <b>true</b></i>", defaultValue: false)
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
     }
 }
@@ -117,9 +118,9 @@ def parse(String description) {
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
                         powerEvent(zigbee.convertHexToInt(it.value)/powerDiv)
-                        if (state.lastPower != map.value ) {
-                            if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${map.value}</b>"}
-                            state.lastPower = map.value
+                        if (state.lastPower != zigbee.convertHexToInt(it.value)/powerDiv ) {
+                            if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${zigbee.convertHexToInt(it.value)/powerDiv}</b>"}
+                            state.lastPower = zigbee.convertHexToInt(it.value)/powerDiv
                         }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
@@ -339,6 +340,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             default :
                                 log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}${descMap.data[2]}${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
+                                log.warn "map= ${descMap}"
                                 break
                         }
                         break
@@ -546,7 +548,7 @@ def updated(){
 void initializeVars() {
     log.debug "${device.displayName} UnitializeVars()..."
     state.clear()
-    state.lastPower = "unknown"
+    state.lastPower = 0
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
@@ -561,6 +563,8 @@ void initializeVars() {
     device.updateSetting("logEnable", true)    
     device.updateSetting("txtEnable", true)    
     device.updateSetting("autoPollingEnabled", true)    
+    device.updateSetting("optimizations", false)    
+    
     device.updateSetting("alwaysOn", false)    
     device.updateSetting("pollingInterval", defaultPollingInterval)    
     def mm = device.getDataValue("model")
