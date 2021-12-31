@@ -170,7 +170,7 @@ def switchEvent( value ) {
     }
     map.name = "switch"
     map.value = value
-    if (state.isRefreshRequest == true) {
+    if (state.isRefreshRequest == true || state.model == "TS0601") {
         map.descriptionText = "${device.displayName} switch is ${value}"
     }
     else {
@@ -271,19 +271,23 @@ def parseSimpleDescriptorResponse(Map descMap) {
 
 def disableUnsupportedAttribute(String clusterId, String attrId) {
     switch (clusterId) {
+        case "0006" :    // Switch
+            log.warn "Switch polling is not supported -> Switch polling will be diabled."
+            state.switchPollingSupported = false
+            break
         case "0B04" : // Electrical Measurement attribute is not supported!
             switch (attrId) {
                 case "0505" :    // Voltage
-                    log.warn "Voltage measurement is not supported -> Voltage polling will be diabled."
-                    state.voltageMeasurementSupported = false
+                    log.warn "Voltage polling is not supported -> Voltage polling will be diabled."
+                    state.voltagePollingSupported = false
                     break
                 case "0508" :     // Current
-                    log.warn "Current measurement is not supported -> Current polling will be diabled."
-                    state.currentMeasurementSupported = false
+                    log.warn "Current polling is not supported -> Current polling will be diabled."
+                    state.currentPollingSupported = false
                     break
                 case "050B" :     // Power
-                    log.warn "Power measurement is not supported! -> Power polling will be diabled."
-                    state.powerMeasurementSupported = false
+                    log.warn "Power polling is not supported! -> Power polling will be diabled."
+                    state.powerPollingSupported = false
                     break
                 default :
                     log.warn "Read attribute response: unsupported Attributte ${attrId} for Electrical Measurement cluster ${clusterId}"
@@ -292,7 +296,7 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
             break
         case "0702" : // Simple Metering Cluster
             log.warn "Energy measurement is not supported! -> Energy polling will be diabled."
-            state.energyMeasurementSupported = false
+            state.energyPollingSupported = false
             break
         default :
             log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
@@ -352,15 +356,18 @@ def parseZHAcommand( Map descMap) {
             def status = descMap.data[1]
             if (status != "00") {
                 switch (descMap.clusterId) {
+                    case "0006" : // Switch state
+                        log.warn "Switch state is not supported -> Switch polling will be disabled."
+                        state.switchPollingSupported = false
                     case "0B04" : // Electrical Measurement
-                        log.warn "Electrical measurement is not supported -> Power, Voltage and Amperage polling will be diabled."
-                        state.powerMeasurementSupported = false
-                        state.voltageMeasurementSupported = false
-                        state.currentMeasurementSupported = false
+                        log.warn "Electrical measurement is not supported -> Power, Voltage and Amperage polling will be disabled."
+                        state.powerPollingSupported = false
+                        state.voltagePollingSupported = false
+                        state.currentPollingSupported = false
                         break
                     case "0702" : // Energy
-                        log.warn "Energy measurement is not supported -> Energy polling will be diabled."
-                        state.energyMeasurementSupported = false
+                        log.warn "Energy measurement is not supported -> Energy polling will be disabled."
+                        state.energyPollingSupported = false
                         break
                     default :
                         log.info "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
@@ -443,7 +450,7 @@ def ping() {
 def pollPower() {
     if (logEnable) {log.debug "pollPower().."}
     List<String> cmds = []
-    if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
+    if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
     else {
@@ -458,19 +465,21 @@ def pollPower() {
 def poll() {
     if (logEnable) {log.debug "polling.."}
     List<String> cmds = []
-    cmds = zigbee.onOffRefresh()                            // switch
-    if (state.powerMeasurementSupported & state.voltageMeasurementSupported & state.currentMeasurementSupported == true) {
+    if (state.switchPollingSupported == true ) {
+        cmds = zigbee.onOffRefresh()                            // switch
+    }
+    if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
     else {
-        if (state.powerMeasurementSupported == true) 
+        if (state.powerPollingSupported == true) 
             cmds += zigbee.electricMeasurementPowerRefresh()    // Power ( cluster 0B04, attr. 050B )
-        if (state.voltageMeasurementSupported == true)
+        if (state.voltagePollingSupported == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0505)        // voltage
-        if (state.currentMeasurementSupported == true)
+        if (state.currentPollingSupported == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     }    
-    if (state.energyMeasurementSupported == true)
+    if (state.energyPollingSupported == true)
         cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
@@ -541,10 +550,11 @@ void initializeVars() {
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
-    state.voltageMeasurementSupported = true
-    state.currentMeasurementSupported = true
-    state.powerMeasurementSupported = true
-    state.energyMeasurementSupported = true
+    state.switchPollingSupported = true
+    state.voltagePollingSupported = true
+    state.currentPollingSupported = true
+    state.powerPollingSupported = true
+    state.energyPollingSupported = true
     state.isDigital = true
     state.isRefreshRequest = true
     state.switchDebouncing = false
@@ -574,10 +584,11 @@ void initializeVars() {
 }
 
 def logInitializeRezults() {
-    log.info "${device.displayName} voltageMeasurementSupported = ${state.voltageMeasurementSupported}"
-    log.info "${device.displayName} currentMeasurementSupported = ${state.currentMeasurementSupported}"
-    log.info "${device.displayName} powerMeasurementSupported   = ${state.powerMeasurementSupported}"
-    log.info "${device.displayName} energyMeasurementSupported  = ${state.energyMeasurementSupported}"
+    log.info "${device.displayName} switchPollingSupported  = ${state.switchPollingSupported}"
+    log.info "${device.displayName} voltagePollingSupported = ${state.voltagePollingSupported}"
+    log.info "${device.displayName} currentPollingSupported = ${state.currentPollingSupported}"
+    log.info "${device.displayName} powerPollingSupported   = ${state.powerPollingSupported}"
+    log.info "${device.displayName} energyPollingSupported  = ${state.energyPollingSupported}"
     log.info "${device.displayName} Initialization finished"
 }
 
@@ -594,8 +605,9 @@ def initialize() {
 def installed() {
     log.info "${device.displayName} Installed()..."
     initializeVars()
-    runIn( 1, initialize)
-    log.debug "calling initialize() after 3 seconds..."
+    runIn( 5, initialize)
+    log.debug "calling initialize() after 5 seconds..."
+    // HE will autoomaticall call configure() method here
 }
 
 void uninstalled() {
