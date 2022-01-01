@@ -19,7 +19,7 @@
  *  ver. 1.1.2 2021-12-24 kkossev - added Tuya / Neo NAS-WR01 fingerprint; fingerprint inClusters correction
  *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
  *  ver. 1.2.1 2021-12-29 kkossev - added AlwaysOn option
- *  ver. 1.3.0 2021-12-31 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
+ *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *
  */
 import groovy.json.*
@@ -153,6 +153,7 @@ def parse(String description) {
 
 def switchEvent( value ) {
     def map = [:] 
+    boolean bWasChange = false
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
         runInMillis( debouncingTimer, switchDebouncingClear)
@@ -160,6 +161,7 @@ def switchEvent( value ) {
     }
     map.type = state.isDigital ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
+        bWasChange = true
         if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
         if (autoPollingEnabled == true) {
             runInMillis(5000, pollPower)
@@ -177,8 +179,11 @@ def switchEvent( value ) {
     else {
         map.descriptionText = "${device.displayName} was turned ${value} [${map.type}]"
     }
-    if (txtEnable) {log.info "${map.descriptionText}"}
-    sendEvent(map)
+    if (optimizations==false || bWasChange==true ) 
+    {
+        if (txtEnable) {log.info "${map.descriptionText}"}
+        sendEvent(map)
+    }
 }
 
 def voltageEvent( voltage ) {
@@ -186,8 +191,11 @@ def voltageEvent( voltage ) {
     map.name = "voltage"
     map.value = voltage
     map.unit = "V"
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-    sendEvent(map)
+    if (state.lastVoltage != voltage || optimizations==false ) {
+        state.lastVoltage = voltage
+        if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+        sendEvent(map)
+    }
 }
 
 def powerEvent( power ) {
@@ -195,8 +203,11 @@ def powerEvent( power ) {
     map.name = "power"
     map.value = power
     map.unit = "W"
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-    sendEvent(map)
+    if (state.lastPower != power || optimizations==false ) {
+        state.lastPower = power    
+        if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+        sendEvent(map)
+    }
 }
 
 def amperageEvent( amperage ) {
@@ -204,8 +215,11 @@ def amperageEvent( amperage ) {
     map.name = "amperage"
     map.value = amperage
     map.unit = "A"
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-    sendEvent(map)
+    if (state.lastAmperage != amperage || optimizations==false ) {
+        state.lastAmperage = amperage    
+        if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+        sendEvent(map)
+    }
 }
 
 def energyEvent( energy ) {
@@ -213,8 +227,12 @@ def energyEvent( energy ) {
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-    sendEvent(map)
+    if (state.lastEnergy != energy || optimizations==false ) {
+        state.lastEnergy = energy    
+        if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+        sendEvent(map)
+        log.trace "energy event ${map}"
+    }
 }
 
 
@@ -548,7 +566,10 @@ def updated(){
 void initializeVars() {
     log.debug "${device.displayName} UnitializeVars()..."
     state.clear()
-    state.lastPower = 0
+    state.lastPower = 0.0
+    state.lastVoltage = 0.0
+    state.lastAmperage = 0.0
+    state.lastEnergy = 0.0
     state.lastSwitchState = "unknown"
     state.lastPresenceState = "unknown"
     state.notPresentCounter = 0
