@@ -4,7 +4,7 @@
   "version": "1.3.0",
   "minimumHEVersion": "2.2.0",
   "dateReleased": "2022-01-01",
-  "releaseNotes": "1.0.0 - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds\n1.0.1 - 'amperage' attribute name bug fix; added 'pollingInterval' preference\n1.1.1  - added Tuya Outlet TS011F fingerprint.\n1.1.2 - added Tuya / Neo NAS-WR01 fingerprint.\n1.2.0 2021-12-29 - major refactoring and optimizations\n1.3.0 - added 'HIKING TOMZN DDS238-2 TS0601', 'AlwaysOn' and 'Optimizations' options",
+  "releaseNotes": "1.0.0 - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds\n1.0.1 - 'amperage' attribute name bug fix; added 'pollingInterval' preference\n1.1.1  - added Tuya Outlet TS011F fingerprint.\n1.1.2 - added Tuya / Neo NAS-WR01 fingerprint.\n1.2.0 - major refactoring and optimizations\n1.3.0 - added 'HIKING TOMZN DDS238-2 TS0601', 'AlwaysOn' and 'Optimizations' options",
   "drivers": [
     {
       "id": "c418ee54-b6b3-4e3e-b695-3347f27910f6",
