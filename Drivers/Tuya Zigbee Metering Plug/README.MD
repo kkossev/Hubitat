@@ -55,6 +55,8 @@ Other metering plugs that send energy measurement reports on Tuya cluster 0xEF00
  
  ver. 1.2.1 2021-12-29 - added AlwaysOn option
  
- ver. 1.3.0 2021-12-29 - (W.I.P., development branch only) - "HIKING TOMZN DDS238-2 TS0601_din" support
+ ver. 1.3.0 2022-01-01 - added 'HIKING TOMZN DDS238-2 TS0601 (DIN rail)' support'; 'Optimizations' option.
+ 
+
  
 
