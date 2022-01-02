@@ -20,6 +20,7 @@
  *  ver. 1.2.0 2021-12-29 kkossev - major refactoring and optimizations
  *  ver. 1.2.1 2021-12-29 kkossev - added AlwaysOn option
  *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
+ *  ver. 1.3.1 2022-01-02 kkossev - minor bug fixes
  *
  */
 import groovy.json.*
@@ -231,7 +232,6 @@ def energyEvent( energy ) {
         state.lastEnergy = energy    
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
-        log.trace "energy event ${map}"
     }
 }
 
@@ -537,7 +537,7 @@ def configure() {
 
 // This method is called when the preferences of a device are updated.
 def updated(){
-    log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")}"
+    log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
     log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(1800, logsOff)    // turn off debug logging after 30 minutes
@@ -586,7 +586,10 @@ void initializeVars() {
     device.updateSetting("autoPollingEnabled", true)    
     device.updateSetting("optimizations", false)    
     
-    device.updateSetting("alwaysOn", false)    
+    if (device.getDataValue("alwaysOn") != null) {    // do not change the "alwaysOn" setting if already set!
+        device.updateSetting("alwaysOn", false)    
+    }
+
     device.updateSetting("pollingInterval", defaultPollingInterval)    
     def mm = device.getDataValue("model")
     if ( mm != null) {
