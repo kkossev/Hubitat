@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/01/16 2:37 PM"}
+def timeStamp() {"2022/01/17 11:18 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -48,13 +48,14 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "modelGroupPreference", title: "Select a model group", description: "<i>Recommended value is <b>'Auto detect'</b></i>", type: "enum", options:["Auto detect", "TUYA", "TEST"], defaultValue: "Auto detect", required: false)        
+        input (name: "modelGroupPreference", title: "Select a model group", description: "<i>Recommended value is <b>'Auto detect'</b></i>", type: "enum", options:["Auto detect", "TS0601", "TS0201", "TS0222", "TEST"], defaultValue: "Auto detect", required: false)        
     }
 }
 
 @Field static final Map<String, String> Models = [
-    '_TZE200_lve3dvpy'  : 'TUYA',     
-    '_TZE200_xxxxxxxx'  : 'UNKNOWN',     
+    '_TZE200_lve3dvpy'  : 'TS0601',     
+    '_TZ2000_a476raq2'  : 'TS0201',     
+    '_TYZB01_kvwjujy9'  : 'TS0222',     
     ''                  : 'UNKNOWN'      // 
 ]
 
@@ -86,7 +87,23 @@ def parse(String description) {
     if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
-        if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
+        if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
+            if (descMap.attrInt == 0x0021) {
+                getBatteryPercentageResult(Integer.parseInt(descMap.value,16))
+            } else {
+                getBatteryResult(Integer.parseInt(descMap.value, 16))
+            }
+        }     
+		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
+            handleIlluminanceEvent( descMap )
+		}        
+		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
+            handleTemperatureEvent( descMap )
+		}
+        else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
+            handleHumidityEvent( descMap )
+		}
+        else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
             if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
             def offset = 0
             try {
@@ -135,12 +152,21 @@ def parse(String description) {
             //thitTemperature: 8,            
             switch (dp) {
                 case 0x01 : // temperature
-                case 0x12 :
                     temperatureEvent( fncmd / 10.0 )
                     break
                 case 0x02 : // humidity
                     humidityEvent (fncmd)
                     break 
+                case 0x03 : // illuminance - NOT TESTED! or battery?
+                    illuminanceEvent (fncmd)
+                    break 
+                case 0x04 : // battery
+                    getBatteryPercentageResult(fncmd * 2)
+                    log.warn "battery is $fncmd %"
+                    break
+                case 0x13 : // temperature sensitivity
+                    log.warn "temperature sensitivity is $fncmd "
+                    break                
                 default :
                     /*if (settings?.logEnable)*/ log.warn "${device.displayName} NOT PROCESSED Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                     break
@@ -216,6 +242,41 @@ def switchEvent( value ) {
     sendEvent(map)
 }
 
+def handleIlluminanceEvent( descMap ) {
+    def rawEncoding = Integer.parseInt(descMap.encoding, 16)
+    def rawLux = Integer.parseInt(descMap.value,16)
+	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
+	if (txtEnable) log.info "$device.displayName illuminance changed to $lux"
+}
+
+def handleTemperatureEvent( descMap ) {
+    def rawValue = hexStrToSignedInt(descMap.value) / 100
+    rawValue =  Math.round((rawValue - 0.05) * 10) / 10
+	def Scale = location.temperatureScale
+    if (Scale == "F") rawValue = (rawValue * 1.8) + 32
+	if ((rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f)) ){
+        log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
+	} else {
+	    sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
+		if (txtEnable) log.info "$device.displayName temperature changed to $rawValue\u00B0"+Scale
+    }
+}
+
+def handleHumidityEvent( descMap ) {
+    def rawValue = Integer.parseInt(descMap.value,16) / 100
+    rawValue =  ((float)rawValue).trunc(1)
+	if (rawValue > 1000 || rawValue <= 0 ) {
+    	log.warn "$device.displayName ignored humidity value: $rawValue"
+	}
+    else {
+	    sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
+		if (txtEnable) log.info "$device.displayName humidity changed to $rawValue"
+	}
+}
+
+
+
 //  called from initialize()
 def installed() {
     if (settings?.txtEnable) log.info "installed()"
@@ -231,7 +292,8 @@ def updated() {
     log.info "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(1800, logsOff)    // turn off debug logging after 30 minutes
+        runIn(/*1800*/86400, logsOff)    // turn off debug logging after 30 minutes
+        if (settings?.txtEnable) log.info "Debug logging is will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
@@ -312,6 +374,45 @@ private getDescriptionText(msg) {
 def logsOff(){
     log.warn "${device.displayName} debug logging disabled..."
     device.updateSetting("logEnable",[value:"false",type:"bool"])
+}
+
+def getBatteryPercentageResult(rawValue) {
+    if (logEnable) log.debug "Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+    def result = [:]
+
+    if (0 <= rawValue && rawValue <= 200) {
+        result.name = 'battery'
+        result.translatable = true
+        result.value = Math.round(rawValue / 2)
+        result.descriptionText = "${device.displayName} battery was ${result.value}%"
+        result.isStateChange = true
+        sendEvent(result)
+    }
+
+    return result
+}
+
+private Map getBatteryResult(rawValue) {
+    if (logEnable) log.debug 'Battery'
+    def linkText = getLinkText(device)
+
+    def result = [:]
+
+    def volts = rawValue / 10
+    if (!(rawValue == 0 || rawValue == 255)) {
+        def minVolts = 2.1
+        def maxVolts = 3.0
+        def pct = (volts - minVolts) / (maxVolts - minVolts)
+        def roundedPct = Math.round(pct * 100)
+        if (roundedPct <= 0)
+        roundedPct = 1
+        result.value = Math.min(100, roundedPct)
+        result.descriptionText = "${linkText} battery was ${result.value}%"
+        result.name = 'battery'
+        result.isStateChange = true
+        sendEvent(result)
+    }
+    return result
 }
 
 
