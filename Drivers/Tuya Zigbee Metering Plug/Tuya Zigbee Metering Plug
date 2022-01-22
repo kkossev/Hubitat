@@ -22,7 +22,11 @@
  *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *  ver. 1.3.1 2022-01-02 kkossev - minor bug fixes
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
- *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup
+ *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode;
+ *             
+ *             TODO - digital/physical bug ?
+ *             TODO - exclude energy and switch from polling 
+ *             TODO - version check ( create preferencies / states on version change ), TODO - remove deistination IP if not used?
  *
  */
 import groovy.json.*
@@ -30,7 +34,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.3.3" }
-def timeStamp() {"2022/01/20 10:51 PM"}
+def timeStamp() {"2022/01/22 11:33 ??"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -39,7 +43,7 @@ metadata {
         capability "CurrentMeter"
         capability "VoltageMeasurement"
         capability "Actuator"    
-        capability "Switch"
+        //capability "Switch"  Outlet has same attribute switch and functions on off
         capability "Outlet"
         capability "Refresh"
         capability "Health Check"
@@ -56,6 +60,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
@@ -65,8 +70,16 @@ metadata {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
-        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Optimize polling and logging. Recommended value is <b>true</b></i>", defaultValue: false)
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
+        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: false)
+        if (optimizations?.value==true) {
+            input (name: "energyMinReportingTime", type: "number", title: "<b>Energy shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two Energy reports. Recommended value is <b>60 seconds</b></i>", 
+                   range: "10..86399", defaultValue: 60)
+            input (name: "energyMaxReportingTime", type: "number", title: "<b>Energy longest reporting interval</b>, seconds", description: "<i>The maximum time without any Energy reports. Recommended value is <b>3600 seconds</b></i>", 
+                   range: "10..86400", defaultValue: 3600)
+            input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, watt/Hours", description: "<i>The minimum Energy change that will trigger reporting. Recommended value is <b>10 Wh</b></i>", 
+                   range: "10..86400", defaultValue: 10)
+        }
     }
 }
 
@@ -83,8 +96,15 @@ metadata {
 
 
 def parse(String description) {
-    if (logEnable==true) {log.debug "description is $description \n\n"}
-    def event = zigbee.getEvent(description)
+    if (logEnable==true) {log.debug "description is $description"}
+    def event = [:]
+    try {
+        event = zigbee.getEvent(description)
+    }
+    catch ( e ) {
+        log.error "failed to parse description:  ${description}"
+        return null
+    }
     setPresent()
     if (event) {
         if (logEnable==true) log.debug "Event enter: $event"
@@ -128,16 +148,22 @@ def parse(String description) {
                         }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
-                        voltageEvent(zigbee.convertHexToInt(it.value)/powerDiv)
+                    voltageEvent(zigbee.convertHexToInt(it.value)/powerDiv)
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
-                        amperageEvent(zigbee.convertHexToInt(it.value)/currentDiv)
+                    amperageEvent(zigbee.convertHexToInt(it.value)/currentDiv)
+                }
+                else if (it.value && it.cluster == "0B04" && it.attrId == "0510") {    //Power Factor Attribute ID: 0x0510
+                    if (txtEnable) {log.info "power Factor reported: ${it.value}" }    // not tested
                 }
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
-                        energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
+                    energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
+                }
+                else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
+                    if (logEnable) {log.debug "Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
                 }
                 else {
-                    if (logEnable==true) log.warn "Unprocessed attribute report: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+                    if (logEnable==true) log.warn "Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
                 //if (logEnable) {log.debug "Parse returned $map"}
             } // for each attribute
@@ -530,10 +556,28 @@ def autoPoll() {
     poll()    
 }
 
-// This method is called unconditionally during the initial pairing, immediately after Installed() method!
+def tuyaBlackMagic() {
+//  after reading these attributes the plug starts to report on/off and energy, however voltage, current and power is not reported.
+// energy is repored when changed or every 5 minutes if no change    
+    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    /*
+        // Enables reporting of physical state changes
+        // https://github.com/Koenkk/zigbee2mqtt/issues/9057#issuecomment-1007742130
+        await endpoint.read('genBasic', ['manufacturerName', 'zclVersion', 'appVersion', 'modelId', 'powerSource', 0xfffe]);
+        await endpoint.write('genBasic', {0xffde: {value: 0x13, type: 0x20}});
+        await endpoint.read('genOnOff', [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003]);
+*/
+}
+
+/*
+    configure() method is called: 
+       *  unconditionally during the initial pairing, immediately after Installed() method
+       *  when Initialize button is pressed
+*/
 def configure() {
     if (txtEnable==true) log.info " configure().."
     List<String> cmds = []
+    cmds += tuyaBlackMagic()
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // Maximum Interval: 600 seconds
     cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
@@ -547,8 +591,9 @@ def updated(){
     if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(1800, logsOff)    // turn off debug logging after 30 minutes
-        if (txtEnable==true) log.info "Debug logging will be automatically switched off after 30 minutes!"
+        runIn(/*1800*/86400, logsOff)    // turn off debug logging after /*30 minutes*/24 hours
+        //if (txtEnable==true) log.info "Debug logging will be automatically switched off after 30 minutes!"
+        if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
     }
     else {
         unschedule(logsOff)
