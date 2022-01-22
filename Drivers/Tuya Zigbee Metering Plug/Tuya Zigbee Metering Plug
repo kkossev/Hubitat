@@ -22,10 +22,9 @@
  *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *  ver. 1.3.1 2022-01-02 kkossev - minor bug fixes
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
- *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode;
+ *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling;
  *             
  *             TODO - digital/physical bug ?
- *             TODO - exclude energy and switch from polling 
  *             TODO - version check ( create preferencies / states on version change ), TODO - remove deistination IP if not used?
  *
  */
@@ -34,7 +33,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.3.3" }
-def timeStamp() {"2022/01/22 11:33 ??"}
+def timeStamp() {"2022/01/22 9:23 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -102,7 +101,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        log.error "failed to parse description:  ${description}"
+        log.error "exception caught while parsing description:  ${description}"
         return null
     }
     setPresent()
@@ -514,12 +513,13 @@ def pollPower() {
     return cmds
 }
 
+
 // Sends refresh / readAttribute commands to the plug
-def poll() {
-    if (logEnable) {log.debug "polling.."}
+def poll( refreshAll = false ) {
+    if (logEnable) {log.trace "polling.. refreshAll is ${refreshAll}"}
     List<String> cmds = []
-    if (state.switchPollingSupported == true ) {
-        cmds = zigbee.onOffRefresh()                            // switch
+    if (state.switchPollingSupported == true && refreshAll == true ) {
+        cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
     }
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
@@ -532,28 +532,32 @@ def poll() {
         if (state.currentPollingSupported == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     }    
-    if (state.energyPollingSupported == true)
-        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy
+    if (state.energyPollingSupported == true && refreshAll == true )
+        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
     return cmds
 }
 
+
 def refresh() {
     if (logEnable) {log.debug "refresh()..."}
-    poll()
+    poll( true )
 }
 
 def autoPoll() {
     if (logEnable) {log.debug "autoPoll()"}
     checkIfNotPresent()
-    if (autoPollingEnabled?.value==true) {
+    if (autoPollingEnabled?.value == true) {
         if ( pollingInterval != null ) 
             runIn( pollingInterval, autoPoll)
         else
             runIn( defaultPollingInterval, autoPoll)
     }
-    poll()    
+    if (optimizations == true) 
+        poll( refreshAll = false )
+    else 
+        poll( refreshAll = true )
 }
 
 def tuyaBlackMagic() {
@@ -580,7 +584,7 @@ def configure() {
     cmds += tuyaBlackMagic()
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // Maximum Interval: 600 seconds
-    cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, 1, 600, 1)// +    // Energy reporting
+    cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, energyMinReportingTime as int, energyMaxReportingTime as int, energyTreshold as int)// +    // Energy reporting
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
     sendZigbeeCommands(cmds)
 }
@@ -637,6 +641,9 @@ void initializeVars() {
     device.updateSetting("txtEnable", true)    
     device.updateSetting("autoPollingEnabled", true)    
     device.updateSetting("optimizations", false)    
+    device.updateSetting("energyMinReportingTime", 60)    
+    device.updateSetting("energyMaxReportingTime", 3600)    
+    device.updateSetting("energyTreshold", 10)    
     
     if (device.getDataValue("alwaysOn") != null) {    // do not change the "alwaysOn" setting if already set!
         device.updateSetting("alwaysOn", false)    
