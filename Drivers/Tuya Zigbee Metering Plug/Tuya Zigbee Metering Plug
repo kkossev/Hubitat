@@ -22,10 +22,10 @@
  *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *  ver. 1.3.1 2022-01-02 kkossev - minor bug fixes
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
- *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling;
+ *  ver. 1.3.3 2022-01-20 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; 
+ *                                  default debug loging is false, optimizations are true; switch digital/physical bug fixed
  *             
- *             TODO - digital/physical bug ?
- *             TODO - version check ( create preferencies / states on version change ), TODO - remove deistination IP if not used?
+ *             TODO - version check ( create preferencies / states on version change )
  *
  */
 import groovy.json.*
@@ -33,7 +33,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.3.3" }
-def timeStamp() {"2022/01/22 9:23 PM"}
+def timeStamp() {"2022/01/22 11:59 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -70,14 +70,14 @@ metadata {
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
-        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: false)
+        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
         if (optimizations?.value==true) {
             input (name: "energyMinReportingTime", type: "number", title: "<b>Energy shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two Energy reports. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..86399", defaultValue: 60)
             input (name: "energyMaxReportingTime", type: "number", title: "<b>Energy longest reporting interval</b>, seconds", description: "<i>The maximum time without any Energy reports. Recommended value is <b>3600 seconds</b></i>", 
-                   range: "10..86400", defaultValue: 3600)
+                   range: "120..86400", defaultValue: 3600)
             input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, watt/Hours", description: "<i>The minimum Energy change that will trigger reporting. Recommended value is <b>10 Wh</b></i>", 
-                   range: "10..86400", defaultValue: 10)
+                   range: "1..10000", defaultValue: 10)
         }
     }
 }
@@ -95,7 +95,7 @@ metadata {
 
 
 def parse(String description) {
-    if (logEnable==true) {log.debug "description is $description"}
+    //if (logEnable==true) {log.debug "description is $description"}
     def event = [:]
     try {
         event = zigbee.getEvent(description)
@@ -105,6 +105,7 @@ def parse(String description) {
         return null
     }
     setPresent()
+    checkDriverVersion()
     if (event) {
         if (logEnable==true) log.debug "Event enter: $event"
         switch (event.name) {
@@ -159,7 +160,7 @@ def parse(String description) {
                     energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
-                    if (logEnable) {log.debug "Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
+                    //if (logEnable) {log.debug "Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
                 }
                 else {
                     if (logEnable==true) log.warn "Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -188,7 +189,7 @@ def switchEvent( value ) {
         runInMillis( debouncingTimer, switchDebouncingClear)
         return null
     }
-    map.type = state.isDigital ? "digital" : "physical"
+    map.type = state.isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
@@ -213,6 +214,7 @@ def switchEvent( value ) {
         if (txtEnable) {log.info "${map.descriptionText}"}
         sendEvent(map)
     }
+    clearIsDigital()
 }
 
 def voltageEvent( voltage ) {
@@ -260,6 +262,9 @@ def energyEvent( energy ) {
         state.lastEnergy = energy    
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
+    }
+    else {
+        if (logEnable) {log.debug "${device.displayName} ${map.name} is ${map.value} ${map.unit} (no change)"}
     }
 }
 
@@ -470,7 +475,7 @@ def off() {
         if (state.model == "TS0601") {
             cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
         }
-        runInMillis( digitalTimer, isDigitalClear)
+        runInMillis( digitalTimer, clearIsDigital)
         return cmds
     }
 }
@@ -482,11 +487,11 @@ def on() {
     if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
-    runInMillis( digitalTimer, isDigitalClear)
+    runInMillis( digitalTimer, clearIsDigital)
     return cmds
 }
 
-def isDigitalClear() { state.isDigital = false }
+def clearIsDigital() { state.isDigital = false }
 
 def isRefreshRequestClear() { state.isRefreshRequest = false }
 
@@ -517,6 +522,7 @@ def pollPower() {
 // Sends refresh / readAttribute commands to the plug
 def poll( refreshAll = false ) {
     if (logEnable) {log.trace "polling.. refreshAll is ${refreshAll}"}
+    checkDriverVersion()
     List<String> cmds = []
     if (state.switchPollingSupported == true && refreshAll == true ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
@@ -583,7 +589,7 @@ def configure() {
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     cmds += refresh()
-    cmds += zigbee.onOffConfig()    // Maximum Interval: 600 seconds
+    cmds += zigbee.onOffConfig()
     cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, energyMinReportingTime as int, energyMaxReportingTime as int, energyTreshold as int)// +    // Energy reporting
            //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
     sendZigbeeCommands(cmds)
@@ -616,31 +622,37 @@ def updated(){
         unschedule(autoPoll)
         if (txtEnable==true) log.info "Auto polling is <b>disabled</b>"
     }
+    if (txtEnable==true) log.info "configuring the switch and energy reporting.."
+    configure()
 }
 
 
-void initializeVars() {
-    if (txtEnable==true) log.info "${device.displayName} UnitializeVars()..."
-    state.clear()
-    state.lastPower = 0.0
-    state.lastVoltage = 0.0
-    state.lastAmperage = 0.0
-    state.lastEnergy = 0.0
-    state.lastSwitchState = "unknown"
-    state.lastPresenceState = "unknown"
-    state.notPresentCounter = 0
-    state.switchPollingSupported = true
-    state.voltagePollingSupported = true
-    state.currentPollingSupported = true
-    state.powerPollingSupported = true
-    state.energyPollingSupported = true
-    state.isDigital = true
-    state.isRefreshRequest = true
-    state.switchDebouncing = false
-    device.updateSetting("logEnable", true)    
+
+void initializeVars( boolean fullInit = true ) {
+    if (txtEnable==true) log.info "${device.displayName} UnitializeVars()... fullInit = ${fullInit}"
+    if (fullInit == true ) {
+        state.clear()
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+    if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
+    if (fullInit == true || state.lastVoltage == null) state.lastVoltage = 0.0
+    if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
+    if (fullInit == true || state.lastEnergy == null) state.lastEnergy = 0.0
+    if (fullInit == true || state.x == lastSwitchState) state.lastSwitchState = "unknown"
+    if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    if (fullInit == true || state.switchPollingSupported == null) state.switchPollingSupported = true
+    if (fullInit == true || state.voltagePollingSupported == null) state.voltagePollingSupported = true
+    if (fullInit == true || state.currentPollingSupported == null) state.currentPollingSupported = true
+    if (fullInit == true || state.powerPollingSupported == null) state.powerPollingSupported = true
+    if (fullInit == true || state.energyPollingSupported == null) state.energyPollingSupported = true
+    if (fullInit == true || state.isDigital == null) state.isDigital = true
+    if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
+    if (fullInit == true || state.x == null) state.switchDebouncing = false
+    device.updateSetting("logEnable", false)    
     device.updateSetting("txtEnable", true)    
     device.updateSetting("autoPollingEnabled", true)    
-    device.updateSetting("optimizations", false)    
+    device.updateSetting("optimizations", true)    
     device.updateSetting("energyMinReportingTime", 60)    
     device.updateSetting("energyMaxReportingTime", 3600)    
     device.updateSetting("energyTreshold", 10)    
@@ -668,6 +680,19 @@ void initializeVars() {
         if (txtEnable==true) log.warn " Destination End Point not found, please re-pair the device!"
         state.destinationEP = "01"    // fallback
     }    
+}
+
+def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
+
+def checkDriverVersion() {
+    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
+        //log.trace "driverVersion is the same ${driverVersionAndTimeStamp()}"
+    }
+    else {
+        if (txtEnable==true) log.debug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        initializeVars( fullInit = false ) 
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
 }
 
 def logInitializeRezults() {
@@ -721,12 +746,14 @@ def setPresent() {
 
 // called from autoPoll()
 def checkIfNotPresent() {
-    state.notPresentCounter = state.notPresentCounter + 1
-    if (state.notPresentCounter > presenceCountTreshold) {
-        if (state.lastPresenceState != "not present") {
-	        sendEvent(name: "presence", value: "not present")
-            state.lastPresenceState = "not present"
-            if (logEnable==true) log.warn "not present!"
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter > presenceCountTreshold) {
+            if (state.lastPresenceState != "not present") {
+    	        sendEvent(name: "presence", value: "not present")
+                state.lastPresenceState = "not present"
+                if (logEnable==true) log.warn "not present!"
+            }
         }
     }
 }
