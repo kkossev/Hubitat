@@ -18,10 +18,9 @@
  * ver. 2.1.1 2021-10-20 kkossev     - numberOfButtons event bug fix; 
  * ver. 2.2.0 2021-10-20 kkossev     - First succesfuly working version with HE!
  * ver. 2.2.1 2021-10-23 kkossev     - added "Reverse button order" preference option
- * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added button push() doubleTapped() and held() handlers for use in Hubutat Dashboards
+ * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
- * ver. 2.3.0 2021-12-05 kkossev (development/feature/TS0041 branch!) - added support for 'Tuya YSB22 TS0041'
- * ver. 2.3.1 2022-01-19 kkossev (development/feature/test branch!) - test LIDL remote 
+ * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  *
  */
 
