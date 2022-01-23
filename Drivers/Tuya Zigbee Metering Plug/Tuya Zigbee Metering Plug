@@ -22,7 +22,7 @@
  *  ver. 1.3.0 2022-01-01 kkossev - added 'HIKING TOMZN DDS238-2 TS0601'
  *  ver. 1.3.1 2022-01-02 kkossev - minor bug fixes
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
- *  ver. 1.3.3 2022-01-23 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; 
+ *  ver. 1.4.0 2022-01-23 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; 
  *                                  default debug loging is false, optimizations are true; switch digital/physical bug fixed; added driver version check
  *
  */
@@ -30,8 +30,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.3.3" }
-def timeStamp() {"2022/01/23 9:28 AM"}
+def version() { "1.4.0" }
+def timeStamp() {"2022/01/23 10:23 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -96,7 +96,7 @@ def parse(String description) {
     //if (logEnable==true) {log.debug "description is $description"}
     checkDriverVersion()
     setPresent()
-    if (isTuyaE00xCluster(description) == true) {
+    if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
     }
     def event = [:]
@@ -773,4 +773,15 @@ boolean isTuyaE00xCluster( String description )
     else
         return false
 }
+
+boolean otherTuyaOddities( String description )
+{
+    if(description.indexOf('cluster: 0000') >= 0 || description.indexOf('attrId: 0004') >= 0) {
+        if (logEnable) log.debug " other Tuya oddities - don't know how to handle it, skipping it for now..."
+        return true
+    }
+    else
+        return false
+}
+
 
