@@ -31,7 +31,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.3.3" }
-def timeStamp() {"2022/01/23 01:03 AM"}
+def timeStamp() {"2022/01/23 8:37 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -94,16 +94,19 @@ metadata {
 
 def parse(String description) {
     //if (logEnable==true) {log.debug "description is $description"}
+    checkDriverVersion()
+    setPresent()
+    if (isTuyaE00xCluster(description) == true) {
+        return null
+    }
     def event = [:]
     try {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        log.error "exception caught while parsing description:  ${description}"
-        return null
+        log.warn "exception caught while parsing description:  ${description}"
+        //return null
     }
-    setPresent()
-    checkDriverVersion()
     if (event) {
         if (logEnable==true) log.debug "Event enter: $event"
         switch (event.name) {
@@ -124,8 +127,15 @@ def parse(String description) {
         return null //event
     }
     else {
-        List result = []
-        def descMap = zigbee.parseDescriptionAsMap(description)
+        //List result = []
+        def descMap = [:]
+        try {
+            descMap = zigbee.parseDescriptionAsMap(description)
+        }
+        catch ( e ) {
+            log.warn "exception caught while parsing descMap:  ${descMap}"
+            //return null
+        }
         if (logEnable) {log.debug "Desc Map: $descMap"}
         if (descMap.attrId != null ) {
             // attribute report received
@@ -754,7 +764,7 @@ def logsOff(){
     device.updateSetting("logEnable", [value:"false",type:"bool"])
 }
 
-def test()
+boolean isTuyaE00xCluster( String description )
 {
     log.debug "testing..."
       
