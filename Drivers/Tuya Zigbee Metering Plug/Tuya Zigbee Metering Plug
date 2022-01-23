@@ -31,7 +31,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.3.3" }
-def timeStamp() {"2022/01/23 8:37 AM"}
+def timeStamp() {"2022/01/23 9:28 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -766,7 +766,11 @@ def logsOff(){
 
 boolean isTuyaE00xCluster( String description )
 {
-    log.debug "testing..."
-      
+    if(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0) {
+        if (logEnable) log.debug " Tuya cluster: E000 or E001 - don't know how to handle it, skipping it for now..."
+        return true
+    }
+    else
+        return false
 }
 
