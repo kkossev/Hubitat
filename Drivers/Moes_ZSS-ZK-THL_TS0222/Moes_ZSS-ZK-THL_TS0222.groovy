@@ -25,8 +25,12 @@
 * 1.2.1  2021-09-08 kkossev    Added binding for genTime cluster ( 0x000A )
 * 1.2.2  2021-09-08 kkossev    Reporting interval changed to 3600, 28800 
 * 1.2.3  2021-10-02 kkossev    Removed any clusters bindings and reporting configurations!
+* 1.3.0  2022-01-24 kkossev    A la Tuya GW pairing initialization
 *
 */
+def version() { "1.3.0" }
+def timeStamp() {"2022/01/24 10:53 AM"}
+
 import hubitat.zigbee.zcl.DataType
 import groovy.json.JsonOutput
 import hubitat.helper.HexUtils
@@ -34,6 +38,7 @@ import hubitat.helper.HexUtils
 metadata {
     definition (name: "Moes ZSS-ZK-THL sensor (TS0222)", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Moes_ZSS-ZK-THL_TS0222/Moes_ZSS-ZK-THL_TS0222.groovy") {
         capability "Configuration"
+        capability "Initialize"
         capability "Battery"
         capability "Refresh"
         capability "IlluminanceMeasurement"
@@ -55,7 +60,10 @@ metadata {
 
 def parse(String description) {
     if (logEnable) log.debug "description: $description"
-
+    checkDriverVersion()
+    if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
+        return null
+    }
     Map descMap = zigbee.parseDescriptionAsMap(description)
 
     if ( true ) {
@@ -73,7 +81,7 @@ def parse(String description) {
                 rawValue =  ((float)rawValue).trunc(1)
             
 				if ((rawValue > 100 || rawValue <= 0) && filterZero ) {
-					log.warn "$device.displayName ignored humidity value: $rawValue"
+					if (txtEnable) log.warn "$device.displayName ignored humidity value: $rawValue"
 				} else {
 					sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
 					if (txtEnable) log.info "$device.displayName humidity changed to $rawValue"
@@ -135,10 +143,6 @@ def installed() {
     configure()
 }
 
-def updated() {
-	if (logEnable) log.debug "updated"
-    configure()
-}
 
 def getBatteryPercentageResult(rawValue) {
     if (logEnable) log.debug "Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
@@ -182,55 +186,94 @@ private Map getBatteryResult(rawValue) {
 def refresh() {
     if (logEnable) log.debug "SKIPPING refreshing Moes ZSS-ZK-THL battery status"
     return
-/*    
-     return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0021) +
-        zigbee.readAttribute(0x0402, 0x0000)+
-        zigbee.readAttribute(0x0405, 0x0000) + 
-        zigbee.readAttribute(0x0400, 0x0000) 
-*/
+}
+
+def tuyaBlackMagic() {
+    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
 }
 
 def configure() {
-    if (logEnable) log.debug "SKIPPING Configuring Moes ZSS-ZK-THL Reporting and Bindings"
-    return
-/*    
-    bindAndRetrieveT1SensorData();
-*/      
-//    return refresh() +
-//        zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 1800, 28800, 0x1) /*+
-//        zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, 3000, 3600, 1*100) +
-//        zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 3000, 3600, 0x1) +
-//        zigbee.configureReporting(0x0400, 0x0000, 0x21, 3000, 3600, 0x15) */
-  
+    if (logEnable) log.debug "configure().."
+    List<String> cmds = []
+    cmds += tuyaBlackMagic()    
+    sendZigbeeCommands(cmds)    
 }
 
-void bindAndRetrieveT1SensorData() {
-    return
-/*    
-    ArrayList<String> cmd = []
-
-    String endpoint = '01'
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
-
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x000A {${device.zigbeeId}} {}", "delay 1189",]    // genTime
-    
-    endpoint = '02'
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0400 {${device.zigbeeId}} {}", "delay 1186",]    // Illuminance
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0402 {${device.zigbeeId}} {}", "delay 1187",]    // temperature
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x0405 {${device.zigbeeId}} {}", "delay 1189",]    // humidity
-
-    endpoint = '00'
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x$endpoint 0x01 0x8021 {${device.zigbeeId}} {}", "delay 1186",]    // configuration
-
-    
-    cmd += zigbee.readAttribute(0x0400, 0x0000)
-    cmd += zigbee.readAttribute(0x0402, 0x0000)
-    cmd += zigbee.readAttribute(0x0405, 0x0000)
-    sendZigbeeCommands(cmd)
-*/
+// This method is called when the preferences of a device are updated.
+def updated(){
+    if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()})"
+    if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
+    if (logEnable==true) {
+        runIn( 86400, logsOff)    // turn off debug logging after 24 hours
+        if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
+    }
+    else {
+        unschedule(logsOff)
+    }
+    configure()
 }
+
+
+void initializeVars( boolean fullInit = true ) {
+    if (txtEnable == true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (fullInit == true ) {
+        state.clear()
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || device.getDataValue("tempOffset") == null) device.updateSetting("tempOffset", 0)
+    if (fullInit == true || device.getDataValue("humidityOffset") == null) device.updateSetting("humidityOffset", 0)
+    if (fullInit == true || device.getDataValue("filterZero") == null) device.updateSetting("tempOffset", true)
+}
+
+def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
+
+def checkDriverVersion() {
+    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
+        //log.trace "driverVersion is the same ${driverVersionAndTimeStamp()}"
+    }
+    else {
+        if (txtEnable==true) log.debug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        initializeVars( fullInit = false ) 
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+}
+
+def initialize() {
+    if (txtEnable==true) log.info "${device.displayName} Initialize()..."
+    unschedule()
+    initializeVars()
+    updated()            // calls also configure()
+}
+
+def logsOff(){
+    log.warn "debug logging disabled..."
+    device.updateSetting("logEnable", [value:"false",type:"bool"])
+}
+
+boolean isTuyaE00xCluster( String description )
+{
+    if(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0) {
+        if (logEnable) log.debug " Tuya cluster: E000 or E001 - don't know how to handle it, skipping it for now..."
+        return true
+    }
+    else
+        return false
+}
+
+boolean otherTuyaOddities( String description )
+{
+    if(description.indexOf('cluster: 0000') >= 0 || description.indexOf('attrId: 0004') >= 0) {
+        if (logEnable) log.debug " other Tuya oddities - don't know how to handle it, skipping it for now..."
+        return true
+    }
+    else {
+        return false
+        log.trace "no oddities detected..."
+    }
+}
+
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
     if (logEnable) log.debug "sendZigbeeCommands(cmd=$cmd)"
