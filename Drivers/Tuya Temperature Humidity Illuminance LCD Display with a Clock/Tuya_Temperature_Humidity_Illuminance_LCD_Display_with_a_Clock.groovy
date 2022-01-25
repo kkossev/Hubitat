@@ -14,8 +14,8 @@
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/01/25 7:17 AM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/01/25 10:31 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -42,21 +42,24 @@ metadata {
  */            
         command "initialize"
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy",  deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
         
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
+        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "modelGroupPreference", title: "Select a model group", description: "<i>Recommended value is <b>'Auto detect'</b></i>", type: "enum", options:["Auto detect", "TS0601", "TS0201", "TS0222", "TEST"], defaultValue: "Auto detect", required: false)        
+        input (name: "modelGroupPreference", title: "Select a model group", description: "<i>Recommended value is <b>'Auto detect'</b></i>", type: "enum", options:["Auto detect", "TS0601", "TS0201", "TS0222", "TS0222_2","TEST"], defaultValue: "Auto detect", required: false)        
     }
 }
 
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601',     
     '_TZ2000_a476raq2'  : 'TS0201',     
-    '_TYZB01_kvwjujy9'  : 'TS0222',     
-    ''                  : 'UNKNOWN'      // 
+    '_TYZB01_kvwjujy9'  : 'TS0222',          // "MOES ZSS-ZK-THL" e-Ink display 
+    '_TYZB01_4mdqxxnn'  : 'TS0222_2',        // illuminance only sensor
+    ''                  : 'UNKNOWN'          // 
 ]
 
 @Field static final Integer MaxRetries = 3
@@ -99,7 +102,12 @@ def parse(String description) {
             handleIlluminanceEvent( descMap )
 		}        
 		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
-            handleTemperatureEvent( descMap )
+            if (getModelGroup() != 'TS0222_2') {
+                handleTemperatureEvent( descMap )
+            }
+            else {
+                log.warn "Ignoring ${getModelGroup()} temperature event"
+            }
 		}
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
             handleHumidityEvent( descMap )
@@ -118,15 +126,11 @@ def parse(String description) {
             if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
             cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
             if (state.txCounter != null) state.txCounter = state.txCounter + 1
-            state.old_dp = ""
-            state.old_fncmd = ""
             
         } else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
             String clusterCmd = descMap?.data[0]
             def status = descMap?.data[1]            
             if (settings?.logEnable) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
-            state.old_dp = ""
-            state.old_fncmd = ""
             if (status != "00") {
                 if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
             }
@@ -137,14 +141,7 @@ def parse(String description) {
             def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
             def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
             def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
-            if (dp == state.old_dp && fncmd == state.old_fncmd) {
-                /*if (settings?.logEnable)*/ log.warn "(duplicate) transid=${transid} dp_id=${dp_id} <b>dp=${dp}</b> fncmd=${fncmd} command=${descMap?.command} data = ${descMap?.data}"
-                if ( state.duplicateCounter != null ) state.duplicateCounter = state.duplicateCounter +1
-                return
-            }
             if (settings?.logEnable) log.trace " dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-            state.old_dp = dp
-            state.old_fncmd = fncmd
             // the switch cases below default to dp_id = "01"
             // TUYA / HUMIDITY/ILLUMINANCE/TEMPERATURE SENSOR
             //thitBatteryPercentage: 3,
@@ -344,15 +341,12 @@ void initializeVars(boolean fullInit = true ) {
         state.driverVersion = driverVersionAndTimeStamp()
     }
     //
-    state.old_dp = ""
-    state.old_fncmd = ""
     state.packetID = 0
     state.rxCounter = 0
     state.txCounter = 0
-    state.duplicateCounter = 0
 
     if (fullInit == true || device.getDataValue("modelGroupPreference") == null) device.updateSetting("modelGroupPreference", "Auto detect")
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
 }
 
