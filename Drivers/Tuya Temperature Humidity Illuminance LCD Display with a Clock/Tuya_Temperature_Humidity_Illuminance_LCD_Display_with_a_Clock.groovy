@@ -10,12 +10,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-01-16 kkossev  - Inital version
+ * ver. 1.0.0 2022-01-25 kkossev  - Inital test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/01/17 11:18 PM"}
+def timeStamp() {"2022/01/25 7:17 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,13 +33,13 @@ metadata {
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
 
-       
+/*       
         command "zTest", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
-             
+ */            
         command "initialize"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy",  deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
@@ -83,6 +83,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 // Parse incoming device messages to generate events
 def parse(String description) {
+    checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
@@ -157,18 +158,30 @@ def parse(String description) {
                 case 0x02 : // humidity
                     humidityEvent (fncmd)
                     break 
-                case 0x03 : // illuminance - NOT TESTED! or battery?
+                case 0x03 : // illuminance - NOT TESTED!
                     illuminanceEvent (fncmd)
                     break 
                 case 0x04 : // battery
                     getBatteryPercentageResult(fncmd * 2)
-                    log.warn "battery is $fncmd %"
+                    log.info "battery is $fncmd %"
+                    break
+                case 0x09: 
+                    log.info "unknown parameter 9 (ENUM) is ${fncmd}"
+                    break
+                case 0x0A: 
+                    log.info "temperature alarm lower limit is ${fncmd/10.0} "
+                    break
+                case 0x0B: 
+                    log.info "temperature alarm upper limit is ${fncmd/10.0} "
+                    break
+                case 0x0E: 
+                    log.info "unknown parameter 0x0E  is ${fncmd} " // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
                     break
                 case 0x13 : // temperature sensitivity
-                    log.warn "temperature sensitivity is $fncmd "
+                    log.info "temperature sensitivity is $fncmd "
                     break                
                 default :
-                    /*if (settings?.logEnable)*/ log.warn "${device.displayName} NOT PROCESSED Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                    /*if (settings?.logEnable)*/ log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                     break
             }
         } else {
@@ -306,15 +319,30 @@ def refresh() {
     zigbee.readAttribute(0, 1)
 }
 
+def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
+
+def checkDriverVersion() {
+    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
+    }
+    else {
+        if (txtEnable==true) log.debug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        initializeVars( fullInit = false ) 
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+}
+
 def logInitializeRezults() {
     log.info "${device.displayName} manufacturer  = ${device.getDataValue("manufacturer")} ModelGroup = ${getModelGroup()}"
     log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
 }
 
 // called by initialize() button
-void initializeVars() {
-    if (settings?.logEnable) log.debug "${device.displayName} UnitializeVars()..."
-    state.clear()
+void initializeVars(boolean fullInit = true ) {
+    if (txtEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (fullInit == true ) {
+        state.clear()
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
     //
     state.old_dp = ""
     state.old_fncmd = ""
@@ -322,15 +350,21 @@ void initializeVars() {
     state.rxCounter = 0
     state.txCounter = 0
     state.duplicateCounter = 0
-    //
-    device.updateSetting("logEnable", false)    
-    device.updateSetting("txtEnable", true)    
+
+    if (fullInit == true || device.getDataValue("modelGroupPreference") == null) device.updateSetting("modelGroupPreference", "Auto detect")
+    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
 }
 
-
+def tuyaBlackMagic() {
+    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+}
 
 def configure() {
-    initialize()
+    if (txtEnable==true) log.info " configure().."
+    List<String> cmds = []
+    cmds += tuyaBlackMagic()    
+    sendZigbeeCommands(cmds)    
 }
 
 def initialize() {
@@ -339,6 +373,7 @@ def initialize() {
     initializeVars()
     installed()
     updated()
+    configure()
     runIn( 3, logInitializeRezults)
 }
 
