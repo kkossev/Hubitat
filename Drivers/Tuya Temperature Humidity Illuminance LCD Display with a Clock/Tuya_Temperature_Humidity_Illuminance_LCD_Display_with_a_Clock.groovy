@@ -10,12 +10,13 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-01-25 kkossev  - Inital test version
+ * ver. 1.0.0 2022-01-2 kkossev  - Inital test version
+ * ver. 1.0.1 2022-01-2 kkossev  - Added Zemismart ZXZTH fingerprint
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/25 10:31 PM"}
+def timeStamp() {"2022/01/26 7:13 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -45,6 +46,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
         
     }
     preferences {
@@ -57,6 +59,7 @@ metadata {
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601',     
     '_TZ2000_a476raq2'  : 'TS0201',     
+    '_TZ3000_lfa05ajd'  : 'TS0201',          // Zemismart ZXZTH
     '_TYZB01_kvwjujy9'  : 'TS0222',          // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',        // illuminance only sensor
     ''                  : 'UNKNOWN'          // 
