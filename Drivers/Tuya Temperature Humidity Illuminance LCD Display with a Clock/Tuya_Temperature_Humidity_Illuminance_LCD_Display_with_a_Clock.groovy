@@ -11,12 +11,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
- * ver. 1.0.1 2022-01-26 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn
+ * ver. 1.0.1 2022-01-29 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Farenheit scale + rounding
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/26 10:52 PM"}
+def timeStamp() {"2022/01/29 12:35 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -254,8 +254,12 @@ def getModelGroup() {
 def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
-    map.value = temperature
-    map.unit = "C"    // TODO!
+    def Scale = location.temperatureScale
+    map.unit = "\u00B0"+Scale
+    if (Scale == "F") {
+        temperature = (temperature * 1.8) + 32
+    }
+    map.value  =  Math.round((temperature - 0.05) * 10) / 10
     if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
