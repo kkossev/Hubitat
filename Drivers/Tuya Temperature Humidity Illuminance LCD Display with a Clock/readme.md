@@ -7,6 +7,10 @@ This project is a work-in-progress, the current driver version is available in t
 
 ![image](https://user-images.githubusercontent.com/6189950/149659251-3503e3e9-237b-41e7-8c45-d8b83155f172.png)
 https://www.aliexpress.com/item/1005003329038812.html
+
+### Manufacturer : _TZE200_locansqn
+![image](https://user-images.githubusercontent.com/6189950/151618266-a322189e-c9ad-4d72-8b7d-9eb8164d95e9.png)
+
 **Driver status**: basic functionalities working OK!
 
 -----------------------------------------------------------------------------
