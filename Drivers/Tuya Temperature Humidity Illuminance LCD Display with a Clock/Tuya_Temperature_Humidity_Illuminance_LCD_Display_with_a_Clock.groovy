@@ -10,13 +10,13 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-01-2 kkossev  - Inital test version
- * ver. 1.0.1 2022-01-2 kkossev  - Added Zemismart ZXZTH fingerprint
+ * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
+ * ver. 1.0.1 2022-01-26 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/26 7:13 AM"}
+def timeStamp() {"2022/01/26 10:52 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -44,6 +44,7 @@ metadata {
         command "initialize"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
@@ -58,10 +59,14 @@ metadata {
 
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601',     
+    '_TZE200_locansqn'  : 'TS0601',          // Haozee Temperature Humidity Illuminance LCD Display with a Clock
+    
     '_TZ2000_a476raq2'  : 'TS0201',     
     '_TZ3000_lfa05ajd'  : 'TS0201',          // Zemismart ZXZTH
+    
     '_TYZB01_kvwjujy9'  : 'TS0222',          // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',        // illuminance only sensor
+    
     ''                  : 'UNKNOWN'          // 
 ]
 
@@ -152,10 +157,10 @@ def parse(String description) {
             //thitHumidity: 9,
             //thitTemperature: 8,            
             switch (dp) {
-                case 0x01 : // temperature
+                case 0x01 : // temperature in °C
                     temperatureEvent( fncmd / 10.0 )
                     break
-                case 0x02 : // humidity
+                case 0x02 : // humidity in %
                     humidityEvent (fncmd)
                     break 
                 case 0x03 : // illuminance - NOT TESTED!
@@ -165,20 +170,38 @@ def parse(String description) {
                     getBatteryPercentageResult(fncmd * 2)
                     log.info "battery is $fncmd %"
                     break
-                case 0x09: 
-                    log.info "unknown parameter 9 (ENUM) is ${fncmd}"
+                case 0x09: // temp. scale 0=Farenheit 1=Celsius (Haozee only?) 
+                    log.info "temp. scale is ${fncmd}"
                     break
-                case 0x0A: 
-                    log.info "temperature alarm lower limit is ${fncmd/10.0} "
+                case 0x0A: // Max?. Temp Alarm, Value / 10
+                    log.info "temperature alarm lower limit is ${fncmd/10.0} "    // TODO: or max?
                     break
-                case 0x0B: 
-                    log.info "temperature alarm upper limit is ${fncmd/10.0} "
+                case 0x0B: // Min?. Temp Alarm, Value / 10
+                    log.info "temperature alarm upper limit is ${fncmd/10.0} "    // TODO: or min?
                     break
-                case 0x0E: 
-                    log.info "unknown parameter 0x0E  is ${fncmd} " // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
+                    log.info "humidity alarm upper limit is ${fncmd} "
                     break
-                case 0x13 : // temperature sensitivity
-                    log.info "temperature sensitivity is $fncmd "
+                case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
+                    log.info "humidity alarm lower limit is ${fncmd} "
+                    break
+                case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
+                    log.info "Temperature Alarm (0x0E) is ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                    break
+                case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
+                    log.info "Humidity Alarm (0x0F) is ${fncmd}" 
+                    break
+                case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
+                    log.info "temperature max reporting interval is ${fncmd} min"
+                    break                
+                case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
+                    log.info "humidity max reporting interval is ${fncmd} min"
+                    break                
+                case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
+                    log.info "temperature sensitivity is ${fncmd/2.0/10.0} °C"
+                    break                
+                case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
+                    log.info "humidity sensitivity is ${fncmd} %"
                     break                
                 default :
                     /*if (settings?.logEnable)*/ log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -260,7 +283,7 @@ def handleIlluminanceEvent( descMap ) {
     def rawLux = Integer.parseInt(descMap.value,16)
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
-	if (txtEnable) log.info "$device.displayName illuminance changed to $lux"
+    if (txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 def handleTemperatureEvent( descMap ) {
@@ -272,7 +295,7 @@ def handleTemperatureEvent( descMap ) {
         log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
 	} else {
 	    sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
-		if (txtEnable) log.info "$device.displayName temperature changed to $rawValue\u00B0"+Scale
+		if (txtEnable) log.info "$device.displayName temperature is $rawValue\u00B0"+Scale
     }
 }
 
@@ -284,7 +307,7 @@ def handleHumidityEvent( descMap ) {
 	}
     else {
 	    sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
-		if (txtEnable) log.info "$device.displayName humidity changed to $rawValue"
+		if (txtEnable) log.info "$device.displayName humidity is $rawValue"
 	}
 }
 
@@ -293,8 +316,6 @@ def handleHumidityEvent( descMap ) {
 //  called from initialize()
 def installed() {
     if (settings?.txtEnable) log.info "installed()"
-    sendEvent(name: "temperature", value: 20, unit: "C", displayed: false)     
-    //sendEvent(name: "switch", value: "on", displayed: true)
     unschedule()
 }
 
