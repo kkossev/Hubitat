@@ -11,12 +11,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
- * ver. 1.0.1 2022-01-20 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding
+ * ver. 1.0.1 2022-01-30 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/29 11:12 AM"}
+def timeStamp() {"2022/01/30 12:26 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -57,7 +57,8 @@ metadata {
        
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "Advanced options, may not be supported by all devices!", defaultValue: false)
+        input (name: "modelGroupOptions", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"TEST"])
+        input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
                 input it.value.input 
@@ -67,10 +68,10 @@ metadata {
 }
 
 @Field static Map configParams = [
-        11: [input: [name: "modelGroupOptions", type: "enum", title: "Model Group Options Title", description:"Model Group Options Description", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"TEST"]], parameterSize: 1],
-        12: [input: [name: "temperatureScaleOptions", type: "enum", title: "Temperature Scale Title", description:"Temperature Scale Description", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]], parameterSize: 1],
-        13: [input: [name: "numberParameter", type: "number", title: "Number Title", description: "number Description", defaultValue: 0], parameterSize: 2]
+        1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperatre change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]]
 ]
+
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601_Tuya',         // Tuya Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
@@ -186,9 +187,7 @@ def parse(String description) {
                     log.info "battery is $fncmd %"
                     break
                 case 0x09: // temp. scale 0=Fahrenheit  1=Celsius (Haozee only?) 
-                    device.updateSetting("temperatureScalePreference", [value: fncmd == 0 ? "2" : "1", type:"enum"])
-                    //device.updateSetting("configParam${param.num}",[value:"${paramVal}", type:"enum"])
-                    log.info "temp. scale is ${settings.temperatureScalePreference.value} (${fncmd})"
+                    log.info "Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
                     break
                 case 0x0A: // Max?. Temp Alarm, Value / 10
                     log.info "temperature alarm lower limit is ${fncmd/10.0} "    // TODO: or max?
@@ -215,7 +214,8 @@ def parse(String description) {
                     log.info "humidity max reporting interval is ${fncmd} min"
                     break                
                 case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
-                    log.info "temperature sensitivity is ${fncmd/2.0/10.0} °C"
+                    log.info "temperature sensitivity reported by device is: ${fncmd/10.0} °C"
+                    device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
                     break                
                 case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
                     log.info "humidity sensitivity is ${fncmd} %"
@@ -272,9 +272,13 @@ def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
     def Scale = location.temperatureScale
-    map.unit = "\u00B0"+Scale
-    if (Scale == "F") {
+    
+    if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && Scale == "F")) {
         temperature = (temperature * 1.8) + 32
+        map.unit = "\u00B0"+"F"
+    }
+    else {
+        map.unit = "\u00B0"+"C"
     }
     map.value  =  Math.round((temperature - 0.05) * 10) / 10
     if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
@@ -340,21 +344,45 @@ def installed() {
     unschedule()
 }
 
+
 def updated() {
+    ArrayList<String> cmds = []
+    
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
     log.info "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(/*1800*/86400, logsOff)    // turn off debug logging after 30 minutes
+        runIn(86400, logsOff)    // turn off debug logging after 30 minutes
         if (settings?.txtEnable) log.info "Debug logging is will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
     }
+
+    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
+        log.trace "temperatureScaleParameter = ${temperatureScaleParameter}"
+        if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
+            log.warn "changing to Celsius: ${cmds}"
+        }
+        else if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && location.temperatureScale== "F")) {    // Fahrenheit
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
+            log.warn "changing to Fahrenheit: ${cmds}"
+        }
+        else log.warn "temperatureScaleParameter NOT MATCH!"
+        
+        Integer fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
+        log.trace "changing temperatureSensitivity to= ${fncmd}"
+        cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+
+    }
+    
     log.info "Update finished"
+    sendZigbeeCommands( cmds )  
 }
+
 
 def refresh() {
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
@@ -460,7 +488,7 @@ def getBatteryPercentageResult(rawValue) {
         result.name = 'battery'
         result.translatable = true
         result.value = Math.round(rawValue / 2)
-        result.descriptionText = "${device.displayName} battery was ${result.value}%"
+        result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
         sendEvent(result)
     }
@@ -483,7 +511,7 @@ private Map getBatteryResult(rawValue) {
         if (roundedPct <= 0)
         roundedPct = 1
         result.value = Math.min(100, roundedPct)
-        result.descriptionText = "${linkText} battery was ${result.value}%"
+        result.descriptionText = "${linkText} battery is ${result.value}%"
         result.name = 'battery'
         result.isStateChange = true
         sendEvent(result)
