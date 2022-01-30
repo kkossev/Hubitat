@@ -11,12 +11,13 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
- * ver. 1.0.1 2022-01-30 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity
+ * ver. 1.0.1 2022-01-30 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
+ *                                 TODO: 2E+1 problem!
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/30 12:26 AM"}
+def timeStamp() {"2022/01/30 11:32 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -35,6 +36,8 @@ metadata {
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
 
+        attribute "minTempAlarm", "enum", ["inactive","active"]
+        attribute "maxTempAlarm", "enum", ["inactive","active"]
 /*       
         command "zTest", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -69,7 +72,9 @@ metadata {
 
 @Field static Map configParams = [
         1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
-        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperatre change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]]
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]],
+        3: [input: [name: "minTempAlarm", type: "number", title: "Minimal Temperature Alarm", description: "Minimal Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0"]],
+        4: [input: [name: "maxTempAlarm", type: "number", title: "Maximal Temperature Alarm", description: "Maximal Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0"]]
 ]
 
 @Field static final Map<String, String> Models = [
@@ -189,11 +194,14 @@ def parse(String description) {
                 case 0x09: // temp. scale 0=Fahrenheit  1=Celsius (Haozee only?) 
                     log.info "Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
                     break
-                case 0x0A: // Max?. Temp Alarm, Value / 10
-                    log.info "temperature alarm lower limit is ${fncmd/10.0} "    // TODO: or max?
+                case 0x0B: // Max?. Temp Alarm, Value / 10
+                    log.info "temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
+                    device.updateSetting("maxTempAlarm", [value:fncmd/10.0, type:"number"])
                     break
-                case 0x0B: // Min?. Temp Alarm, Value / 10
-                    log.info "temperature alarm upper limit is ${fncmd/10.0} "    // TODO: or min?
+                case 0x0A: // Min?. Temp Alarm, Value / 10
+                    log.info "temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
+                    device.updateSetting("minTempAlarm", [value:fncmd/10.0, type:"number"])
+                //maxTempAlarm
                     break
                 case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
                     log.info "humidity alarm upper limit is ${fncmd} "
@@ -202,7 +210,22 @@ def parse(String description) {
                     log.info "humidity alarm lower limit is ${fncmd} "
                     break
                 case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-                    log.info "Temperature Alarm (0x0E) is ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                    if (fncmd == 1) {
+                        sendEvent("name": "minTempAlarm", "value": "active")
+                        log.info "Minimal Temperature Alarm (0x0E=${fncmd}) is active"
+                    }
+                    else if (fncmd == 0) {
+                        sendEvent("name": "maxTempAlarm", "value": "active")
+                        log.info "Maximal Temperature Alarm (0x0E=${fncmd}) is active"
+                    }
+                    else if (fncmd == 2 ) {
+                        sendEvent("name": "minTempAlarm", "value": "inactive")
+                        sendEvent("name": "maxTempAlarm", "value": "inactive")
+                        log.info "Temperature Alarm (0x0E=${fncmd}) is inactive"
+                    }
+                    else {
+                        log.warn "Temperature Alarm (0x0E) UNKNWOEN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                    }
                     break
                 case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
                     log.info "Humidity Alarm (0x0F) is ${fncmd}" 
@@ -360,7 +383,7 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-
+    Integer fncmd
     if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
         log.trace "temperatureScaleParameter = ${temperatureScaleParameter}"
         if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
@@ -372,10 +395,21 @@ def updated() {
             log.warn "changing to Fahrenheit: ${cmds}"
         }
         else log.warn "temperatureScaleParameter NOT MATCH!"
-        
-        Integer fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
-        log.trace "changing temperatureSensitivity to= ${fncmd}"
+        //
+        fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
+        log.trace "changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        //
+        fncmd = (safeToDouble( maxTempAlarm ) * 10) as int
+        log.trace "changing maxTempAlarm to= ${fncmd/10.0}"
+        cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        //
+        fncmd = (safeToDouble( minTempAlarm ) * 10) as int
+        log.trace "changing minTempAlarm to= ${fncmd/10.0}"
+        cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        //
+        
+        
 
     }
     
@@ -423,6 +457,8 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || device.getDataValue("temperatureScalePreference") == null) device.updateSetting("temperatureScalePreference",  [value:"Auto detect", type:"enum"])
+    if (fullInit == true || device.getDataValue("temperatureSensitivity") == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
+
 }
 
 def tuyaBlackMagic() {
@@ -443,6 +479,8 @@ def initialize() {
     installed()
     updated()
     configure()
+    sendEvent("name": "minTempAlarm", "value": "inactive", isStateChange: true)
+    sendEvent("name": "maxTempAlarm", "value": "inactive", isStateChange: true)
     runIn( 3, logInitializeRezults)
 }
 
