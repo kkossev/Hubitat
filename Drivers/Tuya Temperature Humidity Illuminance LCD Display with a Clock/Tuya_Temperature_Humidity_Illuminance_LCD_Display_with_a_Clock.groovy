@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/02/02 10:28 AM"}
+def timeStamp() {"2022/02/02 9:29 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -38,6 +38,8 @@ metadata {
 
         attribute "minTempAlarm", "enum", ["inactive","active"]
         attribute "maxTempAlarm", "enum", ["inactive","active"]
+        attribute "minHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
+        attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)        
 /*       
         command "zTest", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -73,8 +75,10 @@ metadata {
 @Field static Map configParams = [
         1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
         2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]],
-        3: [input: [name: "minTempAlarm", type: "number", title: "Minimal Temperature Alarm", description: "Minimal Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0"]],
-        4: [input: [name: "maxTempAlarm", type: "number", title: "Maximal Temperature Alarm", description: "Maximal Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0"]]
+        3: [input: [name: "minTempAlarmPar", type: "number", title: "Minimal Temperature Alarm", description: "Minimal Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0"]],
+        4: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximal Temperature Alarm", description: "Maximal Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0"]],
+        5: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100"]],            // 'TS0601_Haozee' only!
+        6: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximal Humidity Alarm", description: "Maximal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100"]]             // 'TS0601_Haozee' only!
 ]
 
 @Field static final Map<String, String> Models = [
@@ -196,18 +200,19 @@ def parse(String description) {
                     break
                 case 0x0B: // Max?. Temp Alarm, Value / 10
                     if (settings?.txtEnable) log.info "temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
-                    device.updateSetting("maxTempAlarm", [value:fncmd/10.0, type:"number"])
+                    device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0, type:"number"])
                     break
                 case 0x0A: // Min?. Temp Alarm, Value / 10
                     if (settings?.txtEnable) log.info "temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
-                    device.updateSetting("minTempAlarm", [value:fncmd/10.0, type:"number"])
-                //maxTempAlarm
+                    device.updateSetting("minTempAlarmPar", [value:fncmd/10.0, type:"number"])
                     break
                 case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
                     if (settings?.txtEnable) log.info "humidity alarm upper limit is ${fncmd} "
+                    device.updateSetting("maxHumidityAlarmPar", [value:fncmd, type:"number"])
                     break
                 case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
                     if (settings?.txtEnable) log.info "humidity alarm lower limit is ${fncmd} "
+                    device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
                     break
                 case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
                     if (fncmd == 1) {
@@ -224,14 +229,29 @@ def parse(String description) {
                         if (settings?.txtEnable) log.info "Temperature Alarm (0x0E=${fncmd}) is inactive"
                     }
                     else {
-                        if (settings?.txtEnable) log.warn "Temperature Alarm (0x0E) UNKNWOEN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                        if (settings?.txtEnable) log.warn "Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
                     }
                     break
-                case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-                    if (settings?.txtEnable) log.info "Humidity Alarm (0x0F) is ${fncmd}" 
+                case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?) 
+                    if (fncmd == 1) {
+                        sendEvent("name": "minHumidityAlarm", "value": "active")
+                        if (settings?.txtEnable) log.info "Minimal Temperature Alarm (0x0F=${fncmd}) is active"
+                    }
+                    else if (fncmd == 0) {
+                        sendEvent("name": "maxHumidityAlarm", "value": "active")
+                        if (settings?.txtEnable) log.info "Maximal Temperature Alarm (0x0F=${fncmd}) is active"
+                    }
+                    else if (fncmd == 2 ) {
+                        sendEvent("name": "minHumidityAlarm", "value": "inactive")
+                        sendEvent("name": "maxHumidityAlarm", "value": "inactive")
+                        if (settings?.txtEnable) log.info "Humidity Alarm (0x0F=${fncmd}) is inactive"
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                    }                
                     break
                 case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
-                    if (settings?.txtEnable) og.info "temperature max reporting interval is ${fncmd} min"
+                    if (settings?.txtEnable) log.info "temperature max reporting interval is ${fncmd} min"
                     break                
                 case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
                     if (settings?.txtEnable) log.info "humidity max reporting interval is ${fncmd} min"
@@ -400,17 +420,24 @@ def updated() {
         if (settings?.logEnable) log.trace "changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
-        fncmd = (safeToDouble( maxTempAlarm ) * 10) as int
+        fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "changing maxTempAlarm to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
-        fncmd = (safeToDouble( minTempAlarm ) * 10) as int
+        fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "changing minTempAlarm to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
-        
-        
-
+    }
+    // minHumidityAlarm
+    if (getModelGroup() in ['TS0601_Haozee']) {
+        fncmd = safeToInt( maxHumidityAlarmPar )
+        if (settings?.logEnable) log.trace "changing maxHumidityAlarm to= ${fncmd}"
+        cmds += sendTuyaCommand("0C", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        //
+        fncmd = safeToInt( minHumidityAlarmPar )
+        if (settings?.logEnable) log.trace "changing minHumidityAlarm to= ${fncmd}"
+        cmds += sendTuyaCommand("0D", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
     }
     
     if (settings?.txtEnable) log.info "Update finished"
@@ -458,7 +485,11 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || device.getDataValue("temperatureScalePreference") == null) device.updateSetting("temperatureScalePreference",  [value:"Auto detect", type:"enum"])
     if (fullInit == true || device.getDataValue("temperatureSensitivity") == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
-
+    if (fullInit == true || device.getDataValue("minTempAlarmPar") == null) device.updateSetting("minTempAlarmPar",  [value:10.0, type:"number"])
+    if (fullInit == true || device.getDataValue("maxTempAlarmPar") == null) device.updateSetting("maxTempAlarmPar",  [value:40.0, type:"number"])
+    if (fullInit == true || device.getDataValue("minHumidityAlarmPar") == null) device.updateSetting("minHumidityAlarmPar",  [value:10, type:"decimal"])
+    if (fullInit == true || device.getDataValue("maxHumidityAlarmPar") == null) device.updateSetting("maxHumidityAlarmPar",  [value:90, type:"decimal"])
+    
 }
 
 def tuyaBlackMagic() {
@@ -481,6 +512,8 @@ def initialize() {
     configure()
     sendEvent("name": "minTempAlarm", "value": "inactive", isStateChange: true)
     sendEvent("name": "maxTempAlarm", "value": "inactive", isStateChange: true)
+    sendEvent("name": "minHumidityAlarm", "value": "inactive", isStateChange: true)
+    sendEvent("name": "maxHumidityAlarm", "value": "inactive", isStateChange: true)
     runIn( 3, logInitializeRezults)
 }
 
