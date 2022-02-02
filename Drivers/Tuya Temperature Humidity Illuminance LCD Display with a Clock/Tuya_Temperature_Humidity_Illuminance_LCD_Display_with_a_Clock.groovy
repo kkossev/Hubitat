@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/02/02 9:33 PM"}
+def timeStamp() {"2022/02/02 11:29 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -52,10 +52,11 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019", model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B Temperature Humidity Illuminance LCD Display"    // NOT TESTED!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
-        
     }
     preferences {
 
@@ -72,6 +73,7 @@ metadata {
     }
 }
 
+@Field static final Integer numberOfconfigParams = 6
 @Field static Map configParams = [
         1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
         2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]],
@@ -89,12 +91,21 @@ metadata {
     
     '_TZ2000_a476raq2'  : 'TS0201',     
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
-    
+    '_TZ2000_xogb73am'  : 'TS0201',     
+    '_TZ2000_avdnvykf'  : 'TS0201',     
+    '_TYZB01_a476raq2'  : 'TS0201',     
+    '_TYZB01_hjsgdkfl'  : 'TS0201',     
+    '_TZ2000_hjsgdkfl'  : 'TS0201',             // "AVATTO S-H02"   
+    '_TZ3000_qaaysllp'  : 'TS0201',             // NAS-TH02B    NOT TESTED !!
+
     '_TYZB01_kvwjujy9'  : 'TS0222',              // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',            // illuminance only sensor
     
     ''                  : 'UNKNOWN'              // 
 ]
+
+
+
 
 @Field static final Integer MaxRetries = 3
                                 
