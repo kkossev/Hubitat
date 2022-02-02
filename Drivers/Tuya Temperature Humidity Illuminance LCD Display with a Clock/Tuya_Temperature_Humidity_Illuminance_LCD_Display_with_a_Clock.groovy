@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/01/30 11:32 AM"}
+def timeStamp() {"2022/02/02 10:28 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -135,7 +135,7 @@ def parse(String description) {
                 handleTemperatureEvent( descMap )
             }
             else {
-                log.warn "Ignoring ${getModelGroup()} temperature event"
+                if (settings?.logEnable) log.warn "Ignoring ${getModelGroup()} temperature event"
             }
 		}
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
@@ -148,10 +148,10 @@ def parse(String description) {
                 offset = location.getTimeZone().getOffset(new Date().getTime())
                 //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
             } catch(e) {
-                log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+                if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
             }
             def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-            log.trace "${device.displayName} now is: ${now()}"  // KK TODO - converto to Date/Time string!        
+            if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - converto to Date/Time string!        
             if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
             cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
             if (state.txCounter != null) state.txCounter = state.txCounter + 1
@@ -189,70 +189,70 @@ def parse(String description) {
                     break 
                 case 0x04 : // battery
                     getBatteryPercentageResult(fncmd * 2)
-                    log.info "battery is $fncmd %"
+                    if (settings?.txtEnable) log.info "battery is $fncmd %"
                     break
                 case 0x09: // temp. scale 0=Fahrenheit  1=Celsius (Haozee only?) 
-                    log.info "Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
+                    if (settings?.txtEnable) log.info "Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
                     break
                 case 0x0B: // Max?. Temp Alarm, Value / 10
-                    log.info "temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
+                    if (settings?.txtEnable) log.info "temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
                     device.updateSetting("maxTempAlarm", [value:fncmd/10.0, type:"number"])
                     break
                 case 0x0A: // Min?. Temp Alarm, Value / 10
-                    log.info "temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
+                    if (settings?.txtEnable) log.info "temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
                     device.updateSetting("minTempAlarm", [value:fncmd/10.0, type:"number"])
                 //maxTempAlarm
                     break
                 case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
-                    log.info "humidity alarm upper limit is ${fncmd} "
+                    if (settings?.txtEnable) log.info "humidity alarm upper limit is ${fncmd} "
                     break
                 case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
-                    log.info "humidity alarm lower limit is ${fncmd} "
+                    if (settings?.txtEnable) log.info "humidity alarm lower limit is ${fncmd} "
                     break
                 case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
                     if (fncmd == 1) {
                         sendEvent("name": "minTempAlarm", "value": "active")
-                        log.info "Minimal Temperature Alarm (0x0E=${fncmd}) is active"
+                        if (settings?.txtEnable) log.info "Minimal Temperature Alarm (0x0E=${fncmd}) is active"
                     }
                     else if (fncmd == 0) {
                         sendEvent("name": "maxTempAlarm", "value": "active")
-                        log.info "Maximal Temperature Alarm (0x0E=${fncmd}) is active"
+                        if (settings?.txtEnable) log.info "Maximal Temperature Alarm (0x0E=${fncmd}) is active"
                     }
                     else if (fncmd == 2 ) {
                         sendEvent("name": "minTempAlarm", "value": "inactive")
                         sendEvent("name": "maxTempAlarm", "value": "inactive")
-                        log.info "Temperature Alarm (0x0E=${fncmd}) is inactive"
+                        if (settings?.txtEnable) log.info "Temperature Alarm (0x0E=${fncmd}) is inactive"
                     }
                     else {
-                        log.warn "Temperature Alarm (0x0E) UNKNWOEN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                        if (settings?.txtEnable) log.warn "Temperature Alarm (0x0E) UNKNWOEN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
                     }
                     break
                 case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-                    log.info "Humidity Alarm (0x0F) is ${fncmd}" 
+                    if (settings?.txtEnable) log.info "Humidity Alarm (0x0F) is ${fncmd}" 
                     break
                 case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
-                    log.info "temperature max reporting interval is ${fncmd} min"
+                    if (settings?.txtEnable) og.info "temperature max reporting interval is ${fncmd} min"
                     break                
                 case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
-                    log.info "humidity max reporting interval is ${fncmd} min"
+                    if (settings?.txtEnable) log.info "humidity max reporting interval is ${fncmd} min"
                     break                
                 case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
-                    log.info "temperature sensitivity reported by device is: ${fncmd/10.0} °C"
+                    if (settings?.txtEnable) log.info "temperature sensitivity reported by device is: ${fncmd/10.0} °C"
                     device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
                     break                
                 case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
-                    log.info "humidity sensitivity is ${fncmd} %"
+                    if (settings?.txtEnable) log.info "humidity sensitivity is ${fncmd} %"
                     break                
                 default :
-                    /*if (settings?.logEnable)*/ log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                    if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                     break
             }
         } else {
-            /*if (settings?.logEnable)*/ log.warn "<b>not parsed</b>: "+descMap
+            if (settings?.logEnable) log.warn "<b>not parsed</b>: "+descMap
         }
     }
     else {
-        /*if (settings?.logEnable)*/ log.debug "${device.displayName} <b>UNPROCESSED</b> parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
+        if (settings?.logEnable) log.debug "${device.displayName} <b>UNPROCESSED</b> parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
 }
 
@@ -287,7 +287,7 @@ def getModelGroup() {
     else {
          modelGroup = modelGroupPreference 
     }
-    //    log.trace "manufacturer ${manufacturer} group is ${modelGroup}"
+    //    if (settings?.logEnable) log.trace "manufacturer ${manufacturer} group is ${modelGroup}"
     return modelGroup
 }
 
@@ -304,7 +304,7 @@ def temperatureEvent( temperature ) {
         map.unit = "\u00B0"+"C"
     }
     map.value  =  Math.round((temperature - 0.05) * 10) / 10
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
 
@@ -313,7 +313,7 @@ def humidityEvent( humidity ) {
     map.name = "humidity"
     map.value = humidity
     map.unit = "%"    // TODO!
-    if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
 
@@ -322,7 +322,7 @@ def switchEvent( value ) {
     map.name = "switch"
     map.value = value
     map.descriptionText = "${device.displayName} switch is ${value}"
-    if (txtEnable) {log.info "${map.descriptionText}"}
+    if (settings?.txtEnable) {log.info "${map.descriptionText}"}
     sendEvent(map)
 }
 
@@ -331,7 +331,7 @@ def handleIlluminanceEvent( descMap ) {
     def rawLux = Integer.parseInt(descMap.value,16)
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
-    if (txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 def handleTemperatureEvent( descMap ) {
@@ -340,10 +340,10 @@ def handleTemperatureEvent( descMap ) {
 	def Scale = location.temperatureScale
     if (Scale == "F") rawValue = (rawValue * 1.8) + 32
 	if ((rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f)) ){
-        log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
+        if (settings?.logEnable) log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
 	} else {
 	    sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
-		if (txtEnable) log.info "$device.displayName temperature is $rawValue\u00B0"+Scale
+		if (settings?.txtEnable) log.info "$device.displayName temperature is $rawValue\u00B0"+Scale
     }
 }
 
@@ -351,11 +351,11 @@ def handleHumidityEvent( descMap ) {
     def rawValue = Integer.parseInt(descMap.value,16) / 100
     rawValue =  ((float)rawValue).trunc(1)
 	if (rawValue > 1000 || rawValue <= 0 ) {
-    	log.warn "$device.displayName ignored humidity value: $rawValue"
+    	if (settings?.logEnable) log.warn "$device.displayName ignored humidity value: $rawValue"
 	}
     else {
 	    sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
-		if (txtEnable) log.info "$device.displayName humidity is $rawValue"
+		if (settings?.txtEnable) log.info "$device.displayName humidity is $rawValue"
 	}
 }
 
@@ -374,7 +374,7 @@ def updated() {
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
-    log.info "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
+    if (settings?.txtEnable) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff)    // turn off debug logging after 30 minutes
@@ -385,27 +385,27 @@ def updated() {
     }
     Integer fncmd
     if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
-        log.trace "temperatureScaleParameter = ${temperatureScaleParameter}"
+        if (settings?.logEnable) log.trace "temperatureScaleParameter = ${temperatureScaleParameter}"
         if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
             cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
-            log.warn "changing to Celsius: ${cmds}"
+            if (settings?.logEnable) log.warn "changing to Celsius: ${cmds}"
         }
         else if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && location.temperatureScale== "F")) {    // Fahrenheit
             cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
-            log.warn "changing to Fahrenheit: ${cmds}"
+            if (settings?.logEnable) log.warn "changing to Fahrenheit: ${cmds}"
         }
-        else log.warn "temperatureScaleParameter NOT MATCH!"
+        else if (settings?.logEnable) log.warn "temperatureScaleParameter NOT MATCH!"
         //
         fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
-        log.trace "changing temperatureSensitivity to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
         fncmd = (safeToDouble( maxTempAlarm ) * 10) as int
-        log.trace "changing maxTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "changing maxTempAlarm to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
         fncmd = (safeToDouble( minTempAlarm ) * 10) as int
-        log.trace "changing minTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "changing minTempAlarm to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         //
         
@@ -413,7 +413,7 @@ def updated() {
 
     }
     
-    log.info "Update finished"
+    if (settings?.txtEnable) log.info "Update finished"
     sendZigbeeCommands( cmds )  
 }
 
@@ -436,13 +436,13 @@ def checkDriverVersion() {
 }
 
 def logInitializeRezults() {
-    log.info "${device.displayName} manufacturer  = ${device.getDataValue("manufacturer")} ModelGroup = ${getModelGroup()}"
-    log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
+    if (settings?.txtEnable) log.info "${device.displayName} manufacturer  = ${device.getDataValue("manufacturer")} ModelGroup = ${getModelGroup()}"
+    if (settings?.txtEnable) log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
 }
 
 // called by initialize() button
 void initializeVars(boolean fullInit = true ) {
-    if (txtEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (settings?.txtEnable) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
@@ -466,7 +466,7 @@ def tuyaBlackMagic() {
 }
 
 def configure() {
-    if (txtEnable==true) log.info " configure().."
+    if (settings?.txtEnable) log.info " configure().."
     List<String> cmds = []
     cmds += tuyaBlackMagic()    
     sendZigbeeCommands(cmds)    
@@ -519,7 +519,7 @@ def logsOff(){
 }
 
 def getBatteryPercentageResult(rawValue) {
-    if (logEnable) log.debug "Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+    if (settings?.logEnable) log.debug "Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
 
     if (0 <= rawValue && rawValue <= 200) {
@@ -535,7 +535,7 @@ def getBatteryPercentageResult(rawValue) {
 }
 
 private Map getBatteryResult(rawValue) {
-    if (logEnable) log.debug 'Battery'
+    if (settings?.logEnable) log.debug 'Battery'
     def linkText = getLinkText(device)
 
     def result = [:]
@@ -563,7 +563,7 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
     def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
     def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
 
-    log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
+    if (settings?.logEnable) log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
 
     switch ( getModelGroup() ) {
         case 'MOES' :
