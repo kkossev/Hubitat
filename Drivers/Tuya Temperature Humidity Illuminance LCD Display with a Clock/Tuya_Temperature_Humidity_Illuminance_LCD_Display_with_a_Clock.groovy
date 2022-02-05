@@ -12,11 +12,11 @@
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
- * ver. 1.0.2 2022-02-05 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2
+ * ver. 1.0.2 2022-02-05 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/02/05 9:50 PM"}
+def timeStamp() {"2022/02/05 11:51 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -62,7 +62,9 @@ metadata {
        
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "modelGroupOptions", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"TEST"])
+        //input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"])
+        input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: 
+               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0201":"TS0201", "TS0222":"TS0222", "TS0222_2":"TS0222_2", "Zigbee NON-Tuya":"Zigbee NON-Tuya"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
@@ -172,8 +174,14 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             humidityEvent( raw / 100.0 )
 		}
-        else if (descMap?.clusterInt==CLUSTER_TUYA) {
+        else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
+        } 
+        else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
+            if (getModelGroup() == 'TS0222') {
+                log.warn "TS0222 device announcement"
+                configure()
+            }
         } 
         else if (descMap.isClusterSpecific == false && descMap.command == "01" ) { //global commands read attribute response
             def status = descMap.data[2]
@@ -334,9 +342,11 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+// options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"]
+
 def getModelGroup() {
     def manufacturer = device.getDataValue("manufacturer")
-    def modelGroup = 'Unknown'
+    def modelGroup = 'UNKNOWN'
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
@@ -345,7 +355,7 @@ def getModelGroup() {
             modelGroup = Models[manufacturer]
         }
         else {
-             modelGroup = 'Unknown'
+             modelGroup = 'UNKNOWN'
         }
     }
     else {
@@ -379,7 +389,7 @@ def humidityEvent( humidity ) {
     map.value = humidity as int
     map.unit = "% RH"
     map.isStateChange = true
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
     sendEvent(map)
 }
 
@@ -458,6 +468,13 @@ def updated() {
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400 
     }
+    if (getModelGroup() in ['UNKNOWN']) {
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure temperature - Report every minute, 1 second if any change
+    	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Pressure - Report every minute, 1 second if any change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Humidity - Report every minute, 1 second if any change
+   		cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+   		cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
+    }    
     
     //illuminanceSensitivity
     if (settings?.txtEnable) log.info "${device.displayName} Update finished"
