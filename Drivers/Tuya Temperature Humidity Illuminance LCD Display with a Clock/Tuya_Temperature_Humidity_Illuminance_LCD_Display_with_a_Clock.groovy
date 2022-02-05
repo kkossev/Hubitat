@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/02/05 11:50 AM"}
+def timeStamp() {"2022/02/05 1:15 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -145,7 +145,8 @@ def parse(String description) {
             }
         }     
 		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
-            handleIlluminanceEvent( descMap )
+            def rawLux = Integer.parseInt(descMap.value,16)
+            illuminanceEvent( rawLux )
 		}        
 		else if (descMap.cluster == "0400" && descMap.attrId == "F001") {        //MOES ZSS-ZK-THL
             def raw = Integer.parseInt(descMap.value,16)
@@ -154,14 +155,16 @@ def parse(String description) {
         }        
 		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             if (getModelGroup() != 'TS0222_2') {
-                handleTemperatureEvent( descMap )
+                def raw = Integer.parseInt(descMap.value,16)
+                temperatureEvent( raw / 100.0 )
             }
             else {
                 if (settings?.logEnable) log.warn "${device.displayName} Ignoring ${getModelGroup()} temperature event"
             }
 		}
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
-            handleHumidityEvent( descMap )
+            def raw = Integer.parseInt(descMap.value,16)
+            humidityEvent( raw / 100.0 )
 		}
         else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
             if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
@@ -346,8 +349,8 @@ def temperatureEvent( temperature ) {
 def humidityEvent( humidity ) {
     def map = [:] 
     map.name = "humidity"
-    map.value = humidity
-    map.unit = "%"    // TODO!
+    map.value = humidity as int
+    map.unit = "% RH"
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
@@ -361,39 +364,12 @@ def switchEvent( value ) {
     sendEvent(map)
 }
 
-def handleIlluminanceEvent( descMap ) {
-    def rawEncoding = Integer.parseInt(descMap.encoding, 16)
-    def rawLux = Integer.parseInt(descMap.value,16)
-	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
+def illuminanceEvent( illuminance ) {
+    //def rawLux = Integer.parseInt(descMap.value,16)
+	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
-
-def handleTemperatureEvent( descMap ) {
-    def rawValue = hexStrToSignedInt(descMap.value) / 100
-    rawValue =  Math.round((rawValue - 0.05) * 10) / 10
-	def Scale = location.temperatureScale
-    if (Scale == "F") rawValue = (rawValue * 1.8) + 32
-	if ((rawValue > 200 || rawValue < -200 || (Math.abs(rawValue)<0.1f)) ){
-        if (settings?.logEnable) log.warn "$device.displayName Ignored temperature value: $rawValue\u00B0"+Scale
-	} else {
-	    sendEvent("name": "temperature", "value": rawValue, "unit": "\u00B0"+Scale, isStateChange: true)
-		if (settings?.txtEnable) log.info "$device.displayName temperature is $rawValue\u00B0"+Scale
-    }
-}
-
-def handleHumidityEvent( descMap ) {
-    def rawValue = Integer.parseInt(descMap.value,16) / 100
-    rawValue =  ((float)rawValue).trunc(1)
-	if (rawValue > 1000 || rawValue <= 0 ) {
-    	if (settings?.logEnable) log.warn "$device.displayName ignored humidity value: $rawValue"
-	}
-    else {
-	    sendEvent("name": "humidity", "value": rawValue, "unit": "%", isStateChange: true)
-		if (settings?.txtEnable) log.info "$device.displayName humidity is $rawValue"
-	}
-}
-
 
 
 //  called from initialize()
