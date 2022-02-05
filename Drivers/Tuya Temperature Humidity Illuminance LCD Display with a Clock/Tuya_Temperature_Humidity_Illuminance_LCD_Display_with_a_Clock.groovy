@@ -12,11 +12,11 @@
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
- * ver. 1.0.2 2022-02-05 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2!)
+ * ver. 1.0.2 2022-02-05 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/02/05 8:43 PM"}
+def timeStamp() {"2022/02/05 9:50 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -246,12 +246,12 @@ def processTuyaCluster( descMap ) {
                 if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
                 break
             case 0x0B: // Max?. Temp Alarm, Value / 10
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
-                device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0, type:"number"])
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C"
+                device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
                 break
             case 0x0A: // Min?. Temp Alarm, Value / 10
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
-                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0, type:"number"])
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} °C "
+                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
                 break
             case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity alarm upper limit is ${fncmd} "
@@ -438,10 +438,10 @@ def updated() {
         if (settings?.logEnable) log.trace "${device.displayName} changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
