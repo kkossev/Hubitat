@@ -12,11 +12,11 @@
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
- * ver. 1.0.2 2022-02-05 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix
+ * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/02/05 11:51 PM"}
+def timeStamp() {"2022/02/05 6:35 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -68,7 +68,10 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
-                input it.value.input 
+                if (it.value.input.limit == null || getModelGroup() in it.value.input.limit) {
+                    //log.trace "it = ${it.value.input.limit}"
+                    input it.value.input 
+                }
             }
         }
     }
@@ -77,13 +80,40 @@ metadata {
 @Field static final Integer numberOfconfigParams = 8
 @Field static Map configParams = [
         1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
-        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]],
-        3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50"]],
-        4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100"]],                // TS0222 "MOES ZSS-ZK-THL"
-        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimal Temperature Alarm", description: "Minimal Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0"]],
-        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximal Temperature Alarm", description: "Maximal Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0"]],
-        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100"]],            // 'TS0601_Haozee' only!
-        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximal Humidity Alarm", description: "Maximal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100"]]             // 'TS0601_Haozee' only!
+                   // no limit
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+        3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+        4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
+                   limit:['TS0222']]],
+    
+        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee']]],
+    
+        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0",
+                   limit:['TS0601_Haozee']]],
+    
+        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee']]], 
+    
+        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100",            // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee']]], 
+    
+        9: [input: [name: "minReportingTimeTemp", type: "number", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 30, range: "10..3600",
+                   limit:["Zigbee NON-Tuya"]]],
+    
+       10: [input: [name: "maxReportingTimeTemp", type: "number", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
+                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+       11: [input: [name: "minReportingTimeHumidity", type: "number", title: "Minimum time between humidity reports", description: "Minimum time between humidity reporting, seconds", defaultValue: 30, range: "10..3600",
+                   limit:["Zigbee NON-Tuya"]]],
+    
+       12: [input: [name: "maxReportingTimeHumidity", type: "number", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
+                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]]
+    
 ]
 
 @Field static final Map<String, String> Models = [
