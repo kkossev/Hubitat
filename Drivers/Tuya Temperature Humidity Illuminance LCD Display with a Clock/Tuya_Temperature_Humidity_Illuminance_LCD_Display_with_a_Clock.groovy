@@ -12,12 +12,11 @@
  * 
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
- *                                 TODO: 2E+1 problem!
- *
+ * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
 */
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/02/05 1:15 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/02/05 6:35 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -64,11 +63,16 @@ metadata {
        
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "modelGroupOptions", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"TEST"])
+        //input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"])
+        input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: 
+               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0201":"TS0201", "TS0222":"TS0222", "TS0222_2":"TS0222_2", "Zigbee NON-Tuya":"Zigbee NON-Tuya"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
-                input it.value.input 
+                if (it.value.input.limit == null || getModelGroup() in it.value.input.limit) {
+                    //log.trace "it = ${it.value.input.limit}"
+                    input it.value.input 
+                }
             }
         }
     }
@@ -77,13 +81,40 @@ metadata {
 @Field static final Integer numberOfconfigParams = 8
 @Field static Map configParams = [
         1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
-        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0"]],
-        3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50"]],
-        4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100"]],                // TS0222 "MOES ZSS-ZK-THL"
-        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimal Temperature Alarm", description: "Minimal Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0"]],
-        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximal Temperature Alarm", description: "Maximal Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0"]],
-        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100"]],            // 'TS0601_Haozee' only!
-        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximal Humidity Alarm", description: "Maximal Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100"]]             // 'TS0601_Haozee' only!
+                   // no limit
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+        3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+        4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
+                   limit:['TS0222']]],
+    
+        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, °C", defaultValue: 10.0, range: "-20.0..60.0",
+                   limit:['TS0601_Tuya', 'TS0601_Haozee']]],
+    
+        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, °C", defaultValue: 40.0, range: "-20.0..60.0",
+                   limit:['TS0601_Haozee']]],
+    
+        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee']]], 
+    
+        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100",            // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee']]], 
+    
+        9: [input: [name: "minReportingTimeTemp", type: "number", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 30, range: "10..3600",
+                   limit:["Zigbee NON-Tuya"]]],
+    
+       10: [input: [name: "maxReportingTimeTemp", type: "number", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
+                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+       11: [input: [name: "minReportingTimeHumidity", type: "number", title: "Minimum time between humidity reports", description: "Minimum time between humidity reporting, seconds", defaultValue: 30, range: "10..3600",
+                   limit:["Zigbee NON-Tuya"]]],
+    
+       12: [input: [name: "maxReportingTimeHumidity", type: "number", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
+                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]]
+    
 ]
 
 @Field static final Map<String, String> Models = [
@@ -135,19 +166,26 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
-    if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    //if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value,16))
-            } else {
+            } else if (descMap.attrInt == 0x0020){
+                log.trace "descMap.attrInt == 0x0020"
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
+            }
+            else {
+                log.warn "unparesed attrint $descMap.attrInt"
             }
         }     
 		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
             def rawLux = Integer.parseInt(descMap.value,16)
             illuminanceEvent( rawLux )
+            if (getModelGroup() == 'TS0222') {
+                pollTS0222()
+            }
 		}        
 		else if (descMap.cluster == "0400" && descMap.attrId == "F001") {        //MOES ZSS-ZK-THL
             def raw = Integer.parseInt(descMap.value,16)
@@ -167,133 +205,159 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             humidityEvent( raw / 100.0 )
 		}
-        else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
-            if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
-            def offset = 0
-            try {
-                offset = location.getTimeZone().getOffset(new Date().getTime())
-                //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
-            } catch(e) {
-                if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+        else if (descMap?.clusterInt == CLUSTER_TUYA) {
+            processTuyaCluster( descMap )
+        } 
+        else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
+            if (getModelGroup() == 'TS0222') {
+                log.warn "TS0222 device announcement"
+                configure()
             }
-            def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-            if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
-            if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
-            cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
-            if (state.txCounter != null) state.txCounter = state.txCounter + 1
-            
-        } else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
-            String clusterCmd = descMap?.data[0]
-            def status = descMap?.data[1]            
-            if (settings?.logEnable) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
-            if (status != "00") {
-                if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+        } 
+        else if (descMap.isClusterSpecific == false && descMap.command == "01" ) { //global commands read attribute response
+            def status = descMap.data[2]
+            if (status == "86") {
+                if (settings?.logEnable) log.warn "${device.displayName} Cluster ${descMap.clusterId} read attribute - NOT SUPPORTED!\r ${descMap}"
             }
-            
-        } else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02")) {
-            //if (descMap?.command == "02") { if (settings?.logEnable) log.warn "${device.displayName} command == 02 !"  }   
-            def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
-            def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
-            def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
-            def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
-            if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-            // the switch cases below default to dp_id = "01"
-            switch (dp) {
-                case 0x01 : // temperature in °C
-                    temperatureEvent( fncmd / 10.0 )
-                    break
-                case 0x02 : // humidity in %
-                    humidityEvent (fncmd)
-                    break 
-                case 0x03 : // illuminance - NOT TESTED!
-                    illuminanceEvent (fncmd)
-                    break 
-                case 0x04 : // battery
-                    getBatteryPercentageResult(fncmd * 2)
-                    if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
-                    break
-                case 0x09: // temp. scale 0=Fahrenheit  1=Celsius (Haozee only?) 
-                    if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
-                    break
-                case 0x0B: // Max?. Temp Alarm, Value / 10
-                    if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0} °C"    // TODO: or max?
-                    device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0, type:"number"])
-                    break
-                case 0x0A: // Min?. Temp Alarm, Value / 10
-                    if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0} °C "    // TODO: or min?
-                    device.updateSetting("minTempAlarmPar", [value:fncmd/10.0, type:"number"])
-                    break
-                case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
-                    if (settings?.txtEnable) log.info "${device.displayName} humidity alarm upper limit is ${fncmd} "
-                    device.updateSetting("maxHumidityAlarmPar", [value:fncmd, type:"number"])
-                    break
-                case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
-                    if (settings?.txtEnable) log.info "${device.displayName} humidity alarm lower limit is ${fncmd} "
-                    device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
-                    break
-                case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
-                    if (fncmd == 1) {
-                        sendEvent("name": "minTempAlarm", "value": "active")
-                        if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0E=${fncmd}) is active"
-                    }
-                    else if (fncmd == 0) {
-                        sendEvent("name": "maxTempAlarm", "value": "active")
-                        if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0E=${fncmd}) is active"
-                    }
-                    else if (fncmd == 2 ) {
-                        sendEvent("name": "minTempAlarm", "value": "inactive")
-                        sendEvent("name": "maxTempAlarm", "value": "inactive")
-                        if (settings?.txtEnable) log.info "${device.displayName} Temperature Alarm (0x0E=${fncmd}) is inactive"
-                    }
-                    else {
-                        if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
-                    }
-                    break
-                case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?) 
-                    if (fncmd == 1) {
-                        sendEvent("name": "minHumidityAlarm", "value": "active")
-                        if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0F=${fncmd}) is active"
-                    }
-                    else if (fncmd == 0) {
-                        sendEvent("name": "maxHumidityAlarm", "value": "active")
-                        if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0F=${fncmd}) is active"
-                    }
-                    else if (fncmd == 2 ) {
-                        sendEvent("name": "minHumidityAlarm", "value": "inactive")
-                        sendEvent("name": "maxHumidityAlarm", "value": "inactive")
-                        if (settings?.txtEnable) log.info "${device.displayName} Humidity Alarm (0x0F=${fncmd}) is inactive"
-                    }
-                    else {
-                        if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
-                    }                
-                    break
-                case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
-                    if (settings?.txtEnable) log.info "${device.displayName} temperature max reporting interval is ${fncmd} min"
-                    break                
-                case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
-                    if (settings?.txtEnable) log.info "${device.displayName} humidity max reporting interval is ${fncmd} min"
-                    break                
-                case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
-                    if (settings?.txtEnable) log.info "${device.displayName} temperature sensitivity reported by device is: ${fncmd/10.0} °C"
-                    device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
-                    break                
-                case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
-                    if (settings?.txtEnable) log.info "${device.displayName} humidity sensitivity is ${fncmd} %"
-                    device.updateSetting("humiditySensitivity", [value:fncmd, type:"decimal"])
-                    break 
-                //
-                default :
-                    if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-                    break
+            else {
+                if (settings?.logEnable) log.warn "${device.displayName} <b>UNPROCESSED Global Command</b> :  ${descMap}"
             }
-        } else {
-            if (settings?.logEnable) log.warn "${device.displayName} <b>not parsed</b>: "+descMap
         }
-    }
+        else {
+            if (settings?.logEnable) log.warn "${device.displayName} <b> NOT PARSED </b> :  ${descMap}"
+        }
+    } // if 'catchall:' or 'read attr -'
     else {
-        if (settings?.logEnable) log.debug "${device.displayName} <b>UNPROCESSED</b> parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
+        if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
 }
+
+
+def processTuyaCluster( descMap ) {
+    if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
+        if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
+        def offset = 0
+        try {
+            offset = location.getTimeZone().getOffset(new Date().getTime())
+            //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
+        }
+        catch(e) {
+            if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+        }
+        def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
+        if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
+        if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
+        cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
+        if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    }
+    else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
+        String clusterCmd = descMap?.data[0]
+        def status = descMap?.data[1]            
+        if (settings?.logEnable) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
+        if (status != "00") {
+            if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+        }
+    } 
+    else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"))
+    {
+        //if (descMap?.command == "02") { if (settings?.logEnable) log.warn "${device.displayName} command == 02 !"  }   
+        def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
+        def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
+        def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
+        def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
+        if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+        // the switch cases below default to dp_id = "01"
+        switch (dp) {
+            case 0x01 : // temperature in °C
+                temperatureEvent( fncmd / 10.0 )
+                break
+            case 0x02 : // humidity in %
+                humidityEvent (fncmd)
+                break 
+            case 0x03 : // illuminance - NOT TESTED!
+                illuminanceEvent (fncmd)
+                break 
+            case 0x04 : // battery
+                getBatteryPercentageResult(fncmd * 2)
+                if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
+                break
+            case 0x09: // temp. scale 0=Fahrenheit  1=Celsius (Haozee only?) 
+                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' : 'Celsius'}"
+                break
+            case 0x0B: // Max?. Temp Alarm, Value / 10
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C"
+                device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
+                break
+            case 0x0A: // Min?. Temp Alarm, Value / 10
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} °C "
+                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
+                break
+            case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
+                if (settings?.txtEnable) log.info "${device.displayName} humidity alarm upper limit is ${fncmd} "
+                device.updateSetting("maxHumidityAlarmPar", [value:fncmd, type:"number"])
+                break
+            case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
+                if (settings?.txtEnable) log.info "${device.displayName} humidity alarm lower limit is ${fncmd} "
+                device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
+                break
+            case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
+                if (fncmd == 1) {
+                    sendEvent("name": "minTempAlarm", "value": "active")
+                    if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0E=${fncmd}) is active"
+                }
+                else if (fncmd == 0) {
+                    sendEvent("name": "maxTempAlarm", "value": "active")
+                    if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0E=${fncmd}) is active"
+                }
+                else if (fncmd == 2 ) {
+                    sendEvent("name": "minTempAlarm", "value": "inactive")
+                    sendEvent("name": "maxTempAlarm", "value": "inactive")
+                    if (settings?.txtEnable) log.info "${device.displayName} Temperature Alarm (0x0E=${fncmd}) is inactive"
+                }
+                else {
+                    if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                }
+                break
+            case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?) 
+                if (fncmd == 1) {
+                    sendEvent("name": "minHumidityAlarm", "value": "active")
+                    if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0F=${fncmd}) is active"
+                }
+                else if (fncmd == 0) {
+                    sendEvent("name": "maxHumidityAlarm", "value": "active")
+                    if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0F=${fncmd}) is active"
+                }
+                else if (fncmd == 2 ) {
+                    sendEvent("name": "minHumidityAlarm", "value": "inactive")
+                    sendEvent("name": "maxHumidityAlarm", "value": "inactive")
+                    if (settings?.txtEnable) log.info "${device.displayName} Humidity Alarm (0x0F=${fncmd}) is inactive"
+                }
+                else {
+                    if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
+                }                
+                break
+            case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
+                if (settings?.txtEnable) log.info "${device.displayName} temperature max reporting interval is ${fncmd} min"
+                break                
+            case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
+                if (settings?.txtEnable) log.info "${device.displayName} humidity max reporting interval is ${fncmd} min"
+                break                
+            case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
+                if (settings?.txtEnable) log.info "${device.displayName} temperature sensitivity reported by device is: ${fncmd/10.0} °C"
+                device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
+                break                
+            case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
+                if (settings?.txtEnable) log.info "${device.displayName} humidity sensitivity is ${fncmd} %"
+                device.updateSetting("humiditySensitivity", [value:fncmd, type:"decimal"])
+                 break 
+            //
+            default :
+                if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                break
+        }
+    } // if (descMap?.command == "01" || descMap?.command == "02")
+}
+
 
 private int getTuyaAttributeValue(ArrayList _data) {
     int retValue = 0
@@ -309,9 +373,11 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+// options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"]
+
 def getModelGroup() {
     def manufacturer = device.getDataValue("manufacturer")
-    def modelGroup = 'Unknown'
+    def modelGroup = 'UNKNOWN'
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
@@ -320,7 +386,7 @@ def getModelGroup() {
             modelGroup = Models[manufacturer]
         }
         else {
-             modelGroup = 'Unknown'
+             modelGroup = 'UNKNOWN'
         }
     }
     else {
@@ -344,6 +410,7 @@ def temperatureEvent( temperature ) {
         map.unit = "\u00B0"+"C"
     }
     map.value  =  Math.round((temperature - 0.05) * 10) / 10
+    map.isStateChange = true
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
@@ -353,7 +420,8 @@ def humidityEvent( humidity ) {
     map.name = "humidity"
     map.value = humidity as int
     map.unit = "% RH"
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    map.isStateChange = true
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
     sendEvent(map)
 }
 
@@ -412,10 +480,10 @@ def updated() {
         if (settings?.logEnable) log.trace "${device.displayName} changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0}"
+        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
@@ -432,16 +500,35 @@ def updated() {
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400 
     }
+    if (getModelGroup() in ['UNKNOWN']) {
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure temperature - Report every minute, 1 second if any change
+    	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Pressure - Report every minute, 1 second if any change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Humidity - Report every minute, 1 second if any change
+   		cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+   		cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
+    }    
     
     //illuminanceSensitivity
     if (settings?.txtEnable) log.info "${device.displayName} Update finished"
     sendZigbeeCommands( cmds )  
 }
 
+def pollTS0222() {
+    List<String> cmds = []
+	cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)  // Battery Percent
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0x0402 0x0000 {}" //, "delay 200",
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0x0405 0x0000 {}" //, "delay 200",
+	sendZigbeeCommands(cmds)
+}
 
 def refresh() {
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
-    zigbee.readAttribute(0, 1)
+    if (getModelGroup() == 'TS0222') {
+        pollTS0222()
+    }
+    else {
+        zigbee.readAttribute(0, 1)
+    }
 }
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
@@ -523,7 +610,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
-    if (settings?.logEnable) {log.debug "${device.displayName} sendZigbeeCommands(cmd=$cmd)"}
+    if (settings?.logEnable) {log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"}
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
@@ -561,11 +648,11 @@ def getBatteryPercentageResult(rawValue) {
         sendEvent(result)
     }
 
-    return result
+    //return result
 }
 
 private Map getBatteryResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} Battery"
+    if (settings?.logEnable) log.debug "${device.displayName} getBatteryResult volts = ${(double)rawValue / 10.0}"
     def linkText = getLinkText(device)
 
     def result = [:]
@@ -584,7 +671,7 @@ private Map getBatteryResult(rawValue) {
         result.isStateChange = true
         sendEvent(result)
     }
-    return result
+    //return result
 }
 
 
