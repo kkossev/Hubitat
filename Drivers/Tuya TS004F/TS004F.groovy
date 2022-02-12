@@ -26,7 +26,7 @@
  */
 
 def version() { "2.3.0" }
-def timeStamp() {"2022/02/12 1:10 PM"}
+def timeStamp() {"2022/02/12 1:22 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -160,16 +160,15 @@ def parse(String description) {
     else {
         def descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) log.debug "raw: descMap: $descMap"
-        log.trace "descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
+        //log.trace "descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
         if (descMap.cluster == "0006" && descMap.attrId == "8004" /* && command in ["01", "0A"] */) {
-            //     attribute "switchMode", "enum", ["dimmer", "scene"]
             if (descMap.value == "00") {
                 sendEvent(name: "switchMode", value: "dimmer", isStateChange: true) 
-                log.info "${device.displayName} mode is <b>dimmer</b>"
+                if (txtEnable) log.info "${device.displayName} mode is <b>dimmer</b>"
             }
             else if (descMap.value == "01") {
                 sendEvent(name: "switchMode", value: "scene", isStateChange: true)
-                log.info "${device.displayName} mode is <b>scene</b>"
+                if (txtEnable) log.info "${device.displayName} mode is <b>scene</b>"
             }
             else {
                 if (logEnable) log.warn "unknown attrId ${descMap.attrId} value ${descMap.value}"
@@ -227,7 +226,7 @@ def initialize() {
         supportedValues = ["pushed", "double", "held"]
     }
     else if (device.getDataValue("model") == "TS004F") {
-        log.warn "manufacturer = ${device.getDataValue("manufacturer")}"
+        //log.warn "manufacturer = ${device.getDataValue("manufacturer")}"
         if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {
             // Smart Knob manufacturer: "_TZ3000_4fjiwweb"  _TZ3000_xabckq1v
         	numberOfButtons = 3
