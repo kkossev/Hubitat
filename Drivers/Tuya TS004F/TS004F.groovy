@@ -26,7 +26,7 @@
  */
 
 def version() { "2.3.0" }
-def timeStamp() {"2022/02/12 12:02 PM"}
+def timeStamp() {"2022/02/12 1:10 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -36,7 +36,7 @@ import groovy.json.JsonOutput
 metadata {
     definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy" ) {
       
-	capability "Refresh"
+    capability "Refresh"
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
@@ -47,6 +47,8 @@ metadata {
         
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
+        
+    command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
       
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_vp6clf9d", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -156,7 +158,26 @@ def parse(String description) {
 	    } 
 	} // if catchall
     else {
-        if (logEnable) {log.warn "DID NOT PARSE MESSAGE for description : $description"}
+        def descMap = zigbee.parseDescriptionAsMap(description)
+        if (logEnable) log.debug "raw: descMap: $descMap"
+        log.trace "descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
+        if (descMap.cluster == "0006" && descMap.attrId == "8004" /* && command in ["01", "0A"] */) {
+            //     attribute "switchMode", "enum", ["dimmer", "scene"]
+            if (descMap.value == "00") {
+                sendEvent(name: "switchMode", value: "dimmer", isStateChange: true) 
+                log.info "${device.displayName} mode is <b>dimmer</b>"
+            }
+            else if (descMap.value == "01") {
+                sendEvent(name: "switchMode", value: "scene", isStateChange: true)
+                log.info "${device.displayName} mode is <b>scene</b>"
+            }
+            else {
+                if (logEnable) log.warn "unknown attrId ${descMap.attrId} value ${descMap.value}"
+            }
+        }
+        else {
+            if (logEnable) {log.warn "DID NOT PARSE MESSAGE for description : $description"}
+        }
 	}
     return result
 }
@@ -206,8 +227,16 @@ def initialize() {
         supportedValues = ["pushed", "double", "held"]
     }
     else if (device.getDataValue("model") == "TS004F") {
-    	numberOfButtons = 4
-        supportedValues = ["pushed", "double", "held", "release"]
+        log.warn "manufacturer = ${device.getDataValue("manufacturer")}"
+        if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {
+            // Smart Knob manufacturer: "_TZ3000_4fjiwweb"  _TZ3000_xabckq1v
+        	numberOfButtons = 3
+            supportedValues = ["pushed", "double", "held", "release"]
+        }
+        else {
+        	numberOfButtons = 4
+            supportedValues = ["pushed", "double", "held", "release"]
+        }
     }
     else {
     	numberOfButtons = 4	// unknown
@@ -230,12 +259,14 @@ def buttonDebounce(button) {
 
 def switchToSceneMode()
 {
-    zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01)
+    if (logEnable) log.debug "Switching TS004F into Scene mode"
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01))
 }
 
 def switchToDimmerMode()
 {
-     zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)   
+    if (logEnable) log.debug "Switching TS004F into Dimmer mode"
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
 }
 
 def buttonEvent(buttonNumber, buttonState) {
@@ -257,6 +288,16 @@ def hold(buttonNumber) {
     buttonEvent(buttonNumber, "held")
 }
 
+//    command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
+def switchMode( mode ) {
+    if (mode == "dimmer") {
+        switchToDimmerMode()
+    }
+    else if (mode == "scene") {
+        switchToSceneMode()
+    }
+}
+
 def readAttributes() {
     ArrayList<String> cmd = []
     cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
@@ -266,12 +307,12 @@ def readAttributes() {
     cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
     cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
     //
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
     //
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}"
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}, delay 50"
     //
     sendZigbeeCommands(cmd)
 }
