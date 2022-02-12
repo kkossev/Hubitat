@@ -21,12 +21,12 @@
  * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
- * ver. 2.3.0 2022-02-11 kkossev     - test 'Tuya Smart Knob TS004F'
+ * ver. 2.3.0 2022-02-12 kkossev     - test 'Tuya Smart Knob TS004F'
  *
  */
 
 def version() { "2.3.0" }
-def timeStamp() {"2022/02/11 7:44 AM"}
+def timeStamp() {"2022/02/12 12:02 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -41,11 +41,12 @@ metadata {
     capability "DoubleTapableButton"
     capability "HoldableButton"
    	capability "ReleasableButton"
-        
     capability "Battery"
-
     capability "Initialize"
     capability "Configuration"
+        
+    attribute "switchMode", "enum", ["dimmer", "scene"]
+    attribute "batteryVoltage", "number"
       
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_vp6clf9d", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -104,6 +105,26 @@ def parse(String description) {
             else if (descMap.sourceEndpoint == "01") {
        	        buttonNumber = reverseButton==true  ? 1 : 4
             }
+            if (descMap.data[0] == "00")
+                buttonState = "pushed"
+            else if (descMap.data[0] == "01")
+                buttonState = "doubleTapped"
+            else if (descMap.data[0] == "02")
+                buttonState = "held"
+            else {
+                if (logEnable) {log.warn "unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}"}
+                return null 
+            }
+        }
+        else if (descMap.clusterInt == 0x0006 && descMap.command == "FC") {
+            // Smart knob
+            if (descMap.data[0] == "00") {            // Rotate one click right
+                buttonNumber = 2
+            }
+            else if (descMap.data[0] == "01") {       // Rotate one click left
+                buttonNumber = 3
+            }
+            buttonState = "pushed"
         }
         else {
             if (logEnable) {log.warn "unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
@@ -119,16 +140,6 @@ def parse(String description) {
                 }
             }
             state.lastButtonNumber = buttonNumber
-            if (descMap.data[0] == "00")
-                buttonState = "pushed"
-            else if (descMap.data[0] == "01")
-                buttonState = "doubleTapped"
-            else if (descMap.data[0] == "02")
-                buttonState = "held"
-            else {
-                 if (logEnable) {log.warn "unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}"}
-                 return null 
-            }
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
 	        def descriptionText = "button $buttonNumber was $buttonState"
@@ -259,6 +270,8 @@ def readAttributes() {
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
     cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub, so the hub receives messages when On/Off buttons pushed
+    //
+    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}"
     //
     sendZigbeeCommands(cmd)
 }
