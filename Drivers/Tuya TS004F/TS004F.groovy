@@ -21,12 +21,12 @@
  * ver. 2.2.2 2021-11-17 kkossev     - added battery reporting capability; added buttons handlers for use in Hubutat Dashboards; code cleanup
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
- * ver. 2.3.0 2022-02-12 kkossev     - test 'Tuya Smart Knob TS004F'
+ * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
  *
  */
 
 def version() { "2.3.0" }
-def timeStamp() {"2022/02/12 1:22 PM"}
+def timeStamp() {"2022/02/13 5:19 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -48,7 +48,7 @@ metadata {
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
         
-    command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
+    //command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
       
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_vp6clf9d", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -218,7 +218,7 @@ def installed()
 }
 
 def initialize() {
-    readAttributes()
+    tuyaMagic()
     def numberOfButtons
     def supportedValues
     if (device.getDataValue("model") == "TS0041") {
@@ -297,22 +297,18 @@ def switchMode( mode ) {
     }
 }
 
-def readAttributes() {
+def tuyaMagic() {
     ArrayList<String> cmd = []
-    cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
+    //cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
+    cmd +=  "raw 0x0000  {10 00 00 04 00 00 00 01 00 05 00 07 00 FE FF}"
+    cmd +=  "send 0x${device.deviceNetworkId} 1 255"
+    cmd += "delay 200"
     cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)                      // success / 0x00
     cmd += zigbee.readAttribute(0xE001, 0xD011, [:], delay=50)                      // Unsupported attribute (0x86)
     cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [:], delay=50)            // Battery voltage + Battery Percentage Remaining
     cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
     cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
-    //
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"    // Bind the outgoing on/off cluster from remote to hub
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}, delay 50"
-    //
-    cmd +=  "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}, delay 50"
-    //
+    // binding is not neccessery
     sendZigbeeCommands(cmd)
 }
 
