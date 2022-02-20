@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Metering Plug",
   "author": "Krassimir Kossev",
-  "version": "1.4.0",
+  "version": "1.4.2",
   "minimumHEVersion": "2.2.0",
   "dateReleased": "2022-01-01",
-  "releaseNotes": "1.0.0 - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds\n1.0.1 - 'amperage' attribute name bug fix; added 'pollingInterval' preference\n1.1.1  - added Tuya Outlet TS011F fingerprint.\n1.1.2 - added Tuya / Neo NAS-WR01 fingerprint.\n1.2.0 - major refactoring and optimizations\n1.3.0 - added 'HIKING TOMZN DDS238-2 TS0601', 'AlwaysOn' and 'Optimizations' options\n1.4.0 - debug & trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; debug loging is disabled and optimizations are enabled by default; switch digital/physical bug fixed; added driver version check",
+  "releaseNotes": "1.0.0 - first version: - reads Power, Energy, Voltage, Amperage once every 60 seconds\n1.0.1 - 'amperage' attribute name bug fix; added 'pollingInterval' preference\n1.1.1  - added Tuya Outlet TS011F fingerprint.\n1.1.2 - added Tuya / Neo NAS-WR01 fingerprint.\n1.2.0 - major refactoring and optimizations\n1.3.0 - added 'HIKING TOMZN DDS238-2 TS0601', 'AlwaysOn' and 'Optimizations' options\n1.4.0 - debug & trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; debug loging is disabled and optimizations are enabled by default; switch digital/physical bug fixed; added driver version check\n1.4.2 - missing Switch capability bug fix",
   "drivers": [
     {
       "id": "c418ee54-b6b3-4e3e-b695-3347f27910f6",
