@@ -13,12 +13,13 @@
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
  * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
- * ver. 1.0.3 2022-02-20 kkossev  - _TZE200_c7emyjom fingerprint added; Celsius/Fahrenheit correction; 
+ * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added; 
+ * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/02/20 9:28 PM"}
+def timeStamp() {"2022/02/20 9:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -41,14 +42,16 @@ metadata {
         attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
         attribute "minHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
         attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
-       
+
+/*        
         command "zTest", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
         command "test"
-             
+*/        
+        
         command "initialize"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
@@ -691,50 +694,10 @@ private Map getBatteryResult(rawValue) {
     }    
 }
 
-
-def zTest( dpCommand, dpValue, dpTypeString ) {
-    ArrayList<String> cmds = []
-    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
-    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
-
-    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
-
-    switch ( getModelGroup() ) {
-        case 'MOES' :
-        case 'UNKNOWN' :
-        default :
-            break
-    }     
-
-    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
-}    
-
-
 Integer safeToInt(val, Integer defaultVal=0) {
 	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 Double safeToDouble(val, Double defaultVal=0.0) {
 	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
-}
-
-
-def displayValue ()
-{
-    log.warn "${device.displayName} changed temp. scale (driver next run!) is ${temperatureScaleParameter}"
-}
-
-def test( value) {
-/*  
-    log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
-
-    log.trace "${device.displayName} changing to Fahrenheit ('2')"
-    device.updateSetting("temperatureScaleParameter",[value:"2", type:"enum"])
-    runIn(1, displayValue)
-*/
-    List<String> cmds = []
-    cmds += tuyaBlackMagic()    
-    sendZigbeeCommands(cmds)    
-    
-    
 }
