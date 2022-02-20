@@ -24,15 +24,16 @@
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
  *  ver. 1.4.0 2022-01-23 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; 
  *                                  default debug loging is false, optimizations are true; switch digital/physical bug fixed; added driver version check
- *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprints (2 variants)
+ *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprint (no power monitoring!)
+ *  ver. 1.4.2 2022-02-20 kkossev - missing Switch capability bug fix
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.4.1" }
-def timeStamp() {"2022/01/23 11:09 PM"}
+def version() { "1.4.2" }
+def timeStamp() {"2022/02/30 11:16 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -41,7 +42,7 @@ metadata {
         capability "CurrentMeter"
         capability "VoltageMeasurement"
         capability "Actuator"    
-        //capability "Switch"  Outlet has same attribute switch and functions on off
+        capability "Switch"
         capability "Outlet"
         capability "Refresh"
         capability "Health Check"
