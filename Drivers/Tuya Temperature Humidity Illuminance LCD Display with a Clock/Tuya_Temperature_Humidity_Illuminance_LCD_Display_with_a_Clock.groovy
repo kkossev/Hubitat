@@ -18,7 +18,7 @@
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
-def version() { "1.0.3" }
+def version() { "1.0.4" }
 def timeStamp() {"2022/02/20 9:58 PM"}
 
 import groovy.json.*
