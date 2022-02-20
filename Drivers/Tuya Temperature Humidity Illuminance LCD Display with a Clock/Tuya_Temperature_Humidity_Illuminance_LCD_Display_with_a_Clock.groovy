@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/02/20 9:04 PM"}
+def timeStamp() {"2022/02/20 9:28 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -285,8 +285,8 @@ def processTuyaCluster( descMap ) {
                 getBatteryPercentageResult(fncmd * 2)
                 if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
                 break
-            case 0x09: // temp. scale  0=Fahrenheit 1=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
-                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' :'Celsius' }"
+            case 0x09: // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
+                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' :'Celsius' }"
                 break
             case 0x0A: // Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
                 if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C"
