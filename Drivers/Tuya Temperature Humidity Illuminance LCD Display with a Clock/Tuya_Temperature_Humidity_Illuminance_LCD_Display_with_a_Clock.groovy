@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/02/20 7:55 PM"}
+def timeStamp() {"2022/02/20 8:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -472,11 +472,11 @@ def updated() {
     if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
         if (settings?.logEnable) log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
         if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
-            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
             if (settings?.logEnable) log.warn "${device.displayName} changing to Celsius: ${cmds}"
         }
         else if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && location.temperatureScale== "F")) {    // Fahrenheit
-            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
             if (settings?.logEnable) log.warn "${device.displayName} changing to Fahrenheit: ${cmds}"
         }
         else {
