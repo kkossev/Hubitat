@@ -43,7 +43,7 @@ metadata {
         capability "CurrentMeter"
         capability "VoltageMeasurement"
         capability "Actuator"    
-        //capability "Switch"  Outlet has same attribute switch and functions on off
+        capability "Switch"
         capability "Outlet"
         capability "Refresh"
         capability "Health Check"
