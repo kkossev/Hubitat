@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/02/20 8:58 PM"}
+def timeStamp() {"2022/02/20 9:04 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,14 +40,15 @@ metadata {
         attribute "minTempAlarm", "enum", ["inactive","active"]        // (TS0601_Tuya and TS0601_Haozee only)
         attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
         attribute "minHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
-        attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)        
-/*       
+        attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
+       
         command "zTest", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
- */            
+        command "test"
+             
         command "initialize"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
@@ -715,4 +716,25 @@ Integer safeToInt(val, Integer defaultVal=0) {
 
 Double safeToDouble(val, Double defaultVal=0.0) {
 	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+
+def displayValue ()
+{
+    log.warn "${device.displayName} changed temp. scale (driver next run!) is ${temperatureScaleParameter}"
+}
+
+def test( value) {
+/*  
+    log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
+
+    log.trace "${device.displayName} changing to Fahrenheit ('2')"
+    device.updateSetting("temperatureScaleParameter",[value:"2", type:"enum"])
+    runIn(1, displayValue)
+*/
+    List<String> cmds = []
+    cmds += tuyaBlackMagic()    
+    sendZigbeeCommands(cmds)    
+    
+    
 }
