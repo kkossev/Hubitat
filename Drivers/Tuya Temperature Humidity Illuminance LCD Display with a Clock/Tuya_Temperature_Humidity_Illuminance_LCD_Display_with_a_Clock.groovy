@@ -13,12 +13,12 @@
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
  * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
- * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added
+ * ver. 1.0.3 2022-02-20 kkossev  - _TZE200_c7emyjom fingerprint added; Celsius/Fahrenheit correction; 
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/02/13 5:45 PM"}
+def timeStamp() {"2022/02/20 7:55 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -97,7 +97,7 @@ metadata {
                    limit:['TS0601_Tuya', 'TS0601_Haozee']]],
     
         6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, °C", defaultValue: 28.0, range: "-20.0..60.0",
-                   limit:['TS0601_Haozee']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee']]],
     
         7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
                    limit:['TS0601_Haozee']]], 
@@ -284,16 +284,16 @@ def processTuyaCluster( descMap ) {
                 getBatteryPercentageResult(fncmd * 2)
                 if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
                 break
-            case 0x09: // temp. scale  0=Celsius 1=Fahrenheit (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
-                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Celsius' : 'Fahrenheit' }"
+            case 0x09: // temp. scale  0=Fahrenheit 1=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
+                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 0 ? 'Fahrenheit' :'Celsius' }"
                 break
-            case 0x0A: // Min. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} °C"
-                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
-                break
-            case 0x0B: // Max. Temp Alarm, Value / 10
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C "
+            case 0x0A: // Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C"
                 device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
+                break
+            case 0x0B: // Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee)
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} °C "
+                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
                 break
             case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity alarm upper limit is ${fncmd} "
@@ -472,11 +472,11 @@ def updated() {
     if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
         if (settings?.logEnable) log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
         if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
-            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
             if (settings?.logEnable) log.warn "${device.displayName} changing to Celsius: ${cmds}"
         }
         else if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && location.temperatureScale== "F")) {    // Fahrenheit
-            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
             if (settings?.logEnable) log.warn "${device.displayName} changing to Fahrenheit: ${cmds}"
         }
         else {
@@ -485,12 +485,15 @@ def updated() {
         fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
-        fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0 as double}"
-        cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0 as double}"
+        cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        
+        fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
+        if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
         fncmd = safeToInt( humiditySensitivity )
