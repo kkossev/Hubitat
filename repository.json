@@ -31,6 +31,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "7aa89d9c-bafd-487e-9eed-ade6c948e320",
+      "name": "Tuya ZigBee Vibration Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/packageManifest.json",
+      "description": "Tuya ZigBee Vibration Sensor TS0210 driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
