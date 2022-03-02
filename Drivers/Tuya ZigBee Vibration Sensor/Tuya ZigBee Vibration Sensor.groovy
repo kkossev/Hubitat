@@ -14,6 +14,7 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.0.3 2022-02-28 kkossev - inital version
+ * ver 1.0.4 2022-03-03 kkossev - (development branch)
  */
 
 // https://community.hubitat.com/t/tuya-vibration-sensor/75269
@@ -25,11 +26,15 @@ metadata {
 	definition (name: "Tuya ZigBee Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev") {
         capability "Sensor"
         capability "AccelerationSensor"
+        capability "Acceleration Sensor"
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
         
-        attribute "accelaration", "ENUM", ["inactive", "active"]    // device.currentState('accelaration')?.value is null otherwise? attribute "accelaration" should be predefined with capability "AccelerationSensor"  ???
+        command "setActive"
+        command "setInactive"
+        
+        //attribute "accelaration", "ENUM", ["inactive", "active"]    // device.currentState('accelaration')?.value is null otherwise? attribute "accelaration" should be predefined with capability "AccelerationSensor"  ???
 
 		fingerprint endpointId: "01", profileId: "0104", inClusters: "0000,000A,0001,0500", outClusters: "0019", manufacturer: "_TYZB01_3zv6oleo", model: "TS0210"      
 	}
@@ -105,6 +110,11 @@ def parse(String description) {
 def parseIasMessage(ZoneStatus zs) {
         if ((zs.alarm1 || zs.alarm2) && zs.battery == 0 && zs.trouble == 0) {
             // Vibration detected
+            
+            setActive()
+            runIn(2, setInactive)    
+            
+            
 	        return handleVibration(true)
         }
         else if (zs.tamper == 1 && zs.battery == 1 && zs.trouble == 1 && zs.ac == 1) {
@@ -154,22 +164,42 @@ def getVibrationResult(vibrationActive) {
 	return [
 			name			: 'accelaration',
 			value			: vibrationActive ? 'active' : 'inactive',
+            isStateChange   : true,
 			descriptionText : descriptionText
 	]
 }
 
 def resetToVibrationInactive() {
     //log.trace "resetToVibrationInactive device.currentState('accelaration')?.value == ${device.currentState('accelaration')?.value}"
-	if (device.currentState('accelaration')?.value == "active") {
+//	if (device.currentState('accelaration')?.value == "active") {
 		def descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
 		sendEvent(
-			name:'accelaration',
-			value:'inactive',
-			// isStateChange: true,
-			descriptionText: descText
+			name : 'accelaration',
+			value : 'inactive',
+			isStateChange : true,
+			descriptionText : descText
 		)
 		logInfo(descText)
-	}
+//	}
+}
+
+def setActive() {
+    accelerationActive()
+}
+def setInactive() {
+    accelerationInactive()
+}
+
+def accelerationActive() {
+    def descriptionText = "${device.displayName} acceleration is active"
+    if (txtEnable) log.info "${descriptionText}"
+    sendEvent(name: "acceleration", value: "active", descriptionText: descriptionText)
+}
+
+def accelerationInactive() {
+    def descriptionText = "${device.displayName} acceleration is inactive"
+    if (txtEnable) log.info "${descriptionText}"
+    sendEvent(name: "acceleration", value: "inactive", descriptionText: descriptionText)
 }
 
 def getSecondsInactive() {
