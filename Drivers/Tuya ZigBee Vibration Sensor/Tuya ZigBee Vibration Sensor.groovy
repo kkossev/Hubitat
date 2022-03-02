@@ -1,6 +1,8 @@
 /**
  *  Tuya ZigBee Vibration Sensor
  *  Device Driver for Hubitat Elevation hub
+ *
+ *  https://community.hubitat.com/t/tuya-vibration-sensor/75269
  *  
  *  Based on Mikhail Diatchenko (muxa) 'Konke ZigBee Motion Sensor' Version 1.0.2, based on code from Robert Morris and ssalahi.
  *
@@ -14,13 +16,11 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.0.3 2022-02-28 kkossev - inital version
- * ver 1.0.4 2022-03-03 kkossev - (development branch)
+ * ver 1.0.4 2022-03-03 kkossev - 'acceleration' misspelled bug fix
  */
 
 def version() { "1.0.4" }
-def timeStamp() {"2022/03/02 10:24 PM"}
-
-// https://community.hubitat.com/t/tuya-vibration-sensor/75269
+def timeStamp() {"2022/03/02 11:27 PM"}
 
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
@@ -156,10 +156,9 @@ def getVibrationResult(vibrationActive) {
 	return [
 			name			: 'acceleration',
 			value			: vibrationActive ? 'active' : 'inactive',
-            isStateChange   : true,
+            //isStateChange   : true,
 			descriptionText : descriptionText
 	]
-   // } else return [:]
 }
 
 def resetToVibrationInactive() {
@@ -167,34 +166,14 @@ def resetToVibrationInactive() {
 	if (device.currentState('acceleration')?.value == "active") {
 		def descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
 		sendEvent(
-			name : 'accelaration',
-			value : 'inactive',
+			name : "acceleration",
+			value : "inactive",
 			isStateChange : true,
 			descriptionText : descText
 		)
 		logInfo(descText)
 	}
 }
-/*
-def setActive() {
-    accelerationActive()
-}
-def setInactive() {
-    accelerationInactive()
-}
-
-def accelerationActive() {
-    def descriptionText = "${device.displayName} acceleration is active"
-    if (txtEnable) log.info "${descriptionText}"
-    sendEvent(name: "acceleration", value: "active", descriptionText: descriptionText)
-}
-
-def accelerationInactive() {
-    def descriptionText = "${device.displayName} acceleration is inactive"
-    if (txtEnable) log.info "${descriptionText}"
-    sendEvent(name: "acceleration", value: "inactive", descriptionText: descriptionText)
-}
-*/
 
 def getSecondsInactive() {
     if (state.vibrationStarted) {
