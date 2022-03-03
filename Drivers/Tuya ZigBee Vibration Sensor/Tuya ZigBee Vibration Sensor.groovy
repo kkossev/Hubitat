@@ -18,11 +18,11 @@
  * ver 1.0.3 2022-02-28 kkossev - inital version
  * ver 1.0.4 2022-03-02 kkossev - 'acceleration' misspelled bug fix
  * ver 1.0.5 2022-03-03 kkossev - Battery reporting
- * ver 1.0.6 2022-03-03 kkossev - development version
+ * ver 1.0.6 2022-03-03 kkossev - Vibration Sensitivity
  */
 
 def version() { "1.0.6" }
-def timeStamp() {"2022/03/03 11:45 AM"}
+def timeStamp() {"2022/03/03 11:50 AM"}
 
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
@@ -68,9 +68,10 @@ def parse(String description) {
             event.isStateChange = true
             event.descriptionText = "battery is ${event.value} ${event.unit}"
         }
-	    else if (map.name == "batteryVoltage")
+	    else if (event.name == "batteryVoltage")
 	    {
     		event.unit = "V"
+            event.isStateChange = true
     		event.descriptionText = "battery voltage is ${event.value} volts"
     	}
         else {
@@ -117,7 +118,6 @@ def parse(String description) {
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
             logInfo("vibration sensitivity : ${descMap.value}")
             def iSens = descMap.value?.toInteger()
-            log.trace "iSens = ${iSens}"
             if (iSens>=0 && iSens<7)  {
                 device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
             }
@@ -293,7 +293,6 @@ private def configureReporting() {
     if ( settings?.sensitivity != null ) {
     logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
             def iSens = settings.sensitivity?.toInteger()
-            log.trace "iSens = ${iSens}"
             if (iSens>=0 && iSens<7)  {
                 cmds += sendZigbeeCommands(zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens))
             }    
