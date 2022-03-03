@@ -16,12 +16,13 @@
  *  for the specific language governing permissions and limitations under the License.
  * 
  * ver 1.0.3 2022-02-28 kkossev - inital version
- * ver 1.0.4 2022-03-03 kkossev - 'acceleration' misspelled bug fix
+ * ver 1.0.4 2022-03-02 kkossev - 'acceleration' misspelled bug fix
  * ver 1.0.5 2022-03-03 kkossev - Battery reporting
+ * ver 1.0.6 2022-03-03 kkossev - development version
  */
 
-def version() { "1.0.5" }
-def timeStamp() {"2022/03/03 8:51 AM"}
+def version() { "1.0.6" }
+def timeStamp() {"2022/03/03 11:45 AM"}
 
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
@@ -34,6 +35,8 @@ metadata {
 		capability "Configuration"
         capability "Refresh"
         
+        attribute "batteryVoltage", "number"
+        
 		fingerprint endpointId: "01", profileId: "0104", inClusters: "0000,000A,0001,0500", outClusters: "0019", manufacturer: "_TYZB01_3zv6oleo", model: "TS0210"      
 	}
 
@@ -43,6 +46,7 @@ metadata {
 		
 		input name: "infoLogging", type: "bool", title: "Enable info message logging", description: ""
 		input name: "debugLogging", type: "bool", title: "Enable debug message logging", description: ""
+        input name: "sensitivity", type: "enum", title: "Vibration Sensitivity", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
 	}
 }
 
@@ -55,7 +59,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        if (infoLogging) log.warn "exception caught while parsing description:  ${description}"
+        if (debugLogging) log.warn "exception caught while parsing description:  ${description}"
         return null
     }
     if (event) {
@@ -63,8 +67,16 @@ def parse(String description) {
             event.unit = '%'
             event.isStateChange = true
             event.descriptionText = "battery is ${event.value} ${event.unit}"
-            logInfo(event.descriptionText)
         }
+	    else if (map.name == "batteryVoltage")
+	    {
+    		event.unit = "V"
+    		event.descriptionText = "battery voltage is ${event.value} volts"
+    	}
+        else {
+             logDebug("event: $event")    
+        }
+        logInfo(event.descriptionText)
         return createEvent(event)
     }
 	if (description?.startsWith('zone status')) {	
@@ -77,7 +89,8 @@ def parse(String description) {
         Map descMap = zigbee.parseDescriptionAsMap(description)        
         if (descMap.clusterInt == zigbee.POWER_CONFIGURATION_CLUSTER && descMap.attrInt == 0x0020) {
             map = parseBattery(descMap.value)
-        } else if (descMap.command == "07") {
+        }
+        else if (descMap.command == "07") {
             // Process "Configure Reporting" response            
             if (descMap.data[0] == "00") {
                 switch (descMap.clusterInt) {
@@ -88,18 +101,31 @@ def parse(String description) {
                         if (infoLogging) log.warn("Unknown reporting configured: ${descMap}");
                         break
                 }
-            } else {
+            } 
+            else {
                 if (infoLogging) log.warn "Reporting configuration failed: ${descMap}"
             }
-        } else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0002) {
+        } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0002) {
             logDebug("Zone status repoted: $descMap")
             def zs = new ZoneStatus(Integer.parseInt(descMap.value, 16))
             map = parseIasMessage(zs)        
-        } else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0011) {
+        } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0011) {
             logInfo("IAS Zone ID: ${descMap.value}")
-        } else if (descMap.profileId == "0000") {
+        } 
+        else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
+            logInfo("vibration sensitivity : ${descMap.value}")
+            def iSens = descMap.value?.toInteger()
+            log.trace "iSens = ${iSens}"
+            if (iSens>=0 && iSens<7)  {
+                device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
+            }
+        } 
+        else if (descMap.profileId == "0000") {
             // ignore routing table messages
-        } else {
+        } 
+        else {
             if (debugLogging) log.warn ("Description map not parsed: $descMap")            
         }
     }
@@ -113,7 +139,7 @@ def parse(String description) {
     }
     
     if (map != [:]) {
-		logInfo(map.descriptionText)
+		logInfo(map?.descriptionText)
 		return createEvent(map)
 	} else
 		return [:]
@@ -239,9 +265,12 @@ def configure() {
 
 def refresh() {
 	logInfo("Refreshing")
-
-    return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020) // battery voltage
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
+    cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // sensitivity
+    sendZigbeeCommands(cmds)
 }
+
 
 // updated() runs every time user saves preferences
 def updated() {
@@ -254,11 +283,27 @@ def updated() {
 
 private def configureReporting() {
     def seconds = Math.round((batteryReportingHours ?: 12)*3600)
-    
     logInfo("Battery reporting frequency: ${seconds/3600}h")    
     
-    return zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds, seconds, 0x01)
-        + zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20)
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200) 
+    cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00)
+    cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20)
+
+    if ( settings?.sensitivity != null ) {
+    logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
+            def iSens = settings.sensitivity?.toInteger()
+            log.trace "iSens = ${iSens}"
+            if (iSens>=0 && iSens<7)  {
+                cmds += sendZigbeeCommands(zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens))
+            }    
+    }
+    sendZigbeeCommands(cmds)
+}
+
+void sendZigbeeCommands(List<String> cmds) {
+    if (debugLogging) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
+	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
 private def logDebug(message) {
