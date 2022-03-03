@@ -17,10 +17,11 @@
  * 
  * ver 1.0.3 2022-02-28 kkossev - inital version
  * ver 1.0.4 2022-03-03 kkossev - 'acceleration' misspelled bug fix
+ * ver 1.0.5 2022-03-03 kkossev - Battery reporting
  */
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/03/02 11:27 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2022/03/03 8:51 AM"}
 
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
@@ -47,9 +48,25 @@ metadata {
 
 // Parse incoming device messages to generate events
 def parse(String description) {
-
     Map map = [:]
     logDebug("Parsing: $description")
+    def event = [:]
+    try {
+        event = zigbee.getEvent(description)
+    }
+    catch ( e ) {
+        if (infoLogging) log.warn "exception caught while parsing description:  ${description}"
+        return null
+    }
+    if (event) {
+        if (event.name == 'battery') {
+            event.unit = '%'
+            event.isStateChange = true
+            event.descriptionText = "battery is ${event.value} ${event.unit}"
+            logInfo(event.descriptionText)
+        }
+        return createEvent(event)
+    }
 	if (description?.startsWith('zone status')) {	
         logDebug("Zone status: $description")    
         def zs = zigbee.parseZoneStatus(description)
@@ -68,11 +85,11 @@ def parse(String description) {
                         logInfo("Battery reporting configured");                        
                         break
                     default:                    
-                        log.warn("Unknown reporting configured: ${descMap}");
+                        if (infoLogging) log.warn("Unknown reporting configured: ${descMap}");
                         break
                 }
             } else {
-                log.warn "Reporting configuration failed: ${descMap}"
+                if (infoLogging) log.warn "Reporting configuration failed: ${descMap}"
             }
         } else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0002) {
             logDebug("Zone status repoted: $descMap")
@@ -119,7 +136,7 @@ def parseIasMessage(ZoneStatus zs) {
 	        ]
         }
         else {
-            log.warn "Zone status message not parsed"
+            if (infoLogging) log.warn "Zone status message not parsed"
             if (debugLogging) {
                 logDebug "zs.alarm1 = $zs.alarm1"
                 logDebug "zs.alarm2 = $zs.alarm2"
@@ -162,7 +179,6 @@ def getVibrationResult(vibrationActive) {
 }
 
 def resetToVibrationInactive() {
-    //log.trace "resetToVibrationInactive device.currentState('acceleration')?.value == ${device.currentState('acceleration')?.value}"
 	if (device.currentState('acceleration')?.value == "active") {
 		def descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
 		sendEvent(
@@ -250,6 +266,5 @@ private def logDebug(message) {
 }
 
 private def logInfo(message) {
-	if (infoLogging)
-		log.info "${device.displayName}: ${message}"
+	if (infoLogging) log.info "${device.displayName}: ${message}"
 }
