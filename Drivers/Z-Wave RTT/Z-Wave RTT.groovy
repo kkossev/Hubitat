@@ -10,7 +10,8 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-03-12 kkossev  - Inital test version
+ * ver. 1.0.0 2022-03-12 kkossev - Inital test version
+ * ver. 1.0.1 2022-03-12 kkossev - RunIn1ms virtual RTT
  *
 */
 
@@ -22,6 +23,8 @@ metadata {
 
     capability "Actuator"
     capability "Polling" 
+    
+    command "RunIn1ms"
         
     attribute "RTT", "number"        
     }
@@ -37,11 +40,16 @@ void parse(String description) {
 
 //Z-Wave versionv2.VersionReport
 void zwaveEvent(hubitat.zwave.commands.versionv2.VersionReport cmd) {
+    sendRTTevent()
+}
+
+def sendRTTevent() {
     def now = new Date().getTime()
     def timeRunning = now.toInteger() -  state.cmdSentTime.toInteger()
     log.debug "${device.displayName} RTT (ms) : ${timeRunning}"    
     sendEvent(name: "RTT", value: timeRunning, unit: "ms")    
 }
+
 
 
 void zwaveEvent(hubitat.zwave.commands.versionv1.VersionCommandClassReport cmd) {
@@ -74,6 +82,13 @@ def poll() {
 
     getVersionReport()
 }
+
+def RunIn1ms() {
+    def now = new Date().getTime()
+    state.cmdSentTime = now
+    runInMillis(1, sendRTTevent)
+}
+
 
 String secure(String cmd){
     return zwaveSecureEncap(cmd)
