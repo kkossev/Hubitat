@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/02/24 9:40 PM"}
+def timeStamp() {"2022/02/24 10:02 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -26,7 +26,7 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
  
 metadata {
     definition (name: "Tuya NEO Coolcam Zigbee Water Leak Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor.groovy", singleThreaded: true ) {
-        capability "Refresh"
+        //capability "Refresh"
         capability "Sensor"
         capability "Battery"
         capability "WaterSensor"        
@@ -93,15 +93,6 @@ def parse(String description) {
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
                 log.warn "${device.displayName} device announcement"
         } 
-        else if (descMap.isClusterSpecific == false && descMap.command == "01" ) { //global commands read attribute response
-            def status = descMap.data[2]
-            if (status == "86") {
-                if (settings?.logEnable) log.warn "${device.displayName} Cluster ${descMap.clusterId} read attribute - NOT SUPPORTED!\r ${descMap}"
-            }
-            else {
-                if (settings?.logEnable) log.warn "${device.displayName} <b>UNPROCESSED Global Command</b> :  ${descMap}"
-            }
-        }
         else {
             if (settings?.logEnable) log.warn "${device.displayName} <b> NOT PARSED </b> :  ${descMap}"
         }
@@ -180,25 +171,27 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         // the switch cases below default to dp_id = "01"
         switch (dp) {
-            case 0x01 : // temperature in °C
-                temperatureEvent( fncmd / 10.0 )
+            case 0x65 : // dry/wet
+                if ( fncmd == 0 ) {
+                    dry()
+                }
+                else {
+                    wet()
+                }
                 break
-            case 0x02 : // humidity in %
-                humidityEvent (fncmd)
+            case 0x66 : // unknown
+                if (settings?.logEnable) log.trace "${device.displayName} dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 break 
-            case 0x03 : // illuminance - NOT TESTED!
-                illuminanceEvent (fncmd)
-                break 
-            case 0x04 : // battery
+            case 0x04 : // battery ?
                 getBatteryPercentageResult(fncmd * 2)
-                if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
+                if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd % (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
                 break
             //
             default :
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
-    } // if (descMap?.command == "01" || descMap?.command == "02")
+    }
 }
 
 
@@ -215,19 +208,6 @@ private int getTuyaAttributeValue(ArrayList _data) {
     }
     return retValue
 }
-
-
-def humidityEvent( humidity ) {
-    def map = [:] 
-    map.name = "humidity"
-    map.value = humidity as int
-    map.unit = "% RH"
-    map.isStateChange = true
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
-    sendEvent(map)
-}
-
-
 
 
 //  called from initialize()
