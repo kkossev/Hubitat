@@ -15,14 +15,14 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/02/24 12:38 PM"}
+def timeStamp() {"2022/02/24 9:29 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
-
+import hubitat.zigbee.clusters.iaszone.ZoneStatus
  
 metadata {
     definition (name: "Tuya NEO Coolcam Zigbee Water Leak Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor.groovy", singleThreaded: true ) {
@@ -110,19 +110,43 @@ def parse(String description) {
         }
     } // if 'catchall:' or 'read attr -'
     else if (description?.startsWith('zone status')) {	
-        // logDebug("Zone status: $description")
-        def zs = zigbee.parseZoneStatus(description)
-        /*
-try: New Zigbee IAS zone parser: Map zigbee.parseZoneStatusChange(String description), returns all attributes in addition to the device sourceEndpoint id.
-        */
-        // logDebug("Zone status: $zs")
-        Map descMap = parseIasMessage(zs)
+        if (settings?.logEnable) log.debug "Zone status: $description"
+        parseIasMessage(description)
     }
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
 }
 
+def parseIasMessage(String description) {
+    try {
+        Map zs = zigbee.parseZoneStatusChange(description)
+        log.trace "zs = $zs"
+        if (zs.alarm1Set == true) {
+            wet()
+        }
+        else {
+            dry()
+        }
+    }
+    catch (e) {
+        log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
+        return null
+    }
+}
+
+
+def wet() {
+    def descriptionText = "${device.displayName} is wet"
+    if (settings?.txtEnable) log.info "$descriptionText"
+    sendEvent(name: "water", value: "wet", descriptionText: descriptionText, isStateChange: true)
+}
+
+def dry() {
+    def descriptionText = "${device.displayName} is dry"
+    if (settings?.txtEnable) log.info "$descriptionText"
+    sendEvent(name: "water", value: "dry",descriptionText: descriptionText, isStateChange: true)
+}
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
@@ -206,13 +230,6 @@ def humidityEvent( humidity ) {
     sendEvent(map)
 }
 
-def wet() {
-    sendEvent(name: "water", value: "wet", descriptionText: "$device.displayName manually set to wet", isStateChange: true)
-}
-
-def dry() {
-    sendEvent(name: "water", value: "dry",descriptionText: "$device.displayName manually set to dry", isStateChange: true)
-}
 
 
 
