@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/02/24 9:29 PM"}
+def timeStamp() {"2022/02/24 9:40 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -91,10 +91,7 @@ def parse(String description) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-            if (getModelGroup() == 'TS0222') {
-                log.warn "TS0222 device announcement"
-                configure()
-            }
+                log.warn "${device.displayName} device announcement"
         } 
         else if (descMap.isClusterSpecific == false && descMap.command == "01" ) { //global commands read attribute response
             def status = descMap.data[2]
