@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/02/26 2:08 PM"}
+def timeStamp() {"2022/02/26 2:40 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -91,6 +91,18 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             if (settings?.logEnable) log.info "${device.displayName} application version is ${descMap?.value}"
         } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
+        } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE2") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya AppVersion is ${descMap?.value}"
+        } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE4") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFE4 value is ${descMap?.value}"
+        } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
+        } 
         else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
             if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
         } 
@@ -118,6 +130,7 @@ def parse(String description) {
 }
 
 def parseIasMessage(String description) {
+    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
     try {
         Map zs = zigbee.parseZoneStatusChange(description)
         if (settings?.logEnable) log.trace "zs = $zs"
