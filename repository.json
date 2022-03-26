@@ -50,7 +50,14 @@
       "description": "Tuya NEO Coolcam Zigbee Water Leak Sensor driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
-      ]      
+      ]
+    },
+    {
+      "id": "bcacde4f-c695-4a63-9a48-f4e49edb9dd2",
+      "name": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/packageManifest.json",
+      "description": "Tuya Temperature Humidity Illuminance LCD Display with a Clock driver for Hubitat Elevation hub"
     }
   ]
 }
