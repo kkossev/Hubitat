@@ -4,6 +4,7 @@
   "version": "1.0.4",
   "minimumHEVersion": "2.2.7",
   "dateReleased": "2022-03-26",
+  "releaseNotes": "ver 1.0.4 2022-03-26 - first release version\n",
   "drivers": [
     {
       "id": "dba8ae15-e635-4476-99b3-830c79a0dd1a",
