@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/02/26 1:11 PM"}
+def timeStamp() {"2022/02/26 2:08 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -91,19 +91,26 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             if (settings?.logEnable) log.info "${device.displayName} application version is ${descMap?.value}"
         } 
+        else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
+            if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+        } 
+        else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
+            if (settings?.logEnable) log.info "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
+        } 
         else {
-            if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> :  ${descMap}"
+            if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
-    else if (description?.startsWith('zone status')) {	
+    else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         if (settings?.logEnable) log.debug "Zone status: $description"
         parseIasMessage(description)
     }
     else if (description?.startsWith('enroll request')) {
+         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
         if (settings?.logEnable) log.info "Sending IAS enroll response..."
-        def enrollResponseCmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        if (settings?.logEnable) log.debug "enroll response: ${enrollResponseCmds}"
-        return enrollResponseCmds
+        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        if (settings?.logEnable) log.debug "enroll response: ${cmds}"
+        sendZigbeeCommands( cmds )  
     }    
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
