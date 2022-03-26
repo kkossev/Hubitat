@@ -60,7 +60,7 @@
       "description": "Tuya Temperature Humidity Illuminance LCD Display with a Clock driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
-      ]
-    }
-}
-    
+			]
+		}
+	]
+} 
