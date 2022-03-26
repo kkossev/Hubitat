@@ -41,6 +41,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "39a56b8d-62a7-4b48-9915-fe26fb11d5e7",
+      "name": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/packageManifest.json",
+      "description": "Tuya NEO Coolcam Zigbee Water Leak Sensor driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]      
     }
   ]
 }
