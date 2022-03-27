@@ -22,11 +22,12 @@
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
+ * ver. 2.4.0 2022-03-27 kkossev     - experimental support for 'MOES remote TS0044'
  *
  */
 
-def version() { "2.3.0" }
-def timeStamp() {"2022/02/13 5:19 PM"}
+def version() { "2.4.0" }
+def timeStamp() {"2022/03/27 9:00 AM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -56,6 +57,7 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044F"
         
     }
     preferences {
@@ -134,7 +136,7 @@ def parse(String description) {
         }
         //
         if (buttonNumber != 0 ) {
-            if (device.getDataValue("model") == "TS004F") {
+            if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
                     if (logEnable) {log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
                     runInMillis(DEBOUNCE_TIME, buttonDebounce)    // restart the debouncing timer again
@@ -225,7 +227,7 @@ def initialize() {
     	numberOfButtons = 1
         supportedValues = ["pushed", "double", "held"]
     }
-    else if (device.getDataValue("model") == "TS004F") {
+    else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
         //log.warn "manufacturer = ${device.getDataValue("manufacturer")}"
         if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {
             // Smart Knob manufacturer: "_TZ3000_4fjiwweb"  _TZ3000_xabckq1v
