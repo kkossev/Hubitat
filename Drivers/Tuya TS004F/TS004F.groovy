@@ -22,12 +22,12 @@
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
- * ver. 2.4.0 2022-03-27 kkossev     - experimental support for 'MOES remote TS0044'
+ * ver. 2.4.0 2022-03-30 kkossev     - experimental support for 'MOES remote TS0044', singleThreaded: true
  *
  */
 
 def version() { "2.4.0" }
-def timeStamp() {"2022/03/27 9:00 AM"}
+def timeStamp() {"2022/03/30 11:41 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -35,7 +35,7 @@ import hubitat.device.HubMultiAction
 import groovy.json.JsonOutput
 
 metadata {
-    definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy" ) {
+    definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy", singleThreaded: true ) {
       
     capability "Refresh"
     capability "PushableButton"
