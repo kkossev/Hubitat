@@ -12,12 +12,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-03-30 kkossev  - Inital test version
+ * ver. 1.0.0 2022-03-31 kkossev  - Inital test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/3/30 2:30 PM"}
+def timeStamp() {"2022/3/30 10:20 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -29,24 +29,19 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 metadata {
     definition (name: "Tuya Smart Siren Zigbee", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy", singleThreaded: true ) {
         capability "Alarm"            //Attributes alarm - ENUM ["strobe", "off", "both", "siren"]; Commands: both() off() siren() strobe() 
-        //capability "Switch"
         capability "Actuator"
-        //capability "Sensor"
         capability "Battery"
         capability "Configuration"
         
-        attribute "alarmLength", "number"
-        attribute "alarmType", "number"
-        attribute "alarmVolume", "string"        
+        //attribute "melody", "number"
+        //attribute "duration", "number"
+        //attribute "volume", "string"        
         
-        command "setAlarmType", [[name:"Type", type: "NUMBER", description: "1..18 = set alarm type, can be any number between 1 and 18"]]
-        command "setAlarmLength", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
-        command "setAlarmVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: ["low", "medium", "high"]]]
-        /*
-        command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
-        command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
-        */
-        //command "test"
+        command "setMelody", [[name:"Set alarm melody type", type: "NUMBER", description: "1..18 = set alarm type, can be any number between 1 and 18"]]
+        command "setDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
+        command "setVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: ["low", "medium", "high"]]]
+        
+        //command "off", [[name: "Switch alarm off" ]]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2'
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
@@ -121,55 +116,14 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
         } 
-        /*
-        else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
-            if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
-        } 
-        else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
-            if (settings?.logEnable) log.info "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
-        } 
-        */
         else {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
-    /*
-    else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
-        if (settings?.logEnable) log.debug "Zone status: $description"
-        parseIasMessage(description)
-    }
-    else if (description?.startsWith('enroll request')) {
-         // The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). 
-        if (settings?.logEnable) log.info "Sending IAS enroll response..."
-        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        if (settings?.logEnable) log.debug "enroll response: ${cmds}"
-        sendZigbeeCommands( cmds )  
-    } 
-    */
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
 }
-
-/*
-def parseIasMessage(String description) {
-    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
-    try {
-        Map zs = zigbee.parseZoneStatusChange(description)
-        if (settings?.logEnable) log.trace "zs = $zs"
-        if (zs.alarm1Set == true) {
-            wet()
-        }
-        else {
-            dry()
-        }
-    }
-    catch (e) {
-        log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
-        return null
-    }
-}
-*/
 
 
 def processTuyaCluster( descMap ) {
@@ -206,18 +160,23 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case TUYA_DP_VOLUME :    // 05 volume [ENUM] 0:low 1: mid 2:high
+                def value = fncmd == 0 ? "low" : fncmd == 1 ? "mid" : fncmd == 2 ? "high" : fncmd
+                if (settings?.txtEnable) log.info "${device.displayName} volume is ${value}"
                 break
             case TUYA_DP_DURATION :  //07 duration [VALUE] in seconds
+                if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd}"
                 break
             case TUYA_DP_ALARM :    // 13 alarm [BOOL]
-                def descriptionText = "${device.displayName} is wet"
-                if (settings?.txtEnable) log.info "$descriptionText"
-                sendEvent(name: "water", value: "wet", descriptionText: descriptionText, isStateChange: true)            
+                def value = fncmd == 0 ? "off" : fncmd == 1 ? "both" : fncmd
+                def descriptionText = "alarm state received is ${value}"
+                if (settings?.txtEnable) log.info "${device.displayName} ${descriptionText}"
+                sendEvent(name: "alarm", value: value, descriptionText: descriptionText, isStateChange: true)            
                 break
             case TUYA_DP_BATTERY :    // 15 battery [VALUE] percentage
                 getBatteryPercentageResult( fncmd )
                 break
             case TUYA_DP_MELODY :     // 21 melody [enum] 1..18 
+                if (settings?.txtEnable) log.info "${device.displayName} melody is ${fncmd}"
                 break
             default :
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -225,8 +184,6 @@ def processTuyaCluster( descMap ) {
         }
     }
 }
-
-
 
 
 private int getTuyaAttributeValue(ArrayList _data) {
@@ -242,37 +199,6 @@ private int getTuyaAttributeValue(ArrayList _data) {
     }
     return retValue
 }
-
-
-/*
-def wet() {
-    def descriptionText = "${device.displayName} is wet"
-    if (settings?.txtEnable) log.info "$descriptionText"
-    sendEvent(name: "water", value: "wet", descriptionText: descriptionText, isStateChange: true)
-}
-
-def dry() {
-    def descriptionText = "${device.displayName} is dry"
-    if (settings?.txtEnable) log.info "$descriptionText"
-    sendEvent(name: "water", value: "dry",descriptionText: descriptionText, isStateChange: true)
-}
-*/
-
-/*
-
-@Field static final Integer TUYA_DP_VOLUME     = 5
-@Field static final Integer TUYA_DP_DURATION   = 7
-@Field static final Integer TUYA_DP_ALARM      = 13
-@Field static final Integer TUYA_DP_BATTERY    = 15
-@Field static final Integer TUYA_DP_MELODY     = 21
-
-// TODO !
-
-    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
-    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
-
-    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
-*/
 
 
 def off() {
@@ -305,31 +231,31 @@ def siren() {
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
 }
 
-void setAlarmType(BigDecimal type) {
-  type = type > 180 ? 180 : type < 1 ? 1 : type
-  logging("setAlarmType(type=$type)", 100)
-  sendTuyaCommand(0x00, "66040001${HexUtils.integerToHexString(type.intValue()-1,1)}")
+void setMelody(BigDecimal type) {
+  int melody = type > 18 ? 18 : type < 1 ? 1 : type as int
+  if (settings?.logEnable) log.debug "${device.displayName} setMelody(type=$type)"
+  sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melody, 2)))
 }
 
-void setAlarmVolume(String volume) {
-  switch(volume) {
-        case "high":
-          sendTuyaCommand(0x00, "7404000100")
+void setVolume(String volume) {
+  switch (volume) {
+        case "low" :
+          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "00"))
           break
-        case "medium":
-          sendTuyaCommand(0x00, "7404000101")
+        case "medium" :
+          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "01"))
           break
-        default:
-          sendTuyaCommand(0x00, "7404000102")
+        case "high" :
+          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "02"))
           break
   }
+  if (settings?.logEnable) log.debug "${device.displayName} setVolume ${volume}"
 }
 
-void setAlarmDuration(BigDecimal length) {
-  length = length > 255 ? 255 : length < 0 ? 0 : length
-  if (settings?.logEnable)  "setAlarmDuration(length=$length)"
-  // TODO !!!
-  //sendTuyaCommand(0x00, "670200040000${HexUtils.integerToHexString(length.intValue(),2)}")
+void setDuration(BigDecimal length) {
+  int duration = length > 255 ? 255 : length < 0 ? 0 : length
+  if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
+  sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
 }
 
 
@@ -343,8 +269,6 @@ def installed() {
 // called when preferences are saved
 // runs when save is clicked in the preferences section
 def updated() {
-    //ArrayList<String> cmds = []
-    
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -354,12 +278,6 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    /*
-    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-   	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
-    if (settings?.txtEnable) log.info "${device.displayName} Update finished"
-    sendZigbeeCommands( cmds )  
-  */
 }
 
 
@@ -508,19 +426,3 @@ private Map getBatteryResult(rawValue) {
     }    
 }
 
-def zTest( dpCommand, dpValue, dpTypeString ) {
-    ArrayList<String> cmds = []
-    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
-    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
-
-    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
-
-    switch ( getModelGroup() ) {
-        case 'MOES' :
-        case 'UNKNOWN' :
-        default :
-            break
-    }     
-
-    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
-}    
