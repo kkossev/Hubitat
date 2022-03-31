@@ -22,12 +22,12 @@
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
- * ver. 2.4.0 2022-03-30 kkossev     - experimental support for 'MOES remote TS0044', singleThreaded: true
+ * ver. 2.4.0 2022-03-31 kkossev     - experimental support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
  *
  */
 
 def version() { "2.4.0" }
-def timeStamp() {"2022/03/30 11:41 PM"}
+def timeStamp() {"2022/03/31 12:54 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -154,7 +154,7 @@ def parse(String description) {
         if (event) {
             //if (logEnable) {log.debug "Creating event: ${event}"}
 		    result = createEvent(event)
-            if (device.getDataValue("model") == "TS004F") {
+            if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 runInMillis(DEBOUNCE_TIME, buttonDebounce)
             }
 	    } 
