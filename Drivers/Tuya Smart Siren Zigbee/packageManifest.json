@@ -3,5 +3,14 @@
   "author": "Krassimir Kossev",
   "version": "1.0.0",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-04-02"
+  "dateReleased": "2022-04-02",
+  "drivers": [
+    {
+      "id": "21580e40-cf53-445a-a729-a67d4608458b",
+      "name": "Tuya Smart Siren Zigbee",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy",
+      "required": true
+    }
+  ]
 }

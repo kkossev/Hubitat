@@ -61,6 +61,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "d8aed522-094b-403f-b1b7-90900ada633c",
+      "name": "Tuya Smart Siren Zigbee",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/packageManifest.json",
+      "description": "Tuya Smart Siren Zigbee driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
-} 
+}
