@@ -12,12 +12,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-03-31 kkossev  - Inital test version
+ * ver. 1.0.0 2022-04-02 kkossev  - Inital test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/3/30 10:20 PM"}
+def timeStamp() {"2022/04/02 10:29 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,9 +33,9 @@ metadata {
         capability "Battery"
         capability "Configuration"
         
-        //attribute "melody", "number"
-        //attribute "duration", "number"
-        //attribute "volume", "string"        
+        attribute "melody", "number"
+        attribute "duration", "number"
+        attribute "volume", "string"        
         
         command "setMelody", [[name:"Set alarm melody type", type: "NUMBER", description: "1..18 = set alarm type, can be any number between 1 and 18"]]
         command "setDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
@@ -162,9 +162,11 @@ def processTuyaCluster( descMap ) {
             case TUYA_DP_VOLUME :    // 05 volume [ENUM] 0:low 1: mid 2:high
                 def value = fncmd == 0 ? "low" : fncmd == 1 ? "mid" : fncmd == 2 ? "high" : fncmd
                 if (settings?.txtEnable) log.info "${device.displayName} volume is ${value}"
+                sendEvent(name: "volume", value: value, descriptionText: descriptionText )            
                 break
             case TUYA_DP_DURATION :  //07 duration [VALUE] in seconds
                 if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd}"
+                sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
                 break
             case TUYA_DP_ALARM :    // 13 alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? "both" : fncmd
@@ -173,10 +175,11 @@ def processTuyaCluster( descMap ) {
                 sendEvent(name: "alarm", value: value, descriptionText: descriptionText, isStateChange: true)            
                 break
             case TUYA_DP_BATTERY :    // 15 battery [VALUE] percentage
-                getBatteryPercentageResult( fncmd )
+                getBatteryPercentageResult( fncmd * 2)
                 break
             case TUYA_DP_MELODY :     // 21 melody [enum] 1..18 
                 if (settings?.txtEnable) log.info "${device.displayName} melody is ${fncmd}"
+                sendEvent(name: "melody", value: fncmd, descriptionText: descriptionText )            
                 break
             default :
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
