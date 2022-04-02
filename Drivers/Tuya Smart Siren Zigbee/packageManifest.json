@@ -1,0 +1,7 @@
+{
+  "packageName": "Tuya Smart Siren Zigbee",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2022-04-02"
+}
