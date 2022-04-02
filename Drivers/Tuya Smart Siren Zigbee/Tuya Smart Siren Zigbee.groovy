@@ -17,14 +17,13 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/02 10:29 AM"}
+def timeStamp() {"2022/04/02 11:06 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
-import hubitat.zigbee.clusters.iaszone.ZoneStatus
  
 metadata {
     definition (name: "Tuya Smart Siren Zigbee", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy", singleThreaded: true ) {
@@ -40,8 +39,6 @@ metadata {
         command "setMelody", [[name:"Set alarm melody type", type: "NUMBER", description: "1..18 = set alarm type, can be any number between 1 and 18"]]
         command "setDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
         command "setVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: ["low", "medium", "high"]]]
-        
-        //command "off", [[name: "Switch alarm off" ]]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2'
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
@@ -92,29 +89,32 @@ def parse(String description) {
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
             }
             else {
-                log.warn "unparesed attrint $descMap.attrInt"
+                if (settings?.logEnable) log.warn "unparesed attrint $descMap.attrInt"
             }
         }     
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-            if (settings?.logEnable) log.info "${device.displayName} device announcement"
+            if (settings?.logEnable) log.debug "${device.displayName} device announcement"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
-            if (settings?.logEnable) log.info "${device.displayName} application version is ${descMap?.value}"
+            if (settings?.logEnable) log.debug "${device.displayName} application version is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
+            if (settings?.logEnable) log.debug "${device.displayName} Tuya check-in"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE2") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya AppVersion is ${descMap?.value}"
+            if (settings?.logEnable) log.debug "${device.displayName} Tuya AppVersion is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE4") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFE4 value is ${descMap?.value}"
+            if (settings?.logEnable) log.debug "${device.displayName} Tuya UNKNOWN attribute FFE4 value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
+            if (settings?.logEnable) log.debug "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
+        } 
+        else if (descMap?.cluster == "0000") {
+            if (settings?.logEnable) log.debug "${device.displayName} basic cluster report  : descMap = ${descMap}"
         } 
         else {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
@@ -138,7 +138,7 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
         }
         def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-        if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
+        //if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
         if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
         cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
@@ -157,7 +157,7 @@ def processTuyaCluster( descMap ) {
         def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
         def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
-        if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+        //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case TUYA_DP_VOLUME :    // 05 volume [ENUM] 0:low 1: mid 2:high
                 def value = fncmd == 0 ? "low" : fncmd == 1 ? "mid" : fncmd == 2 ? "high" : fncmd
@@ -382,7 +382,7 @@ private getDescriptionText(msg) {
 }
 
 def logsOff(){
-    log.warn "${device.displayName} debug logging disabled..."
+    log.info "${device.displayName} debug logging disabled..."
     device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
