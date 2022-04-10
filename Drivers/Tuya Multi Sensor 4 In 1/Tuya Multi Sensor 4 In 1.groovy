@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/10 6:02 PM"}
+def timeStamp() {"2022/04/10 6:40 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -82,6 +82,10 @@ def parse(String description) {
                 log.warn "unparesed attrint $descMap.attrInt"
             }
         }     
+		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
+            def rawLux = Integer.parseInt(descMap.value,16)
+            illuminanceEvent( rawLux )
+		}  
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         } 
@@ -165,7 +169,7 @@ def processTuyaCluster( descMap ) {
         switch (dp) {
             case 0x65 : //  Tuya 3 in 1 (101) -> motion
                 log.warn "motion event 0x65 fncmd = ${fncmd}"
-                sendEvent(getMotionResult(motionActive=fncmd))
+                sendEvent(handleMotion(motionActive=fncmd))
                 break            
             case 0x67 : //  Tuya 3 in 1 (103) -> tamper
                 if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${fncmd==0 ? 'inactive' : 'active'}"
@@ -228,7 +232,8 @@ def parseIasMessage(String description) {
             handleMotion(motionActive=true)
         }
         else {
-            log.warn "no motion active?"
+            log.warn "parseIasMessage: no motion active?"
+            handleMotion(motionActive=false)
         }
     }
     catch (e) {
@@ -245,6 +250,9 @@ private handleMotion(motionActive) {
         if (device.currentState('motion')?.value != "active") {
             state.motionStarted = now()
         }
+    }
+    else {
+        log.warn "handleMotion: no motion active?"
     }
 	return getMotionResult(motionActive)
 }
@@ -306,6 +314,14 @@ def humidityEvent( humidity ) {
     sendEvent(map)
 }
 
+def illuminanceEvent( illuminance ) {
+    //def rawLux = Integer.parseInt(descMap.value,16)
+	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux"/*, isStateChange: true*/)
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+}
+
+
 // called on initial install of device during discovery
 // also called from initialize() in this driver!
 def installed() {
@@ -364,6 +380,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
+        state.motionStarted = now()
     }
     //
     state.packetID = 0
@@ -386,6 +403,7 @@ def tuyaBlackMagic() {
 // It is also called on initial install after discovery.
 def configure() {
     if (settings?.txtEnable) log.info "${device.displayName} configure().."
+    state.motionStarted = now()
     List<String> cmds = []
     cmds += tuyaBlackMagic()    
     sendZigbeeCommands(cmds)    
