@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/10 4:53 PM"}
+def timeStamp() {"2022/04/10 5:24 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -129,71 +129,6 @@ def parse(String description) {
     }
 }
 
-def parseIasMessage(String description) {
-    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
-    try {
-        Map zs = zigbee.parseZoneStatusChange(description)
-        if (settings?.logEnable) log.trace "zs = $zs"
-        if (zs.alarm1Set == true) {
-            handleMotion(motionActive=true)
-        }
-        else {
-            log.warn "no motion active?"
-        }
-    }
-    catch (e) {
-        log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
-        return null
-    }
-}
-
-private handleMotion(motionActive) {    
-    if (motionActive) {
-        def timeout = motionReset ?: 3
-        // If the sensor only sends a motion detected message. the reset to motion inactive must be  performed in code
-        runIn(timeout, resetToMotionInactive)        
-        if (device.currentState('acceleration')?.value != "active") {
-            state.motionStarted = now()
-        }
-    }
-	return getMotionResult(motionActive)
-}
-
-def getMotionResult(motionActive) {
-	def descriptionText = "Detected motion"
-    if (!motionActive) {
-		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
-    }
-	return [
-			name			: 'motion',
-			value			: motionActive ? 'active' : 'inactive',
-            //isStateChange   : true,
-			descriptionText : descriptionText
-	]
-}
-
-def resetToMotionInactive() {
-	if (device.currentState('motion')?.value == "active") {
-		def descText = "Motion reset to inactive after ${getSecondsInactive()}s"
-		sendEvent(
-			name : "acceleration",
-			value : "inactive",
-			isStateChange : true,
-			descriptionText : descText
-		)
-		logInfo(descText)
-	}
-}
-
-def getSecondsInactive() {
-    if (state.motionStarted) {
-        return Math.round((now() - state.motionStarted)/1000)
-    } else {
-        return motionReset ?: 3
-    }
-}
-
-
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
@@ -228,6 +163,13 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
+            case 0x65 : //  Tuya 3 in 1 (101) -> motion
+                log.warn "motion event 0x65 fncmd = ${fncmd}"
+                sendEvent(getMotionResult(motionActive=fncmd))
+                break            
+            case 0x67 : //  Tuya 3 in 1 (103) -> tamper
+                if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${fncmd==0 ? 'inactive' : 'active'}"
+                break            
             case 0x66 : // battery
             case 0x6E : // Tuya 4 in 1
                 if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -275,6 +217,74 @@ private int getTuyaAttributeValue(ArrayList _data) {
     }
     return retValue
 }
+
+
+def parseIasMessage(String description) {
+    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
+    try {
+        Map zs = zigbee.parseZoneStatusChange(description)
+        if (settings?.logEnable) log.trace "zs = $zs"
+        if (zs.alarm1Set == true) {
+            handleMotion(motionActive=true)
+        }
+        else {
+            log.warn "no motion active?"
+        }
+    }
+    catch (e) {
+        log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
+        return null
+    }
+}
+
+private handleMotion(motionActive) {    
+    if (motionActive) {
+        def timeout = motionReset ?: 3
+        // If the sensor only sends a motion detected message. the reset to motion inactive must be  performed in code
+        runIn(timeout, resetToMotionInactive)        
+        if (device.currentState('motion')?.value != "active") {
+            state.motionStarted = now()
+        }
+    }
+	return getMotionResult(motionActive)
+}
+
+def getMotionResult(motionActive) {
+	def descriptionText = "Detected motion"
+    if (!motionActive) {
+		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
+    }
+    log.info " ${descriptionText}"
+	return [
+			name			: 'motion',
+			value			: motionActive ? 'active' : 'inactive',
+            //isStateChange   : true,
+			descriptionText : descriptionText
+	]
+}
+
+def resetToMotionInactive() {
+	if (device.currentState('motion')?.value == "active") {
+		def descText = "Motion reset to inactive after ${getSecondsInactive()}s"
+		sendEvent(
+			name : "motion",
+			value : "inactive",
+			isStateChange : true,
+			descriptionText : descText
+		)
+        log.info " ${descText}"
+	}
+}
+
+def getSecondsInactive() {
+    if (state.motionStarted) {
+        return Math.round((now() - state.motionStarted)/1000)
+    } else {
+        return motionReset ?: 3
+    }
+}
+
+
 
 def temperatureEvent( temperature ) {
     def map = [:] 
