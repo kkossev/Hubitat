@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/10 5:24 PM"}
+def timeStamp() {"2022/04/10 6:02 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -103,7 +103,7 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
         } 
-        else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
+        else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //read attribute response
             if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
         } 
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
