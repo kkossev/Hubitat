@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/12 1:48 PM"}
+def timeStamp() {"2022/04/12 3:09 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,7 +40,11 @@ metadata {
         command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // KK
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
@@ -89,6 +93,14 @@ def parse(String description) {
             def rawLux = Integer.parseInt(descMap.value,16)
             illuminanceEvent( rawLux )
 		}  
+		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
+            def raw = Integer.parseInt(descMap.value,16)
+            temperatureEvent( raw / 10.0 )
+		}
+        else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
+            def raw = Integer.parseInt(descMap.value,16)
+            humidityEvent( raw / 1.0 )
+		}
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         } 
@@ -170,7 +182,7 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x65 : //  Tuya 3 in 1 (101) -> motion
+            case 0x65 : //  Tuya 3 in 1 (101) -> motion (ocupancy)
                 log.warn "motion event 0x65 fncmd = ${fncmd}"
                 sendEvent(handleMotion(motionActive=fncmd))
                 break            
@@ -185,7 +197,7 @@ def processTuyaCluster( descMap ) {
                     else if (fncmd == 1) rawValue = 75       // Battery High
                     else if (fncmd == 2) rawValue = 50       // Battery Medium
                     else if (fncmd == 3) rawValue = 25       // Battery Low
-                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered !
+                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered ! -> PowerSource = USB     capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
                     else {
                         rawValue = fncmd
                     }
@@ -212,10 +224,10 @@ def processTuyaCluster( descMap ) {
                 break            
             case 0x68 : 
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 104: // 0x68 temperature calibration
-                def val = fncmd;
-                // for negative values produce complimentary hex (equivalent to negative values)
-                if (val > 4294967295) val = val - 4294967295;                    
-                if (settings?.txtEnable) log.info "${device.displayName} temperature calibration is ${val / 10.0}"
+                    def val = fncmd;
+                    // for negative values produce complimentary hex (equivalent to negative values)
+                    if (val > 4294967295) val = val - 4294967295;                    
+                    if (settings?.txtEnable) log.info "${device.displayName} temperature calibration is ${val / 10.0}"
                 }
                 else {    //  Tuya 3 in 1 (104) -> temperature in °C
                     temperatureEvent( fncmd / 10.0 )
@@ -277,7 +289,7 @@ def processTuyaCluster( descMap ) {
                 }
                 break
             case 0x71 :
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 113: 0x71 unknown
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 113: 0x71 unknown  ( ENUM)
                     if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
                 }
                 else {
