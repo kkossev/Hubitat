@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/12 11:04 AM"}
+def timeStamp() {"2022/04/12 1:38 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -45,6 +45,7 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+		input "motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0
     }
 }
 
@@ -174,11 +175,21 @@ def processTuyaCluster( descMap ) {
                 sendEvent(handleMotion(motionActive=fncmd))
                 break            
             case 0x66 : 
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // reporting time for 4 in 1 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
                 }
                 else {     // battery for 3 in 1;  
-                    getBatteryPercentageResult(fncmd*2)
+                 if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    def rawValue = 0
+                    if (fncmd == 0) rawValue = 100           // Battery Full
+                    else if (fncmd == 1) rawValue = 75       // Battery High
+                    else if (fncmd == 2) rawValue = 50       // Battery Medium
+                    else if (fncmd == 3) rawValue = 25       // Battery Low
+                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered !
+                    else {
+                        rawValue = fncmd
+                    }
+                    getBatteryPercentageResult(rawValue*2)
                 }
                 break
             case 0x6E : // (110) Tuya 4 in 1
@@ -227,11 +238,16 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
                 }
                 else {    //  Tuya 3 in 1 (105) -> humidity in %
-                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6A fncmd = ${fncmd}"  
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (lux calibration?) DP=0x6A fncmd = ${fncmd}"  
                 }
                 break
-            case 0x6B : //  Tuya 4 in 1 (107) -> temperature in °C
-                temperatureEvent( fncmd / 10.0 )
+            case 0x6B : 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    //  Tuya 4 in 1 (107) -> temperature in °C
+                    temperatureEvent( fncmd / 10.0 )
+                }
+                else {
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (?) DP=0x6B fncmd = ${fncmd}"  
+                }
                 break            
             case 0x6C : //  Tuya 4 in 1 (108) -> humidity in %
                 humidityEvent (fncmd)
@@ -241,7 +257,7 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} PIR enable is ${fncmd}"                
                 }
                 else {
-                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6D fncmd = ${fncmd}"  
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (PIR enable?) DP=0x6D fncmd = ${fncmd}"  
                 }
                 break
             case 0x6F :
@@ -249,7 +265,7 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} led enable is ${fncmd}"                
                 }
                 else {
-                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6F fncmd = ${fncmd}"  
+                    if (settings?.logEnable) log.info "${device.displayName}  <b>UNKNOWN</b> (led enable?) DP=0x6F fncmd = ${fncmd}"  
                 }
                 break
             case 0x70 :
@@ -257,7 +273,15 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"                
                 }
                 else {
-                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x70 fncmd = ${fncmd}"  
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x70 reporting enable?) DP=0x70 fncmd = ${fncmd}"  
+                }
+                break
+            case 0x71 :
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 113: 0x71 unknown
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
+                }
+                else {
+                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
                 }
                 break
             default :
@@ -292,7 +316,7 @@ def parseIasMessage(String description) {
             handleMotion(motionActive=true)
         }
         else {
-            log.warn "parseIasMessage: no motion active?"
+            //log.warn "parseIasMessage: no motion active?"
             handleMotion(motionActive=false)
         }
     }
@@ -304,15 +328,17 @@ def parseIasMessage(String description) {
 
 private handleMotion(motionActive) {    
     if (motionActive) {
-        def timeout = motionReset ?: 3
+        def timeout = motionReset ?: 0
         // If the sensor only sends a motion detected message. the reset to motion inactive must be  performed in code
-        runIn(timeout, resetToMotionInactive)        
+        if (timeout != 0) {
+            runIn(timeout, resetToMotionInactive)
+        }
         if (device.currentState('motion')?.value != "active") {
             state.motionStarted = now()
         }
     }
     else {
-        log.warn "handleMotion: no motion active?"
+        //log.warn "handleMotion: no motion active?"
     }
 	return getMotionResult(motionActive)
 }
@@ -348,7 +374,7 @@ def getSecondsInactive() {
     if (state.motionStarted) {
         return Math.round((now() - state.motionStarted)/1000)
     } else {
-        return motionReset ?: 3
+        return motionReset ?: 0
     }
 }
 
@@ -413,8 +439,11 @@ def updated() {
 
 
 def refresh() {
+    ArrayList<String> cmds = []
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
     def endpointId = 1
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0400 0 {}"
+    cmds += "delay 100"
     cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0402 0 {}"
     cmds += "delay 100"
     cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0405 0 {}"
@@ -456,6 +485,8 @@ void initializeVars(boolean fullInit = true ) {
 
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || device.getDataValue("motionReset") == null) device.updateSetting("motionReset", 0)
+    
 }
 
 def tuyaBlackMagic() {
