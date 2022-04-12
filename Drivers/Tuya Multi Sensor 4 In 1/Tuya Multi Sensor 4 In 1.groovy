@@ -15,7 +15,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/12 1:38 PM"}
+def timeStamp() {"2022/04/12 1:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -504,6 +504,14 @@ def configure() {
     state.motionStarted = now()
     List<String> cmds = []
     cmds += tuyaBlackMagic()    
+
+    cmds += "delay 200"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
+    cmds += "delay 200"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0405 {${device.zigbeeId}} {}"
+    cmds += "delay 200"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0400 {${device.zigbeeId}} {}"
+
     sendZigbeeCommands(cmds)    
 }
 
