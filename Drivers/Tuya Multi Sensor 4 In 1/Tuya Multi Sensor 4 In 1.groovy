@@ -10,12 +10,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-04-10 kkossev  - Inital test version
+ * ver. 1.0.0 2022-04-12 kkossev  - Inital test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/10 6:40 PM"}
+def timeStamp() {"2022/04/12 11:04 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -32,10 +32,12 @@ metadata {
         capability "TemperatureMeasurement"        
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
+        capability "TamperAlert"
+        capability "Refresh"
         
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
-        //command "test"
+        command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // KK
@@ -171,11 +173,15 @@ def processTuyaCluster( descMap ) {
                 log.warn "motion event 0x65 fncmd = ${fncmd}"
                 sendEvent(handleMotion(motionActive=fncmd))
                 break            
-            case 0x67 : //  Tuya 3 in 1 (103) -> tamper
-                if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${fncmd==0 ? 'inactive' : 'active'}"
-                break            
-            case 0x66 : // battery
-            case 0x6E : // Tuya 4 in 1
+            case 0x66 : 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // reporting time for 4 in 1 
+                    if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
+                }
+                else {     // battery for 3 in 1;  
+                    getBatteryPercentageResult(fncmd*2)
+                }
+                break
+            case 0x6E : // (110) Tuya 4 in 1
                 if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 def rawValue = 0
                 if (fncmd == 0) rawValue = 100           // Battery Full
@@ -188,17 +194,71 @@ def processTuyaCluster( descMap ) {
                 }
                 getBatteryPercentageResult(rawValue*2)
                 break 
-            case 0x68 : //  Tuya 3 in 1 (104) -> temperature in °C
-                temperatureEvent( fncmd / 10.0 )
+            case 0x67 : //  Tuya 3 in 1 (103) -> tamper
+                def value = fncmd==0 ? 'clear' : 'detected'
+                if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${value}"
+            	sendEvent(name : "tamper",	value : value, isStateChange : true)
                 break            
-            case 0x69 : //  Tuya 3 in 1 (105) -> humidity in %
-                humidityEvent (fncmd)
+            case 0x68 : 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 104: // 0x68 temperature calibration
+                def val = fncmd;
+                // for negative values produce complimentary hex (equivalent to negative values)
+                if (val > 4294967295) val = val - 4294967295;                    
+                if (settings?.txtEnable) log.info "${device.displayName} temperature calibration is ${val / 10.0}"
+                }
+                else {    //  Tuya 3 in 1 (104) -> temperature in °C
+                    temperatureEvent( fncmd / 10.0 )
+                }
+                break            
+            case 0x69 : 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 105:// 0x69 humidity calibration
+                    def val = fncmd;
+                    if (val > 4294967295) val = val - 4294967295;                    
+                    if (settings?.txtEnable) log.info "${device.displayName} humidity calibration is ${val}"                
+                }
+                else {    //  Tuya 3 in 1 (105) -> humidity in %
+                    humidityEvent (fncmd)
+                }
+                break
+            case 0x6A : 
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 106: // 0x6a lux calibration
+                    def val = fncmd;
+                    if (val > 4294967295) val = val - 4294967295;                    
+                    if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
+                }
+                else {    //  Tuya 3 in 1 (105) -> humidity in %
+                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6A fncmd = ${fncmd}"  
+                }
                 break
             case 0x6B : //  Tuya 4 in 1 (107) -> temperature in °C
                 temperatureEvent( fncmd / 10.0 )
                 break            
             case 0x6C : //  Tuya 4 in 1 (108) -> humidity in %
                 humidityEvent (fncmd)
+                break
+            case 0x6D :
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 109: 0x6d PIR enable
+                    if (settings?.txtEnable) log.info "${device.displayName} PIR enable is ${fncmd}"                
+                }
+                else {
+                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6D fncmd = ${fncmd}"  
+                }
+                break
+            case 0x6F :
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 111: // 0x6f led enable
+                    if (settings?.txtEnable) log.info "${device.displayName} led enable is ${fncmd}"                
+                }
+                else {
+                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x6F fncmd = ${fncmd}"  
+                }
+                break
+            case 0x70 :
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 112: 0x70 reporting enable
+                    if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"                
+                }
+                else {
+                    if (settings?.logEnable) log.info "${device.displayName} UNKNOWN DP=0x70 fncmd = ${fncmd}"  
+                }
                 break
             default :
                 /*if (settings?.logEnable)*/ log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -354,7 +414,14 @@ def updated() {
 
 def refresh() {
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
-    zigbee.readAttribute(0, 1)
+    def endpointId = 1
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0402 0 {}"
+    cmds += "delay 100"
+    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0405 0 {}"
+    cmds += "delay 100"
+
+    //zigbee.readAttribute(0, 1)
+    sendZigbeeCommands( cmds ) 
 }
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
