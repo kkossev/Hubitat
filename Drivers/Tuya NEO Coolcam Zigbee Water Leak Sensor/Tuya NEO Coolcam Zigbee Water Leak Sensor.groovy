@@ -11,11 +11,13 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-03-26 kkossev  - Inital test version
+ * ver. 1.0.1 2022-04-12 kkossev  - added _TYST11_qq9mpfhw fingerprint
+ * ver. 1.0.2 2022-04-14 kkossev  - Check-in info logs; model 'q9mpfhw' inClusters correction
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/02/26 2:40 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/04/14 7:30 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,11 +35,13 @@ metadata {
         command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003",                outClusters:"0003,0019", model:"q9mpfhw", manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_jthf7vb6", deviceJoinName: "Tuya Leak Sensor TS0601"          // vendor: 'TuYa', model: 'WLS-100z'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,EF01", outClusters:"0003,0019", model:"TS0207", manufacturer:"_TYZB01_sqmd19i1", deviceJoinName: "Tuya Leak Sensor TS0207 Type I"   // round cabinet, sensors on the bottom
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,EF01", outClusters:"0003,0019", model:"TS0207", manufacturer:"_TYZB01_o63ssaah", deviceJoinName: "Blitzwolf Leak Sensor BW-IS5" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_upgcbody", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // rerctangular cabinet, external sensor; +BatteryLowAlarm!?
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_t6jriawg", deviceJoinName: "Moes Leak Sensor TS0207"          // Moes
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // not tested
     }
     preferences {
@@ -89,19 +93,19 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} device announcement"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
-            if (settings?.logEnable) log.info "${device.displayName} application version is ${descMap?.value}"
+            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (0001) app version ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
+            if (settings?.txtEnable) log.info "${device.displayName} Tuya check-in (FFDF)"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE2") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya AppVersion is ${descMap?.value}"
+            if (settings?.txtEnable) log.info "${device.displayName} Tuya check-in (FFE2) app version ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE4") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFE4 value is ${descMap?.value}"
+            if (settings?.txtEnable) log.info "${device.displayName} Tuya check-in (FFE4) value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
+            if (settings?.txtEnable) log.info "${device.displayName} Tuya check-in (FFFE) value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
             if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
@@ -162,7 +166,7 @@ def dry() {
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
-        if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
+        if (settings?.txtEnable) log.info "${device.displayName} Tuya time synchronization request"
         def offset = 0
         try {
             offset = location.getTimeZone().getOffset(new Date().getTime())
