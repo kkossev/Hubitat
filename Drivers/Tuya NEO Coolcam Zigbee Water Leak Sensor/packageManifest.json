@@ -3,7 +3,7 @@
   "author": "Krassimir Kossev",
   "version": "1.0.2",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-03-26",
+  "dateReleased": "2022-04-14",
   "releaseNotes": "ver 1.0.0 2022-03-26 - inital version\nver. 1.0.1 2022-04-12 - added _TYST11_qq9mpfhw fingerprint\nver. 1.0.2 2022-04-14 - Check-in info logs; model 'q9mpfhw' inClusters correction",
   "drivers": [
     {
