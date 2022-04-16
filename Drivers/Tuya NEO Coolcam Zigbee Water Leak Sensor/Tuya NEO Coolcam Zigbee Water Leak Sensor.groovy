@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/04/14 9:28 AM"}
+def timeStamp() {"2022/04/14 9:41 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -182,7 +182,7 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
         cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
-        getBatteryPercentageResult(device.currentState('battery').value * 2, isDigital=true)         // added 04/06/2022 : send latest known battery level event to update the 'Last Activity At' timestamp
+        getBatteryPercentageResult((device.currentState('battery').value as int)* 2, isDigital=true)         // added 04/06/2022 : send latest known battery level event to update the 'Last Activity At' timestamp
     }
     else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
@@ -257,7 +257,7 @@ def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff)    // turn off debug logging after 24 hours
-        if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
+        if (settings?.txtEnable) log.info "${device.displayName} Debug logging will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
