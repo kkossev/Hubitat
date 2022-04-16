@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/04/14 9:41 AM"}
+def timeStamp() {"2022/04/14 2:15 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -168,7 +168,7 @@ def dry() {
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
         // Tuya time sync request is sent by NEO Coolcam sensors every 1 hour
-        if (settings?.txtEnable) log.info "${device.displayName} Tuya time synchronization request"
+        if (settings?.logEnable) log.info "${device.displayName} Tuya time synchronization request"
         def offset = 0
         try {
             offset = location.getTimeZone().getOffset(new Date().getTime())
