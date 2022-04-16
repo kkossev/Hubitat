@@ -12,6 +12,7 @@
  * 
  * ver. 1.0.0 2022-03-26 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-12 kkossev  - added _TYST11_qq9mpfhw fingerprint
+<<<<<<< HEAD
  * ver. 1.0.2 2022-04-14 kkossev  - Check-in info logs; model 'q9mpfhw' inClusters correction
  * ver. 1.0.3 2022-04-16 kkossev  - 'Last Updated' workaround for NEO sensors
  *
@@ -19,6 +20,13 @@
 
 def version() { "1.0.3" }
 def timeStamp() {"2022/04/14 9:28 AM"}
+=======
+ *
+*/
+
+def version() { "1.0.1" }
+def timeStamp() {"2022/04/12 8:01 AM"}
+>>>>>>> Tuya_4in1
 
 import groovy.json.*
 import groovy.transform.Field
@@ -37,7 +45,11 @@ metadata {
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
+<<<<<<< HEAD
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003",                outClusters:"0003,0019", model:"q9mpfhw", manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
+=======
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"q9mpfhw", manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
+>>>>>>> Tuya_4in1
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_jthf7vb6", deviceJoinName: "Tuya Leak Sensor TS0601"          // vendor: 'TuYa', model: 'WLS-100z'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,EF01", outClusters:"0003,0019", model:"TS0207", manufacturer:"_TYZB01_sqmd19i1", deviceJoinName: "Tuya Leak Sensor TS0207 Type I"   // round cabinet, sensors on the bottom
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,EF01", outClusters:"0003,0019", model:"TS0207", manufacturer:"_TYZB01_o63ssaah", deviceJoinName: "Blitzwolf Leak Sensor BW-IS5" 
