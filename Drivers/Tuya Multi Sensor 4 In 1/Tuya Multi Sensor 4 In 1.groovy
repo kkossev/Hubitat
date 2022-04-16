@@ -10,12 +10,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-04-12 kkossev  - Inital test version
+ * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/12 5:40 PM"}
+def timeStamp() {"2022/04/16 6:36 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -35,9 +35,7 @@ metadata {
         capability "TamperAlert"
         capability "Refresh"
         
-        
         command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
-        command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00",      outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
@@ -76,7 +74,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
-    /*if (settings?.logEnable)*/ log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
@@ -86,7 +84,7 @@ def parse(String description) {
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
             }
             else {
-                log.warn "unparesed attrint $descMap.attrInt"
+                if (settings?.logEnable) log.warn "${device.displayName} power cluster not parsed attrint $descMap.attrInt"
             }
         }     
 		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
@@ -183,7 +181,7 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x65 : //  Tuya 3 in 1 (101) -> motion (ocupancy)
-                log.warn "motion event 0x65 fncmd = ${fncmd}"
+                if (settings?.logEnable) log.trace "motion event 0x65 fncmd = ${fncmd}"
                 sendEvent(handleMotion(motionActive=fncmd))
                 break            
             case 0x66 : 
@@ -302,7 +300,7 @@ def processTuyaCluster( descMap ) {
         }
     } // Tuya commands '01' and '02'
     else {
-        log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+        if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
     }
 }
 
@@ -331,7 +329,6 @@ def parseIasMessage(String description) {
             handleMotion(motionActive=true)
         }
         else {
-            //log.warn "parseIasMessage: no motion active?"
             handleMotion(motionActive=false)
         }
     }
@@ -344,7 +341,7 @@ def parseIasMessage(String description) {
 private handleMotion(motionActive) {    
     if (motionActive) {
         def timeout = motionReset ?: 0
-        // If the sensor only sends a motion detected message. the reset to motion inactive must be  performed in code
+        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
         if (timeout != 0) {
             runIn(timeout, resetToMotionInactive)
         }
@@ -363,7 +360,7 @@ def getMotionResult(motionActive) {
     if (!motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
     }
-    log.info " ${descriptionText}"
+    if (settings?.txtEnable) log.info " ${descriptionText}"
 	return [
 			name			: 'motion',
 			value			: motionActive ? 'active' : 'inactive',
@@ -381,7 +378,7 @@ def resetToMotionInactive() {
 			isStateChange : true,
 			descriptionText : descText
 		)
-        log.info " ${descText}"
+        if (settings?.txtEnable) log.info " ${descText}"
 	}
 }
 
@@ -456,15 +453,7 @@ def updated() {
 def refresh() {
     ArrayList<String> cmds = []
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
-    def endpointId = 1
-    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0400 0 {}"
-    cmds += "delay 100"
-    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0402 0 {}"
-    cmds += "delay 100"
-    cmds += "he rattr 0x${device.deviceNetworkId} 0x${endpointId} 0x0405 0 {}"
-    cmds += "delay 100"
-
-    //zigbee.readAttribute(0, 1)
+    cmds += zigbee.readAttribute(0, 1)
     sendZigbeeCommands( cmds ) 
 }
 
@@ -573,7 +562,7 @@ private getDescriptionText(msg) {
 }
 
 def logsOff(){
-    log.warn "${device.displayName} debug logging disabled..."
+    if (settings?.logEnable) log.info "${device.displayName} debug logging disabled..."
     device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
