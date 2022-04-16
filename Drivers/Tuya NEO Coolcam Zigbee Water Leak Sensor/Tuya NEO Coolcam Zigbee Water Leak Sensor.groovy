@@ -13,11 +13,12 @@
  * ver. 1.0.0 2022-03-26 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-12 kkossev  - added _TYST11_qq9mpfhw fingerprint
  * ver. 1.0.2 2022-04-14 kkossev  - Check-in info logs; model 'q9mpfhw' inClusters correction
+ * ver. 1.0.3 2022-04-16 kkossev  - 'Last Updated' workaround for NEO sensors
  *
 */
 
-def version() { "1.0.2" }
-def timeStamp() {"2022/04/14 7:30 AM"}
+def version() { "1.0.3" }
+def timeStamp() {"2022/04/14 9:28 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -166,6 +167,7 @@ def dry() {
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
+        // Tuya time sync request is sent by NEO Coolcam sensors every 1 hour
         if (settings?.txtEnable) log.info "${device.displayName} Tuya time synchronization request"
         def offset = 0
         try {
@@ -180,6 +182,7 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
         cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
+        getBatteryPercentageResult(device.currentState('battery').value * 2, isDigital=true)         // added 04/06/2022 : send latest known battery level event to update the 'Last Activity At' timestamp
     }
     else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
@@ -370,7 +373,7 @@ def logsOff(){
     device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
-def getBatteryPercentageResult(rawValue) {
+def getBatteryPercentageResult(rawValue, isDigital=false) {
     if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
 
@@ -378,11 +381,12 @@ def getBatteryPercentageResult(rawValue) {
         result.name = 'battery'
         result.translatable = true
         result.value = Math.round(rawValue / 2)
-        result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
         result.unit  = '%'
+        result.type = isDigital == true ? "digital" : "physical"
+        result.descriptionText = "${device.displayName} battery is ${result.value}% ($result.type)"
         sendEvent(result)
-        if (settings?.txtEnable) log.info "${result.descriptionText}"
+        if (settings?.txtEnable) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
@@ -405,7 +409,7 @@ private Map getBatteryResult(rawValue) {
         result.name = 'battery'
         result.unit  = '%'
         result.isStateChange = true
-        if (settings?.txtEnable) log.info "${result.descriptionText}"
+        if (settings?.txtEnable) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
         sendEvent(result)
     }
     else {
