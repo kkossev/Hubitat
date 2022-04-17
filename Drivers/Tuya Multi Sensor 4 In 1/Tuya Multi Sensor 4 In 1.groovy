@@ -11,11 +11,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
+ * ver. 1.0.1 2022-04-17 kkossev  - Added Tuya TS0202 Motion Sensor for tests; 
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/04/16 6:36 PM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/04/17 6:02 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -23,7 +24,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
- 
+
 metadata {
     definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
         capability "Sensor"
@@ -43,6 +44,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500",      outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"         // for testing
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
@@ -121,10 +123,19 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //read attribute response
-            if (settings?.logEnable) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+            if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+            if (descMap?.attrId == "0002") {
+                if (settings?.logEnable) log.debug "Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
+                handleMotion(Integer.parseInt(descMap?.value, 16))
+            } else if (descMap?.attrId == "000B") {
+                if (settings?.logEnable) log.debug "IAS Zone ID: ${descMap.value}" 
+            }
+            else {
+                if (settings?.logEnable) log.warn "Zone status: NOT PROCESSED ${descMap}" 
+            }
         } 
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
-            if (settings?.logEnable) log.info "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
+            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
         } 
         else {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
@@ -132,7 +143,7 @@ def parse(String description) {
     } // if 'catchall:' or 'read attr -'
     else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         if (settings?.logEnable) log.debug "Zone status: $description"
-        parseIasMessage(description)
+        parseIasMessage(description)    // TS0202 Motion sensor
     }
     else if (description?.startsWith('enroll request')) {
          /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
@@ -319,6 +330,25 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+def parseIasReport(Map descMap) {
+    if (settings?.logEnable) log.debug "pareseIasReport: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
+    def zs = new ZoneStatus(Integer.parseInt(descMap?.value, 16))
+    log.trace "zs = ${zs}"
+    if (settings?.logEnable) {
+        log.debug "zs.alarm1 = $zs.alarm1"
+        log.debug  "zs.alarm2 = $zs.alarm2"
+        log.debug  "zs.tamper = $zs.tamper"
+        log.debug  "zs.battery = $zs.battery"
+        log.debug  "zs.supervisionReports = $zs.supervisionReports"
+        log.debug  "zs.restoreReports = $zs.restoreReports"
+        log.debug  "zs.trouble = $zs.trouble"
+        log.debug  "zs.ac = $zs.ac"
+        log.debug  "zs.test = $zs.test"
+        log.debug  "zs.batteryDefect = $zs.batteryDefect"
+    }    
+    handleMotion(zs.alarm1)  
+}
+       
 
 def parseIasMessage(String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
