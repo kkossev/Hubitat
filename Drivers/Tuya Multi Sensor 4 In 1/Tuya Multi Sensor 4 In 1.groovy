@@ -11,12 +11,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
- * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; 
+ * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/04/18 9:52 PM"}
+def timeStamp() {"2022/04/18 10:29 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -401,7 +401,7 @@ def parseIasMessage(String description) {
         }
     }
     catch (e) {
-        log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
+        log.error "${device.displayName} This driver requires HE version 2.2.7 (May 2021) or newer!"
         return null
     }
 }
@@ -418,7 +418,10 @@ private handleMotion(motionActive) {
         }
     }
     else {
-        //log.warn "handleMotion: no motion active?"
+        if (device.currentState('motion')?.value == "inactive") {
+            if (settings?.txtEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
+            return [:]   // do not process a second motion inactive event!
+        }
     }
 	return getMotionResult(motionActive)
 }
@@ -428,7 +431,7 @@ def getMotionResult(motionActive) {
     if (!motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
     }
-    if (settings?.txtEnable) log.info " ${descriptionText}"
+    if (settings?.txtEnable) log.info "${device.displayName} ${descriptionText}"
 	return [
 			name			: 'motion',
 			value			: motionActive ? 'active' : 'inactive',
@@ -446,8 +449,11 @@ def resetToMotionInactive() {
 			isStateChange : true,
 			descriptionText : descText
 		)
-        if (settings?.txtEnable) log.info " ${descText}"
+        if (settings?.txtEnable) log.info "${device.displayName} ${descText}"
 	}
+    else {
+        if (settings?.txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive after ${getSecondsInactive()}s"
+    }
 }
 
 def getSecondsInactive() {
