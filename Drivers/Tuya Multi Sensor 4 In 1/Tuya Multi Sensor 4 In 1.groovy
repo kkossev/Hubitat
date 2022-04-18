@@ -14,11 +14,12 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
+ * ver. 1.0.2 2022-04-18 kkossev  - setMotion command;
  *
 */
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/04/18 10:36 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/04/18 10:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -39,6 +40,7 @@ metadata {
         capability "Refresh"
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
+        command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ]   
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
@@ -684,4 +686,18 @@ private Map getBatteryResult(rawValue) {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
     }    
 }
+
+def setMotion( mode ) {
+    switch (mode) {
+        case "active" : 
+            sendEvent(handleMotion(motionActive=true))
+            break
+        case "inactive" :
+            sendEvent(handleMotion(motionActive=false))
+            break
+        default :
+            break
+    }
+}
+
 
