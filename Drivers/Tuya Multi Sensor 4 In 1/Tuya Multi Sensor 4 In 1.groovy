@@ -1,6 +1,8 @@
 /**
  *  Tuya Multi Sensor 4 In 1 driver for Hubitat
  *
+ *  https://community.hubitat.com/t/alpha-tuya-zigbee-multi-sensor-4-in-1/92441
+ *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
  *
@@ -16,7 +18,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/04/18 10:29 PM"}
+def timeStamp() {"2022/04/18 10:36 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -26,7 +28,7 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
 metadata {
-    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "Battery"
         capability "MotionSensor"
