@@ -14,12 +14,12 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-18 kkossev  - setMotion command;
+ * ver. 1.0.2 2022-04-19 kkossev  - setMotion command; state.HashStringPars
  *
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/04/18 10:58 PM"}
+def timeStamp() {"2022/04/19 10:47 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -37,10 +37,12 @@ metadata {
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
         capability "TamperAlert"
+        capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Refresh"
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
         command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ]   
+        command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
@@ -508,6 +510,7 @@ def installed() {
 // called when preferences are saved
 // runs when save is clicked in the preferences section
 def updated() {
+    checkDriverVersion()
     //ArrayList<String> cmds = []
     
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
@@ -539,6 +542,7 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
+        // no driver version change
     }
     else {
         if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
@@ -568,7 +572,9 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || device.getDataValue("motionReset") == null) device.updateSetting("motionReset", 0)
-    
+    //
+    state.hashStringPars = calcParsHashString()
+    if (settings?.logEnable) log.trace "${device.displayName} state.hashStringPars = ${state.hashStringPars}"
 }
 
 def tuyaBlackMagic() {
@@ -700,4 +706,38 @@ def setMotion( mode ) {
     }
 }
 
+import java.security.MessageDigest
+String generateMD5(String s) {
+    if(s != null) {
+        //return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
+        return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
+    } else {
+        return "null"
+    }
+}
 
+
+def calcParsHashString() {
+    String hashPars
+    hashPars  = generateMD5(logEnable.toString())[-2..-1]
+    hashPars += generateMD5(txtEnable.toString())[-2..-1]
+    hashPars += generateMD5(motionReset.toString())[-2..-1]
+    return hashPars
+}
+
+def getHashParam(num) {
+    try {
+        return state.hashStringPars[num*2..num*2+1]
+    }
+    catch (e) {
+        return null 
+    }
+}
+
+def test() {
+    def value = true
+    def str = value.toString()
+    def hash = generateMD5(str)
+    //log.trace "str=${str}  hash=${hash[-2..-1]}"
+    log.trace "calcHashStringPars()=${calcParsHashString()}"
+}
