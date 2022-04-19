@@ -14,12 +14,12 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-19 kkossev  - setMotion command; state.HashStringPars
+ * ver. 1.0.2 2022-04-19 kkossev  - setMotion command;s tate.HashStringPars; advancedOptions
  *
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/04/19 10:47 PM"}
+def timeStamp() {"2022/04/19 10:55 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -91,9 +91,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-		input "motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0
+        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)    // par0
+        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)    // par1
+		input "motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0    // par2
+        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)    // par1
     }
 }
 
@@ -522,6 +523,19 @@ def updated() {
     else {
         unschedule(logsOff)
     }
+    if (state.hashStringPars != calcParsHashString()) {
+        if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
+        // par0 = logEnable; par1 = txtEnable; par2 = motionReset; par3 = advancedOptions
+        if (settings?.advancedOptions == true) {
+            if (settings?.logEnable) log.debug "${device.displayName} sending the changed AdvancedOptions"
+        }
+        //
+        state.hashStringPars = calcParsHashString()
+    }
+    else {
+        if (settings?.logEnable) log.debug "${device.displayName} no change in state.hashStringPars = {state.hashStringPars}"
+    }
+    
     /*
     cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
    	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
@@ -572,6 +586,8 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || device.getDataValue("motionReset") == null) device.updateSetting("motionReset", 0)
+    if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
+    
     //
     state.hashStringPars = calcParsHashString()
     if (settings?.logEnable) log.trace "${device.displayName} state.hashStringPars = ${state.hashStringPars}"
@@ -722,6 +738,8 @@ def calcParsHashString() {
     hashPars  = generateMD5(logEnable.toString())[-2..-1]
     hashPars += generateMD5(txtEnable.toString())[-2..-1]
     hashPars += generateMD5(motionReset.toString())[-2..-1]
+    hashPars += generateMD5(advancedOptions.toString())[-2..-1]
+    
     return hashPars
 }
 
