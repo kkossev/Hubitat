@@ -14,12 +14,12 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-19 kkossev  - setMotion command;s tate.HashStringPars; advancedOptions
+ * ver. 1.0.2 2022-04-19 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable
  *
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/04/19 10:55 PM"}
+def timeStamp() {"2022/04/19 11:56 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -49,7 +49,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Tuya Multi Sensor 2 In 1"          // https://zigbee.blakadder.com/Tuya_LY-TAD-K616S-ZB.html // Model LY-TAD-K616S-ZB
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrfecyku", deviceJoinName: "Tuya Human presence sensor"        // fz.tuya_radar_sensor
@@ -94,7 +93,10 @@ metadata {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)    // par0
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)    // par1
 		input "motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0    // par2
-        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)    // par1
+        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)    // par3
+        if (advancedOptions == true) {
+            input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected</i>", defaultValue: true)    // par4
+        }
     }
 }
 
@@ -326,13 +328,9 @@ def processTuyaCluster( descMap ) {
                     if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (PIR enable?) DP=0x6D fncmd = ${fncmd}"  
                 }
                 break
-            case 0x6F :
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 111: // 0x6f led enable
-                    if (settings?.txtEnable) log.info "${device.displayName} led enable is ${fncmd}"                
-                }
-                else {
-                    if (settings?.logEnable) log.info "${device.displayName}  <b>UNKNOWN</b> (led enable?) DP=0x6F fncmd = ${fncmd}"  
-                }
+            case 0x6F : // case 111: // 0x6f led enable
+                if (settings?.txtEnable) log.info "${device.displayName} LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
+                device.updateSetting("ledEnable", [value:fncmd as boolean, type:"boolean"])
                 break
             case 0x70 :
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 112: 0x70 reporting enable
@@ -512,7 +510,7 @@ def installed() {
 // runs when save is clicked in the preferences section
 def updated() {
     checkDriverVersion()
-    //ArrayList<String> cmds = []
+    ArrayList<String> cmds = []
     
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
@@ -527,7 +525,10 @@ def updated() {
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
         // par0 = logEnable; par1 = txtEnable; par2 = motionReset; par3 = advancedOptions
         if (settings?.advancedOptions == true) {
-            if (settings?.logEnable) log.debug "${device.displayName} sending the changed AdvancedOptions"
+            if (getHashParam(4) != calcHashParam(4)) {    // ledEnable par4
+                cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
+                if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
+            }
         }
         //
         state.hashStringPars = calcParsHashString()
@@ -539,9 +540,12 @@ def updated() {
     /*
     cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
    	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
+    */
+    if (cmds != null) {
+        if (settings?.logEnable) log.debug "${device.displayName} sending the changed AdvancedOptions"
+        sendZigbeeCommands( cmds )  
+    }
     if (settings?.txtEnable) log.info "${device.displayName} Update finished"
-    sendZigbeeCommands( cmds )  
-  */
 }
 
 
@@ -587,7 +591,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || device.getDataValue("motionReset") == null) device.updateSetting("motionReset", 0)
     if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
-    
+    if (fullInit == true || device.getDataValue("ledEnable") == null) device.updateSetting("ledEnable", true)
     //
     state.hashStringPars = calcParsHashString()
     if (settings?.logEnable) log.trace "${device.displayName} state.hashStringPars = ${state.hashStringPars}"
@@ -739,6 +743,7 @@ def calcParsHashString() {
     hashPars += generateMD5(txtEnable.toString())[-2..-1]
     hashPars += generateMD5(motionReset.toString())[-2..-1]
     hashPars += generateMD5(advancedOptions.toString())[-2..-1]
+    hashPars += generateMD5(ledEnable.toString())[-2..-1]
     
     return hashPars
 }
@@ -751,6 +756,26 @@ def getHashParam(num) {
         return null 
     }
 }
+
+
+def calcHashParam(num) {
+    try {
+        switch (num) {
+            case 0 : return generateMD5(logEnable.toString())[-2..-1]
+            case 1 : return generateMD5(txtEnable.toString())[-2..-1]
+            case 2 : return generateMD5(motionReset.toString())[-2..-1]
+            case 3 : return generateMD5(advancedOptions.toString())[-2..-1]
+            case 4 : return generateMD5(ledEnable.toString())[-2..-1]
+            default :
+                return null
+        }
+    }
+    catch (e) {
+        return null 
+    }
+}
+
+
 
 def test() {
     def value = true
