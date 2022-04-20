@@ -14,12 +14,12 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-19 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable
+ * ver. 1.0.2 2022-04-20 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!
  *
 */
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/04/19 11:56 PM"}
+def timeStamp() {"2022/04/20 10:09 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -41,13 +41,18 @@ metadata {
         capability "Refresh"
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
-        command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ]   
-        command "test"
+        command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ] 
+        
+        command "test", [
+            [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
+            [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
+            [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
+        ]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // KK
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"          // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Tuya Multi Sensor 2 In 1"          // https://zigbee.blakadder.com/Tuya_LY-TAD-K616S-ZB.html // Model LY-TAD-K616S-ZB
@@ -246,7 +251,7 @@ def processTuyaCluster( descMap ) {
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
                 }
-                else {     // battery for 3 in 1;  
+                else {     // battery level for 3 in 1;  
                  if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     def rawValue = 0
                     if (fncmd == 0) rawValue = 100           // Battery Full
@@ -260,19 +265,6 @@ def processTuyaCluster( descMap ) {
                     getBatteryPercentageResult(rawValue*2)
                 }
                 break
-            case 0x6E : // (110) Tuya 4 in 1
-                if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-                def rawValue = 0
-                if (fncmd == 0) rawValue = 100           // Battery Full
-                else if (fncmd == 1) rawValue = 75       // Battery High
-                else if (fncmd == 2) rawValue = 50       // Battery Medium
-                else if (fncmd == 3) rawValue = 25       // Battery Low
-                else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered !
-                else {
-                    rawValue = fncmd
-                }
-                getBatteryPercentageResult(rawValue*2)
-                break 
             case 0x67 : //  Tuya 3 in 1 (103) -> tamper
                 def value = fncmd==0 ? 'clear' : 'detected'
                 if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${value}"
@@ -299,53 +291,81 @@ def processTuyaCluster( descMap ) {
                     humidityEvent (fncmd)
                 }
                 break
-            case 0x6A : 
+            case 0x6A : // 106
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 106: // 0x6a lux calibration
                     def val = fncmd;
                     if (val > 4294967295) val = val - 4294967295;                    
                     if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
                 }
-                else {    //  Tuya 3 in 1 (105) -> humidity in %
-                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (lux calibration?) DP=0x6A fncmd = ${fncmd}"  
+                else {    //  Tuya 3 in 1 temperature scale Celsius/Fahrenheit
+                    if (settings?.logEnable) log.info "${device.displayName} Temperature Scale is: ${fncmd=0 ? 'Celsius' : 'Fahrenheit'} (DP=0x6A fncmd = ${fncmd})"  
                 }
                 break
-            case 0x6B : 
+            case 0x6B : // 107
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    //  Tuya 4 in 1 (107) -> temperature in °C
                     temperatureEvent( fncmd / 10.0 )
                 }
-                else {
-                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (?) DP=0x6B fncmd = ${fncmd}"  
+                else { // 3in1
+                    if (settings?.logEnable) log.info "${device.displayName} Min Temp is: ${fncmd} (DP=0x6B)"  
                 }
                 break            
             case 0x6C : //  Tuya 4 in 1 (108) -> humidity in %
-                humidityEvent (fncmd)
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {
+                    humidityEvent (fncmd)
+                }
+                else { // 3in1
+                    if (settings?.logEnable) log.info "${device.displayName} Max Temp is: ${fncmd} (DP=0x6C)"  
+                }
                 break
             case 0x6D :
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 109: 0x6d PIR enable
                     if (settings?.txtEnable) log.info "${device.displayName} PIR enable is ${fncmd}"                
                 }
-                else {
-                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (PIR enable?) DP=0x6D fncmd = ${fncmd}"  
+                else { // 3in1
+                    if (settings?.logEnable) log.info "${device.displayName} Min Humidity is: ${fncmd} (DP=0x6D)"  
                 }
                 break
-            case 0x6F : // case 111: // 0x6f led enable
-                if (settings?.txtEnable) log.info "${device.displayName} LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
-                device.updateSetting("ledEnable", [value:fncmd as boolean, type:"boolean"])
+            case 0x6E : // (110) Tuya 4 in 1
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {
+                    if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    def rawValue = 0
+                    if (fncmd == 0) rawValue = 100           // Battery Full
+                    else if (fncmd == 1) rawValue = 75       // Battery High
+                    else if (fncmd == 2) rawValue = 50       // Battery Medium
+                    else if (fncmd == 3) rawValue = 25       // Battery Low
+                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered !
+                    else {
+                        rawValue = fncmd
+                    }
+                    getBatteryPercentageResult(rawValue*2)
+                }
+                else {  //  3in1
+                    if (settings?.logEnable) log.info "${device.displayName} Max Humidity is: ${fncmd} (DP=0x6E)"  
+                }
+                break 
+            case 0x6F : // (111) Tuya 4 in 1: // 0x6f led enable
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') { 
+                    if (settings?.txtEnable) log.info "${device.displayName} LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
+                    device.updateSetting("ledEnable", [value:fncmd as boolean, type:"boolean"])
+                }
+                else { // 3in1 - temperature alarm switch
+                    if (settings?.logEnable) log.info "${device.displayName} Temperature alarm switch is: ${fncmd} (DP=0x6F)"  
+                }
                 break
-            case 0x70 :
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 112: 0x70 reporting enable
+            case 0x70 : // (112)
+                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 112: 0x70 reporting enable (Alarm type)
                     if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"                
                 }
                 else {
-                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x70 reporting enable?) DP=0x70 fncmd = ${fncmd}"  
+                    if (settings?.logEnable) log.info "${device.displayName} Humidity alarm switch is: ${fncmd} (DP=0x6F)"  
                 }
                 break
             case 0x71 :
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 113: 0x71 unknown  ( ENUM)
                     if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
                 }
-                else {
-                    if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
+                else {    // 3in1 - Alarm Type
+                    if (settings?.txtEnable) log.info "${device.displayName} Alar type is: ${fncmd}"                
                 }
                 break
             default :
@@ -777,10 +797,12 @@ def calcHashParam(num) {
 
 
 
-def test() {
-    def value = true
-    def str = value.toString()
-    def hash = generateMD5(str)
-    //log.trace "str=${str}  hash=${hash[-2..-1]}"
-    log.trace "calcHashStringPars()=${calcParsHashString()}"
-}
+
+def test( dpCommand, dpValue, dpTypeString ) {
+    ArrayList<String> cmds = []
+    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
+    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
+    log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
+    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
+}    
+
