@@ -11,7 +11,7 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  *
- *  ver. 1.0.0 2022-04-21 kkossev - first version: - 
+ *  ver. 1.0.0 2022-04-21 kkossev - inital version
  *
  */
 import groovy.json.*
@@ -19,22 +19,22 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/21 10:18 PM"}
+def timeStamp() {"2022/04/21 10:49 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
         capability "Actuator"    
         //capability "Sensor"
         capability "Valve"
-        capability "Polling"
-        capability "Refresh"
-        
+        //capability "Polling"
+        //capability "Refresh"
+        /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
-        
+        */
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_iedbgyxt"     // https://community.hubitat.com/t/generic-zigbee-3-0-valve-not-getting-fingerprint/92614
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"     // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
@@ -46,11 +46,13 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+/*        
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value==true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
+*/
     }
 }
 
@@ -144,11 +146,13 @@ def switchEvent( value ) {
 
     def map = [:] 
     boolean bWasChange = false
+    /*
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
         runInMillis( debouncingTimer, switchDebouncingClear)
         return null
     }
+    */
     map.type = state.isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
