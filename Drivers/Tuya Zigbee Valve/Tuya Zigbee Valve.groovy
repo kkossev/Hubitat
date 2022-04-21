@@ -19,7 +19,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/21 10:49 PM"}
+def timeStamp() {"2022/04/21 11:55 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
@@ -39,27 +39,23 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"     // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"     // unknown 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"     // clusters verified! model: 'ZN231392'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"     // clusters verified
+        
+        
    
     }
     
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-/*        
-        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
-        if (autoPollingEnabled?.value==true) {
-            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
-                   range: "10..3600", defaultValue: defaultPollingInterval)
-        }
-*/
     }
 }
 
 // Constants
 @Field static final Integer presenceCountTreshold = 3
-@Field static final Integer defaultPollingInterval = 60
-@Field static final Integer debouncingTimer = 300
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
@@ -109,7 +105,7 @@ def parse(String description) {
             attrData.each {
                 def map = [:]
                 if (it.status == "86") {
-                    disableUnsupportedAttribute(descMap.cluster, it.attrId)
+                    if (logEnable==true) log.warn "Read attribute response: unsupported Attributte ${it.attrId} cluster ${descMap.cluster}"
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
                         powerEvent(zigbee.convertHexToInt(it.value)/powerDiv)
@@ -146,24 +142,11 @@ def switchEvent( value ) {
 
     def map = [:] 
     boolean bWasChange = false
-    /*
-    if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
-        if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
-        runInMillis( debouncingTimer, switchDebouncingClear)
-        return null
-    }
-    */
     map.type = state.isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "Valve  state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
-        if (autoPollingEnabled == true) {
-            runInMillis(5000, pollSwitch)
-            runIn( pollingInterval, autoPoll) // restart polling interval timer
-        }
-        state.switchDebouncing = true
         state.lastSwitchState = value
-        runInMillis( debouncingTimer, switchDebouncingClear)
     }
     map.name = "valve"
     map.value = value
@@ -236,84 +219,41 @@ def parseSimpleDescriptorResponse(Map descMap) {
     }
 }
 
-def disableUnsupportedAttribute(String clusterId, String attrId) {
-    switch (clusterId) {
-        case "0006" :    // Switch
-            if (logEnable==true) log.warn "Switch polling is not supported -> Switch polling will be diabled."
-            state.switchPollingSupported = false
-            break
-        default :
-            if (logEnable==true) log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
-            break
-    }
-}
-
 def parseZHAcommand( Map descMap) {
     switch (descMap.command) {
         case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
             def status = descMap.data[2]
             def attrId = descMap.data[1] + descMap.data[0] 
             if (status == "86") {
-                disableUnsupportedAttribute(descMap.clusterId, attrId)
-                if (logEnable==true) log.trace "descMap = ${descMap}"
+                if (logEnable==true) log.warn "Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}  descMap = ${descMap}"
             }
             else {
                 switch (descMap.clusterId) {
                     case "EF00" :
-                        //if (logEnable==true) log.warn "Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
+                        if (logEnable==true) log.debug "Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
                         def attribute = getAttribute(descMap.data)
                         def value = getAttributeValue(descMap.data)
-                        //if (logEnable==true) log.trace "attribute=${attribute} value=${value}"
+                        if (logEnable==true) log.trace "Tuya cluster attribute=${attribute} value=${value}"
                         def map = [:]
-                        def cmd = /*descMap.data[0]+*/ descMap.data[2]
-                        switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
+                        def cmd = descMap.data[2]
+                        switch (cmd) {
                             case "01" : // switch
                                 switchEvent(value==0 ? "off" : "on")
                                 break
-                            case "11" : // Energy
-                                energyEvent(value/100)
+                            case "07" : // Countdown
+                                if (txtEnable==true) log.info "${device.displayName} Countdown is: ${value}"
                                 break
-                            case "12" : // Amperage
-                                amperageEvent(value/1000)
+                            case "0D" : // relay status
+                                if (txtEnable==true) log.info "${device.displayName} relay status is: ${value}"
                                 break
-                            case "13" : // Power
-                                powerEvent(value/10)
+                            case "13" : // inching switch(
+                                if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
                                 break
-                            case "14" : // Voltage
-                                voltageEvent(value/10)
+                            case "D1" : // cycle timer
+                                if (txtEnable==true) log.info "${device.displayName} cycle timeris: ${value}"
                                 break
-                            case "65" : // Voltage HOCH
-                                voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / 10)
-                                break
-                            case "66" : // Amperage HOCH
-                                amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 1000)
-                                break
-                            case "67" : // hochActivePower: 103
-                                powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 10)
-                                break
-                            case "69" : // hochTemperature: 105
-                                log.info "temperature is ${(zigbee.convertHexToInt(descMap.data[9]))}"
-                                break
-                            case "09" : // hochCountdownTimer: 9
-                            case "1A" : // hochFaultCode: 26
-                            case "1B" : // hochRelayStatus: 27 (power recovery behaviour)
-                            case "1D" : // hochChildLock: 29
-                            case "68" : // hochLeakageCurrent: 104
-                            case "6A" : // hochRemainingEnergy: 106
-                            case "6B" : // "recharge energy" : 107
-                            case "6C" : // hochCostParameters: 108 (non-zero)
-                            case "6D" : // hochLeakageParameters: 109 (non-zero)
-                            case "6E" : // hochVoltageThreshold: 110 (non-zero)
-                            case "6F" : // hochCurrentThreshold: 111 (non-zero)
-                            case "70" : // hochTemperatureThreshold: 112 (non-zero)
-                            case "71" : // hochTotalActivePower: 113
-                            case "72" : // hochEquipmentNumberType: 114
-                            case "73" : //: "clear energy",115
-                            case "74" : // hochLocking: 116  (test button pressed)
-                            case "75" : // hochTotalReverseActivePower: 117
-                            case "76" : // hochHistoricalVoltage: 118
-                            case "77" : // hochHistoricalCurrent: 119
-                                log.trace "cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8)}"
+                            case "D2" : // random timer
+                                if (txtEnable==true) log.info "${device.displayName} cycle timeris: ${value}"
                                 break
                             default :
                                 if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
@@ -426,9 +366,6 @@ def clearIsDigital() { state.isDigital = false }
 
 def isRefreshRequestClear() { state.isRefreshRequest = false }
 
-def switchDebouncingClear() { state.switchDebouncing = false }
-
-
 
 // * PING is used by Device-Watch in attempt to reach the Device
 def ping() {
@@ -464,20 +401,6 @@ def refresh() {
     poll( true )
 }
 
-def autoPoll() {
-    if (logEnable) {log.debug "autoPoll()"}
-    checkIfNotPresent()
-    if (autoPollingEnabled?.value == true) {
-        if ( pollingInterval != null ) 
-            runIn( pollingInterval, autoPoll)
-        else
-            runIn( defaultPollingInterval, autoPoll)
-    }
-    if (optimizations == true) 
-        poll( refreshAll = false )
-    else 
-        poll( refreshAll = true )
-}
 
 def tuyaBlackMagic() {
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
@@ -511,19 +434,6 @@ def updated(){
         unschedule(logsOff)
     }
 
-    if (autoPollingEnabled?.value==true) {
-        if ( pollingInterval != null ) {
-            runIn( pollingInterval, autoPoll)
-            if (txtEnable==true) log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
-        }
-        else {
-            runIn( defaultPollingInterval, autoPoll)
-        }
-    }
-    else {
-        unschedule(autoPoll)
-        if (txtEnable==true) log.info "Auto polling is <b>disabled</b>"
-    }
     if (txtEnable==true) log.info "configuring the switch and energy reporting.."
     configure()
 }
