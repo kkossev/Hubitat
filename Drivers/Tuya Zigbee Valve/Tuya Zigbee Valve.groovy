@@ -19,7 +19,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/21 11:55 PM"}
+def timeStamp() {"2022/04/21 11:25 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
@@ -28,6 +28,10 @@ metadata {
         capability "Valve"
         //capability "Polling"
         //capability "Refresh"
+        capability "Configuration"
+        //capability "Initialize"
+        //capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        
         /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -49,13 +53,22 @@ metadata {
     }
     
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        /*
+        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable automatic polling for checking the valve presence. Recommended value is <b>true</b></i>", defaultValue: true)
+        if (autoPollingEnabled?.value==true) {
+            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, minutes", description: "<i>The time period in which the valve will be checked for inactivity. Recommended value is <b>15 minutes</b></i>", 
+                   range: "1..1440", defaultValue: defaultPollingInterval)
+        }
+        */
     }
 }
 
 // Constants
 @Field static final Integer presenceCountTreshold = 3
+@Field static final Integer defaultPollingInterval = 15
+@Field static final Integer debouncingTimer = 300
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
@@ -142,25 +155,44 @@ def switchEvent( value ) {
 
     def map = [:] 
     boolean bWasChange = false
+    if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
+        if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}"} 
+        log.trace "DEBOUNCING and SAME state (${value}==${state.lastSwitchState}) -> starting debouncingTimer=${debouncingTimer}"
+        runInMillis( debouncingTimer, switchDebouncingClear)
+        return null
+    }
+    else {
+        log.trace "??? value=${value}  lastSwitchState=${state.lastSwitchState}"
+    }
+    
     map.type = state.isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
-        if (logEnable) {log.debug "Valve  state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
+        if (logEnable) {log.debug "Valve state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
+        state.switchDebouncing = true
         state.lastSwitchState = value
+        log.trace "DEBOUNCING different state (${value}<>${state.lastSwitchState}) -> starting debouncingTimer=${debouncingTimer}"
+        runInMillis( debouncingTimer, switchDebouncingClear)        
     }
+    else {
+        log.trace "SAME STATE ??? value=${value}  lastSwitchState=${state.lastSwitchState}"
+        state.switchDebouncing = true
+        runInMillis( debouncingTimer, switchDebouncingClear)     
+    }
+        
     map.name = "valve"
     map.value = value
     if (state.isRefreshRequest == true || state.model == "TS0601") {
-        map.descriptionText = "${device.displayName} valve is ${value}"
+        map.descriptionText = "${device.displayName} is ${value}"
     }
     else {
-        map.descriptionText = "${device.displayName} was ${value} [${map.type}]"
+        map.descriptionText = "${device.displayName} is ${value} [${map.type}]"
     }
-    if (optimizations==false || bWasChange==true ) 
-    {
+    //if ( bWasChange==true ) 
+    //{
         if (txtEnable) {log.info "${map.descriptionText}"}
         sendEvent(map)
-    }
+    //}
     clearIsDigital()
 }
 
@@ -287,22 +319,24 @@ def parseZHAcommand( Map descMap) {
             break
         case "24" :    // Tuya time sync
             log.trace "Tuya time sync"
-                        if (descMap?.clusterInt==0xEF00 && descMap?.command == "24") {        //getSETTIME
-                            if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
-                            def offset = 0
-                            try {
-                                offset = location.getTimeZone().getOffset(new Date().getTime())
-                                //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
-                            }
-                            catch(e) {
-                                if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
-                            }
-                            def cmds = zigbee.command(0xEF00, 0x24, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-                            if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
-                            if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
-                            cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
-                            return
-                        }
+            if (descMap?.clusterInt==0xEF00 && descMap?.command == "24") {        //getSETTIME
+                if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
+                def offset = 0
+                try {
+                    offset = location.getTimeZone().getOffset(new Date().getTime())
+                    //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
+                }
+                catch(e) {
+                    if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+                }
+                def cmds = zigbee.command(0xEF00, 0x24, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
+                if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
+                if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
+                cmds.each { 
+                    sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) 
+                }
+                return
+            }
             break
         default :
             if (logEnable==true) log.warn "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
@@ -342,6 +376,7 @@ private int getAttributeValue(ArrayList _data) {
 
 def close() {
     state.isDigital = true
+    log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} closing"}
     def cmds = zigbee.off()
     if (state.model == "TS0601") {
@@ -353,6 +388,7 @@ def close() {
 
 def open() {
     state.isDigital = true
+    log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} opening"}
     def cmds = zigbee.on()
     if (state.model == "TS0601") {
@@ -362,7 +398,8 @@ def open() {
     return cmds
 }
 
-def clearIsDigital() { state.isDigital = false }
+def clearIsDigital() { state.isDigital = false; log.trace "clearIsDigital()" }
+def switchDebouncingClear() { state.switchDebouncing = false; log.trace "switchDebouncingClear()"  }
 
 def isRefreshRequestClear() { state.isRefreshRequest = false }
 
@@ -452,11 +489,12 @@ void initializeVars( boolean fullInit = true ) {
     state.txCounter = 0
     
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
-    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    //if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
+    //if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
-    if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
+    //if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
+    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
 
 
@@ -471,12 +509,12 @@ void initializeVars( boolean fullInit = true ) {
     }
     def ep = device.getEndpointId()
     if ( ep  != null) {
-        state.destinationEP = ep
+        //state.destinationEP = ep
         if (logEnable==true) log.trace " destinationEP = ${state.destinationEP}"
     }
     else {
         if (txtEnable==true) log.warn " Destination End Point not found, please re-pair the device!"
-        state.destinationEP = "01"    // fallback
+        //state.destinationEP = "01"    // fallback
     }    
 }
 
@@ -501,7 +539,7 @@ def logInitializeRezults() {
 def initialize() {
     if (txtEnable==true) log.info "${device.displayName} Initialize()..."
     unschedule()
-    initializeVars()
+    initializeVars(fullInit = false)
     updated()            // calls also configure()
     runIn( 12, logInitializeRezults)
 }
@@ -524,7 +562,7 @@ void uninstalled() {
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
     if (state.lastPresenceState != "present") {
-    	sendEvent(name: "presence", value: "present") 
+    	sendEvent(name: "powerSource", value: "dc") 
         state.lastPresenceState = "present"
     }
     state.notPresentCounter = 0
@@ -536,7 +574,7 @@ def checkIfNotPresent() {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter > presenceCountTreshold) {
             if (state.lastPresenceState != "not present") {
-    	        sendEvent(name: "presence", value: "not present")
+    	        sendEvent(name: "powerSource", value: "unknown")
                 state.lastPresenceState = "not present"
                 if (logEnable==true) log.warn "not present!"
             }
