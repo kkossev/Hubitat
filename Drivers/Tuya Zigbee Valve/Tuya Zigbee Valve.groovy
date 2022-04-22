@@ -11,7 +11,7 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  *
- *  ver. 1.0.0 2022-04-21 kkossev - inital version
+ *  ver. 1.0.0 2022-04-23 kkossev - inital version
  *
  */
 import groovy.json.*
@@ -19,7 +19,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/04/21 11:25 PM"}
+def timeStamp() {"2022/04/23 11:47 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
@@ -31,7 +31,7 @@ metadata {
         capability "Configuration"
         //capability "Initialize"
         //capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
-        
+
         /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -96,7 +96,7 @@ def parse(String description) {
         else {
             if (txtEnable) {log.warn "received <b>unhandled event</b> ${event.name} = $event.value"} 
         }
-        return null //event
+        //return null //event
     }
     else {
         //List result = []
@@ -120,13 +120,6 @@ def parse(String description) {
                 if (it.status == "86") {
                     if (logEnable==true) log.warn "Read attribute response: unsupported Attributte ${it.attrId} cluster ${descMap.cluster}"
                 }
-                else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
-                        powerEvent(zigbee.convertHexToInt(it.value)/powerDiv)
-                        if (state.lastPower != zigbee.convertHexToInt(it.value)/powerDiv ) {
-                            if (logEnable) {log.trace "power changed from <b>${state.lastPower}</b> to <b>${zigbee.convertHexToInt(it.value)/powerDiv}</b>"}
-                            state.lastPower = zigbee.convertHexToInt(it.value)/powerDiv
-                        }
-                }
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
                     if (logEnable) {log.debug "Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
                 }
@@ -144,7 +137,7 @@ def parse(String description) {
         else {
             if (logEnable==true)  log.warn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
-        return null //result
+        //return null //result
     } // descMap
 }
 
@@ -157,12 +150,11 @@ def switchEvent( value ) {
     boolean bWasChange = false
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}"} 
-        log.trace "DEBOUNCING and SAME state (${value}==${state.lastSwitchState}) -> starting debouncingTimer=${debouncingTimer}"
         runInMillis( debouncingTimer, switchDebouncingClear)
         return null
     }
     else {
-        log.trace "??? value=${value}  lastSwitchState=${state.lastSwitchState}"
+        //log.trace "value=${value}  lastSwitchState=${state.lastSwitchState}"
     }
     
     map.type = state.isDigital == true ? "digital" : "physical"
@@ -171,11 +163,9 @@ def switchEvent( value ) {
         if (logEnable) {log.debug "Valve state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
         state.switchDebouncing = true
         state.lastSwitchState = value
-        log.trace "DEBOUNCING different state (${value}<>${state.lastSwitchState}) -> starting debouncingTimer=${debouncingTimer}"
         runInMillis( debouncingTimer, switchDebouncingClear)        
     }
     else {
-        log.trace "SAME STATE ??? value=${value}  lastSwitchState=${state.lastSwitchState}"
         state.switchDebouncing = true
         runInMillis( debouncingTimer, switchDebouncingClear)     
     }
@@ -318,7 +308,7 @@ def parseZHAcommand( Map descMap) {
             }
             break
         case "24" :    // Tuya time sync
-            log.trace "Tuya time sync"
+            //log.trace "Tuya time sync"
             if (descMap?.clusterInt==0xEF00 && descMap?.command == "24") {        //getSETTIME
                 if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
                 def offset = 0
@@ -376,7 +366,7 @@ private int getAttributeValue(ArrayList _data) {
 
 def close() {
     state.isDigital = true
-    log.trace "state.isDigital = ${state.isDigital}"
+    //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} closing"}
     def cmds = zigbee.off()
     if (state.model == "TS0601") {
@@ -388,7 +378,7 @@ def close() {
 
 def open() {
     state.isDigital = true
-    log.trace "state.isDigital = ${state.isDigital}"
+    //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} opening"}
     def cmds = zigbee.on()
     if (state.model == "TS0601") {
@@ -398,8 +388,8 @@ def open() {
     return cmds
 }
 
-def clearIsDigital() { state.isDigital = false; log.trace "clearIsDigital()" }
-def switchDebouncingClear() { state.switchDebouncing = false; log.trace "switchDebouncingClear()"  }
+def clearIsDigital() { state.isDigital = false; /*log.trace "clearIsDigital()"*/ }
+def switchDebouncingClear() { state.switchDebouncing = false; /*log.trace "switchDebouncingClear()" */ }
 
 def isRefreshRequestClear() { state.isRefreshRequest = false }
 
