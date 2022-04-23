@@ -22,12 +22,13 @@
  * ver. 2.2.3 2021-12-01 kkossev     - added fingerprint for Tuya Remote _TZ3000_pcqjmcud
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
- * ver. 2.4.0 2022-03-31 kkossev     - experimental support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
+ * ver. 2.4.0 2022-03-31 kkossev     - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
+ * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart 
  *
  */
 
-def version() { "2.4.0" }
-def timeStamp() {"2022/03/31 12:54 PM"}
+def version() { "2.4.1" }
+def timeStamp() {"2022/04/23 7:04 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -139,11 +140,15 @@ def parse(String description) {
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
                     if (logEnable) {log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
-                    runInMillis(DEBOUNCE_TIME, buttonDebounce)    // restart the debouncing timer again
+                    runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
+                    if (logEnable) {log.debug "restarted debouncing timer ${DEBOUNCE_TIME}ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})"}
                     return null 
                 }
             }
             state.lastButtonNumber = buttonNumber
+        }
+        else {
+            if (logEnable) {log.warn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.lastButtonNumber}"}
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
 	        def descriptionText = "button $buttonNumber was $buttonState"
@@ -155,7 +160,7 @@ def parse(String description) {
             //if (logEnable) {log.debug "Creating event: ${event}"}
 		    result = createEvent(event)
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
-                runInMillis(DEBOUNCE_TIME, buttonDebounce)
+                runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
             }
 	    } 
 	} // if catchall
@@ -254,7 +259,7 @@ def updated()
 }
 
 def buttonDebounce(button) {
-    if (logEnable) log.warn "debouncing button ${state.lastButtonNumber}"
+    if (logEnable) log.debug "debouncing timer for button ${state.lastButtonNumber} expired."
     state.lastButtonNumber = 0
 }
 
