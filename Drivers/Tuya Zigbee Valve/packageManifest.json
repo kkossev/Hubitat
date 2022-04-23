@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Valve",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-04-23",
-  "releaseNotes": "ver 1.0.0 2022-04-23 - inital version\n",
+  "dateReleased": "2022-04-24",
+  "releaseNotes": "1.0.0 2022-04-22 - inital version\n1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource\n",
 "drivers": [
     {
       "id": "f13edc5b-1560-4b1f-8123-4546162fedf8",
