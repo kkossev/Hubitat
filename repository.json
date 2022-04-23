@@ -71,6 +71,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "953f1da4-5f70-4845-a157-ca9d36e80c2c",
+      "name": "Tuya Zigbee Valve",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/packageManifest.json",
+      "description": "Tuya Zigbee Water/Gas Valve driver for Hubitat Elevation hub",
+       "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
