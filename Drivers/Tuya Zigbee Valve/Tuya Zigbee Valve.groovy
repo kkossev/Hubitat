@@ -1,5 +1,7 @@
 /**
  *  Tuya Zigbee Valve driver for Hubitat Elevation
+ * 
+ *  https://community.hubitat.com/t/alpha-tuya-zigbee-valve-driver/92788 
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -11,26 +13,26 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  *
- *  ver. 1.0.0 2022-04-23 kkossev - inital version
+ *  ver. 1.0.0 2022-04-22 kkossev - inital version
+ *  ver. 1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource
+ *
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/04/23 11:47 PM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/04/23 10:10 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
         capability "Actuator"    
-        //capability "Sensor"
         capability "Valve"
-        //capability "Polling"
-        //capability "Refresh"
+        capability "Refresh"
         capability "Configuration"
         //capability "Initialize"
-        //capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
 
         /*
         command "test", [
@@ -77,7 +79,7 @@ metadata {
 def parse(String description) {
     if (logEnable==true) {log.debug "description is $description"}
     checkDriverVersion()
-    //setPresent()
+    setPresent()    // powerSource event
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
     }
@@ -150,7 +152,7 @@ def switchEvent( value ) {
     boolean bWasChange = false
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}"} 
-        runInMillis( debouncingTimer, switchDebouncingClear)
+        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
         return null
     }
     else {
@@ -163,17 +165,17 @@ def switchEvent( value ) {
         if (logEnable) {log.debug "Valve state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
         state.switchDebouncing = true
         state.lastSwitchState = value
-        runInMillis( debouncingTimer, switchDebouncingClear)        
+        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])        
     }
     else {
         state.switchDebouncing = true
-        runInMillis( debouncingTimer, switchDebouncingClear)     
+        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])     
     }
         
     map.name = "valve"
     map.value = value
-    if (state.isRefreshRequest == true || state.model == "TS0601") {
-        map.descriptionText = "${device.displayName} is ${value}"
+    if (state.isRefreshRequest == true) {
+        map.descriptionText = "${device.displayName} is ${value} (Refresh)"
     }
     else {
         map.descriptionText = "${device.displayName} is ${value} [${map.type}]"
@@ -372,7 +374,7 @@ def close() {
     if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
     }
-    runInMillis( digitalTimer, clearIsDigital)
+    runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     return cmds
 }
 
@@ -384,7 +386,7 @@ def open() {
     if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
-    runInMillis( digitalTimer, clearIsDigital)
+    runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     return cmds
 }
 
@@ -399,33 +401,21 @@ def ping() {
     return refresh()
 }
 
-def pollSwitch() {
-    if (logEnable) {log.debug "pollSwitch().."}
-    List<String> cmds = []
-    cmds += cmds = zigbee.onOffRefresh()  
-    state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)       // 3 seconds
-    return cmds
-}
-
-
 // Sends refresh / readAttribute commands to the device
-def poll( refreshAll = false ) {
-    if (logEnable) {log.trace "polling.. refreshAll is ${refreshAll}"}
+def poll() {
+    if (logEnable) {log.trace "${device.displayName} polling.."}
     checkDriverVersion()
     List<String> cmds = []
-    if (state.switchPollingSupported == true && refreshAll == true ) {
-        cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
-    }
     state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
+    cmds = zigbee.onOffRefresh()
+    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     return cmds
 }
 
 
 def refresh() {
-    if (logEnable) {log.debug "refresh()..."}
-    poll( true )
+    if (logEnable) {log.debug "${device.displayName} sending refresh() command..."}
+    poll()
 }
 
 
@@ -454,7 +444,7 @@ def updated(){
     if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(/*1800*/86400, logsOff)    // turn off debug logging after /*30 minutes*/24 hours
+        runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
         if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
     }
     else {
@@ -480,10 +470,10 @@ void initializeVars( boolean fullInit = true ) {
     
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
     //if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
-    //if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
-    //if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
+    if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = false
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
 
@@ -531,14 +521,14 @@ def initialize() {
     unschedule()
     initializeVars(fullInit = false)
     updated()            // calls also configure()
-    runIn( 12, logInitializeRezults)
+    runIn( 12, logInitializeRezults, [overwrite: true])
 }
 
 // This method is called when the device is first created.
 def installed() {
     if (txtEnable==true) log.info "${device.displayName} Installed()..."
     initializeVars()
-    runIn( 5, initialize)
+    runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
     // HE will autoomaticall call configure() method here
 }
@@ -551,10 +541,10 @@ void uninstalled() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if (state.lastPresenceState != "present") {
+    //if (state.lastPresenceState != "present") {
     	sendEvent(name: "powerSource", value: "dc") 
         state.lastPresenceState = "present"
-    }
+    //}
     state.notPresentCounter = 0
 }
 
