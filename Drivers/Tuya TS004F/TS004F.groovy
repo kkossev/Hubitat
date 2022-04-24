@@ -23,12 +23,12 @@
  * ver. 2.2.4 2021-12-05 kkossev     - added support for 'YSR-MINI-Z Remote TS004F'
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
  * ver. 2.4.0 2022-03-31 kkossev     - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
- * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart 
+ * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms  
  *
  */
 
 def version() { "2.4.1" }
-def timeStamp() {"2022/04/23 7:04 PM"}
+def timeStamp() {"2022/04/23 7:55 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -71,7 +71,7 @@ metadata {
 // Constants
 @Field static final Integer DIMMER_MODE = 0
 @Field static final Integer SCENE_MODE  = 1
-@Field static final Integer DEBOUNCE_TIME = 900
+@Field static final Integer DEBOUNCE_TIME = 1000
 
 
 // Parse incoming device messages to generate events
