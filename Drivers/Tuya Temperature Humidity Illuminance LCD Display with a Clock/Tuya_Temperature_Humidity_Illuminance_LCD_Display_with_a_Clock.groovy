@@ -15,12 +15,13 @@
  * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
  * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added; 
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
- * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) AUBESS illuminance only tests
+ * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) AUBESS illuminance only tests; ModelGroup is shown in State Variables
+ *
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/04/25 7:41 PM"}
+def timeStamp() {"2022/04/25 9:36 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -482,6 +483,7 @@ def updated() {
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
+    state.modelGroup = getModelGroup()
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -610,6 +612,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("maxReportingTimeTemp") == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"decimal"])
     if (fullInit == true || device.getDataValue("minReportingTimeHumidity") == null) device.updateSetting("minReportingTimeHumidity",  [value:60, type:"decimal"])
     if (fullInit == true || device.getDataValue("maxReportingTimeHumidity") == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"decimal"])
+    if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
     
 }
 
