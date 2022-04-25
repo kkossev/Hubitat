@@ -21,7 +21,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/04/25 2:21 PM"}
+def timeStamp() {"2022/04/25 6:13 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -291,14 +291,14 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x02 : // humidity in %
                 if (getModelGroup() != 'TS0601_AUBESS') {
-                        humidityEvent (fncmd)
+                    humidityEvent( fncmd )
                 }
                 else {
-                    illuminanceEvent (fncmd * 10000)
+                    illuminanceEventLux( safeToInt( fncmd ) )
                 }
                 break 
             case 0x03 : // illuminance - NOT TESTED!
-                illuminanceEvent (fncmd)
+                illuminanceEvent(fncmd)
                 break 
             case 0x04 : // battery
                 getBatteryPercentageResult(fncmd * 2)
@@ -465,6 +465,10 @@ def illuminanceEvent( illuminance ) {
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
+def illuminanceEventLux( Integer lux ) {
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux")
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+}
 
 //  called from initialize()
 def installed() {
