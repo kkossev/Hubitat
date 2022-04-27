@@ -1,10 +1,11 @@
 {
   "packageName": "Moes ZSS-ZK-THL_TS0222",
   "author": "Krassimir Kossev",
-  "version": "1.2.3",
-  "minimumHEVersion": "1.0.0",
-  "dateReleased": "2021-10-02",
-  "drivers": [
+  "version": "1.3.0",
+  "minimumHEVersion": "2.2.1",
+  "dateReleased": "2022-01-24",
+  "releaseNotes": "1.0.0 2021-09-05 - Initial version\n1.2.3 2021-10-02 - Removed any clusters bindings and reporting configurations\n1.3.0 2022-01-24 A la Tuya GW pairing initialization",
+    "drivers": [
     {
       "id": "e6880c42-66c5-49b1-a3d9-2fab3aadb86b",
       "name": "Moes ZSS-ZK-THL sensor (TS0222)",

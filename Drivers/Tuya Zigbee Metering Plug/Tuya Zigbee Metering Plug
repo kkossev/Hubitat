@@ -24,15 +24,17 @@
  *  ver. 1.3.2 2022-01-12 kkossev - Tuya cluster command bug fix (HIKING TOMZN TS0601)
  *  ver. 1.4.0 2022-01-23 kkossev - debug / trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; 
  *                                  default debug loging is false, optimizations are true; switch digital/physical bug fixed; added driver version check
- *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprints (2 variants)
+ *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprint (no power monitoring!)
+ *  ver. 1.4.2 2022-02-20 kkossev - missing Switch capability bug fix
+ *  ver. 1.4.3 2022-02-15 kkossev - added 'Tuya RC-RCBO Circuit Breaker' 
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.4.1" }
-def timeStamp() {"2022/01/23 11:09 PM"}
+def version() { "1.4.2" }
+def timeStamp() {"2022/02/30 11:16 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -41,7 +43,7 @@ metadata {
         capability "CurrentMeter"
         capability "VoltageMeasurement"
         capability "Actuator"    
-        //capability "Switch"  Outlet has same attribute switch and functions on off
+        capability "Switch"
         capability "Outlet"
         capability "Refresh"
         capability "Health Check"
@@ -51,17 +53,23 @@ metadata {
         capability "Polling"
         command "initialize"
 
-        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
-        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
-        fingerprint profileId: "0104", inClusters: "0000, 0004, 0005, 0006, 0702, 0B04", outClusters: "0019, 000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702,0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
+        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702,0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
+        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702 0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F var. 1"  
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F var. 2"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cymsnfvf", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"  
     }
+    
+    
+    
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
@@ -405,7 +413,7 @@ def parseZHAcommand( Map descMap) {
                                 voltageEvent(value/10)
                                 break
                             default :
-                                if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}${descMap.data[2]}${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
+                                if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
                                 if (logEnable==true) log.warn "map= ${descMap}"
                                 break
                         }
@@ -443,6 +451,25 @@ def parseZHAcommand( Map descMap) {
                 }
             }
             break
+        case "24" :    // Tuya time sync
+            log.trace "Tuya time sync"
+                        if (descMap?.clusterInt==0xEF00 && descMap?.command == "24") {        //getSETTIME
+                            if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
+                            def offset = 0
+                            try {
+                                offset = location.getTimeZone().getOffset(new Date().getTime())
+                                //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
+                            }
+                            catch(e) {
+                                if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+                            }
+                            def cmds = zigbee.command(0xEF00, 0x24, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
+                            if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
+                            if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
+                            cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
+                            return
+                        }
+            break
         default :
             if (logEnable==true) log.warn "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
@@ -463,14 +490,18 @@ private String getAttribute(ArrayList _data) {
 
 private int getAttributeValue(ArrayList _data) {
     int retValue = 0
-    
+    try {    
     if (_data.size() >= 6) {
-        int dataLength = _data[5] as Integer
+        int dataLength = zigbee.convertHexToInt(_data[5]) as Integer
         int power = 1;
         for (i in dataLength..1) {
             retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
             power = power * 256
         }
+    }
+}
+    catch ( e ) {
+        log.error "Exception caught : data = ${_data}"
     }
     return retValue
 }
@@ -539,6 +570,7 @@ def poll( refreshAll = false ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
     }
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
+         if (logEnable) {log.trace "polling all"}
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
     else {

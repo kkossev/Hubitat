@@ -31,6 +31,56 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "7aa89d9c-bafd-487e-9eed-ade6c948e320",
+      "name": "Tuya ZigBee Vibration Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/packageManifest.json",
+      "description": "Tuya ZigBee Vibration Sensor TS0210 driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "39a56b8d-62a7-4b48-9915-fe26fb11d5e7",
+      "name": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/packageManifest.json",
+      "description": "Tuya NEO Coolcam Zigbee Water Leak Sensor driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "bcacde4f-c695-4a63-9a48-f4e49edb9dd2",
+      "name": "Tuya Temperature Humidity Illuminance LCD Display with a Clock",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/packageManifest.json",
+      "description": "Tuya Temperature Humidity Illuminance LCD Display with a Clock driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "d8aed522-094b-403f-b1b7-90900ada633c",
+      "name": "Tuya Smart Siren Zigbee",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/packageManifest.json",
+      "description": "Tuya Smart Siren Zigbee driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "953f1da4-5f70-4845-a157-ca9d36e80c2c",
+      "name": "Tuya Zigbee Valve",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/packageManifest.json",
+      "description": "Tuya Zigbee Water/Gas Valve driver for Hubitat Elevation hub",
+       "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }

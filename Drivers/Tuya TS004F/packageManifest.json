@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Scene Switch TS004F",
   "author": "Krassimir Kossev",
-  "version": "2.2.4",
+  "version": "2.4.1",
   "minimumHEVersion": "1.0.0",
   "dateReleased": "2021-12-05",
-  "releaseNotes": "2.2.0 2021-10-20 - First succesfuly working version with HE!\n2.2.1 - added 'Reverse button order' preference option\n2.2.2 - added battery reporting capability; added button push() doubleTapped() and held() handlers for use in Hubutat Dashboards\n2.2.4 - added support for 'YSR-MINI-Z Remote TS004F'",
+  "releaseNotes": "2.2.4 2021-12-05 - added support for 'YSR-MINI-Z Remote TS004F'\n2.3.0 2022-02-13 - added support for 'Tuya Smart Knob TS004F'\n2.4.0 2022-03-31 - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044 remote\n2.4.1 2022-04-23 - improved tracing of debounce logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms",
   "drivers": [
     {
       "id": "0135dcaf-2335-457f-bda3-ffdaa2249d2e",
