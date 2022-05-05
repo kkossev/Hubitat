@@ -20,7 +20,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/05/05 5:42 PM"}
+def timeStamp() {"2022/05/05 6:51 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -119,21 +119,25 @@ metadata {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
             if (isRadar()) {
-		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "1..9", defaultValue: 0)   
+		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
+		        input ("detectionDelay", "number", title: "Detection delay, seconds", description: "", range: "1..120", defaultValue: 10)   
+		        input ("fadingTime", "number", title: "Fading time, seconds", description: "", range: "1..300", defaultValue: 60)   
+                // Fading time, seconds
             }
         }
     }
 }
 
-@Field static final Integer numberOfconfigParams = 5
+@Field static final Integer numberOfconfigParams = 7
 @Field static final Integer temperatureOffsetParamIndex = 0
 @Field static final Integer humidityOffsetParamIndex = 1
 @Field static final Integer luxOffsetParamIndex = 2
 @Field static final Integer ledEnableParamIndex = 3
 @Field static final Integer sensitivityParamIndex = 4
+@Field static final Integer detectionDelayParamIndex = 5
+@Field static final Integer fadingTimeParamIndex = 6
 
 def is4in1() {
-    log.warn "is4in1 ${device.getDataValue('manufacturer') }"
     return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
 }
 
@@ -343,7 +347,8 @@ def processTuyaCluster( descMap ) {
             //
             case 0x65 :    // (101)
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar detection delay is ${fncmd}s"
+                    if (settings?.txtEnable) log.info "${device.displayName} Radar detection delay is ${fncmd}s"    //detectionDelay
+                    device.updateSetting("detectionDelay", [value:fncmd as int , type:"number"])
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.trace "{device.displayName} motion event 0x65 fncmd = ${fncmd}"
@@ -352,7 +357,8 @@ def processTuyaCluster( descMap ) {
                 break            
             case 0x66 :     // (102)
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar fading time is ${fncmd}s"
+                    if (settings?.txtEnable) log.info "${device.displayName} Radar fading time is ${fncmd}s"        // 
+                    device.updateSetting("fadingTime", [value:fncmd as int , type:"number"])
                 }
                 else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
@@ -685,7 +691,19 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
             }
         }
-        //
+        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndexParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("65", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.detectionDelay as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar detection Delay o : ${settings?.detectionDelay }"                
+            }
+        }
+        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndexParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.fadingTime as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar fading time to : ${settings?.fadingTime }"                
+            }
+        }
+        // 
 
         //
         state.hashStringPars = calcParsHashString()
@@ -752,7 +770,10 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("humidityOffset", 0.0)
     if (fullInit == true || settings.humidityOffset == null) device.updateSetting("humidityOffset", 0.0)
     if (fullInit == true || settings.luxOffset == null) device.updateSetting("luxOffset", 1.0)
-    
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", 7)
+    if (fullInit == true || settings.detectionDelay == null) device.updateSetting("detectionDelay", 10)
+    if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", 60)
+    // 
     
     //
     state.hashStringPars = calcParsHashString()
@@ -926,6 +947,9 @@ def calcHashParam(num) {
             case luxOffsetParamIndex :         hashByte = generateMD5(luxOffset.toString())[-2..-1];          break
             case ledEnableParamIndex :         hashByte = generateMD5(ledEnable.toString())[-2..-1];          break
             case sensitivityParamIndex :       hashByte = generateMD5(sensitivity.toString())[-2..-1];        break
+            case detectionDelayParamIndex :    hashByte = generateMD5(detectionDelay.toString())[-2..-1];     break
+            case fadingTimeParamIndex :        hashByte = generateMD5(fadingTime.toString())[-2..-1];         break
+            //
             default :
                 log.error "invalid par calcHashParam(${num})"
                 return null
