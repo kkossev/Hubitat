@@ -14,12 +14,13 @@
  * 
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-20 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 inClusters correction
+ * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
+ * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  *
 */
 
-def version() { "1.0.2" }
-def timeStamp() {"2022/04/20 10:22 PM"}
+def version() { "1.0.3" }
+def timeStamp() {"2022/05/05 10:36 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -39,50 +40,61 @@ metadata {
         capability "TamperAlert"
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Refresh"
+
+		attribute "distance", "number"        // Tuya Radar
         
-        command "configure", [[name: "Manually initialize the sensor after switching drivers" ]]
+        command "configure", [[name: "Manually initialize the sensor after switching drivers\nLoads default values!" ]]
         command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ] 
-        
+        /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
-        
+        */
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"          // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1" // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Tuya Multi Sensor 2 In 1"          // https://zigbee.blakadder.com/Tuya_LY-TAD-K616S-ZB.html // Model LY-TAD-K616S-ZB
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrfecyku", deviceJoinName: "Tuya Human presence sensor"        // fz.tuya_radar_sensor
+        
+        // Human presence sensor 'MIR-HE200-TY' - illuminance, presence, occupancy, motion_speed, motion_direction, radar_sensitivity, radar_scene
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrfecyku", deviceJoinName: "Tuya Human presence sensor MIR-HE200"        // fz.tuya_radar_sensor
+        
+        // Human presence sensor 'MIR-HE200-TY_fall' - illuminance, presence, occupancy, motion_speed, motion_direction, radar_sensitivity, radar_scene, tumble_switch, fall_sensitivity, tumble_alarm_time, fall_down_status, static_dwell_alarm
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lu01t0zl", deviceJoinName: "Tuya Human presence sensor with fall function"   // fz.tuya_radar_sensor_fall     // fz.tuya_radar_sensor
+        
+        // Smart Human presence sensor - illuminance, presence, target_distance; radar_sensitivity; minimum_range; maximum_range; detection_delay; fading_time; CLI; self_test (checking, check_success, check_failure, others, comm_fault, radar_fault)
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor"   // KK
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ikvncluo", deviceJoinName: "Tuya ZigBee Breath Presence Sensor"   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lyetpprm", deviceJoinName: "Tuya ZigBee Breath Presence Sensor"   
        
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"  // 5 seconds (!) reset period for testing
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_mmtwjmaq", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_otvn3lne", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_jytabjkb", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_ef5xlc9q", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_vwqnz1sn", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_2b8f6cio", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_qjqgmqxr", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_zwvaj5wy", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_bsvqrxru", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_tv3wxhcz", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_hqbdru35", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_tiwq83wk", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_ykwcwxmz", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"WHD02",  manufacturer:"_TZ3000_hktqahrq", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"  // KK model: 'ZM-RT201'// 5 seconds (!) reset period for testing
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mmtwjmaq", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_otvn3lne", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_jytabjkb", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_ef5xlc9q", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_vwqnz1sn", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_2b8f6cio", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_qjqgmqxr", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Tuya TS0202 Motion Sensor"    // 3in1 ?
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_zwvaj5wy", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_bsvqrxru", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_tv3wxhcz", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_hqbdru35", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_tiwq83wk", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_ykwcwxmz", deviceJoinName: "Tuya TS0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"WHD02",  manufacturer:"_TZ3000_hktqahrq", deviceJoinName: "Tuya TS0202 Motion Sensor"
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"    // TODO: PIR sensor sensitivity and PIR keep time in seconds
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"    // TODO: PIR sensor sensitivity and PIR keep time in seconds
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"    // TODO: fz.ZM35HQ_attr        
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo", deviceJoinName: "Tuya TS0210  Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"1000,0006,0019,000A", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo", deviceJoinName: "Tuya TS0210 Motion/Vibration Sensor"
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TY0202", manufacturer:"_TZ1800_fcdjzz3s", deviceJoinName: "Lidl TY0202 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019",           model:"TY0202", manufacturer:"_TZ1800_fcdjzz3s", deviceJoinName: "Lidl TY0202 Motion Sensor"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-53o41joc", deviceJoinName: "TUYATEC RH3040 Motion Sensor"       // 60 seconds reset period        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-b5g40alm", deviceJoinName: "TUYATEC RH3040 Motion Sensor"
@@ -95,15 +107,59 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)    // par0
-        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)    // par1
-		input "motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0    // par2
-        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)    // par3
+        if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
+            input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+            if (isRadar() == false) {
+    		    input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)
+            }
+            if (false) {
+                input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)
+                input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
+                input ("luxOffset", "number", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
+            }
+        }
+        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected</i>", defaultValue: true)    // par4
+            if (is4in1()) {
+                input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
+            }
+            if (isRadar()) {
+                input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
+		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
+		        input ("detectionDelay", "number", title: "Detection delay, seconds", description: "", range: "1..120", defaultValue: 15)   
+		        input ("fadingTime", "number", title: "Fading time, seconds", description: "", range: "1..300", defaultValue: 60)   
+		        input ("minimumDistance", "number", title: "Minimum detection distance, meters", description: "", range: "0.1..5.0", defaultValue: 1.0)   
+		        input ("maximumDistance", "number", title: "Maximum detection distance, meters", description: "", range: "1.0..7.0", defaultValue: 6.0)   
+                // Minimum detection distance, meters
+            }
         }
     }
 }
+
+@Field static final Integer numberOfconfigParams = 9
+@Field static final Integer temperatureOffsetParamIndex = 0
+@Field static final Integer humidityOffsetParamIndex = 1
+@Field static final Integer luxOffsetParamIndex = 2
+@Field static final Integer ledEnableParamIndex = 3
+@Field static final Integer sensitivityParamIndex = 4
+@Field static final Integer detectionDelayParamIndex = 5
+@Field static final Integer fadingTimeParamIndex = 6
+@Field static final Integer minimumDistanceParamIndex = 7
+@Field static final Integer maximumDistanceParamIndex = 8
+
+def is4in1() {
+    return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
+}
+
+def is3in1() {
+    return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZE200_mrf6vtua']
+}
+
+def isRadar() {
+    return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku']
+}
+
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -160,7 +216,7 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} device announcement"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
-            if (settings?.logEnable) log.info "${device.displayName} application version is ${descMap?.value}"
+            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
@@ -243,12 +299,83 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x65 : //  Tuya 3 in 1 (101) -> motion (ocupancy)
-                if (settings?.logEnable) log.trace "motion event 0x65 fncmd = ${fncmd}"
-                sendEvent(handleMotion(motionActive=fncmd))
+            case 0x01 : 
+                if (isRadar()) {
+                    //log.warn "motion event radar fncmd=${fncmd}"
+                    handleMotion(motionActive=fncmd)
+                }
+                else {        // also PIR state for TS0202 ?
+                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion event 0x01 fncmd = ${fncmd}"
+                }
+                break
+            case 0x02 :
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar sensitivity is ${fncmd}"
+                    device.updateSetting("sensitivity", [value:fncmd as int , type:"number"])
+                }
+                else {
+                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                }
+                break
+            case 0x03 :
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar Minimum detection distance is ${fncmd/100} m"    //
+                    device.updateSetting("minimumDistance", [value:fncmd/100, type:"number"])
+                }
+                else {        // also battery level STATE for TS0202 ? 
+                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                }
+                break
+            case 0x04 :
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar Maximum detection distance is ${fncmd/100} m"
+                    device.updateSetting("maximumDistance", [value:fncmd/100 , type:"number"])
+                }
+                else {        // also battery level for TS0202 ?
+                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                }
+                break
+            
+            // case 0x05 : tamper alarm for TS0202 ?
+            
+            case 0x06 :
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar self checking status is ${fncmd}"
+                }
+                else {
+                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                }
+                break
+            case 0x09 :
+                if (isRadar()) {
+                    if (settings?.ignoreDistance == false) {
+                        if (settings?.txtEnable) log.info "${device.displayName} Radar target distance is ${fncmd/100} m"
+                        sendEvent(name : "distance", value : fncmd/100, unit : "m")
+                    }
+                }
+                else {
+                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                }
+                break
+            //            
+            // case 0x0A : (10) keep time for TS0202 ?
+            //
+            case 0x65 :    // (101)
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar detection delay is ${fncmd}s"    //detectionDelay
+                    device.updateSetting("detectionDelay", [value:fncmd as int , type:"number"])
+                }
+                else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
+                    if (settings?.logEnable) log.trace "{device.displayName} motion event 0x65 fncmd = ${fncmd}"
+                    sendEvent(handleMotion(motionActive=fncmd))
+                }
                 break            
-            case 0x66 : 
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
+            case 0x66 :     // (102)
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar fading time is ${fncmd}s"        // 
+                    device.updateSetting("fadingTime", [value:fncmd as int , type:"number"])
+                }
+                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
                 }
                 else {     // battery level for 3 in 1;  
@@ -265,13 +392,21 @@ def processTuyaCluster( descMap ) {
                     getBatteryPercentageResult(rawValue*2)
                 }
                 break
-            case 0x67 : //  Tuya 3 in 1 (103) -> tamper
-                def value = fncmd==0 ? 'clear' : 'detected'
-                if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${value}"
-            	sendEvent(name : "tamper",	value : value, isStateChange : true)
+            case 0x67 :     // (103)
+                if (isRadar()) {
+                    if (settings?.logEnable) log.info "${device.displayName} Radar DP_103 (CLI) is ${fncmd}"
+                }
+                else {        //  Tuya 3 in 1 (103) -> tamper            // TUYATEC- Battery level ????
+                    def value = fncmd==0 ? 'clear' : 'detected'
+                    if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${value} (dp=67,fncmd=${fncmd})"
+                	sendEvent(name : "tamper",	value : value, isStateChange : true)
+                }
                 break            
-            case 0x68 : 
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 104: // 0x68 temperature calibration
+            case 0x68 :     // (104)
+                if (isRadar()) {
+                    illuminanceEventLux( fncmd )
+                }
+                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 104: // 0x68 temperature calibration
                     def val = fncmd;
                     // for negative values produce complimentary hex (equivalent to negative values)
                     if (val > 4294967295) val = val - 4294967295;                    
@@ -298,7 +433,7 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
                 }
                 else {    //  Tuya 3 in 1 temperature scale Celsius/Fahrenheit
-                    if (settings?.logEnable) log.info "${device.displayName} Temperature Scale is: ${fncmd=0 ? 'Celsius' : 'Fahrenheit'} (DP=0x6A fncmd = ${fncmd})"  
+                    if (settings?.logEnable) log.info "${device.displayName} Temperature Scale is: ${fncmd == 0 ? 'Celsius' : 'Fahrenheit'} (DP=0x6A fncmd = ${fncmd})"  
                 }
                 break
             case 0x6B : // 107
@@ -432,6 +567,7 @@ def parseIasMessage(String description) {
 }
 
 private handleMotion(motionActive) {    
+    //log.warn "handleMotion motionActive=${motionActive}"
     if (motionActive) {
         def timeout = motionReset ?: 0
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
@@ -444,7 +580,7 @@ private handleMotion(motionActive) {
     }
     else {
         if (device.currentState('motion')?.value == "inactive") {
-            if (settings?.txtEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
+            if (settings?.logEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
             return [:]   // do not process a second motion inactive event!
         }
     }
@@ -511,13 +647,16 @@ def humidityEvent( humidity ) {
     sendEvent(map)
 }
 
-def illuminanceEvent( illuminance ) {
-    //def rawLux = Integer.parseInt(descMap.value,16)
-	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lux"/*, isStateChange: true*/)
+def illuminanceEvent( rawLux ) {
+	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
+def illuminanceEventLux( Integer lux ) {
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux")
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+}
 
 // called on initial install of device during discovery
 // also called from initialize() in this driver!
@@ -527,7 +666,6 @@ def installed() {
 }
 
 // called when preferences are saved
-// runs when save is clicked in the preferences section
 def updated() {
     checkDriverVersion()
     ArrayList<String> cmds = []
@@ -541,15 +679,55 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    if (state.hashStringPars != calcParsHashString()) {
+    
+    
+    if (state.hashStringPars != calcParsHashString()) {    // an configurable device parameter was changed
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
-        // par0 = logEnable; par1 = txtEnable; par2 = motionReset; par3 = advancedOptions
-        if (settings?.advancedOptions == true) {
-            if (getHashParam(4) != calcHashParam(4)) {    // ledEnable par4
+        //
+        if (getHashParam(ledEnableParamIndex) != calcHashParam(ledEnableParamIndex)) {
+            if (is4in1()) {
                 cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
                 if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
             }
         }
+        if (getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("02", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.sensitivity as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
+            }
+        }
+       
+        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("65", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.detectionDelay as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar detection Delay to : ${settings?.detectionDelay }"                
+            }
+        }
+        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.fadingTime as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar fading time to : ${settings?.fadingTime }"                
+            }
+        }
+
+      
+        if (getHashParam(minimumDistanceParamIndex) != calcHashParam(minimumDistanceParamIndex)) {
+            if (isRadar()) { 
+                int value = ((settings?.minimumDistance as double) * 100.0) as int
+                cmds += sendTuyaCommand("03", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar minimum distance to : ${settings?.minimumDistance }"                
+            }
+        }
+        if (getHashParam(maximumDistanceParamIndex) != calcHashParam(maximumDistanceParamIndex)) {
+            if (isRadar()) { 
+                int value = ((settings?.maximumDistance as double) * 100.0) as int
+                cmds += sendTuyaCommand("04", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar maximum distance to : ${settings?.maximumDistance }"                
+            }
+        }
+
+        //
+
         //
         state.hashStringPars = calcParsHashString()
     }
@@ -607,11 +785,22 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
 
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("motionReset") == null) device.updateSetting("motionReset", 0)
-    if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
-    if (fullInit == true || device.getDataValue("ledEnable") == null) device.updateSetting("ledEnable", true)
+    if (fullInit == true || settings.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", 0)
+    if (fullInit == true || settings.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
+    if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
+    if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("humidityOffset", 0.0)
+    if (fullInit == true || settings.humidityOffset == null) device.updateSetting("humidityOffset", 0.0)
+    if (fullInit == true || settings.luxOffset == null) device.updateSetting("luxOffset", 1.0)
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", 7)
+    if (fullInit == true || settings.detectionDelay == null) device.updateSetting("detectionDelay", 15)
+    if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", 60)
+    if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", 1.00)
+    if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance", 6.00)
+    //  
+    
     //
     state.hashStringPars = calcParsHashString()
     if (settings?.logEnable) log.trace "${device.displayName} state.hashStringPars = ${state.hashStringPars}"
@@ -749,7 +938,6 @@ def setMotion( mode ) {
 import java.security.MessageDigest
 String generateMD5(String s) {
     if(s != null) {
-        //return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
         return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
     } else {
         return "null"
@@ -758,13 +946,10 @@ String generateMD5(String s) {
 
 
 def calcParsHashString() {
-    String hashPars
-    hashPars  = generateMD5(logEnable.toString())[-2..-1]
-    hashPars += generateMD5(txtEnable.toString())[-2..-1]
-    hashPars += generateMD5(motionReset.toString())[-2..-1]
-    hashPars += generateMD5(advancedOptions.toString())[-2..-1]
-    hashPars += generateMD5(ledEnable.toString())[-2..-1]
-    
+    String hashPars = ''
+    for (int i = 0; i< numberOfconfigParams; i++) {
+        hashPars += calcHashParam( i )     
+    }
     return hashPars
 }
 
@@ -773,25 +958,34 @@ def getHashParam(num) {
         return state.hashStringPars[num*2..num*2+1]
     }
     catch (e) {
-        return null 
+        log.error "exception caught getHashParam(${num})"
+        return '??' 
     }
 }
 
 
 def calcHashParam(num) {
+    def hashByte
     try {
         switch (num) {
-            case 0 : return generateMD5(logEnable.toString())[-2..-1]
-            case 1 : return generateMD5(txtEnable.toString())[-2..-1]
-            case 2 : return generateMD5(motionReset.toString())[-2..-1]
-            case 3 : return generateMD5(advancedOptions.toString())[-2..-1]
-            case 4 : return generateMD5(ledEnable.toString())[-2..-1]
+            case temperatureOffsetParamIndex : hashByte = generateMD5(temperatureOffset.toString())[-2..-1];  break
+            case humidityOffsetParamIndex :    hashByte = generateMD5(humidityOffset.toString())[-2..-1];     break
+            case luxOffsetParamIndex :         hashByte = generateMD5(luxOffset.toString())[-2..-1];          break
+            case ledEnableParamIndex :         hashByte = generateMD5(ledEnable.toString())[-2..-1];          break
+            case sensitivityParamIndex :       hashByte = generateMD5(sensitivity.toString())[-2..-1];        break
+            case detectionDelayParamIndex :    hashByte = generateMD5(detectionDelay.toString())[-2..-1];     break
+            case fadingTimeParamIndex :        hashByte = generateMD5(fadingTime.toString())[-2..-1];         break
+            case minimumDistanceParamIndex :   hashByte = generateMD5(minimumDistance.toString())[-2..-1];    break
+            case maximumDistanceParamIndex :   hashByte = generateMD5(maximumDistance.toString())[-2..-1];    break
+            //minimumDistance
             default :
-                return null
+                log.error "invalid par calcHashParam(${num})"
+                return '??'
         }
     }
     catch (e) {
-        return null 
+        log.error "exception caught calcHashParam(${num})"
+        return '??' 
     }
 }
 
