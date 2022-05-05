@@ -20,7 +20,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/05/05 3:52 PM"}
+def timeStamp() {"2022/05/05 5:42 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,6 +40,8 @@ metadata {
         capability "TamperAlert"
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Refresh"
+
+		attribute "distance", "number"        // Tuya Radar
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers\nLoads default values!" ]]
         command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ] 
@@ -114,13 +116,24 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)        // par6
         if (advancedOptions == true) {
             if (is4in1()) {
-                input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)   //par7
+                input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
+            }
+            if (isRadar()) {
+		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "1..9", defaultValue: 0)   
             }
         }
     }
 }
 
+@Field static final Integer numberOfconfigParams = 5
+@Field static final Integer temperatureOffsetParamIndex = 0
+@Field static final Integer humidityOffsetParamIndex = 1
+@Field static final Integer luxOffsetParamIndex = 2
+@Field static final Integer ledEnableParamIndex = 3
+@Field static final Integer sensitivityParamIndex = 4
+
 def is4in1() {
+    log.warn "is4in1 ${device.getDataValue('manufacturer') }"
     return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
 }
 
@@ -283,6 +296,7 @@ def processTuyaCluster( descMap ) {
             case 0x02 :
                 if (isRadar()) {
                     if (settings?.txtEnable) log.info "${device.displayName} Radar sensitivity is ${fncmd}"
+                    device.updateSetting("sensitivity", [value:fncmd as int , type:"number"])
                 }
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -318,6 +332,7 @@ def processTuyaCluster( descMap ) {
             case 0x09 :
                 if (isRadar()) {
                     if (settings?.txtEnable) log.info "${device.displayName} Radar target distance is ${fncmd/100}"
+                    sendEvent(name : "distance", value : fncmd/100, unit : "m")
                 }
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -642,17 +657,36 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    if (state.hashStringPars != calcParsHashString()) {
+    
+/*
+@Field static final Integer numberOfconfigParams = 5
+
+@Field static final Integer temperatureOffsetParamIndex = 0
+@Field static final Integer humidityOffsetParamIndex = 1
+@Field static final Integer luxOffsetParamIndex = 2
+@Field static final Integer ledEnableParamIndex = 3
+@Field static final Integer sensitivityParamIndex = 4
+*/
+
+    
+    
+    if (state.hashStringPars != calcParsHashString()) {    // an configurable device parameter was changed
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
-        // par0 = logEnable; par1 = txtEnable; par2 = motionReset; par3 = advancedOptions
-        if (settings?.advancedOptions == true) {
-            if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') { // 4in1 only!
-                if (getHashParam(4) != calcHashParam(4)) {    // ledEnable par4
-                    cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
-                    if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
-                }
+        //
+        if (getHashParam(ledEnableParamIndex) != calcHashParam(ledEnableParamIndex)) {
+            if (is4in1()) {
+                cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
+                if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
             }
         }
+        if (getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)) {
+            if (isRadar()) { 
+                cmds += sendTuyaCommand("02", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.sensitivity as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
+            }
+        }
+        //
+
         //
         state.hashStringPars = calcParsHashString()
     }
@@ -857,7 +891,6 @@ def setMotion( mode ) {
 import java.security.MessageDigest
 String generateMD5(String s) {
     if(s != null) {
-        //return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
         return MessageDigest.getInstance("MD5").digest(s.bytes).encodeHex().toString()
     } else {
         return "null"
@@ -866,13 +899,10 @@ String generateMD5(String s) {
 
 
 def calcParsHashString() {
-    String hashPars
-    hashPars  = generateMD5(logEnable.toString())[-2..-1]
-    hashPars += generateMD5(txtEnable.toString())[-2..-1]
-    hashPars += generateMD5(motionReset.toString())[-2..-1]
-    hashPars += generateMD5(advancedOptions.toString())[-2..-1]
-    hashPars += generateMD5(ledEnable.toString())[-2..-1]
-    
+    String hashPars = ''
+    for (int i = 0; i< numberOfconfigParams; i++) {
+        hashPars += calcHashParam( i )     
+    }
     return hashPars
 }
 
@@ -881,24 +911,28 @@ def getHashParam(num) {
         return state.hashStringPars[num*2..num*2+1]
     }
     catch (e) {
+        log.error "exception caught getHashParam(${num})"
         return null 
     }
 }
 
 
 def calcHashParam(num) {
+    def hashByte
     try {
         switch (num) {
-            case 0 : return generateMD5(logEnable.toString())[-2..-1]
-            case 1 : return generateMD5(txtEnable.toString())[-2..-1]
-            case 2 : return generateMD5(motionReset.toString())[-2..-1]
-            case 3 : return generateMD5(advancedOptions.toString())[-2..-1]
-            case 4 : return generateMD5(ledEnable.toString())[-2..-1]
+            case temperatureOffsetParamIndex : hashByte = generateMD5(temperatureOffset.toString())[-2..-1];  break
+            case humidityOffsetParamIndex :    hashByte = generateMD5(humidityOffset.toString())[-2..-1];     break
+            case luxOffsetParamIndex :         hashByte = generateMD5(luxOffset.toString())[-2..-1];          break
+            case ledEnableParamIndex :         hashByte = generateMD5(ledEnable.toString())[-2..-1];          break
+            case sensitivityParamIndex :       hashByte = generateMD5(sensitivity.toString())[-2..-1];        break
             default :
+                log.error "invalid par calcHashParam(${num})"
                 return null
         }
     }
     catch (e) {
+        log.error "exception caught calcHashParam(${num})"
         return null 
     }
 }
