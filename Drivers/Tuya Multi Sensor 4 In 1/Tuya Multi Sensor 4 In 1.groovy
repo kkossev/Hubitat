@@ -15,12 +15,12 @@
  * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
- * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit is 'lx'
+ * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  *
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/05/05 9:28 PM"}
+def timeStamp() {"2022/05/05 10:36 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -45,13 +45,13 @@ metadata {
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers\nLoads default values!" ]]
         command "setMotion", [ [name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"] ] 
-        
+        /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
-        
+        */
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
@@ -107,18 +107,25 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-		input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)
-        input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)
-        input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
-        input ("luxOffset", "number", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
+        if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
+            input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+            if (isRadar() == false) {
+    		    input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)
+            }
+            if (false) {
+                input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)
+                input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
+                input ("luxOffset", "number", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
+            }
+        }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             if (is4in1()) {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
             if (isRadar()) {
+                input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
 		        input ("detectionDelay", "number", title: "Detection delay, seconds", description: "", range: "1..120", defaultValue: 15)   
 		        input ("fadingTime", "number", title: "Fading time, seconds", description: "", range: "1..300", defaultValue: 60)   
@@ -294,7 +301,7 @@ def processTuyaCluster( descMap ) {
         switch (dp) {
             case 0x01 : 
                 if (isRadar()) {
-                    log.warn "motion event radar fncmd=${fncmd}"
+                    //log.warn "motion event radar fncmd=${fncmd}"
                     handleMotion(motionActive=fncmd)
                 }
                 else {        // also PIR state for TS0202 ?
@@ -303,7 +310,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x02 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar sensitivity is ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} Radar sensitivity is ${fncmd}"
                     device.updateSetting("sensitivity", [value:fncmd as int , type:"number"])
                 }
                 else {
@@ -312,7 +319,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x03 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar Minimum detection distance is ${fncmd/100}m"    //
+                    if (settings?.logEnable) log.info "${device.displayName} Radar Minimum detection distance is ${fncmd/100} m"    //
                     device.updateSetting("minimumDistance", [value:fncmd/100, type:"number"])
                 }
                 else {        // also battery level STATE for TS0202 ? 
@@ -321,7 +328,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x04 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar Maximum detection distance is ${fncmd/100}m"
+                    if (settings?.logEnable) log.info "${device.displayName} Radar Maximum detection distance is ${fncmd/100} m"
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"number"])
                 }
                 else {        // also battery level for TS0202 ?
@@ -333,7 +340,7 @@ def processTuyaCluster( descMap ) {
             
             case 0x06 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar self checking status is ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} Radar self checking status is ${fncmd}"
                 }
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -341,8 +348,10 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x09 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar target distance is ${fncmd/100}"
-                    sendEvent(name : "distance", value : fncmd/100, unit : "m")
+                    if (settings?.ignoreDistance == false) {
+                        if (settings?.txtEnable) log.info "${device.displayName} Radar target distance is ${fncmd/100} m"
+                        sendEvent(name : "distance", value : fncmd/100, unit : "m")
+                    }
                 }
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -353,7 +362,7 @@ def processTuyaCluster( descMap ) {
             //
             case 0x65 :    // (101)
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar detection delay is ${fncmd}s"    //detectionDelay
+                    if (settings?.logEnable) log.info "${device.displayName} Radar detection delay is ${fncmd}s"    //detectionDelay
                     device.updateSetting("detectionDelay", [value:fncmd as int , type:"number"])
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
@@ -363,7 +372,7 @@ def processTuyaCluster( descMap ) {
                 break            
             case 0x66 :     // (102)
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar fading time is ${fncmd}s"        // 
+                    if (settings?.logEnable) log.info "${device.displayName} Radar fading time is ${fncmd}s"        // 
                     device.updateSetting("fadingTime", [value:fncmd as int , type:"number"])
                 }
                 else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
@@ -385,7 +394,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x67 :     // (103)
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar DP_103 (CLI) is ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} Radar DP_103 (CLI) is ${fncmd}"
                 }
                 else {        //  Tuya 3 in 1 (103) -> tamper            // TUYATEC- Battery level ????
                     def value = fncmd==0 ? 'clear' : 'detected'
@@ -558,6 +567,7 @@ def parseIasMessage(String description) {
 }
 
 private handleMotion(motionActive) {    
+    //log.warn "handleMotion motionActive=${motionActive}"
     if (motionActive) {
         def timeout = motionReset ?: 0
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
@@ -570,7 +580,7 @@ private handleMotion(motionActive) {
     }
     else {
         if (device.currentState('motion')?.value == "inactive") {
-            if (settings?.txtEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
+            if (settings?.logEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
             return [:]   // do not process a second motion inactive event!
         }
     }
@@ -779,6 +789,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", 0)
     if (fullInit == true || settings.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("humidityOffset", 0.0)
     if (fullInit == true || settings.humidityOffset == null) device.updateSetting("humidityOffset", 0.0)
