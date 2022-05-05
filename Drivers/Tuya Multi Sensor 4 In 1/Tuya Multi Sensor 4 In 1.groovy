@@ -20,7 +20,7 @@
 */
 
 def version() { "1.0.3" }
-def timeStamp() {"2022/05/05 6:51 PM"}
+def timeStamp() {"2022/05/05 9:28 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -107,28 +107,30 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)    // par0
-        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)   // par1
-		input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)    // par2
-        input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)    // par3
-        input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)     // par4
-        input ("luxOffset", "number", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)       // par5
-        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)        // par6
+        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+        input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+		input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)
+        input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)
+        input ("humidityOffset", "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
+        input ("luxOffset", "number", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
+        input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             if (is4in1()) {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
             if (isRadar()) {
 		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
-		        input ("detectionDelay", "number", title: "Detection delay, seconds", description: "", range: "1..120", defaultValue: 10)   
+		        input ("detectionDelay", "number", title: "Detection delay, seconds", description: "", range: "1..120", defaultValue: 15)   
 		        input ("fadingTime", "number", title: "Fading time, seconds", description: "", range: "1..300", defaultValue: 60)   
-                // Fading time, seconds
+		        input ("minimumDistance", "number", title: "Minimum detection distance, meters", description: "", range: "0.1..5.0", defaultValue: 1.0)   
+		        input ("maximumDistance", "number", title: "Maximum detection distance, meters", description: "", range: "1.0..7.0", defaultValue: 6.0)   
+                // Minimum detection distance, meters
             }
         }
     }
 }
 
-@Field static final Integer numberOfconfigParams = 7
+@Field static final Integer numberOfconfigParams = 9
 @Field static final Integer temperatureOffsetParamIndex = 0
 @Field static final Integer humidityOffsetParamIndex = 1
 @Field static final Integer luxOffsetParamIndex = 2
@@ -136,6 +138,8 @@ metadata {
 @Field static final Integer sensitivityParamIndex = 4
 @Field static final Integer detectionDelayParamIndex = 5
 @Field static final Integer fadingTimeParamIndex = 6
+@Field static final Integer minimumDistanceParamIndex = 7
+@Field static final Integer maximumDistanceParamIndex = 8
 
 def is4in1() {
     return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
@@ -308,7 +312,8 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x03 :
                 if (isRadar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} Radar Minimum detection distance is ${fncmd/100}m"
+                    if (settings?.txtEnable) log.info "${device.displayName} Radar Minimum detection distance is ${fncmd/100}m"    //
+                    device.updateSetting("minimumDistance", [value:fncmd/100, type:"number"])
                 }
                 else {        // also battery level STATE for TS0202 ? 
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -317,6 +322,7 @@ def processTuyaCluster( descMap ) {
             case 0x04 :
                 if (isRadar()) {
                     if (settings?.txtEnable) log.info "${device.displayName} Radar Maximum detection distance is ${fncmd/100}m"
+                    device.updateSetting("maximumDistance", [value:fncmd/100 , type:"number"])
                 }
                 else {        // also battery level for TS0202 ?
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -664,17 +670,6 @@ def updated() {
         unschedule(logsOff)
     }
     
-/*
-@Field static final Integer numberOfconfigParams = 5
-
-@Field static final Integer temperatureOffsetParamIndex = 0
-@Field static final Integer humidityOffsetParamIndex = 1
-@Field static final Integer luxOffsetParamIndex = 2
-@Field static final Integer ledEnableParamIndex = 3
-@Field static final Integer sensitivityParamIndex = 4
-*/
-
-    
     
     if (state.hashStringPars != calcParsHashString()) {    // an configurable device parameter was changed
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
@@ -691,19 +686,37 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
             }
         }
-        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndexParamIndex)) {
+       
+        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndex)) {
             if (isRadar()) { 
                 cmds += sendTuyaCommand("65", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.detectionDelay as int, 8))
-                if (settings?.logEnable) log.warn "${device.displayName} changing radar detection Delay o : ${settings?.detectionDelay }"                
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar detection Delay to : ${settings?.detectionDelay }"                
             }
         }
-        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndexParamIndex)) {
+        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndex)) {
             if (isRadar()) { 
                 cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.fadingTime as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar fading time to : ${settings?.fadingTime }"                
             }
         }
-        // 
+
+      
+        if (getHashParam(minimumDistanceParamIndex) != calcHashParam(minimumDistanceParamIndex)) {
+            if (isRadar()) { 
+                int value = ((settings?.minimumDistance as double) * 100.0) as int
+                cmds += sendTuyaCommand("03", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar minimum distance to : ${settings?.minimumDistance }"                
+            }
+        }
+        if (getHashParam(maximumDistanceParamIndex) != calcHashParam(maximumDistanceParamIndex)) {
+            if (isRadar()) { 
+                int value = ((settings?.maximumDistance as double) * 100.0) as int
+                cmds += sendTuyaCommand("04", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing radar maximum distance to : ${settings?.maximumDistance }"                
+            }
+        }
+
+        //
 
         //
         state.hashStringPars = calcParsHashString()
@@ -771,9 +784,11 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.humidityOffset == null) device.updateSetting("humidityOffset", 0.0)
     if (fullInit == true || settings.luxOffset == null) device.updateSetting("luxOffset", 1.0)
     if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", 7)
-    if (fullInit == true || settings.detectionDelay == null) device.updateSetting("detectionDelay", 10)
+    if (fullInit == true || settings.detectionDelay == null) device.updateSetting("detectionDelay", 15)
     if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", 60)
-    // 
+    if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", 1.00)
+    if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance", 6.00)
+    //  
     
     //
     state.hashStringPars = calcParsHashString()
@@ -933,7 +948,7 @@ def getHashParam(num) {
     }
     catch (e) {
         log.error "exception caught getHashParam(${num})"
-        return null 
+        return '??' 
     }
 }
 
@@ -949,15 +964,17 @@ def calcHashParam(num) {
             case sensitivityParamIndex :       hashByte = generateMD5(sensitivity.toString())[-2..-1];        break
             case detectionDelayParamIndex :    hashByte = generateMD5(detectionDelay.toString())[-2..-1];     break
             case fadingTimeParamIndex :        hashByte = generateMD5(fadingTime.toString())[-2..-1];         break
-            //
+            case minimumDistanceParamIndex :   hashByte = generateMD5(minimumDistance.toString())[-2..-1];    break
+            case maximumDistanceParamIndex :   hashByte = generateMD5(maximumDistance.toString())[-2..-1];    break
+            //minimumDistance
             default :
                 log.error "invalid par calcHashParam(${num})"
-                return null
+                return '??'
         }
     }
     catch (e) {
         log.error "exception caught calcHashParam(${num})"
-        return null 
+        return '??' 
     }
 }
 
