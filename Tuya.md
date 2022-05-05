@@ -60,8 +60,8 @@
 |  Scene/Dimmer Switch  TS004F ![image](https://user-images.githubusercontent.com/6189950/154431871-34bc7f0c-795d-48b6-a7b6-3bcb7e492e0c.png)| https://www.amazon.de/-/en/Wireless-Switches-Controller-Automation-Scenarios/dp/B091HPX159 <br> https://community.hubitat.com/t/yagusmart-4-button-scene-switch/57237 <br> Hubitat inbuilt Tuya Scene Switch driver|
 | Remote Control TS004F ![image](https://user-images.githubusercontent.com/6189950/155196487-0ff66665-510b-4fe7-984b-a21910dea4aa.png) | Amazon : https://www.amazon.de/-/en/Wireless-Portable-Required-Automation-Scenario/dp/B098L5XSD6 <br> Hubitat: https://community.hubitat.com/t/yagusmart-4-button-scene-switch/57237 |
 |  Button TS0041 ![image](https://user-images.githubusercontent.com/6189950/155110780-3164615a-94e0-498b-aeb7-75c9d99dba08.png) |  https://www.aliexpress.com/item/1005002283147125.html <br> Hubitat inbuilt driver |
-| ZigBee Scene Switch, 3 Buttons ![image](https://user-images.githubusercontent.com/6189950/155200952-c6d8dc64-ffc4-4581-96ed-661d41fbba9f.png)  | Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Buttons-Control-Batteries/dp/B0977KK7ZP <br>  |
-| |
+| ZigBee Scene Switch, 3 Buttons ![image](https://user-images.githubusercontent.com/6189950/155200952-c6d8dc64-ffc4-4581-96ed-661d41fbba9f.png)  | Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Buttons-Control-Batteries/dp/B0977KK7ZP  |
+| LoraTap 6 Button Gang Scene Switch ![image](https://user-images.githubusercontent.com/6189950/166911477-960eddc5-b750-4bd1-a93e-25796ac1cb8d.png) | AliExpres: [(link)](https://www.aliexpress.com/item/1005003731082631.html) | 
 
 ------------------------------
 
@@ -76,6 +76,7 @@
 ---------------------------------
 
 ### Tuya Other Zigbee Devices
+
 |  Device |  Links |
 |---|---|
 |  Tuya Zigbee Hub ![image](https://user-images.githubusercontent.com/6189950/154432781-9b55b4d4-132b-47f5-a910-8efe327158f5.png) |  https://community.hubitat.com/t/beta-tuya-cloud-driver-limited-device-support/80627 <br> https://www.aliexpress.com/item/4000560975293.html  <br> https://www.amazon.de/-/en/KETOTEK-Gateway-Wireless-Control-Compatible/dp/B08PF4ZYNY |
