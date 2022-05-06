@@ -795,7 +795,6 @@ def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
     map.unit = "°${location.temperatureScale}"
-    log.warn "${location.temperatureScale}"
     String tempConverted = convertTemperatureIfNeeded(temperature, "C", precision=1)
     map.value = tempConverted
     map.isStateChange = true
