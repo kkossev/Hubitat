@@ -16,12 +16,12 @@
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
- * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall()
+ * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
  *
 */
 
 def version() { "1.0.4" }
-def timeStamp() {"2022/05/06 1:44 PM"}
+def timeStamp() {"2022/05/06 8:02 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -794,8 +794,10 @@ def getSecondsInactive() {
 def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
-    map.unit = "\u00B0"+"C"
-    map.value  =  Math.round((temperature - 0.05) * 10) / 10
+    map.unit = "°${location.temperatureScale}"
+    log.warn "${location.temperatureScale}"
+    String tempConverted = convertTemperatureIfNeeded(temperature, "C", precision=1)
+    map.value = tempConverted
     map.isStateChange = true
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
