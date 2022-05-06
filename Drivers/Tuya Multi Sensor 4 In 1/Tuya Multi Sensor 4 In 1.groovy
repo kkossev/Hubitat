@@ -16,12 +16,12 @@
  * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
- * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added 2 other types Human Presence sensors DPs; isHumanPresenceSensorAIR(); isHumanPresenceSensorScene()
+ * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall()
  *
 */
 
 def version() { "1.0.4" }
-def timeStamp() {"2022/05/06 1:21 PM"}
+def timeStamp() {"2022/05/06 1:44 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -166,8 +166,9 @@ def isRadar() {
     return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr']
 }
 
-def isHumanPresenceSensorAIR() { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
-def isHumanPresenceSensorScene() { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
+def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
+def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
+def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
 
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -311,14 +312,14 @@ def processTuyaCluster( descMap ) {
             case 0x01 : 
                 if (isRadar()) {
                     //log.warn "motion event radar fncmd=${fncmd}"
-                    handleMotion(motionActive=fncmd)                    // Presence state for other types of Human Presence sensors? Including HumanPresenceSensorScene
+                    handleMotion(motionActive=fncmd)                    // Presence state for other types of Human Presence sensors? Including isHumanPresenceSensorScene() and isHumanPresenceSensorFall()
                 }
                 else {        // also PIR state for TS0202 ?
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion event 0x01 fncmd = ${fncmd}"
                 }
                 break
             case 0x02 :
-                if (isRadar()) {    // including HumanPresenceSensorScene
+                if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
                     if (settings?.logEnable) log.info "${device.displayName} Radar sensitivity is ${fncmd}"
                     device.updateSetting("sensitivity", [value:fncmd as int , type:"number"])
                 }
@@ -389,7 +390,7 @@ def processTuyaCluster( descMap ) {
                     if (isHumanPresenceSensorAIR()) {
                         if (settings?.logEnable) log.info "${device.displayName} msOSensitivity is ${fncmd}s"
                     }
-                    else if (isHumanPresenceSensorScene()) {                     // trsfMotionState: (102) for TuYa Radar Sensor with fall function
+                    else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {                     // trsfMotionState: (102) for TuYa Radar Sensor with fall function
                         if (settings?.logEnable) log.info "${device.displayName} motion state is ${fncmd}"
                     }
                     else {
@@ -419,7 +420,7 @@ def processTuyaCluster( descMap ) {
                     if (isHumanPresenceSensorAIR()) {
                         if (settings?.logEnable) log.info "${device.displayName} msVacancyDelay is ${fncmd}s"
                     }
-                    else if (isHumanPresenceSensorScene()) { // trsfIlluminanceLux for TuYa Radar Sensor with fall function
+                    else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) { // trsfIlluminanceLux for TuYa Radar Sensor with fall function
                         illuminanceEventLux( fncmd )
                     }
                     else {
@@ -464,7 +465,7 @@ def processTuyaCluster( descMap ) {
                     if (isHumanPresenceSensorAIR()) {
                         if (settings?.logEnable) log.info "${device.displayName} msVacantConfirmTime is ${fncmd}s"
                     }
-                    else {
+                    else if (isHumanPresenceSensorFall()) {
                         // trsfTumbleSwitch for TuYa Radar Sensor with fall function
                         if (settings?.txtEnable) log.info "${device.displayName} Tumble Switch (dp=69) is ${fncmd}"
                     }
@@ -483,7 +484,7 @@ def processTuyaCluster( descMap ) {
                     if (isHumanPresenceSensorAIR()) {
                         if (settings?.logEnable) log.info "${device.displayName} msReferenceLuminance is ${fncmd}s"
                     }
-                    else {
+                    else if (isHumanPresenceSensorFall()) {
                         // trsfTumbleAlarmTime
                         if (settings?.txtEnable) log.info "${device.displayName} Tumble Alarm Time (dp=6A) is ${fncmd}"
                     }
@@ -581,8 +582,13 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"                
                 }
                 if (isRadar()) {
-                    // trsfScene                    if (isHumanPresenceSensorScene()) { // detection data  for TuYa Radar Sensor with scene
-                    if (settings?.txtEnable) log.info "${device.displayName} Scene (dp=70) is ${fncmd}"
+                    // trsfScene                    if ( ) { // detection data  for TuYa Radar Sensor with scene
+                    if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} Scene (dp=70) is ${fncmd}"
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknwon model radar scene is ${fncmd}"                
+                    }
                 }
                 else {
                     if (settings?.logEnable) log.info "${device.displayName} Humidity alarm switch is: ${fncmd} (DP=0x6F)"  
@@ -598,8 +604,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x72 : // (114)
                 if (isRadar()) {    // trsfMotionDirection
-                    // if (isHumanPresenceSensorScene()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} radar motion direction is ${fncmd}"                
+                    if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} radar motion direction is ${fncmd}"                
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknown radar motion direction 0x72 fncmd = ${fncmd}"
+                    }
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion direction 0x72 fncmd = ${fncmd}"
@@ -607,8 +617,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x73 : // (115)
                 if (isRadar()) {    // trsfMotionSpeed
-                    // if (isHumanPresenceSensorScene()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} radar motion speed is ${fncmd}"                
+                    if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} radar motion speed is ${fncmd}"                
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknown radar motion speed 0x73 fncmd = ${fncmd}"
+                    }
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion speed 0x73 fncmd = ${fncmd}"
@@ -616,7 +630,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x74 : // (116)
                 if (isRadar()) {    // trsfFallDownStatus
-                    if (settings?.txtEnable) log.info "${device.displayName} radar fall down status is ${fncmd}"                
+                    if (isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} radar fall down status is ${fncmd}"                
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknown radar fall down status 0x74 fncmd = ${fncmd}"
+                    }
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar fall down status 0x74 fncmd = ${fncmd}"
@@ -624,7 +643,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x75 : // (117)
                 if (isRadar()) {    // trsfStaticDwellAlarm
-                    if (settings?.txtEnable) log.info "${device.displayName} radar static dwell alarm is ${fncmd}"                
+                    if (isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} radar static dwell alarm is ${fncmd}"                
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknown radar static dwell alarm 0x75 fncmd = ${fncmd}"
+                    }
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar static dwell alarm 0x75 fncmd = ${fncmd}"
@@ -632,7 +656,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x76 : // (118)
                 if (isRadar()) {    // trsfFallSensitivity
-                    if (settings?.txtEnable) log.info "${device.displayName} radar fall sensitivity is ${fncmd}"                
+                    if (isHumanPresenceSensorFall()) {
+                        if (settings?.txtEnable) log.info "${device.displayName} radar fall sensitivity is ${fncmd}"
+                    }
+                    else {
+                        if (settings?.txtEnable) log.warn "${device.displayName} unknown radar fall sensitivity  0x76 fncmd = ${fncmd}"
+                    }
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar fall sensitivity  0x76 fncmd = ${fncmd}"
