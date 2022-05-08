@@ -24,13 +24,13 @@
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
  * ver. 2.4.0 2022-03-31 kkossev     - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
  * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms  
- * ver. 2.4.2 2022-05-06 kkossev     - added LoraTap 6 button Scene Controller
+ * ver. 2.4.2 2022-05-07 kkossev     - added LoraTap 6 button Scene Controller; device.getDataValue bug fix;
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.4.2" }
-def timeStamp() {"2022/05/06 11:51 PM"}
+def timeStamp() {"2022/05/07 6:03 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -230,9 +230,11 @@ void initializeVars(boolean fullInit = true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("reverseButton") == null) device.updateSetting("reverseButton", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
+    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    
 }
 
 def configure() {
