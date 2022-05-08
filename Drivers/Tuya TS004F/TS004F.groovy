@@ -24,11 +24,13 @@
  * ver. 2.3.0 2022-02-13 kkossev     - added support for 'Tuya Smart Knob TS004F'
  * ver. 2.4.0 2022-03-31 kkossev     - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
  * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms  
+ * ver. 2.4.2 2022-05-06 kkossev     - added LoraTap 6 button Scene Controller
+ *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.1" }
-def timeStamp() {"2022/04/23 7:55 PM"}
+def version() { "2.4.2" }
+def timeStamp() {"2022/05/06 11:51 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -59,6 +61,7 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044F"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
         
     }
     preferences {
@@ -77,24 +80,24 @@ metadata {
 // Parse incoming device messages to generate events
 def parse(String description) {
     checkDriverVersion()
-    //if (logEnable) log.debug "description is $description"
+    //if (logEnable) log.debug "${device.displayName} description is $description"
 	def event = null
     try {
         event = zigbee.getEvent(description)
     }
     catch (e) {
-        if (logEnable) {log.error "exception caught while procesing event $description"}
+        if (logEnable) {log.warn "${device.displayName} exception caught while procesing event $description"}
     }
 	def result = []
     def buttonNumber = 0
     
 	if (event) {
         result = event
-        if (logEnable) log.debug "sendEvent $event"
+        if (logEnable) log.debug "${device.displayName} sendEvent $event"
     }
     else if (description?.startsWith("catchall")) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
-        if (logEnable) log.debug "catchall descMap: $descMap"
+        if (logEnable) log.debug "${device.displayName} catchall descMap: $descMap"
         def buttonState = "unknown"
         // when TS004F initialized in Scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.command == "FD") {
@@ -117,7 +120,7 @@ def parse(String description) {
             else if (descMap.data[0] == "02")
                 buttonState = "held"
             else {
-                if (logEnable) {log.warn "unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}"}
+                if (logEnable) {log.warn "${device.displayName} unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}"}
                 return null 
             }
         }
@@ -131,33 +134,51 @@ def parse(String description) {
             }
             buttonState = "pushed"
         }
+        else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
+            if (descMap.data.size() == 10 && descMap.data[2] == "0A" ) {
+                //log.debug "${device.displayName} Battery is ${zigbee.convertHexToInt(descMap?.data[9])} %"
+                return createEvent(name: "battery", value: zigbee.convertHexToInt(descMap?.data[9]))
+            }
+            else if (descMap.data.size() == 7 && descMap.data[2] >= "01" && descMap.data[2] <= "06") {
+                buttonNumber = zigbee.convertHexToInt(descMap.data[2])
+                if (descMap.data[6] == "00")
+                    buttonState = "pushed"
+                else if (descMap.data[6] == "01")
+                    buttonState = "doubleTapped"
+                else if (descMap.data[6] == "02")
+                    buttonState = "held"
+            }
+            else {
+                if (logEnable) {log.debug "${device.displayName} unprocessed Tuya cluster EF00 command descMap: $descMap"}
+            }
+        }
         else {
-            if (logEnable) {log.warn "unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
-            if (logEnable) {log.debug "catchall descMap: $descMap"}
+            if (logEnable) {log.warn "${device.displayName} unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
+            if (logEnable) {log.debug "${device.displayName} catchall descMap: $descMap"}
         }
         //
         if (buttonNumber != 0 ) {
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
-                    if (logEnable) {log.warn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
+                    if (logEnable) {log.warn "${device.displayName} ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
                     runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
-                    if (logEnable) {log.debug "restarted debouncing timer ${DEBOUNCE_TIME}ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})"}
+                    if (logEnable) {log.debug "${device.displayName} restarted debouncing timer ${DEBOUNCE_TIME}ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})"}
                     return null 
                 }
             }
             state.lastButtonNumber = buttonNumber
         }
         else {
-            if (logEnable) {log.warn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.lastButtonNumber}"}
+            if (logEnable) {log.warn "${device.displayName} UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.lastButtonNumber}"}
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
 	        def descriptionText = "button $buttonNumber was $buttonState"
 	        event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true]
-            if (txtEnable) {log.info "$descriptionText"}
+            if (txtEnable) {log.info "${device.displayName} $descriptionText"}
         }
         
         if (event) {
-            //if (logEnable) {log.debug "Creating event: ${event}"}
+            //if (logEnable) {log.debug "${device.displayName} Creating event: ${event}"}
 		    result = createEvent(event)
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
@@ -166,8 +187,8 @@ def parse(String description) {
 	} // if catchall
     else {
         def descMap = zigbee.parseDescriptionAsMap(description)
-        if (logEnable) log.debug "raw: descMap: $descMap"
-        //log.trace "descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
+        if (logEnable) log.debug "${device.displayName} raw: descMap: $descMap"
+        //log.trace "${device.displayName} descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
         if (descMap.cluster == "0006" && descMap.attrId == "8004" /* && command in ["01", "0A"] */) {
             if (descMap.value == "00") {
                 sendEvent(name: "switchMode", value: "dimmer", isStateChange: true) 
@@ -178,11 +199,11 @@ def parse(String description) {
                 if (txtEnable) log.info "${device.displayName} mode is <b>scene</b>"
             }
             else {
-                if (logEnable) log.warn "unknown attrId ${descMap.attrId} value ${descMap.value}"
+                if (logEnable) log.warn "${device.displayName} unknown attrId ${descMap.attrId} value ${descMap.value}"
             }
         }
         else {
-            if (logEnable) {log.warn "DID NOT PARSE MESSAGE for description : $description"}
+            if (logEnable) {log.warn "${device.displayName} DID NOT PARSE MESSAGE for description : $description"}
         }
 	}
     return result
@@ -215,7 +236,7 @@ void initializeVars(boolean fullInit = true ) {
 }
 
 def configure() {
-	if (logEnable) log.debug "Configuring device ${device.getDataValue("model")} in Scene Switch mode..."
+	if (logEnable) log.debug "${device.displayName} Configuring device ${device.getDataValue("model")} in Scene Switch mode..."
     initialize()
 }
 
@@ -233,9 +254,7 @@ def initialize() {
         supportedValues = ["pushed", "double", "held"]
     }
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
-        //log.warn "manufacturer = ${device.getDataValue("manufacturer")}"
-        if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {
-            // Smart Knob manufacturer: "_TZ3000_4fjiwweb"  _TZ3000_xabckq1v
+        if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {    // Smart Knob 
         	numberOfButtons = 3
             supportedValues = ["pushed", "double", "held", "release"]
         }
@@ -244,6 +263,9 @@ def initialize() {
             supportedValues = ["pushed", "double", "held", "release"]
         }
     }
+    else if (device.getDataValue("model") == "TS0601") {
+        numberOfButtons = 6
+        supportedValues = ["pushed", "double", "held"]    }
     else {
     	numberOfButtons = 4	// unknown
         supportedValues = ["pushed", "double", "held", "release"]
@@ -255,30 +277,30 @@ def initialize() {
 
 def updated() 
 {
-    if (logEnable) {log.debug "updated()"}
+    if (logEnable) {log.debug "${device.displayName} updated()"}
 }
 
 def buttonDebounce(button) {
-    if (logEnable) log.debug "debouncing timer for button ${state.lastButtonNumber} expired."
+    if (logEnable) log.debug "${device.displayName} debouncing timer for button ${state.lastButtonNumber} expired."
     state.lastButtonNumber = 0
 }
 
 def switchToSceneMode()
 {
-    if (logEnable) log.debug "Switching TS004F into Scene mode"
+    if (logEnable) log.debug "${device.displayName} Switching TS004F into Scene mode"
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01))
 }
 
 def switchToDimmerMode()
 {
-    if (logEnable) log.debug "Switching TS004F into Dimmer mode"
+    if (logEnable) log.debug "${device.displayName} Switching TS004F into Dimmer mode"
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
 }
 
 def buttonEvent(buttonNumber, buttonState) {
 
     def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true]
-    if (txtEnable) {log.info "$event.descriptionText"}
+    if (txtEnable) {log.info "${device.displayName} $event.descriptionText"}
     sendEvent(event)
 }
 
@@ -320,7 +342,7 @@ def tuyaMagic() {
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
-    if (logEnable) {log.trace "sendZigbeeCommands(cmd=$cmd)"}
+    if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"}
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))

@@ -15,11 +15,13 @@
  * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
  * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added; 
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
+ * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
+ *
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/02/20 9:58 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2022/04/25 6:13 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -58,11 +60,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019", model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B Temperature Humidity Illuminance LCD Display"  // Neo Coolcam ?  // NOT TESTED!
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB" 
     }
     preferences {
 
@@ -71,7 +75,7 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         //input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"])
         input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: 
-               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0201":"TS0201", "TS0222":"TS0222", "TS0222_2":"TS0222_2", "Zigbee NON-Tuya":"Zigbee NON-Tuya"])
+               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0601_AUBESS":"TS0601_AUBESS", "TS0201":"TS0201", "TS0222":"TS0222", "TS0222_2":"TS0222_2","Zigbee NON-Tuya":"Zigbee NON-Tuya"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
@@ -95,7 +99,7 @@ metadata {
                    limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
         4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
-                   limit:['TS0222','TS0201']]],
+                   limit:['TS0222']]],
     
         5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, °C", defaultValue: 18.0, range: "-20.0..60.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee']]],
@@ -128,6 +132,7 @@ metadata {
     '_TZE200_c7emyjom'  : 'TS0601_Tuya',         // Tuya Temperature Humidity LCD Display with a Clock
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       // 
+    '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     
     '_TZ2000_a476raq2'  : 'TS0201',     
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
@@ -138,10 +143,10 @@ metadata {
     '_TZ2000_hjsgdkfl'  : 'TS0201',             // "AVATTO S-H02"   
     '_TZ3000_qaaysllp'  : 'TS0201',             // NAS-TH02B  / NEO Coolcam ?  - testing! 
 
-    '_TYZB01_kvwjujy9'  : 'TS0222',              // "MOES ZSS-ZK-THL" e-Ink display 
-    '_TYZB01_4mdqxxnn'  : 'TS0222_2',            // illuminance only sensor
+    '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display 
+    '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     
-    ''                  : 'UNKNOWN'              // 
+    ''                  : 'UNKNOWN'
 ]
 
 
@@ -276,13 +281,24 @@ def processTuyaCluster( descMap ) {
         // the switch cases below default to dp_id = "01"
         switch (dp) {
             case 0x01 : // temperature in °C
-                temperatureEvent( fncmd / 10.0 )
+                if (getModelGroup() != "TS0601_AUBESS") {
+                    temperatureEvent( fncmd / 10.0 )
+                }
+                else {
+                    def lomihi = fncmd == 0 ? "low" : fncmd == 1 ? "medium" : fncmd == 2 ? "high" : "unknown"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya illuminance status is: ${lomihi} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
+                }
                 break
             case 0x02 : // humidity in %
-                humidityEvent (fncmd)
+                if (getModelGroup() != 'TS0601_AUBESS') {
+                    humidityEvent( fncmd )
+                }
+                else {
+                    illuminanceEventLux( safeToInt( fncmd ) )
+                }
                 break 
             case 0x03 : // illuminance - NOT TESTED!
-                illuminanceEvent (fncmd)
+                illuminanceEvent(fncmd)
                 break 
             case 0x04 : // battery
                 getBatteryPercentageResult(fncmd * 2)
@@ -445,10 +461,14 @@ def switchEvent( value ) {
 def illuminanceEvent( illuminance ) {
     //def rawLux = Integer.parseInt(descMap.value,16)
 	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lux", isStateChange: true)
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux"/*, isStateChange: true*/)
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
+def illuminanceEventLux( Integer lux ) {
+    sendEvent("name": "illuminance", "value": lux, "unit": "lux")
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+}
 
 //  called from initialize()
 def installed() {
@@ -463,6 +483,7 @@ def updated() {
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
+    state.modelGroup = getModelGroup()
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -591,6 +612,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("maxReportingTimeTemp") == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"decimal"])
     if (fullInit == true || device.getDataValue("minReportingTimeHumidity") == null) device.updateSetting("minReportingTimeHumidity",  [value:60, type:"decimal"])
     if (fullInit == true || device.getDataValue("maxReportingTimeHumidity") == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"decimal"])
+    if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
     
 }
 
@@ -700,4 +722,46 @@ Integer safeToInt(val, Integer defaultVal=0) {
 
 Double safeToDouble(val, Double defaultVal=0.0) {
 	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+
+def zTest( dpCommand, dpValue, dpTypeString ) {
+    ArrayList<String> cmds = []
+    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
+    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
+
+    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
+
+    switch ( getModelGroup() ) {
+        case 'MOES' :
+        case 'UNKNOWN' :
+        default :
+            break
+    }     
+
+    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
+}    
+
+
+
+
+
+def displayValue ()
+{
+    log.warn "${device.displayName} changed temp. scale (driver next run!) is ${temperatureScaleParameter}"
+}
+
+def test( value) {
+/*  
+    log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
+
+    log.trace "${device.displayName} changing to Fahrenheit ('2')"
+    device.updateSetting("temperatureScaleParameter",[value:"2", type:"enum"])
+    runIn(1, displayValue)
+*/
+    List<String> cmds = []
+    cmds += tuyaBlackMagic()    
+    sendZigbeeCommands(cmds)    
+    
+    
 }
