@@ -27,14 +27,15 @@
  *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprint (no power monitoring!)
  *  ver. 1.4.2 2022-02-20 kkossev - missing Switch capability bug fix
  *  ver. 1.4.3 2022-02-15 kkossev - added 'Tuya RC-RCBO Circuit Breaker' 
+ *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix;
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.4.2" }
-def timeStamp() {"2022/02/30 11:16 PM"}
+def version() { "1.4.4" }
+def timeStamp() {"2022/05/08 10:11 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -57,7 +58,8 @@ metadata {
         fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702,0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
         fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702 0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7" , deviceJoinName: "Tuya Outlet TS011F" //TS011F   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7", deviceJoinName: "Tuya Outlet TS011F" //TS011F   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ps3dmato",  deviceJoinName: "Lellki WK35 Plug Wall Socket"   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
@@ -65,7 +67,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"
+        // TODO - add _TZ3000_ksw8qtmt
+        // TODO - add _TZ3000_ky0fq4ho
+        
     }
     
     
@@ -205,7 +210,7 @@ def switchEvent( value ) {
     boolean bWasChange = false
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "Ignored duplicated switch event for model ${state.model}: ${description}"} 
-        runInMillis( debouncingTimer, switchDebouncingClear)
+        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
         return null
     }
     map.type = state.isDigital == true ? "digital" : "physical"
@@ -213,12 +218,12 @@ def switchEvent( value ) {
         bWasChange = true
         if (logEnable) {log.debug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
         if (autoPollingEnabled == true) {
-            runInMillis(5000, pollPower)
-            runIn( pollingInterval, autoPoll) // restart polling interval timer
+            runInMillis(5000, pollPower, [overwrite: true])
+            runIn( pollingInterval, autoPoll, [overwrite: true]) // restart polling interval timer
         }
         state.switchDebouncing = true
         state.lastSwitchState = value
-        runInMillis( debouncingTimer, switchDebouncingClear)
+        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
     }
     map.name = "switch"
     map.value = value
@@ -241,7 +246,7 @@ def voltageEvent( voltage ) {
     map.name = "voltage"
     map.value = voltage
     map.unit = "V"
-    if (state.lastVoltage != voltage || optimizations==false ) {
+    if (state.lastVoltage != voltage || optimizations == false || state.isRefreshRequest == true ) {
         state.lastVoltage = voltage
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
@@ -253,7 +258,7 @@ def powerEvent( power ) {
     map.name = "power"
     map.value = power
     map.unit = "W"
-    if (state.lastPower != power || optimizations==false ) {
+    if (state.lastPower != power || optimizations == false || state.isRefreshRequest == true ) {
         state.lastPower = power    
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
@@ -265,7 +270,7 @@ def amperageEvent( amperage ) {
     map.name = "amperage"
     map.value = amperage
     map.unit = "A"
-    if (state.lastAmperage != amperage || optimizations==false ) {
+    if (state.lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
         state.lastAmperage = amperage    
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
@@ -277,7 +282,7 @@ def energyEvent( energy ) {
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
-    if (state.lastEnergy != energy || optimizations==false ) {
+    if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
         state.lastEnergy = energy    
         if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
         sendEvent(map)
@@ -412,6 +417,39 @@ def parseZHAcommand( Map descMap) {
                             case "14" : // Voltage
                                 voltageEvent(value/10)
                                 break
+                            case "65" : // Voltage HOCH
+                                voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / 10)
+                                break
+                            case "66" : // Amperage HOCH
+                                amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 1000)
+                                break
+                            case "67" : // hochActivePower: 103
+                                powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 10)
+                                break
+                            case "69" : // hochTemperature: 105
+                                log.info "temperature is ${(zigbee.convertHexToInt(descMap.data[9]))}"
+                                break
+                            case "09" : // hochCountdownTimer: 9
+                            case "1A" : // hochFaultCode: 26
+                            case "1B" : // hochRelayStatus: 27 (power recovery behaviour)
+                            case "1D" : // hochChildLock: 29
+                            case "68" : // hochLeakageCurrent: 104
+                            case "6A" : // hochRemainingEnergy: 106
+                            case "6B" : // "recharge energy" : 107
+                            case "6C" : // hochCostParameters: 108 (non-zero)
+                            case "6D" : // hochLeakageParameters: 109 (non-zero)
+                            case "6E" : // hochVoltageThreshold: 110 (non-zero)
+                            case "6F" : // hochCurrentThreshold: 111 (non-zero)
+                            case "70" : // hochTemperatureThreshold: 112 (non-zero)
+                            case "71" : // hochTotalActivePower: 113
+                            case "72" : // hochEquipmentNumberType: 114
+                            case "73" : //: "clear energy",115
+                            case "74" : // hochLocking: 116  (test button pressed)
+                            case "75" : // hochTotalReverseActivePower: 117
+                            case "76" : // hochHistoricalVoltage: 118
+                            case "77" : // hochHistoricalCurrent: 119
+                                log.trace "cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8)}"
+                                break
                             default :
                                 if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
                                 if (logEnable==true) log.warn "map= ${descMap}"
@@ -517,7 +555,7 @@ def off() {
         if (state.model == "TS0601") {
             cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
         }
-        runInMillis( digitalTimer, clearIsDigital)
+        runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
         return cmds
     }
 }
@@ -529,7 +567,7 @@ def on() {
     if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
-    runInMillis( digitalTimer, clearIsDigital)
+    runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     return cmds
 }
 
@@ -556,7 +594,7 @@ def pollPower() {
         cmds += zigbee.electricMeasurementPowerRefresh()    // just power
     }
     state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)       // 3 seconds
+    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])       // 3 seconds
     return cmds
 }
 
@@ -584,7 +622,7 @@ def poll( refreshAll = false ) {
     if (state.energyPollingSupported == true && refreshAll == true )
         cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh
     state.isRefreshRequest = true
-    runInMillis( refreshTimer, isRefreshRequestClear)           // 3 seconds
+    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     return cmds
 }
 
@@ -599,9 +637,9 @@ def autoPoll() {
     checkIfNotPresent()
     if (autoPollingEnabled?.value == true) {
         if ( pollingInterval != null ) 
-            runIn( pollingInterval, autoPoll)
+            runIn( pollingInterval, autoPoll, [overwrite: true])
         else
-            runIn( defaultPollingInterval, autoPoll)
+            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
     }
     if (optimizations == true) 
         poll( refreshAll = false )
@@ -636,7 +674,7 @@ def updated(){
     if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(/*1800*/86400, logsOff)    // turn off debug logging after /*30 minutes*/24 hours
+        runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
         //if (txtEnable==true) log.info "Debug logging will be automatically switched off after 30 minutes!"
         if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
     }
@@ -646,11 +684,11 @@ def updated(){
 
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) {
-            runIn( pollingInterval, autoPoll)
+            runIn( pollingInterval, autoPoll, [overwrite: true])
             if (txtEnable==true) log.info "Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
         }
         else {
-            runIn( defaultPollingInterval, autoPoll)
+            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
         }
     }
     else {
@@ -684,15 +722,15 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("autoPollingEnabled") == null) device.updateSetting("autoPollingEnabled", true)
-    if (fullInit == true || device.getDataValue("optimizations") == null) device.updateSetting("optimizations", true)
-    if (fullInit == true || device.getDataValue("energyMinReportingTime") == null) device.updateSetting("energyMinReportingTime", 60)
-    if (fullInit == true || device.getDataValue("energyMaxReportingTime") == null) device.updateSetting("energyMaxReportingTime", 3600)
-    if (fullInit == true || device.getDataValue("energyTreshold") == null) device.updateSetting("energyTreshold", 1)
-    if (fullInit == true || device.getDataValue("pollingInterval") == null) device.updateSetting("pollingInterval", defaultPollingInterval)
-    if (device.getDataValue("alwaysOn") == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
+    if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
+    if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", 60)
+    if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", 3600)
+    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", 1)
+    if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
+    if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -741,14 +779,14 @@ def initialize() {
     unschedule()
     initializeVars()
     updated()            // calls also configure()
-    runIn( 12, logInitializeRezults)
+    runIn( 12, logInitializeRezults, [overwrite: true])
 }
 
 // This method is called when the device is first created.
 def installed() {
     if (txtEnable==true) log.info "${device.displayName} Installed()..."
     initializeVars()
-    runIn( 5, initialize)
+    runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
     // HE will autoomaticall call configure() method here
 }
