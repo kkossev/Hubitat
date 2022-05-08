@@ -27,7 +27,7 @@
  *  ver. 1.4.1 2022-01-27 kkossev - added XH-002P Outlet TS011F fingerprint (no power monitoring!)
  *  ver. 1.4.2 2022-02-20 kkossev - missing Switch capability bug fix
  *  ver. 1.4.3 2022-02-15 kkossev - added 'Tuya RC-RCBO Circuit Breaker' 
- *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers;  
+ *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix;
  *
  */
 import groovy.json.*
@@ -35,7 +35,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.4.4" }
-def timeStamp() {"2022/05/08 8:03 AM"}
+def timeStamp() {"2022/05/08 10:11 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -722,15 +722,15 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("autoPollingEnabled") == null) device.updateSetting("autoPollingEnabled", true)
-    if (fullInit == true || device.getDataValue("optimizations") == null) device.updateSetting("optimizations", true)
-    if (fullInit == true || device.getDataValue("energyMinReportingTime") == null) device.updateSetting("energyMinReportingTime", 60)
-    if (fullInit == true || device.getDataValue("energyMaxReportingTime") == null) device.updateSetting("energyMaxReportingTime", 3600)
-    if (fullInit == true || device.getDataValue("energyTreshold") == null) device.updateSetting("energyTreshold", 1)
-    if (fullInit == true || device.getDataValue("pollingInterval") == null) device.updateSetting("pollingInterval", defaultPollingInterval)
-    if (device.getDataValue("alwaysOn") == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
+    if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
+    if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", 60)
+    if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", 3600)
+    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", 1)
+    if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
+    if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
