@@ -28,7 +28,8 @@
 ### Tuya Smart Sockets
 |  Device |  Links |
 |---|---|
-|  Metering Plugs ![image](https://user-images.githubusercontent.com/6189950/147770322-e42d4f3f-47ff-4a21-9e90-3f3a98ba7241.png)  | Hubitat: https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> AliExpress: https://www.aliexpress.com/item/1005002409588154.html <br> Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Remote-Control-Monitor/dp/B09L4LB8HY |
+| Tuya Metering Plugs ![image](https://user-images.githubusercontent.com/6189950/147770322-e42d4f3f-47ff-4a21-9e90-3f3a98ba7241.png)  | Hubitat: https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> AliExpress: https://www.aliexpress.com/item/1005002409588154.html <br> Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Remote-Control-Monitor/dp/B09L4LB8HY |
+| Lellki WK35 Plug Wall Socket EU BR IT JP FR IL <br> ![image](https://user-images.githubusercontent.com/6189950/167282480-825ad7cc-64fe-4bf9-b635-7168ee05690f.png) | Hubitat: https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> AliExpress: https://www.aliexpress.com/item/4001243518512.html <br> |
 |  Energy Meters  ![image](https://user-images.githubusercontent.com/6189950/147771140-a29c2401-9cd8-4e80-a777-93e0c5e183be.png)  | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://www.aliexpress.com/item/1005002409588154.html |
 |  Circuit Breakers ![image](https://user-images.githubusercontent.com/6189950/154424284-7cd1eea2-b0b9-4a89-9634-9876e4445005.png) | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://fr.aliexpress.com/item/1005003726599840.html  |
 | |
