@@ -1,10 +1,12 @@
 {
   "packageName": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-04-16",
-  "releaseNotes": "1.0.0 2022-03-26 - inital version\n1.0.1 2022-04-12 - added _TYST11_qq9mpfhw fingerprint\n1.0.2 2022-04-14 - Check-in info logs; model 'q9mpfhw' inClusters correction\n1.0.3 2022-04-16 - 'Last Updated' workaround for NEO sensors",
+  "dateReleased": "2022-05-14",
+  "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/README.md",
+  "communityLink": "https://community.hubitat.com/t/beta-tuya-neo-coolcam-zigbee-water-leak-sensor/91370",
+  "releaseNotes": "1.0.0 2022-03-26 - inital version\n1.0.1 2022-04-12 - added _TYST11_qq9mpfhw fingerprint\n1.0.2 2022-04-14 - Check-in info logs; model 'q9mpfhw' inClusters correction\n1.0.3 2022-04-16 - 'Last Updated' workaround for NEO sensors\n1.0.4 2022-05-14 - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button",
   "drivers": [
     {
       "id": "6278d570-44aa-4837-8ac6-63eadf0c0b06",
