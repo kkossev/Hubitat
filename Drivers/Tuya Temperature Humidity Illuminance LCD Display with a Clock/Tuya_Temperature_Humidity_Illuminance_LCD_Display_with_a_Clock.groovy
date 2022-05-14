@@ -16,12 +16,13 @@
  * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added; 
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
  * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
+ * ver. 1.0.6 2022-05-09 kkossev  - (dev. branch) new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
  *
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
-def version() { "1.0.5" }
-def timeStamp() {"2022/04/25 6:13 PM"}
+def version() { "1.0.6" }
+def timeStamp() {"2022/05/09 10:05 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -61,7 +62,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B Temperature Humidity Illuminance LCD Display"  // Neo Coolcam ?  // NOT TESTED!
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
@@ -75,7 +76,8 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         //input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"])
         input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options: 
-               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0601_AUBESS":"TS0601_AUBESS", "TS0201":"TS0201", "TS0222":"TS0222", "TS0222_2":"TS0222_2","Zigbee NON-Tuya":"Zigbee NON-Tuya"])
+               ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0601_AUBESS":"TS0601_AUBESS", "TS0201":"TS0201", "TS0222":"TS0222", 'TS0201_LCZ030': 'TS0201_LCZ030',
+                "TS0222_2":"TS0222_2","Zigbee NON-Tuya":"Zigbee NON-Tuya"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
@@ -102,16 +104,16 @@ metadata {
                    limit:['TS0222']]],
     
         5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, °C", defaultValue: 18.0, range: "-20.0..60.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_LCZ030']]],
     
         6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, °C", defaultValue: 28.0, range: "-20.0..60.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee']]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_LCZ030']]],
     
-        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
-                   limit:['TS0601_Haozee']]], 
+        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, %", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee', 'TS0201_LCZ030']]], 
     
-        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, % (TS0601_Haozee only)", defaultValue: 90, range: "0..100",            // 'TS0601_Haozee' only!
-                   limit:['TS0601_Haozee']]], 
+        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, %", defaultValue: 90, range: "0..100",            // 'TS0601_Haozee' only!
+                   limit:['TS0601_Haozee', 'TS0201_LCZ030']]], 
     
         9: [input: [name: "minReportingTimeTemp", type: "number", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 60, range: "10..3600",
                    limit:["Zigbee NON-Tuya"]]],
@@ -123,7 +125,14 @@ metadata {
                    limit:["Zigbee NON-Tuya"]]],
     
        12: [input: [name: "maxReportingTimeHumidity", type: "number", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
-                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]]
+                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
+    
+       13: [input: [name: "alarmTempPar", type: "enum", title: "Temperature Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min temp", 1:"Over max temp", 2:"off"],
+                   limit:['TS0201_LCZ030']]],
+            
+       14: [input: [name: "alarmHumidityPar", type: "enum", title: "Humidity Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min hum.", 1:"Over max hum", 2:"off"],
+                   limit:['TS0201_LCZ030']]]
+    
     
 ]
 
@@ -141,7 +150,7 @@ metadata {
     '_TYZB01_a476raq2'  : 'TS0201',     
     '_TYZB01_hjsgdkfl'  : 'TS0201',     
     '_TZ2000_hjsgdkfl'  : 'TS0201',             // "AVATTO S-H02"   
-    '_TZ3000_qaaysllp'  : 'TS0201',             // NAS-TH02B  / NEO Coolcam ?  - testing! 
+    '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! 
 
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
@@ -221,8 +230,8 @@ def parse(String description) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
+        if (settings?.logEnable) log.warn "TS0222 device announcement"
             if (getModelGroup() == 'TS0222') {
-                log.warn "TS0222 device announcement"
                 configure()
             }
         } 
@@ -534,13 +543,16 @@ def updated() {
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400 
     }
-    if (getModelGroup() in ["Zigbee NON-Tuya"]) {
-    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure temperature - Report every minute, 1 second if any change
-    	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Pressure - Report every minute, 1 second if any change
-    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, 1, 60, 1, [:], 200)  // Configure Humidity - Report every minute, 1 second if any change
+    /* 2022-05-09 - do not configre reporting for multi-EP devices like TS0201 _TZ3000_qaaysllp !!! (binds to wrong EP ?)
+    if (getModelGroup() in ["Zigbee NON-Tuya", 'TS0201_LCZ030']) {
+    	cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.INT16, 10, 600, 5, [:], 200)  // Configure Illuminance - Report after 10 seconds if any change, every 10 minutes if no change, 5 Lux change?
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 10, 600, 1, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0403, 0x0000, DataType.INT16, 10, 600, 1, [:], 200)  // Configure Pressure - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, 10, 600, 1, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
    		cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
    		cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
     }    
+    */
     
     //illuminanceSensitivity - descMap.cluster == "0400" && descMap.attrId == "F001" 
     // TODO !!!!! ( for TS0201 Neo Coolcam and TS0222  MOES ZSS-ZK-THL
@@ -596,22 +608,22 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
 
-    if (fullInit == true || device.getDataValue("modelGroupPreference") == null) device.updateSetting("modelGroupPreference", "Auto detect")
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("advancedOptions") == null) device.updateSetting("advancedOptions", false)
-    if (fullInit == true || device.getDataValue("temperatureScaleParameter") == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
-    if (fullInit == true || device.getDataValue("temperatureSensitivity") == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
-    if (fullInit == true || device.getDataValue("humiditySensitivity") == null)     device.updateSetting("temperatureSensitivity", [value:5, type:"decimal"])
-    if (fullInit == true || device.getDataValue("illuminanceSensitivity") == null)     device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
-    if (fullInit == true || device.getDataValue("minTempAlarmPar") == null) device.updateSetting("minTempAlarmPar",  [value:18.0, type:"number"])
-    if (fullInit == true || device.getDataValue("maxTempAlarmPar") == null) device.updateSetting("maxTempAlarmPar",  [value:28.0, type:"number"])
-    if (fullInit == true || device.getDataValue("minHumidityAlarmPar") == null) device.updateSetting("minHumidityAlarmPar",  [value:10, type:"decimal"])
-    if (fullInit == true || device.getDataValue("maxHumidityAlarmPar") == null) device.updateSetting("maxHumidityAlarmPar",  [value:90, type:"decimal"])
-    if (fullInit == true || device.getDataValue("minReportingTimeTemp") == null) device.updateSetting("minReportingTimeTemp",  [value:60, type:"decimal"])
-    if (fullInit == true || device.getDataValue("maxReportingTimeTemp") == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"decimal"])
-    if (fullInit == true || device.getDataValue("minReportingTimeHumidity") == null) device.updateSetting("minReportingTimeHumidity",  [value:60, type:"decimal"])
-    if (fullInit == true || device.getDataValue("maxReportingTimeHumidity") == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"decimal"])
+    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", "Auto detect")
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    if (fullInit == true || settings?.temperatureScaleParameter == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
+    if (fullInit == true || settings?.temperatureSensitivity == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
+    if (fullInit == true || settings?.humiditySensitivity == null)     device.updateSetting("temperatureSensitivity", [value:5, type:"decimal"])
+    if (fullInit == true || settings?.illuminanceSensitivity == null)     device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
+    if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar",  [value:18.0, type:"number"])
+    if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar",  [value:28.0, type:"number"])
+    if (fullInit == true || settings?.minHumidityAlarmPar == null) device.updateSetting("minHumidityAlarmPar",  [value:10, type:"decimal"])
+    if (fullInit == true || settings?.maxHumidityAlarmPar == null) device.updateSetting("maxHumidityAlarmPar",  [value:90, type:"decimal"])
+    if (fullInit == true || settings?.minReportingTimeTemp == null) device.updateSetting("minReportingTimeTemp",  [value:60, type:"decimal"])
+    if (fullInit == true || settings?.maxReportingTimeTemp == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"decimal"])
+    if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity",  [value:60, type:"decimal"])
+    if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"decimal"])
     if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
     
 }
