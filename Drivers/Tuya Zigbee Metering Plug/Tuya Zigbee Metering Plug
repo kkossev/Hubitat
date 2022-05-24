@@ -29,6 +29,7 @@
  *  ver. 1.4.3 2022-02-15 kkossev - added 'Tuya RC-RCBO Circuit Breaker' 
  *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix; 
  *  ver. 1.4.5 2022-05-24 kkossev - added _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix?
+ *                                  added childLock, ledMode, powerOnState configuration commands
  *
  */
 import groovy.json.*
@@ -36,7 +37,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.4.5" }
-def timeStamp() {"2022/05/24 9:01 AM"}
+def timeStamp() {"2022/05/24 8:48 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug.groovy", singleThreaded: true ) {
@@ -53,11 +54,15 @@ metadata {
         capability "Initialize"
         capability "PresenceSensor"
         capability "Polling"
+        command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
+        command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
+        command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]]
+        
         command "initialize"
 
-        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702,0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_vtscrpmw", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
-        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702,0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_3ooaz3ng", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
-        fingerprint profileId:"0104", inClusters: "0000,0004,0005,0006,0702 0B04", outClusters: "0019,000A", manufacturer: "_TZ3000_rdtixbnu", model: "TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_3ooaz3ng", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702 0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_rdtixbnu", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug    
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", model:"TS0121", manufacturer:"_TZ3000_g5xawfcq",  deviceJoinName: "Blitzwolf BW-SHP13" //Blitzwolf BW-SHP13  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cphmq0q7", deviceJoinName: "Tuya Outlet TS011F" //TS011F   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ps3dmato",  deviceJoinName: "Lellki WK35 Plug Wall Socket"   
@@ -110,6 +115,8 @@ metadata {
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
+def isTS0121() {state.model == "TS0121"}
+def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"]}
 
 def parse(String description) {
     //if (logEnable==true) {log.debug "description is $description"}
@@ -187,7 +194,10 @@ def parse(String description) {
                     energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
-                    //if (logEnable) {log.debug "Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
+                    if (logEnable) {log.debug "Tuya specific attribute ${it.attrId}  cluster ${it.cluster } reported: value=${it.value}" }    // not tested
+                }
+                else if ( it.cluster == "0006" && it.attrId in ["8000", "8001", "8002"]) {
+                    parseOnOffAttributes(it)
                 }
                 else {
                     if (logEnable==true) log.warn "Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -206,6 +216,37 @@ def parse(String description) {
         }
         return null //result
     } // descMap
+}
+
+
+def parseOnOffAttributes( it ) {
+    if (logEnable) {log.debug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" }
+    def mode
+    def attrName
+    def value = it.value as int
+    switch (it.attrId) {
+        case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
+            attrName = "Child Lock"
+            mode = value == 0 ? "off" : "on"
+            break
+        case "8001" :    // command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
+            attrName = "LED mode"
+            if (isCircuitBreaker()) {
+                mode = value == 0 ? "Always Green" : value == 1 ? "Red when On; Green when Off" : value == 2 ? "Green when On; Red when Off" : value == 3 ? "Always Red" : null
+            }
+            else {
+                mode = value == 0 ? "Disabled"  : value == 1 ? "Lit when On" : value == 2 ? "Lit when Off" : null
+            }
+            break
+        case "8002" :    // command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]]
+            attrName = "Power On State"
+            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : null
+            break
+        default :
+            if (logEnable) log.warn "Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
+            break
+    }
+    if (txtEnable) log.info "${device.displayName} ${attrName} is ${mode}"
 }
 
 def switchEvent( value ) {
@@ -420,6 +461,9 @@ def parseZHAcommand( Map descMap) {
                             case "14" : // Voltage
                                 voltageEvent(value/10)
                                 break
+                            case "1D" : // hochChildLock: 29
+                                if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
+                                break
                             case "65" : // Voltage HOCH
                                 voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / 10)
                                 break
@@ -435,7 +479,6 @@ def parseZHAcommand( Map descMap) {
                             case "09" : // hochCountdownTimer: 9
                             case "1A" : // hochFaultCode: 26
                             case "1B" : // hochRelayStatus: 27 (power recovery behaviour)
-                            case "1D" : // hochChildLock: 29
                             case "68" : // hochLeakageCurrent: 104
                             case "6A" : // hochRemainingEnergy: 106
                             case "6B" : // "recharge energy" : 107
@@ -464,6 +507,9 @@ def parseZHAcommand( Map descMap) {
                         break
                 } // switch (descMap.clusterId)
             }  //command is read attribute response
+            break
+        case "04" : //write attribute response
+            if (logEnable==true) log.info "Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         case "07" : // Configure Reporting Response
             if (logEnable==true) log.info "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
@@ -611,7 +657,7 @@ def poll( refreshAll = false ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
     }
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
-         if (logEnable) {log.trace "polling all"}
+        if (logEnable) {log.trace "polling all"}
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], dummy, delay=200)    // Power, Voltage and Amperage at once!
     }
     else {
@@ -853,11 +899,69 @@ boolean isTuyaE00xCluster( String description )
 boolean otherTuyaOddities( String description )
 {
     if(description.indexOf('cluster: 0000') >= 0 || description.indexOf('attrId: 0004') >= 0) {
-        if (logEnable) log.debug " other Tuya oddities - don't know how to handle it, skipping it for now..."
+        if (logEnable) log.debug " other Tuya oddities - don't know how to handle it, skipping it for now... "
+        if (logEnable==true) {log.debug "description is $description"}
         return true
     }
     else
         return false
+}
+
+def childLock( mode ) {
+    ArrayList<String> cmds = []
+    if (state.model == "TS0601") {
+        def dp = "1D" // hochChildLock: 29
+        def value = mode == "off" ? "00" : "01"
+        cmds += sendTuyaCommand(dp, DP_TYPE_BOOL, value)
+    }
+    else {
+        // doesn't work for TS0121 _TZ3000_g5xawfcq :( 
+        def value = mode == "off" ? "00" : "01"
+        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8000, DataType.BOOLEAN, value.toInteger())
+    }
+    if (settings?.logEnable) log.trace "${device.displayName} sending child lock mode : ${mode}"
+    sendZigbeeCommands( cmds )    
+}
+
+def ledMode( mode ) {
+    ArrayList<String> cmds = []
+    String value = null
+    if (state.model == "TS0601") {
+        if (settings?.logEnable) log.warn "${device.displayName} LED mode not implemented for TS0601: ${mode}"
+        // continue anyway ..
+    }
+    if (isCircuitBreaker()) {
+        value = mode == "Always Green" ? "00" : mode == "Red when On; Green when Off" ? "01" : mode == "Green when On; Red when Off" ? "02" : mode == "Always Red" ? "03" : null
+    }
+    else {
+        value = mode == "Disabled" ? "00" : mode == "Lit when On" ? "01" : mode == "Lit when Off" ? "02" : null
+    }
+    if (value != null) {
+        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8001, DataType.ENUM8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending LED mode : ${mode}"
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} LED mode ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+    }
+}
+
+def powerOnState( mode ) {
+    ArrayList<String> cmds = []
+    String value = null
+    if (state.model == "TS0601") {
+        if (settings?.logEnable) log.warn "${device.displayName} Power On State not implemented for TS0601: ${mode}"
+        // continue anyway ..
+    }
+    value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "02" : null
+    if (value != null) {
+        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8002, DataType.ENUM8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending LED mode : ${mode}"
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} Power On State ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+    }
 }
 
 
