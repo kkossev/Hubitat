@@ -32,7 +32,7 @@
  *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix; 
  *  ver. 1.4.5 2022-05-24 kkossev - added _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix?
  *                                  added childLock, ledMode, powerOnState configuration commands; importURL is the development branch
- *  ver. 1.4.6 2022-06-02 kkossev - (dev. branch) - added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
+ *  ver. 1.4.6 2022-06-03 kkossev - (dev. branch) - added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
  *
  */
 import groovy.json.*
@@ -40,7 +40,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.4.6" }
-def timeStamp() {"2022/06/02 10:09 PM"}
+def timeStamp() {"2022/06/03 12:30 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -57,11 +57,12 @@ metadata {
         capability "Initialize"
         capability "PresenceSensor"
         capability "Polling"
-        command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
-        command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
-        command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]]
         
         command "initialize"
+        command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
+        command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
+        command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
+        
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_3ooaz3ng", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
@@ -939,11 +940,16 @@ def childLock( mode ) {
     }
     else {
         // doesn't work for TS0121 _TZ3000_g5xawfcq :( 
-        def value = mode == "off" ? "00" : "01"
-        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8000, DataType.BOOLEAN, value.toInteger())
+        def value = mode == "off" ? "00" : mode == "off" ? "01" : null
+        if (value != null) {
+            cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8000, DataType.BOOLEAN, value.toInteger())
+            if (settings?.logEnable) log.trace "${device.displayName} sending child lock mode : ${mode}"
+            sendZigbeeCommands( cmds )    
+        }
+        else {
+            if (settings?.logEnable) log.warn "${device.displayName} please select a Child Lock option"
+        }
     }
-    if (settings?.logEnable) log.trace "${device.displayName} sending child lock mode : ${mode}"
-    sendZigbeeCommands( cmds )    
 }
 
 def ledMode( mode ) {
@@ -965,7 +971,12 @@ def ledMode( mode ) {
         sendZigbeeCommands( cmds )    
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} LED mode ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+        if (mode.contains("---")) {
+            if (settings?.logEnable) log.warn "${device.displayName} please select a LED mode option"
+        }
+        else {
+            if (settings?.logEnable) log.warn "${device.displayName} LED mode ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+        }
     }
 }
 
@@ -983,7 +994,7 @@ def powerOnState( mode ) {
         sendZigbeeCommands( cmds )    
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} Power On State ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} please select a Power On State option"
     }
 }
 
