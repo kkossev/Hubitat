@@ -32,7 +32,7 @@
  *  ver. 1.4.4 2022-05-08 kkossev - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix; 
  *  ver. 1.4.5 2022-05-24 kkossev - added _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix?
  *                                  added childLock, ledMode, powerOnState configuration commands; importURL is the development branch
- *  ver. 1.4.6 2022-06-03 kkossev - (dev. branch) - added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
+ *  ver. 1.4.6 2022-06-04 kkossev - added _TZ3000_gjnozsaz;  added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
  *
  */
 import groovy.json.*
@@ -40,7 +40,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.4.6" }
-def timeStamp() {"2022/06/03 12:30 PM"}
+def timeStamp() {"2022/06/04 8:20 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -76,6 +76,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cymsnfvf", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"
@@ -104,8 +105,8 @@ metadata {
                    range: "10..86399", defaultValue: 60)
                 input (name: "energyMaxReportingTime", type: "number", title: "<b>Energy longest reporting interval</b>, seconds", description: "<i>The maximum time without any Energy reports. Recommended value is <b>3600 seconds</b></i>", 
                    range: "120..86400", defaultValue: 3600)
-                input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, watt/Hours", description: "<i>The minimum Energy change that will trigger reporting.</i>", 
-                   range: "1..10000", defaultValue: 1)
+                input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", 
+                   range: "0..10000", defaultValue: 0)
             }
             input (name: "reportAmperage", type: "bool", title: "<b>Amperage reporting</b>", description: "<i>Disable Amperage reporting when not needed</i>", defaultValue: true)
             input (name: "reportVoltage", type:  "bool", title: "<b>Voltage reporting</b>",  description: "<i>Disable Voltage reporting when not needed</i>", defaultValue: true)
@@ -801,7 +802,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", 60)
     if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", 3600)
-    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", 1)
+    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", 0)
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
