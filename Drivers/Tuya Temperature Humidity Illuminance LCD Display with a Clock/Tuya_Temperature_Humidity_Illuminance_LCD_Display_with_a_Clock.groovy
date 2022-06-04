@@ -17,12 +17,12 @@
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
  * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - (dev. branch) new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
- *
+ * ver. 1.0.7 2022-06-04 kkossev  - (dev. branch) new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
-def version() { "1.0.6" }
-def timeStamp() {"2022/05/09 10:05 PM"}
+def version() { "1.0.7" }
+def timeStamp() {"2022/06/04 11:49 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,6 +40,7 @@ metadata {
         capability "TemperatureMeasurement"        
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
+        capability "ContactSensor"
 
         attribute "minTempAlarm", "enum", ["inactive","active"]        // (TS0601_Tuya and TS0601_Haozee only)
         attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
@@ -68,6 +69,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor" 
     }
     preferences {
 
@@ -154,7 +156,7 @@ metadata {
 
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
-    
+    '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     ''                  : 'UNKNOWN'
 ]
 
@@ -187,7 +189,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
-    //if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
@@ -289,8 +291,14 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         // the switch cases below default to dp_id = "01"
         switch (dp) {
-            case 0x01 : // temperature in °C
-                if (getModelGroup() != "TS0601_AUBESS") {
+            case 0x01 : // temperature in °C for most models
+                // 
+                if (getModelGroup() == "TS0601_Contact") {
+                    def value = fncmd == 1 ? "closed" : "open"
+                    sendEvent("name": "contact", "value": value)
+                    if (settings?.txtEnable) log.info "${device.displayName} Contact is ${value}"
+                }
+                else if (getModelGroup() != "TS0601_AUBESS") { // temperature in °C
                     temperatureEvent( fncmd / 10.0 )
                 }
                 else {
@@ -383,7 +391,10 @@ def processTuyaCluster( descMap ) {
             case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity sensitivity is ${fncmd} %"
                 device.updateSetting("humiditySensitivity", [value:fncmd, type:"decimal"])
-                 break 
+                break
+            case 0x65 : (101)
+                illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
+                break
             //
             default :
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -470,12 +481,12 @@ def switchEvent( value ) {
 def illuminanceEvent( illuminance ) {
     //def rawLux = Integer.parseInt(descMap.value,16)
 	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lux"/*, isStateChange: true*/)
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 def illuminanceEventLux( Integer lux ) {
-    sendEvent("name": "illuminance", "value": lux, "unit": "lux")
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
