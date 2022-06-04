@@ -33,7 +33,7 @@
  *  ver. 1.4.5 2022-05-24 kkossev - added _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix?
  *                                  added childLock, ledMode, powerOnState configuration commands; importURL is the development branch
  *  ver. 1.4.6 2022-06-04 kkossev - added _TZ3000_gjnozsaz;  added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
- *  ver. 1.5.0 2022-06-04 kkossev - (dev branch) Bug fix - all settings were reset back in to the defaults on hub reboot;
+ *  ver. 1.5.0 2022-06-04 kkossev - (dev branch) Bug fix - all settings were reset back in to the defaults on hub reboot; 
  *
  */
 import groovy.json.*
@@ -41,7 +41,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.5.0" }
-def timeStamp() {"2022/06/04 7:16 PM"}
+def timeStamp() {"2022/06/04 11:18 PM"}
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -58,11 +58,12 @@ metadata {
         capability "PresenceSensor"
         capability "Polling"
         
-        command "initialize"
+
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
+        //command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for OSRAM plug only :( 
         
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
@@ -100,7 +101,7 @@ metadata {
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
         input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
         if (optimizations?.value == true) {
-            input (name: "reportEnergy", type:    "bool", title: "<b>Energy reporting</b>",  description:  "<i>Disable Energy reporting when not needed</i>", defaultValue: true)
+            input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting On or Off</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
                 input (name: "energyMinReportingTime", type: "number", title: "<b>Energy shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two Energy reports. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..86399", defaultValue: 60)
@@ -109,9 +110,9 @@ metadata {
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", 
                    range: "0..10000", defaultValue: 0)
             }
-            input (name: "reportAmperage", type: "bool", title: "<b>Amperage reporting</b>", description: "<i>Disable Amperage reporting when not needed</i>", defaultValue: true)
-            input (name: "reportVoltage", type:  "bool", title: "<b>Voltage reporting</b>",  description: "<i>Disable Voltage reporting when not needed</i>", defaultValue: true)
-            input (name: "reportPower", type:    "bool", title: "<b>Power reporting</b>",  description:   "<i>Disable Power reporting when not needed</i>", defaultValue: true)
+            input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting On or Off</b>", description: "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting On or Off</b>",  description: "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            input (name: "reportPower", type:    "bool", title: "<b>Power Reporting On or Off</b>",  description:   "<i>(Disable reporting when not desired)</i>", defaultValue: true)
         } 
     }
 }
@@ -539,9 +540,13 @@ def parseZHAcommand( Map descMap) {
             def status = descMap.data[1]
             if (status != "00") {
                 switch (descMap.clusterId) {
+                    case "0003" : // Identify response
+                        if (txtEnable==true) log.warn "${device.displayName} Identify command is not supported by ${device.getDataValue('manufacturer')}"
+                        break
                     case "0006" : // Switch state
                         if (logEnable==true) log.warn "${device.displayName} Switch state is not supported -> Switch polling will be disabled."
                         state.switchPollingSupported = false
+                        break    // fixed in ver. 1.5.0
                     case "0B04" : // Electrical Measurement
                         if (logEnable==true) log.warn "${device.displayName} Electrical measurement is not supported -> Power, Voltage and Amperage polling will be disabled."
                         state.powerPollingSupported = false
@@ -1000,4 +1005,26 @@ def powerOnState( mode ) {
     }
 }
 
+private getIDENTIFY_CMD_IDENTIFY() { 0x00 }
+private getIDENTIFY_CMD_QUERY() { 0x01 }
+private getIDENTIFY_CMD_TRIGGER() { 0x40 }
+
+def intTo16bitUnsignedHex(value) {
+	def hexStr = zigbee.convertToHexString(value.toInteger(),4)
+	return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
+}
+
+def intTo8bitUnsignedHex(value) {
+	return zigbee.convertToHexString(value.toInteger(), 2)
+}
+
+def identify() {
+	List<String> cmds = []
+	cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_IDENTIFY} { 0x${intTo16bitUnsignedHex(30)} }"    // Identify for 30 seconds
+	//cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_TRIGGER} { 0x${intTo8bitUnsignedHex(EFFECT_BREATHE)} 0x${intTo8bitUnsignedHex(0)} }"    // Trigger Effect
+    if (txtEnable==true) log.info "${device.displayName} sending Identify to ${device.getDataValue('manufacturer')}"
+    //cmds += zigbee.command(0x0003, 0x00, "0500")        // 5 seconds?
+	return cmds;
+}
+}
 
