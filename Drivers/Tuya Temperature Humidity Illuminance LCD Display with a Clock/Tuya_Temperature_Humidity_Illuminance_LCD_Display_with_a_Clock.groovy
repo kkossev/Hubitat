@@ -17,12 +17,12 @@
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
  * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - (dev. branch) new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
- * ver. 1.0.7 2022-06-04 kkossev  - (dev. branch) new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx
+ * ver. 1.0.7 2022-06-05 kkossev  - (dev. branch) new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/06/04 11:49 PM"}
+def timeStamp() {"2022/06/05 7:35 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,7 +40,7 @@ metadata {
         capability "TemperatureMeasurement"        
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
-        capability "ContactSensor"
+        //capability "ContactSensor"    // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
 
         attribute "minTempAlarm", "enum", ["inactive","active"]        // (TS0601_Tuya and TS0601_Haozee only)
         attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
@@ -232,7 +232,7 @@ def parse(String description) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-        if (settings?.logEnable) log.warn "TS0222 device announcement"
+            if (settings?.logEnable) log.warn "TS0222 device announcement"
             if (getModelGroup() == 'TS0222') {
                 configure()
             }
