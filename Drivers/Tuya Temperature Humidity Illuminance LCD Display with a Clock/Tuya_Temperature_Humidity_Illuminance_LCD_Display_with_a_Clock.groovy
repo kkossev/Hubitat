@@ -15,14 +15,14 @@
  * ver. 1.0.2 2022-02-06 kkossev  - Tuya commands refactoring; TS0222 T/H poll on illuminance change (EP2); modelGroupPreference bug fix; dyncamic parameters
  * ver. 1.0.3 2022-02-13 kkossev  - _TZE200_c7emyjom fingerprint added; 
  * ver. 1.0.4 2022-02-20 kkossev  - Celsius/Fahrenheit correction for TS0601_Tuya devices
- * ver. 1.0.5 2022-04-25 kkossev  - (dev. branch) added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
- * ver. 1.0.6 2022-05-09 kkossev  - (dev. branch) new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
- * ver. 1.0.7 2022-06-05 kkossev  - (dev. branch) new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx
+ * ver. 1.0.5 2022-04-25 kkossev  - added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
+ * ver. 1.0.6 2022-05-09 kkossev  - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
+ * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/06/05 7:35 AM"}
+def timeStamp() {"2022/06/09 9:15 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -32,10 +32,9 @@ import hubitat.device.Protocol
 
  
 metadata {
-    definition (name: "Tuya Temperature Humidity Illuminance LCD Display with a Clock", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Temperature Humidity Illuminance LCD Display with a Clock", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya_Temperature_Humidity_Illuminance_LCD_Display_with_a_Clock.groovy", singleThreaded: true ) {
         capability "Refresh"
         capability "Sensor"
-        capability "Initialize"
         capability "Battery"
         capability "TemperatureMeasurement"        
         capability "RelativeHumidityMeasurement"
@@ -56,7 +55,7 @@ metadata {
         command "test"
 */        
         
-        command "initialize"
+        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
@@ -232,7 +231,7 @@ def parse(String description) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-            if (settings?.logEnable) log.warn "TS0222 device announcement"
+            if (settings?.logEnable) log.warn "${device.displayName} device announcement"
             if (getModelGroup() == 'TS0222') {
                 configure()
             }
