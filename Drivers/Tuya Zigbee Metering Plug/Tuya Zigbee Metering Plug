@@ -33,14 +33,18 @@
  *  ver. 1.4.5 2022-05-24 kkossev - added _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix?
  *                                  added childLock, ledMode, powerOnState configuration commands; importURL is the development branch
  *  ver. 1.4.6 2022-06-04 kkossev - added _TZ3000_gjnozsaz;  added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
+ *  ver. 1.5.0 2022-06-05 kkossev - (dev branch) Bug fix - all settings were reset back in to the defaults on hub reboot; 
+ *                                    parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.4.6" }
-def timeStamp() {"2022/06/04 8:20 AM"}
+def version() { "1.5.0" }
+def timeStamp() {"2022/06/05 10:29 PM"}
+
+
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -54,13 +58,13 @@ metadata {
         capability "Refresh"
         capability "Health Check"
         capability "Sensor"
-        capability "Initialize"
         capability "PresenceSensor"
         capability "Polling"
         
-        command "initialize"
+        //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+        command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
-        command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
+        command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         
 
@@ -99,7 +103,7 @@ metadata {
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
         input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
         if (optimizations?.value == true) {
-            input (name: "reportEnergy", type:    "bool", title: "<b>Energy reporting</b>",  description:  "<i>Disable Energy reporting when not needed</i>", defaultValue: true)
+            input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting On or Off</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
                 input (name: "energyMinReportingTime", type: "number", title: "<b>Energy shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two Energy reports. Recommended value is <b>60 seconds</b></i>", 
                    range: "10..86399", defaultValue: 60)
@@ -108,9 +112,9 @@ metadata {
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", 
                    range: "0..10000", defaultValue: 0)
             }
-            input (name: "reportAmperage", type: "bool", title: "<b>Amperage reporting</b>", description: "<i>Disable Amperage reporting when not needed</i>", defaultValue: true)
-            input (name: "reportVoltage", type:  "bool", title: "<b>Voltage reporting</b>",  description: "<i>Disable Voltage reporting when not needed</i>", defaultValue: true)
-            input (name: "reportPower", type:    "bool", title: "<b>Power reporting</b>",  description:   "<i>Disable Power reporting when not needed</i>", defaultValue: true)
+            input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting On or Off</b>", description: "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting On or Off</b>",  description: "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            input (name: "reportPower", type:    "bool", title: "<b>Power Reporting On or Off</b>",  description:   "<i>(Disable reporting when not desired)</i>", defaultValue: true)
         } 
     }
 }
@@ -125,13 +129,19 @@ metadata {
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
+@Field static final String ONOFF = "Switch"
+@Field static final String POWER = "Power"
+@Field static final String ENERGY = "Energy"
+@Field static final String VOLTAGE = "Voltage"
+@Field static final String AMPERAGE = "Amperage"
 
 def isTS0121() {state.model == "TS0121"}
 def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"]}
 
 def parse(String description) {
-    if (logEnable==true) {log.debug "${device.displayName} description is $description"}
+    if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
     checkDriverVersion()
+    if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
@@ -141,7 +151,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        log.warn "${device.displayName} exception caught while parsing description:  ${description}"
+        log.warn "${device.displayName} parse: exception caught while parsing description:  ${description}"
         //return null
     }
     if (event) {
@@ -170,10 +180,10 @@ def parse(String description) {
             descMap = zigbee.parseDescriptionAsMap(description)
         }
         catch ( e ) {
-            log.warn "${device.displayName} exception caught while parsing descMap:  ${descMap}"
-            //return null
+            log.warn "${device.displayName} parse: exception caught while parsing descMap:  ${descMap}"
+            return null
         }
-        if (logEnable) {log.debug "${device.displayName} Desc Map: $descMap"}
+        //if (logEnable) {log.debug "${device.displayName} parse: Desc Map: $descMap"}
         if (descMap.attrId != null ) {
             // attribute report received
             List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
@@ -204,12 +214,14 @@ def parse(String description) {
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
                     energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
+                /*
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
                     if (logEnable) {log.debug "${device.displayName} Tuya specific attribute ${it.attrId}  cluster ${it.cluster } reported: value=${it.value}" }    // not tested
                 }
                 else if ( it.cluster == "0006" && it.attrId in ["8000", "8001", "8002"]) {
                     parseOnOffAttributes(it)
                 }
+                */
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
@@ -234,6 +246,10 @@ def parseOnOffAttributes( it ) {
     if (logEnable) {log.debug "${device.displayName} OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" }
     def mode
     def attrName
+    if (it.value == null) {
+        //if (logEnable) log.trace "${device.displayName} OnOff attribute ${it.attrId} cluster ${it.cluster } skipping NULL value status=${it.status}"
+        return
+    }
     def value = it.value as int
     switch (it.attrId) {
         case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
@@ -246,16 +262,20 @@ def parseOnOffAttributes( it ) {
                 mode = value == 0 ? "Always Green" : value == 1 ? "Red when On; Green when Off" : value == 2 ? "Green when On; Red when Off" : value == 3 ? "Always Red" : null
             }
             else {
-                mode = value == 0 ? "Disabled"  : value == 1 ? "Lit when On" : value == 2 ? "Lit when Off" : null
+                mode = value == 0 ? "Disabled"  : value == 1 ? "Lit when On" : value == 2 ? "Lit when Off" : value == 3 ? "Freeze": null
             }
             break
         case "8002" :    // command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]]
             attrName = "Power On State"
             mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : null
             break
+        case "8003" : //  Over current alarm
+            attrName = "Over current alarm"
+            mode = value == 0 ? "Over Current OK" : value == 1 ? "Over Current Alarm" : null
+            break
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
-            break
+            return
     }
     if (txtEnable) log.info "${device.displayName} ${attrName} is ${mode}"
 }
@@ -414,21 +434,21 @@ def parseSimpleDescriptorResponse(Map descMap) {
 def disableUnsupportedAttribute(String clusterId, String attrId) {
     switch (clusterId) {
         case "0006" :    // Switch
-            if (logEnable==true) log.warn "${device.displayName} Switch polling is not supported -> Switch polling will be diabled."
+            if (logEnable==true) log.warn "${device.displayName} Switch polling is not supported -> Switch polling will be disabled."
             state.switchPollingSupported = false
             break
         case "0B04" : // Electrical Measurement attribute is not supported!
             switch (attrId) {
                 case "0505" :    // Voltage
-                    if (logEnable==true) log.warn "${device.displayName} Voltage polling is not supported -> Voltage polling will be diabled."
+                    if (logEnable==true) log.warn "${device.displayName} Voltage polling is not supported -> Voltage polling will be disabled."
                     state.voltagePollingSupported = false
                     break
                 case "0508" :     // Current
-                    if (logEnable==true) log.warn "${device.displayName} Current polling is not supported -> Current polling will be diabled."
+                    if (logEnable==true) log.warn "${device.displayName} Current polling is not supported -> Current polling will be disabled."
                     state.currentPollingSupported = false
                     break
                 case "050B" :     // Power
-                    if (logEnable==true) log.warn "${device.displayName} Power polling is not supported! -> Power polling will be diabled."
+                    if (logEnable==true) log.warn "${device.displayName} Power polling is not supported! -> Power polling will be disabled."
                     state.powerPollingSupported = false
                     break
                 default :
@@ -437,7 +457,7 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
             }
             break
         case "0702" : // Simple Metering Cluster
-            if (logEnable==true) log.warn "${device.displayName} Energy measurement is not supported! -> Energy polling will be diabled."
+            if (logEnable==true) log.warn "${device.displayName} Energy measurement is not supported! -> Energy polling will be disabled."
             state.energyPollingSupported = false
             break
         default :
@@ -534,13 +554,32 @@ def parseZHAcommand( Map descMap) {
             if (logEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             // Status: Unreportable Attribute (0x8c)
             break
+        case "09" : // Command: Read Reporting Configuration Response (0x09)
+            // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0006 , data=[00, 00, 00, 00, 10, 00, 00, 58, 02] (Status: Success) min=0 max=600
+            // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0702 , data=[00, 00, 00, 00, 25, 3C, 00, 10, 0E, 00, 00, 00, 00, 00, 00] (Status: Success) min=60 max=3600
+            def status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
+            def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
+            if (status == 0) {
+                def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
+                def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
+                def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
+                if (logEnable==true) log.info "${device.displayName} Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max}"
+            }
+            else {
+                if (logEnable==true) log.info "${device.displayName} <b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            }
+            break
         case "0B" : // ZCL Default Response
             def status = descMap.data[1]
             if (status != "00") {
                 switch (descMap.clusterId) {
+                    case "0003" : // Identify response
+                        if (txtEnable==true) log.warn "${device.displayName} Identify command is not supported by ${device.getDataValue('manufacturer')}"
+                        break
                     case "0006" : // Switch state
                         if (logEnable==true) log.warn "${device.displayName} Switch state is not supported -> Switch polling will be disabled."
                         state.switchPollingSupported = false
+                        break    // fixed in ver. 1.5.0
                     case "0B04" : // Electrical Measurement
                         if (logEnable==true) log.warn "${device.displayName} Electrical measurement is not supported -> Power, Voltage and Amperage polling will be disabled."
                         state.powerPollingSupported = false
@@ -572,6 +611,7 @@ def parseZHAcommand( Map descMap) {
                 if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
                 if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
                 cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
+                if (state.txCounter != null) state.txCounter = state.txCounter + 1
                 return
             }
             break
@@ -623,6 +663,7 @@ def off() {
             cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
         }
         runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
+        if (state.txCounter != null) state.txCounter = state.txCounter + 1
         return cmds
     }
 }
@@ -635,6 +676,7 @@ def on() {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
 }
 
@@ -664,6 +706,7 @@ def pollPower() {
     }
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])       // 3 seconds
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
 }
 
@@ -694,6 +737,7 @@ def poll( refreshAll = false ) {
         cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
 }
 
@@ -719,6 +763,7 @@ def autoPoll() {
 }
 
 def tuyaBlackMagic() {
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
 }
 
@@ -772,11 +817,13 @@ def updated(){
 
 
 void initializeVars( boolean fullInit = true ) {
-    if (txtEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
+    if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
     if (fullInit == true || state.lastVoltage == null) state.lastVoltage = 0.0
     if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
@@ -833,7 +880,7 @@ def checkDriverVersion() {
         //log.trace "${device.displayName} driverVersion is the same ${driverVersionAndTimeStamp()}"
     }
     else {
-        if (txtEnable==true) log.debug "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -876,6 +923,7 @@ def powerRefresh() {
     cmds.each{
         sendHubCommand(new hubitat.device.HubMultiAction(delayBetween(cmds,200), hubitat.device.Protocol.ZIGBEE))
     }
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
 // called when any event was received from the Zigbee device in parse() method..
@@ -904,6 +952,8 @@ def checkIfNotPresent() {
 void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    // TODO - multiple commands ???
 }
 
 def logsOff(){
@@ -921,16 +971,79 @@ boolean isTuyaE00xCluster( String description )
         return false
 }
 
-boolean otherTuyaOddities( String description )
-{
-    if(description.indexOf('cluster: 0000') >= 0 || description.indexOf('attrId: 0004') >= 0) {
-        if (logEnable) log.debug "${device.displayName} other Tuya oddities - don't know how to handle it, skipping it for now... "
-        if (logEnable==true) {log.debug "${device.displayName} description is $description"}
+
+
+// return true if further processing in the main parse method should be cancelled !
+boolean otherTuyaOddities( String description ) {
+  
+    if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) {
+        if (logEnable) log.debug "${device.displayName} skipping Tuya parse of  cluster 0 attrId 4"             // parseDescriptionAsMap throws exception when processing Tuya cluster 0 attrId 4 
         return true
     }
-    else
+    def descMap = [:]
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+    }
+    catch ( e ) {
+        if (logEnable) log.warn "${device.displayName} exception caught while parsing <b>otherTuyaOddities</b> descMap:  ${descMap}"
+        return true
+    }
+    //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}        
+    if (descMap.attrId == null ) {
+        //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping"
         return false
+    }
+    boolean bWasAtLeastOneAttributeProcessed = false
+    // attribute report received
+    List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
+    descMap.additionalAttrs.each {
+        attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
+        //log.trace "tyua oddity: filling in attrData ${attrData}"
+    }
+    attrData.each {
+        //log.trace "each it=${it}"
+        def map = [:]
+        if (it.status == "86") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} <b>unsupported attrId ${it.attrId}</b>"
+            // TODO - skip parsing?
+        }
+        switch (it.cluster) {
+            case "0000" :
+                if (it.attrId in ["0001"]) {
+                    if (settings?.logEnable) log.info "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
+                    bWasAtLeastOneAttributeProcessed = true
+                }
+                else if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
+                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    bWasAtLeastOneAttributeProcessed = true
+                }
+                else if (it.attrId in ["FFFE", "FFDF"]) {
+                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    bWasAtLeastOneAttributeProcessed = true
+                }
+                else {
+                    //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} (Cluster ${cluster}) attrId ${it.attrId} N/A, skipping"
+                }
+                break
+            case "0006" :
+                if (it.attrId in ["8000", "8001", "8002", "8003"]) {
+                    parseOnOffAttributes(it)
+                    bWasAtLeastOneAttributeProcessed = true
+                }
+                if (it.attrId in ["4001", "4002"]) {
+                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
+                    bWasAtLeastOneAttributeProcessed = true
+                }
+                break
+            default :
+                //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} N/A, skipping"
+                break
+        } // switch
+    } // for each attribute
+    return bWasAtLeastOneAttributeProcessed
 }
+
+
 
 def childLock( mode ) {
     ArrayList<String> cmds = []
@@ -964,7 +1077,7 @@ def ledMode( mode ) {
         value = mode == "Always Green" ? "00" : mode == "Red when On; Green when Off" ? "01" : mode == "Green when On; Red when Off" ? "02" : mode == "Always Red" ? "03" : null
     }
     else {
-        value = mode == "Disabled" ? "00" : mode == "Lit when On" ? "01" : mode == "Lit when Off" ? "02" : null
+        value = mode == "Disabled" ? "00" : mode == "Lit when On" ? "01" : mode == "Lit when Off" ? "02" : mode == "Freeze" ? "03" : null
     }
     if (value != null) {
         cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8001, DataType.ENUM8, value.toInteger())
@@ -999,4 +1112,103 @@ def powerOnState( mode ) {
     }
 }
 
+private getIDENTIFY_CMD_IDENTIFY() { 0x00 }
+private getIDENTIFY_CMD_QUERY() { 0x01 }
+private getIDENTIFY_CMD_TRIGGER() { 0x40 }
+
+def intTo16bitUnsignedHex(value) {
+	def hexStr = zigbee.convertToHexString(value.toInteger(),4)
+	return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
+}
+
+def intTo8bitUnsignedHex(value) {
+	return zigbee.convertToHexString(value.toInteger(), 2)
+}
+
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+def identify() {
+	List<String> cmds = []
+	cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_IDENTIFY} { 0x${intTo16bitUnsignedHex(30)} }"    // Identify for 30 seconds
+	//cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_TRIGGER} { 0x${intTo8bitUnsignedHex(EFFECT_BREATHE)} 0x${intTo8bitUnsignedHex(0)} }"    // Trigger Effect
+    if (txtEnable==true) log.info "${device.displayName} sending Identify to ${device.getDataValue('manufacturer')}"
+    //cmds += zigbee.command(0x0003, 0x00, "0500")        // 5 seconds?
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+	return cmds;
+}
+
+def configureReporting(String operation, String measurement,  String minTime, String maxTime, String delta ) {
+    int intMinTime = safeToInt(minTime)
+    int intMaxTime = safeToInt(maxTime)
+    int intDelta = safeToInt(delta)
+    log.trace "configureReporting operation=${operation}, measurement=${measurement}  minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
+
+    List<String> cmds = []      
+    
+    switch (measurement) {
+        case ONOFF :
+            if (operation == "Write") {
+                cmds += zigbee.onOffConfig(intMinTime, intMaxTime)  // Configure On/Off 
+            }
+            else {
+                cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [:], 250)
+            }
+            break
+        case ENERGY :
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime)
+            }
+            else {
+                cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [:], 250)
+            }
+            break
+        case POWER :
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0B04,  DataType.UINT48, intMinTime, intMaxTime)
+            }
+            else {
+                cmds += zigbee.reportingConfiguration(0x0B04, 0x0B04, [:], 250)
+            }
+            break
+        case VOLTAGE :
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT48, intMinTime, intMaxTime)
+            }
+            else {
+                cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [:], 250)
+            }
+            break
+        case AMPERAGE :
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT48, intMinTime, intMaxTime)
+            }
+            else {
+                cmds += igbee.reportingConfiguration(0x0B04, 0x0508, [:], 250)
+            }
+            break
+        defaukt :
+            break
+    }
+    if (cmds != null) {
+        sendZigbeeCommands(cmds)
+    }
+}
+ 
+def test(String description)
+{
+    //  await endpoint.write('genBasic', {0xffde: {value: 0x13, type: 0x20}});
+    //  await endpoint.read('genOnOff', [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003]);
+    List<String> cmds = []
+    cmds += tuyaBlackMagic()
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13)
+    cmds += zigbee.readAttribute(0x0006, [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003], [:], delay=200) 
+    log.warn "${device.displayName} test"
+    sendZigbeeCommands(cmds)
+}
 
