@@ -61,7 +61,7 @@ metadata {
         capability "PresenceSensor"
         capability "Polling"
         
-
+        //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
@@ -192,7 +192,7 @@ def parse(String description) {
             log.warn "${device.displayName} parse: exception caught while parsing descMap:  ${descMap}"
             return null
         }
-        if (logEnable) {log.debug "${device.displayName} Desc Map: $descMap"}
+        //if (logEnable) {log.debug "${device.displayName} parse: Desc Map: $descMap"}
         if (descMap.attrId != null ) {
             // attribute report received
             List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
