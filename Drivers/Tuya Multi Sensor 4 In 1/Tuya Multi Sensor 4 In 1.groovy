@@ -22,7 +22,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/10 7:48 PM"}
+def timeStamp() {"2022/06/10 8:28 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -132,6 +132,15 @@ metadata {
             if (is4in1()) {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
+            if (is2in1() || isConfigurable() ) {
+                input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
+            }
+            if (is2in1()) {
+                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['--- Select ---':'--- Select ---', '10':'10', '30':'30', '60':'60', '120':'120'])
+            }
+            if (isConfigurable()) {
+                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['--- Select ---':'--- Select ---', '30':'30', '60':'60', '120':'120'])
+            }
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 		        input ("sensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
@@ -169,6 +178,9 @@ def is2in1() {
     return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd']
 }
 
+def isConfigurable() {
+    return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']    // TS0202 models
+}
 def isRadar() {
     return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr']
 }
@@ -230,7 +242,7 @@ def parse(String description) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-            if (settings?.logEnable) log.info "${device.displayName} device announcement"
+            if (settings?.txtEnable) log.info "${device.displayName} device announcement"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
@@ -249,11 +261,20 @@ def parse(String description) {
         } 
         else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //read attribute response
             if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
-            if (descMap?.attrId == "0002") {
+            if (descMap?.attrId == "0000") {
+                if (settings?.logEnable) log.debug "Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
+            }
+            else if (descMap?.attrId == "0002") {
                 if (settings?.logEnable) log.debug "Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
                 handleMotion(Integer.parseInt(descMap?.value, 16))
             } else if (descMap?.attrId == "000B") {
                 if (settings?.logEnable) log.debug "IAS Zone ID: ${descMap.value}" 
+            }
+            else if (descMap?.attrId == "0013") {
+                if (settings?.logEnable) log.info "Current Zone Sensitivity Level = ${Integer.parseInt(descMap?.value, 16)}"
+            }
+            else if (descMap?.attrId == "F001") {
+                if (settings?.logEnable) log.info "Current Zone Keep-Time = ${Integer.parseInt(descMap?.value, 16)}"
             }
             else {
                 if (settings?.logEnable) log.warn "Zone status: NOT PROCESSED ${descMap}" 
@@ -760,6 +781,14 @@ def getMotionResult(motionActive) {
 	def descriptionText = "Detected motion"
     if (!motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
+    }
+    else {
+        if (device.currentValue("motion") == "active") {
+    		descriptionText = "Motion active ${getSecondsInactive()}s"
+        }
+        else {
+            descriptionText = "Detected motion"
+        }
     }
     if (settings?.txtEnable) log.info "${device.displayName} ${descriptionText}"
 	return [
