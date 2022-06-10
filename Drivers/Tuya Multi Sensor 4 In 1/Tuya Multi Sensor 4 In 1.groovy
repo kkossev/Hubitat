@@ -17,11 +17,12 @@
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
+ * ver. 1.0.5 2022-06-10 kkossev  - (dev. branch) _TZE200_3towulqd
  *
 */
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/05/06 8:02 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2022/06/10 7:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -62,6 +63,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Tuya Multi Sensor 2 In 1"          // https://zigbee.blakadder.com/Tuya_LY-TAD-K616S-ZB.html // Model LY-TAD-K616S-ZB
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux"          // https://www.aliexpress.com/item/1005004095233195.html
         
         // Human presence sensor AIR - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Human presence sensor AIR"        // Tuya LY-TAD-K616S-ZB
@@ -154,12 +156,17 @@ metadata {
 @Field static final Integer minimumDistanceParamIndex = 7
 @Field static final Integer maximumDistanceParamIndex = 8
 
+
 def is4in1() {
     return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
 }
 
 def is3in1() {
     return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZE200_mrf6vtua']
+}
+
+def is2in1() {
+    return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd']
 }
 
 def isRadar() {
@@ -309,14 +316,9 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x01 : 
-                if (isRadar()) {
-                    //log.warn "motion event radar fncmd=${fncmd}"
-                    handleMotion(motionActive=fncmd)                    // Presence state for other types of Human Presence sensors? Including isHumanPresenceSensorScene() and isHumanPresenceSensorFall()
-                }
-                else {        // also PIR state for TS0202 ?
-                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion event 0x01 fncmd = ${fncmd}"
-                }
+            case 0x01 : // motion for 2-in-1 TS0601 and presence state? for radars
+                if (settings?.logEnable) log.debug "${device.displayName} motion event 0x01 fncmd = ${fncmd}"
+                handleMotion(motionActive=fncmd)
                 break
             case 0x02 :
                 if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
@@ -366,6 +368,9 @@ def processTuyaCluster( descMap ) {
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
                 }
+                break
+            case 0x0C : // (12)
+                illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 break
             //            
             // case 0x0A : (10) keep time for TS0202 ?
@@ -819,7 +824,7 @@ def illuminanceEvent( rawLux ) {
 }
 
 def illuminanceEventLux( Integer lux ) {
-    sendEvent("name": "illuminance", "value": lux, "unit": "lux")
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
