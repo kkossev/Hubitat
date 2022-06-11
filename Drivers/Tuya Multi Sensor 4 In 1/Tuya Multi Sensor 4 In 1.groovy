@@ -17,12 +17,12 @@
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
- * ver. 1.0.5 2022-06-10 kkossev  - (dev. branch) _TZE200_3towulqd
+ * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd; 'Reset Motion to Inactive' made explicit option 
  *
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/10 8:28 PM"}
+def timeStamp() {"2022/06/11 10:45 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -32,7 +32,7 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
 metadata {
-    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "Battery"
         capability "MotionSensor"
@@ -119,7 +119,10 @@ metadata {
             input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
             if (isRadar() == false) {
-    		    input ("motionReset", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 0 seconds (disabled)", description: "", range: "0..7200", defaultValue: 0)
+                input (name: "motionReset", type: "bool", title: "Reset Motion to Inactive", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
+                if (motionReset.value == true) {
+    		        input ("motionResetTimer", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
+                }
             }
             if (false) {
                 input ("temperatureOffset", "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0.0)
@@ -133,13 +136,13 @@ metadata {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
             if (is2in1() || isConfigurable() ) {
-                input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
+                input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
             }
             if (is2in1()) {
-                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['--- Select ---':'--- Select ---', '10':'10', '30':'30', '60':'60', '120':'120'])
+                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
             }
             if (isConfigurable()) {
-                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['--- Select ---':'--- Select ---', '30':'30', '60':'60', '120':'120'])
+                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
             }
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
@@ -176,6 +179,10 @@ def is3in1() {
 
 def is2in1() {
     return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd']
+}
+
+def isIAS() {
+    return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters')))
 }
 
 def isConfigurable() {
@@ -262,22 +269,23 @@ def parse(String description) {
         else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //read attribute response
             if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
             if (descMap?.attrId == "0000") {
-                if (settings?.logEnable) log.debug "Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
+                if (settings?.logEnable) log.debug "${device.displayName} Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
             }
             else if (descMap?.attrId == "0002") {
-                if (settings?.logEnable) log.debug "Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
+                if (settings?.logEnable) log.debug "${device.displayName} Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
                 handleMotion(Integer.parseInt(descMap?.value, 16))
             } else if (descMap?.attrId == "000B") {
-                if (settings?.logEnable) log.debug "IAS Zone ID: ${descMap.value}" 
+                if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}" 
             }
             else if (descMap?.attrId == "0013") {
-                if (settings?.logEnable) log.info "Current Zone Sensitivity Level = ${Integer.parseInt(descMap?.value, 16)}"
+                def value = Integer.parseInt(descMap?.value, 16)
+                if (settings?.logEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${getSensitivity(value)} (${value})"
             }
             else if (descMap?.attrId == "F001") {
-                if (settings?.logEnable) log.info "Current Zone Keep-Time = ${Integer.parseInt(descMap?.value, 16)}"
+                if (settings?.logEnable) log.info "${device.displayName} Current Zone Keep-Time = ${Integer.parseInt(descMap?.value, 16)}"
             }
             else {
-                if (settings?.logEnable) log.warn "Zone status: NOT PROCESSED ${descMap}" 
+                if (settings?.logEnable) log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}" 
             }
         } 
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
@@ -288,14 +296,14 @@ def parse(String description) {
         }
     } // if 'catchall:' or 'read attr -'
     else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
-        if (settings?.logEnable) log.debug "Zone status: $description"
+        if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
         parseIasMessage(description)    // TS0202 Motion sensor
     }
     else if (description?.startsWith('enroll request')) {
          /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
-        if (settings?.logEnable) log.info "Sending IAS enroll response..."
+        if (settings?.logEnable) log.info "${device.displayName} Sending IAS enroll response..."
         ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        if (settings?.logEnable) log.debug "enroll response: ${cmds}"
+        if (settings?.logEnable) log.debug "${device.displayName} enroll response: ${cmds}"
         sendZigbeeCommands( cmds )  
     }    
     else {
@@ -759,10 +767,10 @@ def parseIasMessage(String description) {
 private handleMotion(motionActive) {    
     //log.warn "handleMotion motionActive=${motionActive}"
     if (motionActive) {
-        def timeout = motionReset ?: 0
+        def timeout = motionResetTimer ?: 0
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
-        if (timeout != 0) {
-            runIn(timeout, resetToMotionInactive)
+        if (motionReset == true && timeout != 0) {
+            runIn(timeout, resetToMotionInactive, [overwrite: true])
         }
         if (device.currentState('motion')?.value != "active") {
             state.motionStarted = now()
@@ -801,7 +809,7 @@ def getMotionResult(motionActive) {
 
 def resetToMotionInactive() {
 	if (device.currentState('motion')?.value == "active") {
-		def descText = "Motion reset to inactive after ${getSecondsInactive()}s"
+		def descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)"
 		sendEvent(
 			name : "motion",
 			value : "inactive",
@@ -811,7 +819,7 @@ def resetToMotionInactive() {
         if (settings?.txtEnable) log.info "${device.displayName} ${descText}"
 	}
     else {
-        if (settings?.txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive after ${getSecondsInactive()}s"
+        if (settings?.txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s"
     }
 }
 
@@ -819,7 +827,7 @@ def getSecondsInactive() {
     if (state.motionStarted) {
         return Math.round((now() - state.motionStarted)/1000)
     } else {
-        return motionReset ?: 0
+        return motionResetTimer ?: 0
     }
 }
 
@@ -949,7 +957,10 @@ def updated() {
 def refresh() {
     ArrayList<String> cmds = []
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
-    cmds += zigbee.readAttribute(0, 1)
+    //cmds += zigbee.readAttribute(0, 1)
+    if (isIAS()) {
+        cmds += readSensitivity()
+    }
     sendZigbeeCommands( cmds ) 
 }
 
@@ -986,7 +997,8 @@ void initializeVars(boolean fullInit = true ) {
 
     if (fullInit == true || settings.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", 0)
+    if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", false)
+    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 60)
     if (fullInit == true || settings.advancedOptions == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
@@ -1041,7 +1053,7 @@ def initialize() {
     installed()
     updated()
     configure()
-    runIn( 3, logInitializeRezults)
+    runIn( 3, logInitializeRezults, [overwrite: true])
 }
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
@@ -1185,6 +1197,38 @@ def calcHashParam(num) {
     catch (e) {
         log.error "exception caught calcHashParam(${num})"
         return '??' 
+    }
+}
+
+
+def getSensitivity( value ) {
+    return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null
+}
+
+def readSensitivity() {
+    return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)
+}
+
+//  input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
+def setSensitivity( String mode ) {
+    if (mode == null) {
+        if (settings?.logEnable) log.warn "${device.displayName} sensitivity is not set for ${device.getDataValue('manufacturer')}"
+        return null
+    }
+    ArrayList<String> cmds = []
+    String value = null
+    if (!(is2in1() || isConfigurable()))  {
+        if (settings?.logEnable) log.warn "${device.displayName} sensitivity can not be set for ${device.getDataValue('manufacturer')}"
+        // continue anyway ..
+    }
+    value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? "02" : null
+    if (value != null) {
+        cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
 }
 
