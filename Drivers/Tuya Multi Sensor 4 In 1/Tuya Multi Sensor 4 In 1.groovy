@@ -17,12 +17,12 @@
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
- * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd; 'Reset Motion to Inactive' made explicit option 
+ * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime configuration for IAS sensors (TS0202) 
  *
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 10:45 AM"}
+def timeStamp() {"2022/06/11 1:39 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -45,7 +45,8 @@ metadata {
 
 		attribute "distance", "number"        // Tuya Radar
         
-        command "configure", [[name: "Manually initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
+        command "configure", [[name: "Configure the sensor after switching drivers"]]
+        command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
@@ -157,7 +158,7 @@ metadata {
     }
 }
 
-@Field static final Integer numberOfconfigParams = 9
+@Field static final Integer numberOfconfigParams = 10
 @Field static final Integer temperatureOffsetParamIndex = 0
 @Field static final Integer humidityOffsetParamIndex = 1
 @Field static final Integer luxOffsetParamIndex = 2
@@ -167,6 +168,7 @@ metadata {
 @Field static final Integer fadingTimeParamIndex = 6
 @Field static final Integer minimumDistanceParamIndex = 7
 @Field static final Integer maximumDistanceParamIndex = 8
+@Field static final Integer keepTimeParamIndex = 9
 
 
 def is4in1() {
@@ -277,12 +279,19 @@ def parse(String description) {
             } else if (descMap?.attrId == "000B") {
                 if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}" 
             }
-            else if (descMap?.attrId == "0013") {
+            else if (descMap?.attrId == "0013") {    // [raw:7CC50105000813002002, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:0013, encoding:20, command:0A, value:02, clusterInt:1280, attrInt:19]
+            
                 def value = Integer.parseInt(descMap?.value, 16)
-                if (settings?.logEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${getSensitivity(value)} (${value})"
+                def str = getSensitivityString(value)
+                if (settings?.logEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
+                device.updateSetting("sensitivity", [value:str, type:"enum"])                
             }
-            else if (descMap?.attrId == "F001") {
-                if (settings?.logEnable) log.info "${device.displayName} Current Zone Keep-Time = ${Integer.parseInt(descMap?.value, 16)}"
+            else if (descMap?.attrId == "F001") {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
+                def value = Integer.parseInt(descMap?.value, 16)
+                def str = getKeepTimeString(value)
+                if (settings?.logEnable) log.info "${device.displayName} Current Zone Keep-Time =  ${str} (${value})"
+                //log.trace "str = ${str}"
+                device.updateSetting("keepTime", [value:str, type:"enum"])                
             }
             else {
                 if (settings?.logEnable) log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}" 
@@ -726,10 +735,11 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+// not used
 def parseIasReport(Map descMap) {
     if (settings?.logEnable) log.debug "pareseIasReport: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
     def zs = new ZoneStatus(Integer.parseInt(descMap?.value, 16))
-    log.trace "zs = ${zs}"
+    //log.trace "zs = ${zs}"
     if (settings?.logEnable) {
         log.debug "zs.alarm1 = $zs.alarm1"
         log.debug  "zs.alarm2 = $zs.alarm2"
@@ -750,7 +760,7 @@ def parseIasMessage(String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
     try {
         Map zs = zigbee.parseZoneStatusChange(description)
-        if (settings?.logEnable) log.trace "zs = $zs"
+        //if (settings?.logEnable) log.trace "zs = $zs"
         if (zs.alarm1Set == true) {
             handleMotion(motionActive=true)
         }
@@ -902,6 +912,18 @@ def updated() {
                 cmds += sendTuyaCommand("02", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.sensitivity as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
             }
+            else if (isIAS()) {
+                //log.trace "settings?.sensitivity = ${settings?.sensitivity}"
+                cmds += sendSensitivity( settings?.sensitivity )
+                if (settings?.logEnable) log.warn "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
+            }
+        }
+        if (getHashParam(keepTimeParamIndex) != calcHashParam(keepTimeParamIndex)) {
+            if (isIAS()) {
+                //log.trace "settings?.keepTime = ${settings?.keepTime}"
+                cmds += sendKeepTime( settings?.keepTime )
+                if (settings?.logEnable) log.warn "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
+            }
         }
        
         if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndex)) {
@@ -942,15 +964,11 @@ def updated() {
         if (settings?.logEnable) log.debug "${device.displayName} no change in state.hashStringPars = {state.hashStringPars}"
     }
     
-    /*
-    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-   	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected    
-    */
     if (cmds != null) {
         if (settings?.logEnable) log.debug "${device.displayName} sending the changed AdvancedOptions"
         sendZigbeeCommands( cmds )  
     }
-    if (settings?.txtEnable) log.info "${device.displayName} Update finished"
+    if (settings?.txtEnable) log.info "${device.displayName} Update preparation is done"
 }
 
 
@@ -960,6 +978,7 @@ def refresh() {
     //cmds += zigbee.readAttribute(0, 1)
     if (isIAS()) {
         cmds += readSensitivity()
+        cmds += readKeepTime()
     }
     sendZigbeeCommands( cmds ) 
 }
@@ -1000,6 +1019,8 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", false)
     if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 60)
     if (fullInit == true || settings.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"No selection", type:"enum"])
+    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"No selection", type:"enum"])
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("humidityOffset", 0.0)
@@ -1188,6 +1209,7 @@ def calcHashParam(num) {
             case fadingTimeParamIndex :        hashByte = generateMD5(fadingTime.toString())[-2..-1];         break
             case minimumDistanceParamIndex :   hashByte = generateMD5(minimumDistance.toString())[-2..-1];    break
             case maximumDistanceParamIndex :   hashByte = generateMD5(maximumDistance.toString())[-2..-1];    break
+            case keepTimeParamIndex :          hashByte = generateMD5(keepTime.toString())[-2..-1];           break
             //minimumDistance
             default :
                 log.error "invalid par calcHashParam(${num})"
@@ -1201,16 +1223,24 @@ def calcHashParam(num) {
 }
 
 
-def getSensitivity( value ) {
+def getSensitivityString( value ) {
     return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null
+}
+
+def getKeepTimeString( value ) {
+    return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null
 }
 
 def readSensitivity() {
     return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)
 }
 
+def readKeepTime() {
+    return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200)
+}
+
 //  input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
-def setSensitivity( String mode ) {
+def sendSensitivity( String mode ) {
     if (mode == null) {
         if (settings?.logEnable) log.warn "${device.displayName} sensitivity is not set for ${device.getDataValue('manufacturer')}"
         return null
@@ -1218,10 +1248,10 @@ def setSensitivity( String mode ) {
     ArrayList<String> cmds = []
     String value = null
     if (!(is2in1() || isConfigurable()))  {
-        if (settings?.logEnable) log.warn "${device.displayName} sensitivity can not be set for ${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} sensitivity configuration may not work for ${device.getDataValue('manufacturer')}"
         // continue anyway ..
     }
-    value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? "02" : null
+    value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? 02 : null
     if (value != null) {
         cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger())
         if (settings?.logEnable) log.trace "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
@@ -1229,6 +1259,28 @@ def setSensitivity( String mode ) {
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+    }
+}
+
+def sendKeepTime( String mode ) {
+    if (mode == null) {
+        if (settings?.logEnable) log.warn "${device.displayName} Keep Time is not set for ${device.getDataValue('manufacturer')}"
+        return null
+    }
+    ArrayList<String> cmds = []
+    String value = null
+    if (!(is2in1() || isConfigurable()))  {
+        if (settings?.logEnable) log.warn "${device.displayName} Keep Time configuration may not work for ${device.getDataValue('manufacturer')}"
+        // continue anyway .. //['30':'30', '60':'60', '120':'120']
+    }
+    value = mode == "30" ? 0: mode == "60" ? 1 : mode == "120" ? 02 : null
+    if (value != null) {
+        cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
 }
 
