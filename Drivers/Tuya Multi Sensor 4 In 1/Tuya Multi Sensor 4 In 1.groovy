@@ -22,7 +22,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 10:13 PM"}
+def timeStamp() {"2022/06/11 10:14 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -178,7 +178,8 @@ def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5'
 def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd'] }
 def isIAS()  { return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) }
 def isTS0601() { return (device.getDataValue('model') in ['TS0601']) }
-def isConfigurable() { return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9'] }   // TS0202 models
+//def isConfigurable() { return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9'] }   // TS0202 models
+def isConfigurable() { return isIAS() }   // TS0202 models
 def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr'] }
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
@@ -254,6 +255,9 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
         } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "0004") {
+            if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value})"
+        } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
             //  dni:7CC5, endpoint:01, cluster:0000, size:14, attrId:0007, encoding:30, command:01, value:03, clusterInt:0, attrInt:7, additionalAttrs:[[value:00, encoding:30, attrId:FFFE, consumedBytes:4, attrInt:65534]]]
             // ["battery", "dc", "mains", "unknown"]
@@ -273,8 +277,8 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
         } 
-        else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //read attribute response
-            if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+        else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //IAS read attribute response
+            //if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
             if (descMap?.attrId == "0000") {
                 if (settings?.logEnable) log.debug "${device.displayName} Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
             }
@@ -300,9 +304,15 @@ def parse(String description) {
             else {
                 if (settings?.logEnable) log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}" 
             }
+        } // if IAS read attribute response
+        else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
+            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "<b>FAILURE</b>"}"
         } 
-        else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
-            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
+        else if (descMap?.command == "04") {    //write attribute response (other)
+            if (settings?.logEnable) log.debug "${device.displayName} write attribute response is ${descMap?.data[0] == "00" ? "success" : "<b>FAILURE</b>"}"
+        } 
+        else if (descMap?.command == "00" && descMap?.clusterId == "8021" ) {    // bind response
+            if (settings?.logEnable) log.debug "${device.displayName }bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>FAILURE</b>'})"
         } 
         else {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
