@@ -17,13 +17,13 @@
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
- * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime configuration for IAS sensors (TS0202) 
+ * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime configuration for IAS sensors (TS0202);
  *                                W.I.P. - capability "PowerSource"
  *
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 8:12 PM"}
+def timeStamp() {"2022/06/11 9:23 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -172,29 +172,13 @@ metadata {
 @Field static final Integer keepTimeParamIndex = 9
 
 
-def is4in1() {
-    return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5']
-}
-
-def is3in1() {
-    return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZE200_mrf6vtua']
-}
-
-def is2in1() {
-    return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd']
-}
-
-def isIAS() {
-    return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters')))
-}
-
-def isConfigurable() {
-    return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']    // TS0202 models
-}
-def isRadar() {
-    return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr']
-}
-
+def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5'] }
+def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZE200_mrf6vtua'] }
+def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr', '_TZE200_3towulqd'] }
+def isIAS()  { return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) }
+def isTS0601() { return (device.getDataValue('model') in ['TS0601']) }
+def isConfigurable() { return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9'] }   // TS0202 models
+def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr'] }
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
@@ -224,7 +208,18 @@ def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
-    if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
+    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
+        if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
+        parseIasMessage(description)    // TS0202 Motion sensor
+    }
+    else if (description?.startsWith('enroll request')) {
+         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
+        if (settings?.logEnable) log.info "${device.displayName} Sending IAS enroll response..."
+        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        if (settings?.logEnable) log.debug "${device.displayName} enroll response: ${cmds}"
+        sendZigbeeCommands( cmds )  
+    }    
+    else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
@@ -281,7 +276,6 @@ def parse(String description) {
                 if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}" 
             }
             else if (descMap?.attrId == "0013") {    // [raw:7CC50105000813002002, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:0013, encoding:20, command:0A, value:02, clusterInt:1280, attrInt:19]
-            
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getSensitivityString(value)
                 if (settings?.txtEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
@@ -305,17 +299,6 @@ def parse(String description) {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
-    else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
-        if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
-        parseIasMessage(description)    // TS0202 Motion sensor
-    }
-    else if (description?.startsWith('enroll request')) {
-         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
-        if (settings?.logEnable) log.info "${device.displayName} Sending IAS enroll response..."
-        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        if (settings?.logEnable) log.debug "${device.displayName} enroll response: ${cmds}"
-        sendZigbeeCommands( cmds )  
-    }    
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
@@ -355,7 +338,7 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x01 : // motion for 2-in-1 TS0601 and presence state? for radars
+            case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence state? for radars
                 if (settings?.logEnable) log.debug "${device.displayName} motion event 0x01 fncmd = ${fncmd}"
                 handleMotion(motionActive=fncmd)
                 break
@@ -377,13 +360,14 @@ def processTuyaCluster( descMap ) {
                     if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
                 }
                 break
-            case 0x04 :
+            case 0x04 :    // Battery level for _TZE200_3towulqd
                 if (isRadar()) {
                     if (settings?.logEnable) log.info "${device.displayName} Radar Maximum detection distance is ${fncmd/100} m"
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"number"])
                 }
-                else {        // also battery level for TS0202 ?
-                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                else {        // also battery level for TS0202 
+                    if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    handleTuyaBatteryLevel( fncmd )                    
                 }
                 break
             
@@ -405,14 +389,21 @@ def processTuyaCluster( descMap ) {
                     }
                 }
                 else {
-                    if (settings?.logEnable) log.warn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
+                    // sensitivity for TS0202
+                    def str = getSensitivityString(fncmd)
+                    if (settings?.txtEnable) log.info "${device.displayName} sensitivity is ${str} (${fncmd})"
+                    device.updateSetting("sensitivity", [value:str, type:"enum"])                
                 }
+                break
+            case 0x0A : // (10) keep time for TS0202
+                def str = getKeepTimeString(fncmd)
+                if (settings?.txtEnable) log.info "${device.displayName} Keep Time is ${str} (${fncmd})"
+                device.updateSetting("keepTime", [value:str, type:"enum"])                
                 break
             case 0x0C : // (12)
                 illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 break
             //            
-            // case 0x0A : (10) keep time for TS0202 ?
             //
             case 0x65 :    // (101)
                 if (isRadar()) {
@@ -446,17 +437,8 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
                 }
                 else {     // battery level for 3 in 1;  
-                 if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-                    def rawValue = 0
-                    if (fncmd == 0) rawValue = 100           // Battery Full
-                    else if (fncmd == 1) rawValue = 75       // Battery High
-                    else if (fncmd == 2) rawValue = 50       // Battery Medium
-                    else if (fncmd == 3) rawValue = 25       // Battery Low
-                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered ! -> PowerSource = USB     capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
-                    else {
-                        rawValue = fncmd
-                    }
-                    getBatteryPercentageResult(rawValue*2)
+                    if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    handleTuyaBatteryLevel( fncmd )                    
                 }
                 break
             case 0x67 :     // (103)
@@ -589,16 +571,7 @@ def processTuyaCluster( descMap ) {
             case 0x6E : // (110) Tuya 4 in 1
                 if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {
                     if (settings?.logEnable) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-                    def rawValue = 0
-                    if (fncmd == 0) rawValue = 100           // Battery Full
-                    else if (fncmd == 1) rawValue = 75       // Battery High
-                    else if (fncmd == 2) rawValue = 50       // Battery Medium
-                    else if (fncmd == 3) rawValue = 25       // Battery Low
-                    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered !
-                    else {
-                        rawValue = fncmd
-                    }
-                    getBatteryPercentageResult(rawValue*2)
+                    handleTuyaBatteryLevel( fncmd )
                 }
                 else if (isRadar()) {
                     if (isHumanPresenceSensorAIR()) {
@@ -736,6 +709,18 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+
+def handleTuyaBatteryLevel( fncmd ) {
+    def rawValue = 0
+    if (fncmd == 0) rawValue = 100           // Battery Full
+    else if (fncmd == 1) rawValue = 75       // Battery High
+    else if (fncmd == 2) rawValue = 50       // Battery Medium
+    else if (fncmd == 3) rawValue = 25       // Battery Low
+    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered ! -> PowerSource = USB     capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+    else rawValue = fncmd
+    getBatteryPercentageResult(rawValue*2)
+}
+
 // not used
 def parseIasReport(Map descMap) {
     if (settings?.logEnable) log.debug "pareseIasReport: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
@@ -802,12 +787,7 @@ def getMotionResult(motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
     }
     else {
-        if (device.currentValue("motion") == "active") {
-    		descriptionText = "Motion is active ${getSecondsInactive()}s"
-        }
-        else {
-            descriptionText = "Detected motion"
-        }
+        descriptionText = device.currentValue("motion") == "active" ? "Motion is active ${getSecondsInactive()}s" : "Detected motion"
     }
     if (settings?.txtEnable) log.info "${device.displayName} ${descriptionText}"
 	return [
@@ -899,7 +879,7 @@ def updated() {
     }
     
     
-    if (state.hashStringPars != calcParsHashString()) {    // an configurable device parameter was changed
+    if (true /*state.hashStringPars != calcParsHashString()*/) {    // an configurable device parameter was changed
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
         //
         if (getHashParam(ledEnableParamIndex) != calcHashParam(ledEnableParamIndex)) {
@@ -1252,13 +1232,14 @@ def sendSensitivity( String mode ) {
     }
     value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? 02 : null
     if (value != null) {
-        cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger())
+        cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger(), [:], delay=200)
         if (settings?.logEnable) log.trace "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
-        sendZigbeeCommands( cmds )    
+        //sendZigbeeCommands( cmds )         // only prepare the cmds here!
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
+    return cmds
 }
 
 def sendKeepTime( String mode ) {
@@ -1274,13 +1255,14 @@ def sendKeepTime( String mode ) {
     }
     value = mode == "30" ? 0: mode == "60" ? 1 : mode == "120" ? 02 : null
     if (value != null) {
-        cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger())
+        cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger(), [:], delay=200) 
         if (settings?.logEnable) log.trace "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
-        sendZigbeeCommands( cmds )    
+        //sendZigbeeCommands( cmds )    // only prepare the cmds here!
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
+    return cmds
 }
 
 
