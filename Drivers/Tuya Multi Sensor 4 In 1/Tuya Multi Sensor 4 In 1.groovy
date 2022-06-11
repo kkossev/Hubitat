@@ -23,7 +23,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 7:58 PM"}
+def timeStamp() {"2022/06/11 8:12 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,7 +33,7 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
 metadata {
-    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "Battery"
         capability "MotionSensor"
@@ -803,7 +803,7 @@ def getMotionResult(motionActive) {
     }
     else {
         if (device.currentValue("motion") == "active") {
-    		descriptionText = "Motion active ${getSecondsInactive()}s"
+    		descriptionText = "Motion is active ${getSecondsInactive()}s"
         }
         else {
             descriptionText = "Detected motion"
