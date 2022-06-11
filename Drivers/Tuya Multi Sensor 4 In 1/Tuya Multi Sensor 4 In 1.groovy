@@ -22,7 +22,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 10:14 PM"}
+def timeStamp() {"2022/06/11 10:15 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -49,7 +49,7 @@ metadata {
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
-        command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
+        //command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
         /*
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
