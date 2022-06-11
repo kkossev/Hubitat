@@ -18,11 +18,12 @@
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
  * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime configuration for IAS sensors (TS0202) 
+ *                                W.I.P. - capability "PowerSource"
  *
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 1:39 PM"}
+def timeStamp() {"2022/06/11 7:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -283,13 +284,13 @@ def parse(String description) {
             
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getSensitivityString(value)
-                if (settings?.logEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
+                if (settings?.txtEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
                 device.updateSetting("sensitivity", [value:str, type:"enum"])                
             }
             else if (descMap?.attrId == "F001") {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getKeepTimeString(value)
-                if (settings?.logEnable) log.info "${device.displayName} Current Zone Keep-Time =  ${str} (${value})"
+                if (settings?.txtEnable) log.info "${device.displayName} Current Zone Keep-Time =  ${str} (${value})"
                 //log.trace "str = ${str}"
                 device.updateSetting("keepTime", [value:str, type:"enum"])                
             }
@@ -907,22 +908,20 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
             }
         }
-        if (getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)) {
+        if (true /*getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)*/) {
             if (isRadar()) { 
                 cmds += sendTuyaCommand("02", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.sensitivity as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
             }
             else if (isIAS()) {
-                //log.trace "settings?.sensitivity = ${settings?.sensitivity}"
                 cmds += sendSensitivity( settings?.sensitivity )
-                if (settings?.logEnable) log.warn "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
+                if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
             }
         }
-        if (getHashParam(keepTimeParamIndex) != calcHashParam(keepTimeParamIndex)) {
+        if (true /*getHashParam(keepTimeParamIndex) != calcHashParam(keepTimeParamIndex)*/) {
             if (isIAS()) {
-                //log.trace "settings?.keepTime = ${settings?.keepTime}"
                 cmds += sendKeepTime( settings?.keepTime )
-                if (settings?.logEnable) log.warn "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
+                if (settings?.logEnable) log.debug "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
             }
         }
        
@@ -968,7 +967,7 @@ def updated() {
         if (settings?.logEnable) log.debug "${device.displayName} sending the changed AdvancedOptions"
         sendZigbeeCommands( cmds )  
     }
-    if (settings?.txtEnable) log.info "${device.displayName} Update preparation is done"
+    if (settings?.txtEnable) log.info "${device.displayName} preferencies updates are sent to the device..."
 }
 
 
@@ -1031,8 +1030,8 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", 60)
     if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", 1.00)
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance", 6.00)
-    //  
-    
+    //  capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+    if (fullInit == true) sendEvent(name : "powerSource",	value : "unknown", isStateChange : true)
     //
     state.hashStringPars = calcParsHashString()
     if (settings?.logEnable) log.trace "${device.displayName} state.hashStringPars = ${state.hashStringPars}"
