@@ -17,13 +17,12 @@
  * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
  * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
- * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime configuration for IAS sensors (TS0202);
- *                                W.I.P. - capability "PowerSource"
+ * ver. 1.0.5 2022-06-11 kkossev  - (dev. branch) _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  *
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 9:52 PM"}
+def timeStamp() {"2022/06/11 10:13 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -48,7 +47,7 @@ metadata {
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
-        command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["active", "inactive"], description: "Force motion active/inactive (for tests)"]]
+        command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
         /*
@@ -170,6 +169,8 @@ metadata {
 @Field static final Integer minimumDistanceParamIndex = 7
 @Field static final Integer maximumDistanceParamIndex = 8
 @Field static final Integer keepTimeParamIndex = 9
+@Field static final Integer presenceCountTreshold = 1
+@Field static final Integer defaultPollingInterval = 3600
 
 
 def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5'] }
@@ -207,6 +208,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
+    setPresent()
     if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
@@ -251,6 +253,13 @@ def parse(String description) {
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
+        } 
+        else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
+            //  dni:7CC5, endpoint:01, cluster:0000, size:14, attrId:0007, encoding:30, command:01, value:03, clusterInt:0, attrInt:7, additionalAttrs:[[value:00, encoding:30, attrId:FFFE, consumedBytes:4, attrInt:65534]]]
+            // ["battery", "dc", "mains", "unknown"]
+            def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
+            if (settings?.logEnable) log.info "${device.displayName} Power source is ${descMap?.value}"
+            sendEvent(name : "powerSource",	value : value, isStateChange : true)
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
@@ -965,12 +974,13 @@ def updated() {
 
 def refresh() {
     ArrayList<String> cmds = []
-    if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
-    //cmds += zigbee.readAttribute(0, 1)
+    cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)     // Power Source, attributeReportingStatus
     if (isIAS()) {
+        // TODO - optimize!
         cmds += readSensitivity()
         cmds += readKeepTime()
     }
+    if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
     sendZigbeeCommands( cmds ) 
 }
 
@@ -1004,7 +1014,9 @@ void initializeVars(boolean fullInit = true ) {
     state.packetID = 0
     state.rxCounter = 0
     state.txCounter = 0
-
+    if (state.lastPresenceState == null) state.lastPresenceState = "unknown"
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    //
     if (fullInit == true || settings.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", false)
@@ -1022,7 +1034,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", 60)
     if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", 1.00)
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance", 6.00)
-    //  capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+    //
     if (fullInit == true) sendEvent(name : "powerSource",	value : "unknown", isStateChange : true)
     //
     state.hashStringPars = calcParsHashString()
@@ -1154,6 +1166,7 @@ def setMotion( mode ) {
             sendEvent(handleMotion(motionActive=false))
             break
         default :
+            if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
             break
     }
 }
@@ -1218,17 +1231,11 @@ def calcHashParam(num) {
 def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
 def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
 
-
 def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
 def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
 
-def readSensitivity() {
-    return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)
-}
-
-def readKeepTime() {
-    return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200)
-}
+def readSensitivity()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
+def readKeepTime()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
 
 //  input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
 def sendSensitivity( String mode ) {
@@ -1275,6 +1282,37 @@ def sendKeepTime( String mode ) {
         if (settings?.logEnable) log.warn "${device.displayName} Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
     return cmds
+}
+
+def pollPresence() {
+    if (logEnable) {log.debug "${device.displayName} pollPresence()"}
+    checkIfNotPresent()
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+def setPresent() {
+    if (state.lastPresenceState != "present") {
+        sendEvent(name : "powerSource",	value : "present", isStateChange : true)    // TODO !
+        runIn( 1, refresh, [overwrite: true])    // hopefully receive the actual power source ...
+        state.lastPresenceState = "present"
+    }
+    state.notPresentCounter = 0
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])    // restart presence timer
+}
+
+// called from autoPoll()
+def checkIfNotPresent() {
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter >= presenceCountTreshold) {
+            if (state.lastPresenceState != "not present") {
+                sendEvent(name : "powerSource",	value : "unknown", isStateChange : true)
+                state.lastPresenceState = "not present"
+                if (logEnable==true) log.warn "${device.displayName} not present!"
+            }
+        }
+    }
 }
 
 
