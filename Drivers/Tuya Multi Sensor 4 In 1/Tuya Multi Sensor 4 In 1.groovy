@@ -23,7 +23,7 @@
 */
 
 def version() { "1.0.5" }
-def timeStamp() {"2022/06/11 9:23 PM"}
+def timeStamp() {"2022/06/11 9:52 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -882,36 +882,48 @@ def updated() {
     if (true /*state.hashStringPars != calcParsHashString()*/) {    // an configurable device parameter was changed
         if (settings?.logEnable) log.debug "${device.displayName} Config parameters changed! old=${state.hashStringPars} new=${calcParsHashString()}"
         //
-        if (getHashParam(ledEnableParamIndex) != calcHashParam(ledEnableParamIndex)) {
+        if (getHashParam(ledEnableParamIndex) != calcHashParam(ledEnableParamIndex)) {    // LED enable
             if (is4in1()) {
                 cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
                 if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
             }
         }
-        if (true /*getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)*/) {
+        if (true /*getHashParam(sensitivityParamIndex) != calcHashParam(sensitivityParamIndex)*/) {    // sensitivity
             if (isRadar()) { 
                 cmds += sendTuyaCommand("02", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.sensitivity as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar sensitivity to : ${settings?.sensitivity }"                
+            }
+            else if (isTS0601()) {
+                def val = getSensitivityValue( sensitivity.toString() )
+                cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
             }
             else if (isIAS()) {
                 cmds += sendSensitivity( settings?.sensitivity )
                 if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
             }
         }
-        if (true /*getHashParam(keepTimeParamIndex) != calcHashParam(keepTimeParamIndex)*/) {
-            if (isIAS()) {
+        if (true /*getHashParam(keepTimeParamIndex) != calcHashParam(keepTimeParamIndex)*/) {    // keep time
+            if (isRadar()) {
+                // do nothing
+            }
+            else if (isTS0601()) {
+                def val = getKeepTimeValue( keepTime.toString() )
+                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 8))
+                if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
+            }
+            else if (isIAS()) {
                 cmds += sendKeepTime( settings?.keepTime )
                 if (settings?.logEnable) log.debug "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
             }
         }
-       
-        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndex)) {
+        if (getHashParam(detectionDelayParamIndex) != calcHashParam(detectionDelayParamIndex)) {    // radar detection delay
             if (isRadar()) { 
                 cmds += sendTuyaCommand("65", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.detectionDelay as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar detection Delay to : ${settings?.detectionDelay }"                
             }
         }
-        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndex)) {
+        if (getHashParam(fadingTimeParamIndex) != calcHashParam(fadingTimeParamIndex)) {            // radar fading time
             if (isRadar()) { 
                 cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.fadingTime as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing radar fading time to : ${settings?.fadingTime }"                
@@ -1202,13 +1214,13 @@ def calcHashParam(num) {
 }
 
 
-def getSensitivityString( value ) {
-    return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null
-}
 
-def getKeepTimeString( value ) {
-    return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null
-}
+def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
+def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
+
+
+def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
+def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
 
 def readSensitivity() {
     return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)
