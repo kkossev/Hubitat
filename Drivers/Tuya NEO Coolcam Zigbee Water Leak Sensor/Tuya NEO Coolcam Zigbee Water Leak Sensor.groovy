@@ -20,7 +20,7 @@
 */
 
 def version() { "1.0.4" }
-def timeStamp() {"2022/04/14 7:11 PM"}
+def timeStamp() {"2022/04/14"}
 
 import groovy.json.*
 import groovy.transform.Field
