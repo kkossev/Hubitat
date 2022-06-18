@@ -35,9 +35,8 @@ metadata {
         capability "GarageDoorControl"    // door - ENUM ["unknown", "open", "closing", "closed", "opening"]; Commands: close() open()
         capability "ContactSensor"        // contact - ENUM ["closed", "open"]
         capability "Configuration"
-        //if (state.driverVersion ) {
         capability "Switch"
-        //}
+
         if (debug) {
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
             command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["--- Select ---", "open", "closed" ]]]
@@ -72,44 +71,55 @@ def parse(String description) {
 		if (descMap?.clusterInt == CLUSTER_TUYA) {
         	if (logEnable) log.debug "${device.displayName} parse Tuya Cluster: descMap = $descMap"
 			if ( descMap?.command in ["00", "01", "02"] ) {
-				def switchFunc = (descMap?.data[2])
-                def switchAttr = (descMap?.data[3])   
-                def switchState = (descMap?.data[6]) == "01" ? "on" : "off"
-                if (switchFunc in ["01", "02", "03", "04"] && switchAttr =="01") {
-   	                def cd = getChildDevice("${device.id}-${switchFunc}")
-				    if (cd == null) {
-				        return createEvent(name: "switch", value: switchState)
-				    }
-                    if (descMap?.command == "00") {
-			            // switch toggled
-			            cd.parse([[name: "switch", value:switchState, descriptionText: "Child switch ${switchFunc} turned $switchState"]])
-			        } 
-			        else if (descMap?.command in ["01", "02"]) {
-                        // report switch status
-                        cd.parse([[name: "switch", value:switchState, descriptionText: "Child switch ${switchFunc} is $switchState"]])
-			        }
-                    if (switchState == "on") {
-			            if (logEnable) log.debug "Parent Switch ON"
-			            return createEvent(name: "switch", value: "on")
-			        } 
-			        else if (switchState == "off") {
-			            def cdsOn = 0
-			            // cound number of switches on
-			            getChildDevices().each { child ->
-                            if (getChildId(child) != switchFunc && child.currentValue('switch') == "on") {
-                                cdsOn++
+                def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
+                def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
+                def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
+                def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
+                if (logEnable) log.trace "${device.displayName} Tuya cluster dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                switch (dp) {
+                    case 0x01 : // Relay / trigger switch
+                        def value = fncmd == 1 ? "on" : "off"
+                        sendSwitchEvent(value)
+                        break
+                    case 0x03 : // Contact
+                        def value = fncmd == 1 ? "closed" : "open"
+                        sendContactEvent(value)
+                        break
+                    case 0x0C : // Door Status ?
+                        if (logEnable) log.info "${device.displayName} Tuya report: Door Status is ${fncmd}"
+                        break
+                    default :
+                        if (debug == true) {
+                            if (dp==0x07) {
+                                def value = fncmd == 1 ? "closed" : "open"
+                                sendContactEvent(value)
+                                return null
                             }
-			            }
-			            if (cdsOn == 0) {
-                            if (logEnable) log.debug "Parent Switch OFF"
-                            return createEvent(name: "switch", value: "off")
-			            }    
-			        }
+                        }
+                        if (logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                        break
                 }
 			} // if command in ["00", "01", "02"]
+            else {
+                if (logEnable) log.warn "${device.displayName} <b>NOT PROCESSED COMMANDTuya cmd ${descMap?.command}</b> : dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
 		} // if Tuya cluster
-	}
+	} // if catchall or read attr
 }   
+
+private int getTuyaAttributeValue(ArrayList _data) {
+    int retValue = 0
+    
+    if (_data.size() >= 6) {
+        int dataLength = _data[5] as Integer
+        int power = 1;
+        for (i in dataLength..1) {
+            retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
+            power = power * 256
+        }
+    }
+    return retValue
+}
 
 
 def on() { 
@@ -168,6 +178,16 @@ def sendContactEvent(state, isDigital=false) {
     sendEvent(map)
 }
 
+def sendSwitchEvent(state, isDigital=false) {
+    def map = [:]
+    map.name = "switch"
+    map.value = state    // on or off
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${device.displayName} switch is ${map.value}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
+    sendEvent(map)
+}
+
 def confirmClosed(){
 	sendDoorEvent("closed")
     sendContactEvent("closed", isDigital=true)
@@ -217,16 +237,16 @@ def updated() {
     log.info "${device.displayName} debug logging is: ${logEnable == true}"
     log.info "${device.displayName} description logging is: ${txtEnable == true}"
     if (txtEnable) log.info "${device.displayName} Updated..."
-    if (logEnable) runIn(1800, logsOff)
+    if (logEnable) runIn(86400, logsOff, [overwrite: true])
 
 }
 
 def installed() {
     log.info "Installing..."
-    log.warn "Debug logging will be automatically disabled after 30 minutes!"
+    log.info "Debug logging will be automatically disabled after 24 hours"
     device.updateSetting("logEnable",[type:"bool",value:"true"])
     device.updateSetting("txtEnable",[type:"bool",value:"true"])
-    if (logEnable) runIn(1800,logsOff)
+    if (logEnable) runIn(86400, logsOff, [overwrite: true])
 }
 
 
