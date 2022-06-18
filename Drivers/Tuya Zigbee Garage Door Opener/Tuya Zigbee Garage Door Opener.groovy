@@ -17,31 +17,34 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/18 12:03 AM"}
+def timeStamp() {"2022/06/18 2:08 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = false
+@Field static final Boolean debug = true
 @Field static final Integer pulseTimer  = 1000
 @Field static final Integer doorTimeout = 5000
 
 
 metadata {
-    definition (name: "Tuya Zigbee Garage Door Opener", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
+    definition (name: "Tuya Zigbee Garage Door Opener", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/Tuya%20Zigbee%20Garage%20Door%20Opener.groovy", singleThreaded: true ) {
         capability "Actuator"
         capability "GarageDoorControl"    // door - ENUM ["unknown", "open", "closing", "closed", "opening"]; Commands: close() open()
         capability "ContactSensor"        // contact - ENUM ["closed", "open"]
         capability "Configuration"
+        //if (state.driverVersion ) {
         capability "Switch"
-        
+        //}
         if (debug) {
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+            command "setContact", [[name:"Set Contact", type: "ENUM", description: "Select Contact State", constraints: ["--- Select ---", "open", "closed" ]]]
         }
         
-        fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", application:"42", deviceJoinName: "Tuya Zigbee Garage Door Opener"
+        fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "LoraTap Garage Door Opener"        // LoraTap GDC311ZBQ1
+        fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
     }
 
     preferences {
@@ -134,27 +137,45 @@ def pulseOff() {
 
 def open() {
     log.debug "${device.displayName} open()"
-	sendEvent(name: "door", value: "opening")
+	sendDoorEvent("opening")
     runInMillis( doorTimeout, confirmOpen, [overwrite: true])
     pulseOn()
 }
 
 def close() {
     log.debug "${device.displayName} close()"
-	sendEvent(name: "door", value: "closing")
+	sendDoorEvent("closing")
     runInMillis( doorTimeout, confirmClosed, [overwrite: true])
     pulseOn()
 }
 
+def sendDoorEvent(state) {
+    def map = [:]
+    map.name = "door"
+    map.value = state    //  ["unknown", "open", "closing", "closed", "opening"]
+    map.descriptionText = "${device.displayName} door is ${map.value}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    sendEvent(map)
+}
+
+def sendContactEvent(state, isDigital=false) {
+    def map = [:]
+    map.name = "contact"
+    map.value = state    // open or closed
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${device.displayName} contact is ${map.value}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
+    sendEvent(map)
+}
 
 def confirmClosed(){
-	sendEvent(name: "door", value: "closed")
-    sendEvent(name: "contact", value: "closed")
+	sendDoorEvent("closed")
+    sendContactEvent("closed", isDigital=true)
 }
 
 def confirmOpen(){
-    sendEvent(name: "door", value: "open")
-    sendEvent(name: "contact", value: "open")
+    sendDoorEvent("open")
+    sendContactEvent("open", isDigital=true)
 }
 
 void initializeVars( boolean fullInit = true ) {
@@ -228,3 +249,12 @@ void sendZigbeeCommands(List<String> cmds) {
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
 }
 
+def setContact( mode ) {
+    if (mode in ['open', 'closed']) {
+        sendContactEvent(mode, isDigital=true)
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} please select the Contact state"
+    }
+    
+}
