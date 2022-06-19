@@ -18,11 +18,12 @@
  * ver. 1.0.5 2022-04-25 kkossev  - added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
+ * ver. 1.0.8 2022-06-19 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes;
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
-def version() { "1.0.7" }
-def timeStamp() {"2022/06/09 9:15 PM"}
+def version() { "1.0.8" }
+def timeStamp() {"2022/06/19 7:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -293,7 +294,7 @@ def processTuyaCluster( descMap ) {
             case 0x01 : // temperature in °C for most models
                 // 
                 if (getModelGroup() == "TS0601_Contact") {
-                    def value = fncmd == 1 ? "closed" : "open"
+                    def value = fncmd == 0 ? "closed" : "open"    // inverted!
                     sendEvent("name": "contact", "value": value)
                     if (settings?.txtEnable) log.info "${device.displayName} Contact is ${value}"
                 }
@@ -305,12 +306,15 @@ def processTuyaCluster( descMap ) {
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya illuminance status is: ${lomihi} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
                 }
                 break
-            case 0x02 : // humidity in %
-                if (getModelGroup() != 'TS0601_AUBESS') {
-                    humidityEvent( fncmd )
+            case 0x02 : // humidity % for most of the models; 'TS0601_Contact'illuminance; 'TS0601_Contact'0 battery %
+                if (getModelGroup() == 'TS0601_AUBESS') {
+                    illuminanceEventLux( safeToInt( fncmd ) )
+                }
+                else if (getModelGroup() == "TS0601_Contact") {
+                    getBatteryPercentageResult(fncmd * 2)
                 }
                 else {
-                    illuminanceEventLux( safeToInt( fncmd ) )
+                    humidityEvent( fncmd )
                 }
                 break 
             case 0x03 : // illuminance - NOT TESTED!
@@ -391,7 +395,7 @@ def processTuyaCluster( descMap ) {
                 if (settings?.txtEnable) log.info "${device.displayName} humidity sensitivity is ${fncmd} %"
                 device.updateSetting("humiditySensitivity", [value:fncmd, type:"decimal"])
                 break
-            case 0x65 : (101)
+            case 0x65 : // (101)
                 illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
                 break
             //

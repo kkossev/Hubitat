@@ -13,20 +13,20 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-06-18 kkossev  - Inital test version
+ * ver. 1.0.1 2022-06-19 kkossev  - fixed Contact status open/close; added doorTimeout preference, default 15s; improved debug loging; PowerSource capability'; contact open/close status determines door state!
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/06/18 2:08 PM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/06/19 1:23 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 @Field static final Integer pulseTimer  = 1000
-@Field static final Integer doorTimeout = 5000
 
 
 metadata {
@@ -36,6 +36,7 @@ metadata {
         capability "ContactSensor"        // contact - ENUM ["closed", "open"]
         capability "Configuration"
         capability "Switch"
+        capability "PowerSource"
 
         if (debug) {
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
@@ -49,6 +50,7 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "<i>The time needed for the door to open, seconds</i>", range: "1..100", defaultValue: 15)
     }
 }
 
@@ -59,6 +61,7 @@ private getCLUSTER_TUYA() { 0xEF00 }
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
     checkDriverVersion()
+    setPresent()
 	if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         def descMap = [:]
         try {
@@ -81,29 +84,77 @@ def parse(String description) {
                         def value = fncmd == 1 ? "on" : "off"
                         sendSwitchEvent(value)
                         break
+                    case 0x02 : // unknown, received as a confirmation of the relay on/off commands? Payload is always 0
+                        if (logEnable) log.debug "${device.displayName} received confirmation report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                        break
                     case 0x03 : // Contact
-                        def value = fncmd == 1 ? "closed" : "open"
-                        sendContactEvent(value)
+                    //case 0x07 : // debug/testing only!
+                        def contactState = fncmd == 0 ? "closed" : "open"    // reversed in ver 1.0.1
+                        def doorState = device.currentState('door').value
+                        sendContactEvent(contactState)
+                        switch (doorState) {
+                            case 'open' : // contact state was changed while the door was open
+                                if (contactState == "open") {
+                                    // do nothing - contact state confirms the door open state
+                                }
+                                else { // if the contact is now closed, the door state should be considered 'closed' as well !
+                                    runInMillis( 100, confirmClosed, [overwrite: true])
+                                }
+                                break
+                            case 'opening' : // contact state was changed while the door was in opening motion state
+                                if (contactState == "open") {
+                                    // do nothing - open contact state confirms the door opening state
+                                }
+                                else { // it is unusual if the contact changes to 'closed' during 'opening' door motion... just issue a warning!
+                                    if (txtEnable) log.warn "${device.displayName} Contact changed to 'closed' during door 'open' command?"
+                                }
+                                break
+                            case 'closing' : // contact state was changed while the door was in closing motion state
+                                if (contactState == "closed") {
+                                    // contact sensor closed confirmation -> force door status 'closed' as well
+                                    runInMillis( 100, confirmClosed, [overwrite: true])
+                                }
+                                else { // it is unusual if the contact changes to 'open' during 'closing' door motion... just issue a warning!
+                                    if (txtEnable) log.warn "${device.displayName} Contact changed to 'open' during door 'close' command?"
+                                }
+                                break
+                            case 'closed' : // contact state was changed while the door was closed
+                                if (contactState == "closed") {
+                                    // do nothing - contact state confirms the door closed state
+                                }
+                                else { // if the contact is now open, the door state should be considered 'open' as well !
+                                    runInMillis( 100, confirmOpen, [overwrite: true])
+                                }
+                                break;
+                            default :    // unknown
+                                if (logEnable) log.warn "${device.displayName} unknown door state ${doorState} while the contact was ${contactState}" 
+                                break
+                        }
                         break
                     case 0x0C : // Door Status ?
-                        if (logEnable) log.info "${device.displayName} Tuya report: Door Status is ${fncmd}"
+                        if (logEnable) log.info "${device.displayName} Tuya report: Door status is ${fncmd==2?'CLOSED':fncmd.toString()}"
                         break
                     default :
-                        if (debug == true) {
-                            if (dp==0x07) {
-                                def value = fncmd == 1 ? "closed" : "open"
-                                sendContactEvent(value)
-                                return null
-                            }
-                        }
                         if (logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                         break
                 }
 			} // if command in ["00", "01", "02"]
+            else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
+                if (logEnable) log.debug "${device.displayName} device received Tuya cluster ZCL command 0x${descMap?.command} response: 0x${descMap?.data[1]} status: ${descMap?.data[1]=='00'?'success':'FAILURE'} data: ${descMap?.data}"
+            } 
             else {
-                if (logEnable) log.warn "${device.displayName} <b>NOT PROCESSED COMMANDTuya cmd ${descMap?.command}</b> : dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                if (logEnable) log.warn "${device.displayName} <b>NOT PROCESSED COMMAND Tuya cmd ${descMap?.command}</b> : dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
             }
 		} // if Tuya cluster
+        else {
+            if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
+                if (logEnable) log.debug "${device.displayName} Tuya check-in: ${descMap}"
+            }
+            else {
+                if (logEnable) log.debug "${device.displayName} parsed non-Tuya cluster: descMap = $descMap"
+            }
+        }
+        
 	} // if catchall or read attr
 }   
 
@@ -146,16 +197,20 @@ def pulseOff() {
 
 
 def open() {
-    log.debug "${device.displayName} open()"
+    if (logEnable) log.debug "${device.displayName} opening (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
 	sendDoorEvent("opening")
-    runInMillis( doorTimeout, confirmOpen, [overwrite: true])
+    unschedule(confirmClosed)
+    Integer timeout = settings?.doorTimeout * 1000
+    runInMillis( timeout, confirmOpen, [overwrite: true])
     pulseOn()
 }
 
 def close() {
-    log.debug "${device.displayName} close()"
+    if (logEnable) log.debug "${device.displayName} closing (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
 	sendDoorEvent("closing")
-    runInMillis( doorTimeout, confirmClosed, [overwrite: true])
+    unschedule(confirmOpen)
+    Integer timeout = settings?.doorTimeout * 1200  // add 20% tolerance when closing
+    runInMillis( timeout , confirmClosed, [overwrite: true])
     pulseOn()
 }
 
@@ -184,18 +239,28 @@ def sendSwitchEvent(state, isDigital=false) {
     map.value = state    // on or off
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${device.displayName} switch is ${map.value}"
-    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
+    if (logEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
     sendEvent(map)
 }
 
-def confirmClosed(){
-	sendDoorEvent("closed")
-    sendContactEvent("closed", isDigital=true)
+def confirmClosed() {
+    if (device.currentState('contact').value == 'closed') {
+	    sendDoorEvent("closed")
+    }
+    else {
+        sendDoorEvent("open")
+        if (txtEnable) {log.warn "${device.displayName} closing failed, contact sensor is still open!"}
+    }
 }
 
-def confirmOpen(){
-    sendDoorEvent("open")
-    sendContactEvent("open", isDigital=true)
+def confirmOpen() {
+    if (device.currentState('contact').value == 'open') {
+        sendDoorEvent("open")
+    }
+    else {
+        sendDoorEvent("closed")
+        if (txtEnable) {log.warn "${device.displayName} open failed, contact sensor is still closed!"}
+    }
 }
 
 void initializeVars( boolean fullInit = true ) {
@@ -206,14 +271,16 @@ void initializeVars( boolean fullInit = true ) {
     }
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.doorTimeout == null) device.updateSetting("doorTimeout", 15)   
 }
 
 def initialize() {
     if (txtEnable==true) log.info "${device.displayName} Initialize()..."
     unschedule()
     initializeVars()
-	sendEvent(name: "door", value: "unknown")
-	sendEvent(name: "contact", value: "unknown")
+	sendEvent(name: "door", value: "closed")
+	sendEvent(name: "contact", value: "closed")
+    sendEvent(name : "powerSource",	value : "mains")
     updated()            // calls also configure()
 }
 
@@ -250,7 +317,6 @@ def installed() {
 }
 
 
-
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
@@ -262,6 +328,11 @@ def checkDriverVersion() {
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
     }
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+def setPresent() {
+    sendEvent(name : "powerSource",	value : "mains", isStateChange : false)
 }
 
 void sendZigbeeCommands(List<String> cmds) {
