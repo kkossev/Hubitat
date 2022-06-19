@@ -18,7 +18,7 @@
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/06/19 1:15 PM"}
+def timeStamp() {"2022/06/19 1:23 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -239,7 +239,7 @@ def sendSwitchEvent(state, isDigital=false) {
     map.value = state    // on or off
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${device.displayName} switch is ${map.value}"
-    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
+    if (logEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
     sendEvent(map)
 }
 
