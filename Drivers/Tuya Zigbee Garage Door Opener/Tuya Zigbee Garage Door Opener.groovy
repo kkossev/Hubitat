@@ -14,11 +14,12 @@
  * 
  * ver. 1.0.0 2022-06-18 kkossev  - Inital test version
  * ver. 1.0.1 2022-06-19 kkossev  - fixed Contact status open/close; added doorTimeout preference, default 15s; improved debug loging; PowerSource capability'; contact open/close status determines door state!
+ * ver. 1.0.2 2022-06-20 kkossev  - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.
  *
 */
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/06/19 1:23 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/06/20 7:35 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -88,7 +89,7 @@ def parse(String description) {
                         if (logEnable) log.debug "${device.displayName} received confirmation report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                         break
                     case 0x03 : // Contact
-                    //case 0x07 : // debug/testing only!
+                    case 0x07 : // debug/testing only!
                         def contactState = fncmd == 0 ? "closed" : "open"    // reversed in ver 1.0.1
                         def doorState = device.currentState('door').value
                         sendContactEvent(contactState)
@@ -197,21 +198,31 @@ def pulseOff() {
 
 
 def open() {
-    if (logEnable) log.debug "${device.displayName} opening (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
-	sendDoorEvent("opening")
-    unschedule(confirmClosed)
-    Integer timeout = settings?.doorTimeout * 1000
-    runInMillis( timeout, confirmOpen, [overwrite: true])
-    pulseOn()
+    if (device.currentState('contact').value != "open") {
+        if (logEnable) log.debug "${device.displayName} opening (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    	sendDoorEvent("opening")
+        unschedule(confirmClosed)
+        Integer timeout = settings?.doorTimeout * 1000
+        runInMillis( timeout, confirmOpen, [overwrite: true])
+        pulseOn()
+    }
+    else {
+        if (txtEnable) log.warn "${device.displayName} ignoring Open command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    }
 }
 
 def close() {
-    if (logEnable) log.debug "${device.displayName} closing (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
-	sendDoorEvent("closing")
-    unschedule(confirmOpen)
-    Integer timeout = settings?.doorTimeout * 1200  // add 20% tolerance when closing
-    runInMillis( timeout , confirmClosed, [overwrite: true])
-    pulseOn()
+    if (device.currentState('contact').value != "closed") {
+        if (logEnable) log.debug "${device.displayName} closing (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    	sendDoorEvent("closing")
+        unschedule(confirmOpen)
+        Integer timeout = settings?.doorTimeout * 1200  // add 20% tolerance when closing
+        runInMillis( timeout , confirmClosed, [overwrite: true])
+        pulseOn()
+    }
+    else {
+        if (txtEnable) log.warn "${device.displayName} ignoring Close command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+    }
 }
 
 def sendDoorEvent(state) {
