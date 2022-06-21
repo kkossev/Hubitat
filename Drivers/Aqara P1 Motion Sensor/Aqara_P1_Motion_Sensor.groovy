@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/21 8:53 PM"}
+def timeStamp() {"2022/06/21 10:48 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -38,6 +38,8 @@ metadata {
 
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
+        command "configSensitivity", [[name:"cononfigSensitivity", type: "ENUM", description: "Configure PIR Sensitivity", constraints: ["--- Select ---", "Low", "Medium","High"]]]
+        command "configDuration", [[name:"cononfigDuration", type: "NUMBER", description: "Configure PIR Duration"]]
         
         if (debug) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
@@ -202,8 +204,17 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (logEnable) log.warn "${device.displayName} !!!! processed <b>FCC0 illuminance attribute 0112</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             break
         case "0152" : // LED configuration
-            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${it.value==0?'disabled':'enabled'}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            def value = safeToInt(it.value)
+            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${value==0?'disabled':'enabled'}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break        
+        case "010C" : // PIR sensitivity
+            def value = safeToInt(it.value)
+            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${value==1?'Low':value==2?'Medium':value==3?'High':null}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break
+        case "0102" : // Duration
+            def value = safeToInt(it.value)
+            if (txtEnable) log.info "${device.displayName} <b>received PIR duration report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
         break
@@ -314,7 +325,7 @@ def parseZHAcommand( Map descMap) {
             if (logEnable==true) log.info "${device.displayName} Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         case "07" : // Configure Reporting Response
-            if (logEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            if (txtEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             // Status: Unreportable Attribute (0x8c)
             break
         case "09" : // Command: Read Reporting Configuration Response (0x09)
@@ -505,6 +516,14 @@ def initialize() {
     configure()
 }
 
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
 void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.trace "${device.displayName} sending ZigbeeCommands : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
@@ -541,6 +560,35 @@ def configLED( mode ) {
     }
 }
 
+
+def configSensitivity( mode ) {
+    ArrayList<String> cmds = []
+    def value = mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null
+    if (value != null) {
+        cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+        if (settings?.txtEnable) log.info "${device.displayName} sending PIR sensitivity : ${mode}" 
+        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read sensitivity config back!
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} please select a sensitivity mode"
+    }
+}
+
+
+def configDuration( duration ) {
+    ArrayList<String> cmds = []
+    def value = safeToInt( duration )
+    if (value != 0) {
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+        if (settings?.txtEnable) log.info "${device.displayName} sending duration : ${value}" 
+        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read duration config back!
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} please select a duration"
+    }
+}
 
 def test( description ) {
     log.warn "test $description"
