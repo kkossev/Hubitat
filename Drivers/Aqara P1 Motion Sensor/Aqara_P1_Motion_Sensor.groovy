@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/21 3:08 PM"}
+def timeStamp() {"2022/06/21 8:53 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -37,6 +37,8 @@ metadata {
         // batteryVoltage
 
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
+        command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
+        
         if (debug) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
@@ -84,7 +86,7 @@ def parse(String description) {
             //log.trace "parse: filling in attrData: ${attrData}"
         }
         attrData.each {
-            log.trace "parse: attrData.each it=${it}"
+            //log.trace "parse: attrData.each it=${it}"
             if (it.status == "86") {
                 log.warn "unsupported cluster ${it.cluster} attribute ${it.attrId}"
             }
@@ -199,6 +201,9 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             handleMotion( true )
             if (logEnable) log.warn "${device.displayName} !!!! processed <b>FCC0 illuminance attribute 0112</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             break
+        case "0152" : // LED configuration
+            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${it.value==0?'disabled':'enabled'}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break        
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
         break
@@ -500,6 +505,13 @@ def initialize() {
     configure()
 }
 
+void sendZigbeeCommands(List<String> cmds) {
+    if (logEnable) {log.trace "${device.displayName} sending ZigbeeCommands : ${cmds}"}
+	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+}
+
+
 def setMotion( mode ) {
     switch (mode) {
         case "active" : 
@@ -513,6 +525,22 @@ def setMotion( mode ) {
             break
     }
 }
+
+def configLED( mode ) {
+    ArrayList<String> cmds = []
+ 
+    def value = mode == "disabled" ? 0 : mode == "enabled" ? 1 : null
+    if (value != null) {
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+        if (settings?.txtEnable) log.info "${device.displayName} sending LED mode : ${mode}" 
+        cmds += zigbee.readAttribute(0xFCC0, 0x0152, [mfgCode: 0x115F], delay=200)    // read LED config back!
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.logEnable) log.warn "${device.displayName} please select a LED mode"
+    }
+}
+
 
 def test( description ) {
     log.warn "test $description"
