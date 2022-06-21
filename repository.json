@@ -78,7 +78,17 @@
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/packageManifest.json",
       "description": "Tuya Zigbee Water/Gas Valve driver for Hubitat Elevation hub",
-       "tags": [
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "5057db0d-4572-4cf0-a7c3-22c2bffb711e",
+      "name": "Tuya Zigbee Garage Door Opener",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/packageManifest.json",
+      "description": "Tuya Zigbee Garage Door Opener driver for Hubitat Elevation hub",
+      "tags": [
         "Zigbee"
       ]
     }
