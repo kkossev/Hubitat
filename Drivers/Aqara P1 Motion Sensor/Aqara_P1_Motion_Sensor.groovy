@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/23 9:28 PM"}
+def timeStamp() {"2022/06/23 9:29 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -189,21 +189,32 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
             break
         case "00F7" :
-            //  attribute report: cluster=FCC0 attrId=00F7 value=300121760C03281D0421000005210100082105010A214F410C20011320001420006410016521240069201E6A20026B2000 status=null data=null
-            // attribute report: cluster=FCC0 attrId=00F7value=3001 21 170C 0328 20 042100000521 05 00082105010A21 0000 0C20011320001420006410006521 0F01 6920 04 6A20 01 6B20 00
+            // attribute report: cluster=FCC0 attrId=00F7 value=300121760C03281D0421000005210100082105010A214F410C20011320001420006410016521240069201E6A20026B2000 status=null data=null
+            // attribute report: cluster=FCC0 attrId=00F7 value=3001 21 170C 0328 20 042100000521 05 00082105010A21 0000 0C20011320001420006410006521 0F01 6920 04 6A20 01 6B20 00
             // 
             def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
             def MsgLength = valueHex.size()
             log.warn "MsgLength = ${MsgLength} raw descrtiption length = ${description.size()} valueHex=${valueHex}"
             def offset = description.size() - valueHex.size()
-            // Battery (LoHi) : [6..7] LSB [8..9] MSB
+            // Battery : [6..7] LSB [8..9] MSB
             def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
             voltageAndBatteryEvents( rawVolts )
-            //def value = Integer.parseInt((valueHex[2..3]),16)
-            //if (txtEnable) log.info "${device.displayName} battery is ${value} Volts"
-        
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 attribute 00F7</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            // device temperature [14..15]
+            def value = Integer.parseInt(valueHex[14..15])
+            if (txtEnable) log.info "${device.displayName} temperature is ${value} deg.C"
+            // Illuminance MSB-[78..79] LSB-[76..77]
+            value = Integer.parseInt((valueHex[78..79] + valueHex[76..77]),16)
+            illuminanceEventLux( value )
+            // Motion retrigger interval [84..85]
+            value = Integer.parseInt(valueHex[84..85])
+            if (txtEnable) log.info "${device.displayName} retrigger interval is ${value} s."
+            // Sensitivity
+            value = Integer.parseInt(valueHex[90..91])
+            if (txtEnable) log.info "${device.displayName} sensitivity is ${value}"
+            // LED 
+            value = Integer.parseInt(valueHex[96..97])
+            if (txtEnable) log.info "${device.displayName} LED is ${value}"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             // parse: description is read attr - raw: CF7101FCC00E1201232B000100, dni: CF71, endpoint: 01, cluster: FCC0, size: 0E, attrId: 0112, encoding: 23, command: 0A, value: 2B000100
