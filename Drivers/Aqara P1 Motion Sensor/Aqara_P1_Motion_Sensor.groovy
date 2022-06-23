@@ -17,14 +17,14 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/23 9:29 PM"}
+def timeStamp() {"2022/06/23 10:48 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/Tuya%20Zigbee%20Garage%20Door%20Opener.groovy", singleThreaded: true ) {
@@ -36,15 +36,16 @@ metadata {
         
         attribute "batteryVoltage", "string"
 
-        command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
-        command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
-        command "configSensitivity", [[name:"cononfigSensitivity", type: "ENUM", description: "Configure PIR Sensitivity", constraints: ["--- Select ---", "Low", "Medium","High"]]]
-        command "configDuration", [[name:"cononfigDuration", type: "NUMBER", description: "Configure PIR Duration"]]
+        command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
         if (debug) {
+            command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "refresh", [[name: "*** Press the motion sensor button at the same time! ***" ]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+            command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
+            command "configSensitivity", [[name:"cononfigSensitivity", type: "ENUM", description: "Configure PIR Sensitivity", constraints: ["--- Select ---", "Low", "Medium","High"]]]
+            command "configDuration", [[name:"cononfigDuration", type: "NUMBER", description: "Configure PIR Duration"]]
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
@@ -59,7 +60,7 @@ metadata {
         input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", range: "1..7200", defaultValue: 60)
         input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: null)
         input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
-        input (name: "motionLED",  type: "enum", title: "<b>Motion LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
+        input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
     }
 }
 
@@ -201,19 +202,19 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
             voltageAndBatteryEvents( rawVolts )
             // device temperature [14..15]
-            def value = Integer.parseInt(valueHex[14..15])
+            def value = Integer.parseInt(valueHex[14..15],16)
             if (txtEnable) log.info "${device.displayName} temperature is ${value} deg.C"
             // Illuminance MSB-[78..79] LSB-[76..77]
             value = Integer.parseInt((valueHex[78..79] + valueHex[76..77]),16)
             illuminanceEventLux( value )
             // Motion retrigger interval [84..85]
-            value = Integer.parseInt(valueHex[84..85])
+            value = Integer.parseInt(valueHex[84..85],16)
             if (txtEnable) log.info "${device.displayName} retrigger interval is ${value} s."
             // Sensitivity
-            value = Integer.parseInt(valueHex[90..91])
+            value = Integer.parseInt(valueHex[90..91],16)
             if (txtEnable) log.info "${device.displayName} sensitivity is ${value}"
             // LED 
-            value = Integer.parseInt(valueHex[96..97])
+            value = Integer.parseInt(valueHex[96..97],16)
             if (txtEnable) log.info "${device.displayName} LED is ${value}"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
@@ -510,7 +511,7 @@ def updated() {
     checkDriverVersion()
     ArrayList<String> cmds = []
     
-    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
+    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff)    // turn off debug logging after 24 hours
@@ -521,7 +522,7 @@ def updated() {
     }
 }    
 
-void initializeVars( boolean fullInit = true ) {
+void initializeVars( boolean fullInit = false ) {
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
@@ -535,20 +536,19 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 60)    
 }
 
-// called on initial install of device during discovery
-// also called from initialize() in this driver!
 def installed() {
     log.info "${device.displayName} installed()"
-    unschedule()
 }
 
+def configure(boolean fullInit = true ) {
+    log.info "${device.displayName} configure()..."
+    unschedule()
+    initializeVars( fullInit )
+    updated()    
+}
 def initialize() {
     log.info "${device.displayName} Initialize()..."
-    unschedule()
-    initializeVars()
-    installed()
-    updated()
-    configure()
+    configure(fullInit = true)
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
@@ -569,10 +569,10 @@ void sendZigbeeCommands(List<String> cmds) {
 def setMotion( mode ) {
     switch (mode) {
         case "active" : 
-            sendEvent(handleMotion(motionActive=true))
+            handleMotion(true)
             break
         case "inactive" :
-            sendEvent(handleMotion(motionActive=false))
+            handleMotion(false)
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
