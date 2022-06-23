@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/21 10:48 PM"}
+def timeStamp() {"2022/06/23 9:28 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -34,7 +34,7 @@ metadata {
 		capability "Battery"
         capability "PowerSource"
         
-        // batteryVoltage
+        attribute "batteryVoltage", "string"
 
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
@@ -43,24 +43,23 @@ metadata {
         
         if (debug) {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
+            command "refresh", [[name: "*** Press the motion sensor button at the same time! ***" ]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         }
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI"                             // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
         if (debug) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI" 
         }
     }
 
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "motionResetTimer", type: "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
-
-        input (name: "detectionInterval", type: "number", title: "Detection Interval", description: "", range: "5..360", defaultValue: 30)
-        input (name: "motionSensitivity", type: "number", title: "Motion Sensitivity", description: "", range: "0..7200", defaultValue: 60)
-        input (name: "triggerIndicator",  type: "number", title: "Trigger Indicator",  description: "", range: "0..7200", defaultValue: 60)
-
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
+        input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", range: "1..7200", defaultValue: 60)
+        input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: null)
+        input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
+        input (name: "motionLED",  type: "enum", title: "<b>Motion LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
     }
 }
 
@@ -105,7 +104,7 @@ def parse(String description) {
             
             else if (it.cluster == "0000" && it.attrId == "0005") {    // value: value:lumi.sensor_motion.aq2 - sent when button is pressed
                 //  attribute report: cluster=0000 attrId=0005 value=lumi.sensor_motion.aq2 status=null data=nul
-                if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed "
+                if (txtEnable) log.info "${device.displayName} device ${it.value} button was pressed "
             }
 
             else if (descMap.cluster == "FCC0") {    // Aqara P1
@@ -137,7 +136,7 @@ def parse(String description) {
 }
 
 def parseAqaraAttributeFF01 ( description ) {
-    log.warn "#############parseAqaraClusterFF01 descMap=${description}"
+    //log.warn "#############parseAqaraClusterFF01 descMap=${description}"
     // lumi.sensor_motion.aq2 parse: description is read attr - raw: F5DE0100004A01FF42210121F90B0328240421A81305211B00062401000000000A2188326410000B211F00, 
     // dni: F5DE, endpoint: 01, cluster: 0000, size: 4A, attrId: FF01, encoding: 42, command: 0A, value: 210121F90B0328240421A81305211B00062401000000000A2188326410000B211F00
     //
@@ -169,13 +168,13 @@ https://github.com/Koenkk/zigbee-herdsman-converters/blob/eeb9e35d9cf044be30fdd1
     
     Map result = [:]
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-    result = parseBattery( valueHex )    
+    result = parseBatteryFF01( valueHex )    
     sendEvent( result )
 }
                      
                      
 def parseAqaraClusterFCC0 ( description, descMap, it  ) {
-    log.warn "parseAqaraClusterFCC0"
+    //log.warn "parseAqaraClusterFCC0"
 /*
             else if (it.cluster == "FCC0" && it.attrId == "0005") {    // value: value:lumi.sensor_motion.aq2 - sent when button is pressed
                 //  attribute report: cluster=0000 attrId=0005 value=lumi.sensor_motion.aq2 status=null data=nul
@@ -190,8 +189,20 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
             break
         case "00F7" :
-            //  attribute report: cluster=FCC0 attrId=00F7 value=0121760C03281D0421000005210100082105010A214F410C20011320001420006410016521240069201E6A20026B2000 status=null data=null
-            // TODO !
+            //  attribute report: cluster=FCC0 attrId=00F7 value=300121760C03281D0421000005210100082105010A214F410C20011320001420006410016521240069201E6A20026B2000 status=null data=null
+            // attribute report: cluster=FCC0 attrId=00F7value=3001 21 170C 0328 20 042100000521 05 00082105010A21 0000 0C20011320001420006410006521 0F01 6920 04 6A20 01 6B20 00
+            // 
+            def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+            def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
+            def MsgLength = valueHex.size()
+            log.warn "MsgLength = ${MsgLength} raw descrtiption length = ${description.size()} valueHex=${valueHex}"
+            def offset = description.size() - valueHex.size()
+            // Battery (LoHi) : [6..7] LSB [8..9] MSB
+            def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
+            voltageAndBatteryEvents( rawVolts )
+            //def value = Integer.parseInt((valueHex[2..3]),16)
+            //if (txtEnable) log.info "${device.displayName} battery is ${value} Volts"
+        
             if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 attribute 00F7</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
@@ -201,7 +212,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
             illuminanceEventLux( rawValue )    // illuminanceEventLux ?
             handleMotion( true )
-            if (logEnable) log.warn "${device.displayName} !!!! processed <b>FCC0 illuminance attribute 0112</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            //if (logEnable) log.warn "${device.displayName} !!!! processed <b>FCC0 illuminance attribute 0112</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
@@ -224,7 +235,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
                      
 
 // Convert raw 4 digit integer voltage value into percentage based on minVolts/maxVolts range
-private parseBattery( valueHex ) {
+private parseBatteryFF01( valueHex ) {
     // read attr - raw: F5DE0100004A01FF42210121F90B03281E0421A81305211B00062401000000000A2188326410000B211C00, dni: F5DE, endpoint: 01, cluster: 0000, size: 4A, attrId: FF01, encoding: 42, command: 0A, value: 210121F90B03281E0421A81305211B00062401000000000A2188326410000B211C00
     // read attr - raw: F5DE0100007E050042166C756D692E73656E736F725F6D6F74696F6E2E61713201FF42210121F90B03281E0421A83105211B00062402000000000A2188326410000B211300, dni: F5DE, endpoint: 01, cluster: 0000, size: 7E, attrId: 0005, encoding: 42, command: 0A, value: 166C756D692E73656E736F725F6D6F74696F6E2E61713201FF42210121F90B03281E0421A83105211B00062402000000000A2188326410000B211300
 	if (logEnable) log.trace "${device.displayName} Battery parse string = ${valueHex}"
@@ -257,6 +268,19 @@ private parseBattery( valueHex ) {
 	]
 	return result
 }
+
+def voltageAndBatteryEvents( rawVolts )
+{
+	def minVolts = 2.5
+	def maxVolts = 3.0
+	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
+	def roundedPct = Math.min(100, Math.round(pct * 100))
+	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
+    if (txtEnable) log.info "${device.displayName} ${descText}"
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", isStateChange: true )
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", isStateChange: true )
+}
+
 
 /*
 
@@ -421,7 +445,7 @@ def getMotionResult( Boolean motionActive ) {
 
 def resetToMotionInactive() {
 	if (device.currentState('motion')?.value == "active") {
-		def descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)"
+		def descText = "Motion reset to inactive after ${getSecondsInactive()}s"
 		sendEvent(
 			name : "motion",
 			value : "inactive",
@@ -590,9 +614,28 @@ def configDuration( duration ) {
     }
 }
 
+def refresh() {
+    if (txtEnable) log.info "${device.displayName} shortly press the motion sensor button at the same time!"
+    ArrayList<String> cmds = []
+    cmds += zigbee.readAttribute(0xFCC0, 0x0152, [mfgCode: 0x115F], delay=200)    // read LED config back!
+    cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read duration config back!
+    cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read sensitivity config back!
+    sendZigbeeCommands( cmds )    
+}
+
 def test( description ) {
+    /*
     log.warn "test $description"
     parse(description)
+*/
+	List<String> cmds = []
+/*
+	cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 0xFFFF, null, [:], 200)	// Reset Battery Voltage reporting to default
+	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 0xFFFF, null, [:], 200)	// Reset Battery % reporting to default
+*/
+   // cmds += zigbee.batteryConfig()
+    cmds += zigbee.readAttribute(0xFCC0, 0x00F7, [:] /*[mfgCode: 0x115F]*/, delay=200)  
+        sendZigbeeCommands( cmds )  
 }
 
 
