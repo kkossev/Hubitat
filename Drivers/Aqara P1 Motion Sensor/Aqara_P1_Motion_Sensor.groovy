@@ -17,17 +17,17 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/23 10:48 PM"}
+def timeStamp() {"2022/06/24 8:26 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = false
+@Field static final Boolean debug = true
 
 metadata {
-    definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Garage%20Door%20Opener/Tuya%20Zigbee%20Garage%20Door%20Opener.groovy", singleThreaded: true ) {
+    definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara%20P1%20Motion%20Sensor.groovy", singleThreaded: true ) {
 		capability "Motion Sensor"
 		capability "Illuminance Measurement"
 		capability "Sensor"
@@ -43,7 +43,7 @@ metadata {
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "refresh", [[name: "*** Press the motion sensor button at the same time! ***" ]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
-            command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "disabled", "enabled"]]]
+            command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "Disabled", "Enabled"]]]
             command "configSensitivity", [[name:"cononfigSensitivity", type: "ENUM", description: "Configure PIR Sensitivity", constraints: ["--- Select ---", "Low", "Medium","High"]]]
             command "configDuration", [[name:"cononfigDuration", type: "NUMBER", description: "Configure PIR Duration"]]
         }
@@ -57,12 +57,15 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
-        input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", range: "1..7200", defaultValue: 60)
-        input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: null)
+        input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "1..7200", defaultValue: 30)
+        input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
         input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
         input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
     }
 }
+
+private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
+private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
 
 
 def parse(String description) {
@@ -137,36 +140,6 @@ def parse(String description) {
 }
 
 def parseAqaraAttributeFF01 ( description ) {
-    //log.warn "#############parseAqaraClusterFF01 descMap=${description}"
-    // lumi.sensor_motion.aq2 parse: description is read attr - raw: F5DE0100004A01FF42210121F90B0328240421A81305211B00062401000000000A2188326410000B211F00, 
-    // dni: F5DE, endpoint: 01, cluster: 0000, size: 4A, attrId: FF01, encoding: 42, command: 0A, value: 210121F90B0328240421A81305211B00062401000000000A2188326410000B211F00
-    //
-    // https://github.com/dresden-elektronik/deconz-rest-plugin/wiki/Xiaomi-manufacturer-specific-clusters,-attributes-and-attribute-reporting
-    //
-/*    
-Reported data ( Typical length in bytes : 33 )
-Tag (hex)	Data type (hex)	    Data type	        Value (hex)	Value	Description
-01	        21	            Unsigned 16-bit integer    	d10b	3025	Battery
-03	        28	            Signed 8-bit integer    	15	    21	    Device temperature
-04	        21	            Unsigned 16-bit integer	    a813	5032	Unknown
-05	        21	            Unsigned 16-bit integer	    a200	162	    RSSI dB
-06	        24	            Unsigned 40-bit integer	    0300000000		LQI
-0a	        21	            Unsigned 16-bit integer	    c96b	27593	Parent NWK
-64	        10	            Boolean	                    01	    True    On/off
-0b	        21	            Unsigned 16-bit integer	    0700	7	    Light level
-*/
-
-/*
-https://github.com/Koenkk/zigbee-herdsman-converters/blob/eeb9e35d9cf044be30fdd18f3e9d158764cd00e3/devices/xiaomi.js
-            await endpoint.read('genPowerCfg', ['batteryVoltage']);
-            await endpoint.read('aqaraOpple', [0x0102], {manufacturerCode: 0x115f});
-            await endpoint.read('aqaraOpple', [0x010c], {manufacturerCode: 0x115f});
-            await endpoint.read('aqaraOpple', [0x0152], {manufacturerCode: 0x115f});
-
-*/
-    
-    
-    
     Map result = [:]
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     result = parseBatteryFF01( valueHex )    
@@ -175,29 +148,12 @@ https://github.com/Koenkk/zigbee-herdsman-converters/blob/eeb9e35d9cf044be30fdd1
                      
                      
 def parseAqaraClusterFCC0 ( description, descMap, it  ) {
-    //log.warn "parseAqaraClusterFCC0"
-/*
-            else if (it.cluster == "FCC0" && it.attrId == "0005") {    // value: value:lumi.sensor_motion.aq2 - sent when button is pressed
-                //  attribute report: cluster=0000 attrId=0005 value=lumi.sensor_motion.aq2 status=null data=nul
-                if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed "
-            }
-            else if (descMap.cluster == "FCC0" ") {
-                //  attribute report: cluster=FCC0 attrId=0112 value=00010042 status=null data=null
-
-*/
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     switch (it.attrId) {
         case "0005" :
             if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
             break
         case "00F7" :
-            // attribute report: cluster=FCC0 attrId=00F7 value=300121760C03281D0421000005210100082105010A214F410C20011320001420006410016521240069201E6A20026B2000 status=null data=null
-            // attribute report: cluster=FCC0 attrId=00F7 value=3001 21 170C 0328 20 042100000521 05 00082105010A21 0000 0C20011320001420006410006521 0F01 6920 04 6A20 01 6B20 00
-            // 
-            def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-            def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
-            def MsgLength = valueHex.size()
-            log.warn "MsgLength = ${MsgLength} raw descrtiption length = ${description.size()} valueHex=${valueHex}"
-            def offset = description.size() - valueHex.size()
             // Battery : [6..7] LSB [8..9] MSB
             def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
             voltageAndBatteryEvents( rawVolts )
@@ -215,20 +171,19 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (txtEnable) log.info "${device.displayName} sensitivity is ${value}"
             // LED 
             value = Integer.parseInt(valueHex[96..97],16)
-            if (txtEnable) log.info "${device.displayName} LED is ${value}"
+            //device.updateSetting("illuminanceSensitivity", [value:raw, type:"decimal"])
+            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(value)} (${value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
-            // parse: description is read attr - raw: CF7101FCC00E1201232B000100, dni: CF71, endpoint: 01, cluster: FCC0, size: 0E, attrId: 0112, encoding: 23, command: 0A, value: 2B000100
-            // TODO !
-            def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
-            illuminanceEventLux( rawValue )    // illuminanceEventLux ?
+            illuminanceEventLux( rawValue )
             handleMotion( true )
-            //if (logEnable) log.warn "${device.displayName} !!!! processed <b>FCC0 illuminance attribute 0112</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
-            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${value==0?'disabled':'enabled'}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"    //P1_LED_MODE_VALUE
             break        
         case "010C" : // PIR sensitivity
             def value = safeToInt(it.value)
@@ -248,10 +203,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
 
 // Convert raw 4 digit integer voltage value into percentage based on minVolts/maxVolts range
 private parseBatteryFF01( valueHex ) {
-    // read attr - raw: F5DE0100004A01FF42210121F90B03281E0421A81305211B00062401000000000A2188326410000B211C00, dni: F5DE, endpoint: 01, cluster: 0000, size: 4A, attrId: FF01, encoding: 42, command: 0A, value: 210121F90B03281E0421A81305211B00062401000000000A2188326410000B211C00
-    // read attr - raw: F5DE0100007E050042166C756D692E73656E736F725F6D6F74696F6E2E61713201FF42210121F90B03281E0421A83105211B00062402000000000A2188326410000B211300, dni: F5DE, endpoint: 01, cluster: 0000, size: 7E, attrId: 0005, encoding: 42, command: 0A, value: 166C756D692E73656E736F725F6D6F74696F6E2E61713201FF42210121F90B03281E0421A83105211B00062402000000000A2188326410000B211300
-	if (logEnable) log.trace "${device.displayName} Battery parse string = ${valueHex}"
-    
+	//if (logEnable) log.trace "${device.displayName} Battery parse string = ${valueHex}"
 	def MsgLength = valueHex.size()
 	//def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(4)..(5)]),16)
     	for (int i = 0; i < (MsgLength-3); i+=2) {
@@ -292,19 +244,6 @@ def voltageAndBatteryEvents( rawVolts )
     sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", isStateChange: true )
     sendEvent(name: 'battery', value: roundedPct, unit: "%", isStateChange: true )
 }
-
-
-/*
-
-https://github.com/zigpy/zha-device-handlers/blob/ff11499729975274e338ad1cd63ea7824f2dc046/zhaquirks/xiaomi/aqara/motion_ac02.py
-MOTION_ATTRIBUTE = 274
-DETECTION_INTERVAL = 0x0102
-MOTION_SENSITIVITY = 0x010C
-TRIGGER_INDICATOR = 0x0152
-
-*/
-
-
 
 def parseZDOcommand( Map descMap ) {
     switch (descMap.clusterId) {
@@ -409,29 +348,25 @@ def illuminanceEvent( illuminance ) {
 }
 
 def illuminanceEventLux( Integer lux ) {
-    // maximum value is 0xFFDC ! -> sett lux to 0 
-    if ( lux > 0xFFDC ) lux = 0
+    if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
     sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 private handleMotion( Boolean motionActive ) {    
-    //log.warn "handleMotion motionActive=${motionActive}"
     if (motionActive) {
-        def timeout = settings?.motionResetTimer ?: 60
+        def timeout = settings?.motionResetTimer ?: 30
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
-            //log.warn "restarting timeout timer ${timeout}"
             runIn(timeout, resetToMotionInactive, [overwrite: true])
         }
         if (device.currentState('motion')?.value != "active") {
-            //log.warn "motion starts now"
             state.motionStarted = now()
         }
     }
     else {
         if (device.currentState('motion')?.value == "inactive") {
-            if (logEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()}s"
+            if (logEnable) log.debug "${device.displayName} ignored motion inactive event after ${getSecondsInactive()} s."
             return [:]   // do not process a second motion inactive event!
         }
     }
@@ -441,7 +376,7 @@ private handleMotion( Boolean motionActive ) {
 def getMotionResult( Boolean motionActive ) {
 	def descriptionText = "Detected motion"
     if (!motionActive) {
-		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
+		descriptionText = "Motion reset to inactive after ${getSecondsInactive()} s."
     }
     else {
         descriptionText = device.currentValue("motion") == "active" ? "Motion is active ${getSecondsInactive()}s" : "Detected motion"
@@ -457,7 +392,7 @@ def getMotionResult( Boolean motionActive ) {
 
 def resetToMotionInactive() {
 	if (device.currentState('motion')?.value == "active") {
-		def descText = "Motion reset to inactive after ${getSecondsInactive()}s"
+		def descText = "Motion reset to inactive after ${getSecondsInactive()} s."
 		sendEvent(
 			name : "motion",
 			value : "inactive",
@@ -467,7 +402,7 @@ def resetToMotionInactive() {
         if (txtEnable) log.info "${device.displayName} ${descText}"
 	}
     else {
-        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s"
+        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()} s."
     }
 }
 
@@ -475,7 +410,7 @@ def getSecondsInactive() {
     if (state.motionStarted) {
         return Math.round((now() - state.motionStarted)/1000)
     } else {
-        return motionResetTimer ?: 60
+        return motionResetTimer ?: 30
     }
 }
 
@@ -520,6 +455,16 @@ def updated() {
     else {
         unschedule(logsOff)
     }
+    def value
+    // LED
+    if (settings?.motionLED != null ) {
+        value = safeToInt( motionLED )
+        if (settings?.logEnable) log.trace "${device.displayName} changing motionLED to ${motionLED}"
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
+    }
+    if ( cmds != null ) {
+        sendZigbeeCommands( cmds )     
+    }
 }    
 
 void initializeVars( boolean fullInit = false ) {
@@ -533,7 +478,7 @@ void initializeVars( boolean fullInit = false ) {
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 60)    
+    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)    
 }
 
 def installed() {
@@ -580,10 +525,11 @@ def setMotion( mode ) {
     }
 }
 
+
 def configLED( mode ) {
     ArrayList<String> cmds = []
  
-    def value = mode == "disabled" ? 0 : mode == "enabled" ? 1 : null
+    def value = P1_LED_MODE_VALUE(mode)        /*mode == "disabled" ? 0 : mode == "enabled" ? 1 : null*/
     if (value != null) {
         cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
         if (settings?.txtEnable) log.info "${device.displayName} sending LED mode : ${mode}" 
