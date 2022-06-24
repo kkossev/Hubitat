@@ -12,12 +12,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-06-19 kkossev  - project started
+ * ver. 1.0.0 2022-06-19 kkossev  - first test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/24 8:43 PM"}
+def timeStamp() {"2022/06/24 9:01 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -600,18 +600,9 @@ def refresh() {
 }
 
 def test( description ) {
-    /*
-    log.warn "test $description"
-    parse(description)
-*/
 	List<String> cmds = []
-/*
-	cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 0xFFFF, null, [:], 200)	// Reset Battery Voltage reporting to default
-	cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 0xFFFF, null, [:], 200)	// Reset Battery % reporting to default
-*/
-   // cmds += zigbee.batteryConfig()
-    cmds += zigbee.readAttribute(0xFCC0, 0x00F7, [:] /*[mfgCode: 0x115F]*/, delay=200)  
-        sendZigbeeCommands( cmds )  
+    //
+    sendZigbeeCommands( cmds )  
 }
 
 
