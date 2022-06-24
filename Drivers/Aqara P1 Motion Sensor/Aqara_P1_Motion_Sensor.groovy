@@ -17,14 +17,14 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/24 8:26 PM"}
+def timeStamp() {"2022/06/24 8:43 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara%20P1%20Motion%20Sensor.groovy", singleThreaded: true ) {
@@ -66,6 +66,10 @@ metadata {
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
+private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null }
+private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
+
+
 
 
 def parse(String description) {
@@ -165,13 +169,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             illuminanceEventLux( value )
             // Motion retrigger interval [84..85]
             value = Integer.parseInt(valueHex[84..85],16)
+            device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
             if (txtEnable) log.info "${device.displayName} retrigger interval is ${value} s."
             // Sensitivity
             value = Integer.parseInt(valueHex[90..91],16)
-            if (txtEnable) log.info "${device.displayName} sensitivity is ${value}"
+            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(value)} (${value})"
             // LED 
             value = Integer.parseInt(valueHex[96..97],16)
-            //device.updateSetting("illuminanceSensitivity", [value:raw, type:"decimal"])
             device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
             if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(value)} (${value})"
             break
@@ -187,11 +192,13 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break        
         case "010C" : // PIR sensitivity
             def value = safeToInt(it.value)
-            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${value==1?'Low':value==2?'Medium':value==3?'High':null}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
-        case "0102" : // Duration
+        case "0102" : // Retrigger interval
             def value = safeToInt(it.value)
-            if (txtEnable) log.info "${device.displayName} <b>received PIR duration report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
+            if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -459,9 +466,22 @@ def updated() {
     // LED
     if (settings?.motionLED != null ) {
         value = safeToInt( motionLED )
-        if (settings?.logEnable) log.trace "${device.displayName} changing motionLED to ${motionLED}"
+        if (settings?.logEnable) log.trace "${device.displayName} setting motionLED to ${motionLED}"
         cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
     }
+    // Sensitivity    
+    if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
+        value = safeToInt( motionSensitivity )
+        if (settings?.logEnable) log.trace "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
+        cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
+    }
+    // motionRetriggerInterval    
+    if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
+        value = safeToInt( motionRetriggerInterval )
+        if (settings?.logEnable) log.trace "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+    }
+    //
     if ( cmds != null ) {
         sendZigbeeCommands( cmds )     
     }
@@ -540,7 +560,6 @@ def configLED( mode ) {
         if (settings?.logEnable) log.warn "${device.displayName} please select a LED mode"
     }
 }
-
 
 def configSensitivity( mode ) {
     ArrayList<String> cmds = []
