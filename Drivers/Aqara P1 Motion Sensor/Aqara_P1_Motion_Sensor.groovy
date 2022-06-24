@@ -17,7 +17,7 @@
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/24 9:01 PM"}
+def timeStamp() {"2022/06/24 9:08 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -27,7 +27,7 @@ import hubitat.zigbee.zcl.DataType
 @Field static final Boolean debug = false
 
 metadata {
-    definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara%20P1%20Motion%20Sensor.groovy", singleThreaded: true ) {
+    definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
 		capability "Motion Sensor"
 		capability "Illuminance Measurement"
 		capability "Sensor"
