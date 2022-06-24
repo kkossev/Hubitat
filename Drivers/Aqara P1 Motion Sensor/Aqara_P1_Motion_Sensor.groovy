@@ -12,12 +12,12 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-06-19 kkossev  - first test version
+ * ver. 1.0.0 2022-06-24 kkossev  - first test version
  *
 */
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/06/24 9:08 PM"}
+def timeStamp() {"2022/06/24 10:13 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -41,14 +41,11 @@ metadata {
         if (debug) {
             command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
-            command "refresh", [[name: "*** Press the motion sensor button at the same time! ***" ]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
-            command "configLED", [[name:"cononfigLED", type: "ENUM", description: "Configure LED mode", constraints: ["--- Select ---", "Disabled", "Enabled"]]]
-            command "configSensitivity", [[name:"cononfigSensitivity", type: "ENUM", description: "Configure PIR Sensitivity", constraints: ["--- Select ---", "Low", "Medium","High"]]]
-            command "configDuration", [[name:"cononfigDuration", type: "NUMBER", description: "Configure PIR Duration"]]
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
+        
         if (debug) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI" 
         }
@@ -70,8 +67,6 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 
 
-
-
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
     checkDriverVersion()
@@ -83,8 +78,8 @@ def parse(String description) {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
     catch ( e ) {
-            log.warn "${device.displayName} parse: exception caught while parsing descMap:  ${descMap}"
-            return null
+        log.warn "${device.displayName} parse: exception caught while parsing descMap:  ${descMap}"
+        return null
     }
     if (logEnable) {log.debug "${device.displayName} parse: Desc Map: $descMap"}
     if (descMap.attrId != null ) {
@@ -92,43 +87,30 @@ def parse(String description) {
         List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
         descMap.additionalAttrs.each {
             attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
-            //log.trace "parse: filling in attrData: ${attrData}"
         }
         attrData.each {
-            //log.trace "parse: attrData.each it=${it}"
             if (it.status == "86") {
                 log.warn "unsupported cluster ${it.cluster} attribute ${it.attrId}"
             }
-		    else if (it.cluster == "0400" && it.attrId == "0000") {
-                // lumi.sensor_motion.aq2 parse: Desc Map: [raw:F5DE0104000A0000212200, dni:F5DE, endpoint:01, cluster:0400, size:0A, attrId:0000, encoding:21, command:0A, value:0022, clusterInt:1024, attrInt:0]
+		    else if (it.cluster == "0400" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 def rawLux = Integer.parseInt(it.value,16)
                 illuminanceEventLux( rawLux )
-
 		    }                 
-            else if (it.cluster == "0406" && it.attrId == "0000") {
-                // lumi.sensor_motion.aq2 parse: Desc Map: [raw:F5DE0104060800001801, dni:F5DE, endpoint:01, cluster:0406, size:08, attrId:0000, encoding:18, command:0A, value:01, clusterInt:1030, attrInt:0]
+            else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
             }
-            
-            else if (it.cluster == "0000" && it.attrId == "0005") {    // value: value:lumi.sensor_motion.aq2 - sent when button is pressed
-                //  attribute report: cluster=0000 attrId=0005 value=lumi.sensor_motion.aq2 status=null data=nul
+            else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
                 if (txtEnable) log.info "${device.displayName} device ${it.value} button was pressed "
             }
-
             else if (descMap.cluster == "FCC0") {    // Aqara P1
-                //  attribute report: cluster=FCC0 attrId=0112 value=00010042 status=null data=null
                 parseAqaraClusterFCC0( description, descMap, it )
             }
             else if (descMap.cluster == "0000" && it.attrId == "FF01") {
-                // lumi.sensor_motion.aq2 parse: description is read attr - raw: F5DE0100004A01FF42210121F90B0328230421A81305211B00062401000000000A2188326410000B216402, dni: F5DE, endpoint: 01, cluster: 0000, size: 4A, attrId: FF01, encoding: 42, command: 0A, value: 210121F90B0328230421A81305211B00062401000000000A2188326410000B216402
-                // lumi.sensor_motion.aq2 parse: Desc Map: [raw:F5DE0100004A01FF42210121F90B0328230421A81305211B00062401000000000A2188326410000B216402, dni:F5DE, endpoint:01, cluster:0000, size:4A, attrId:FF01, encoding:42, command:0A, value:!ù(#!¨!$!2d!d, clusterInt:0, attrInt:65281]
-                // lumi.sensor_motion.aq2 attribute report: cluster=0000 attrId=FF01 value=!ù(#!¨!$
                 parseAqaraAttributeFF01( description )
             }
             else {
                 if (logEnable) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             }
-                //if (logEnable) {log.debug "${device.displayName} Parse returned $map"}
         } // for each attribute
     } // if attribute report
     else if (descMap.profileId == "0000") { //zdo
@@ -140,7 +122,6 @@ def parse(String description) {
     else {
         if (logEnable==true)  log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
-
 }
 
 def parseAqaraAttributeFF01 ( description ) {
@@ -207,19 +188,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     
 }
                      
-
-// Convert raw 4 digit integer voltage value into percentage based on minVolts/maxVolts range
 private parseBatteryFF01( valueHex ) {
-	//if (logEnable) log.trace "${device.displayName} Battery parse string = ${valueHex}"
 	def MsgLength = valueHex.size()
-	//def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(4)..(5)]),16)
-    	for (int i = 0; i < (MsgLength-3); i+=2) {
+   	for (int i = 0; i < (MsgLength-3); i+=2) {
 		if (valueHex[i..(i+1)] == "21") { // Search for byte preceeding battery voltage bytes
 			rawValue = Integer.parseInt((valueHex[(i+2)..(i+3)] + valueHex[(i+4)..(i+5)]),16)
 			break
 		}
 	}
-    //log.warn "rawValue = ${rawValue}"
     if (rawValue == 0) {
         return
     }
@@ -300,8 +276,8 @@ def parseZHAcommand( Map descMap) {
                     default :
                         if (logEnable==true) log.warn "${device.displayName} <b>UNHANDLED</b> Read attribute response: cluster ${descMap.clusterId} Attributte ${attrId} status code ${status}"
                         break
-                } // switch (descMap.clusterId)
-            }  //command is read attribute response
+                }
+            }
             break
         case "04" : //write attribute response
             if (logEnable==true) log.info "${device.displayName} Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
@@ -347,9 +323,8 @@ def parseZHAcommand( Map descMap) {
 
 
 
-def illuminanceEvent( illuminance ) {
-    //def rawLux = Integer.parseInt(descMap.value,16)
-	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
+def illuminanceEvent( rawLux ) {
+	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
@@ -421,12 +396,10 @@ def getSecondsInactive() {
     }
 }
 
-
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
     sendEvent(name : "powerSource",	value : "battery", isStateChange : false)
 }
-
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
@@ -462,20 +435,17 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    def value
-    // LED
+    def value = 0
     if (settings?.motionLED != null ) {
         value = safeToInt( motionLED )
         if (settings?.logEnable) log.trace "${device.displayName} setting motionLED to ${motionLED}"
         cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
     }
-    // Sensitivity    
     if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
         value = safeToInt( motionSensitivity )
         if (settings?.logEnable) log.trace "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
         cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
     }
-    // motionRetriggerInterval    
     if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
         value = safeToInt( motionRetriggerInterval )
         if (settings?.logEnable) log.trace "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
@@ -543,60 +513,6 @@ def setMotion( mode ) {
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
             break
     }
-}
-
-
-def configLED( mode ) {
-    ArrayList<String> cmds = []
- 
-    def value = P1_LED_MODE_VALUE(mode)        /*mode == "disabled" ? 0 : mode == "enabled" ? 1 : null*/
-    if (value != null) {
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
-        if (settings?.txtEnable) log.info "${device.displayName} sending LED mode : ${mode}" 
-        cmds += zigbee.readAttribute(0xFCC0, 0x0152, [mfgCode: 0x115F], delay=200)    // read LED config back!
-        sendZigbeeCommands( cmds )    
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} please select a LED mode"
-    }
-}
-
-def configSensitivity( mode ) {
-    ArrayList<String> cmds = []
-    def value = mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null
-    if (value != null) {
-        cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
-        if (settings?.txtEnable) log.info "${device.displayName} sending PIR sensitivity : ${mode}" 
-        cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read sensitivity config back!
-        sendZigbeeCommands( cmds )    
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} please select a sensitivity mode"
-    }
-}
-
-
-def configDuration( duration ) {
-    ArrayList<String> cmds = []
-    def value = safeToInt( duration )
-    if (value != 0) {
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
-        if (settings?.txtEnable) log.info "${device.displayName} sending duration : ${value}" 
-        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read duration config back!
-        sendZigbeeCommands( cmds )    
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} please select a duration"
-    }
-}
-
-def refresh() {
-    if (txtEnable) log.info "${device.displayName} shortly press the motion sensor button at the same time!"
-    ArrayList<String> cmds = []
-    cmds += zigbee.readAttribute(0xFCC0, 0x0152, [mfgCode: 0x115F], delay=200)    // read LED config back!
-    cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read duration config back!
-    cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read sensitivity config back!
-    sendZigbeeCommands( cmds )    
 }
 
 def test( description ) {
