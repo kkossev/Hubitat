@@ -91,6 +91,16 @@
       "tags": [
         "Zigbee"
       ]
-    }
+    },
+    {
+      "id": "7f55f65d-dc8e-4742-a2e2-bc74582613b3",
+      "name": "Aqara P1 Motion Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
+      "description": "Aqara P1 Motion Sensor Zigbee driver for Hubitat Elevation hub",
+      "tags": [
+       "Zigbee"
+      ]
+	}
   ]
 }
