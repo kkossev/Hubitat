@@ -1,0 +1,19 @@
+{
+  "packageName": "Aqara P1 Motion Sensor",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2022-06-24",
+  "releaseNotes": "ver 1.0.0 2022-06-24 - first release version\n",
+  "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Aqara%20P1%20Motion%20Sensor/README.MD",
+  "communityLink": "https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/63?u=kkossev",
+  "drivers": [
+    {
+      "id": "dcb7afd8-9786-4298-9b50-a9d57fcfb1d2",
+      "name": "Aqara P1 Motion Sensor",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy",
+      "required": true
+    }
+  ]
+}
