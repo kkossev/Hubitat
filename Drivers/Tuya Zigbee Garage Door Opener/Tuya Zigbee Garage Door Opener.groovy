@@ -15,11 +15,12 @@
  * ver. 1.0.0 2022-06-18 kkossev  - Inital test version
  * ver. 1.0.1 2022-06-19 kkossev  - fixed Contact status open/close; added doorTimeout preference, default 15s; improved debug loging; PowerSource capability'; contact open/close status determines door state!
  * ver. 1.0.2 2022-06-20 kkossev  - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.
+ * ver. 1.0.3 2022-06-26 kkossev  - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default.
  *
 */
 
-def version() { "1.0.2" }
-def timeStamp() {"2022/06/20 7:35 AM"}
+def version() { "1.0.3" }
+def timeStamp() {"2022/06/26 7:08 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -49,7 +50,7 @@ metadata {
     }
 
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "doorTimeout", type: "number", title: "<b>Door timeout</b>", description: "<i>The time needed for the door to open, seconds</i>", range: "1..100", defaultValue: 15)
     }
@@ -107,7 +108,7 @@ def parse(String description) {
                                     // do nothing - open contact state confirms the door opening state
                                 }
                                 else { // it is unusual if the contact changes to 'closed' during 'opening' door motion... just issue a warning!
-                                    if (txtEnable) log.warn "${device.displayName} Contact changed to 'closed' during door 'open' command?"
+                                    if (logEnable) log.warn "${device.displayName} Contact changed to 'closed' during door 'open' command?"
                                 }
                                 break
                             case 'closing' : // contact state was changed while the door was in closing motion state
@@ -116,7 +117,7 @@ def parse(String description) {
                                     runInMillis( 100, confirmClosed, [overwrite: true])
                                 }
                                 else { // it is unusual if the contact changes to 'open' during 'closing' door motion... just issue a warning!
-                                    if (txtEnable) log.warn "${device.displayName} Contact changed to 'open' during door 'close' command?"
+                                    if (logEnable) log.warn "${device.displayName} Contact changed to 'open' during door 'close' command?"
                                 }
                                 break
                             case 'closed' : // contact state was changed while the door was closed
@@ -207,7 +208,7 @@ def open() {
         pulseOn()
     }
     else {
-        if (txtEnable) log.warn "${device.displayName} ignoring Open command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring Open command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
     }
 }
 
@@ -221,7 +222,7 @@ def close() {
         pulseOn()
     }
     else {
-        if (txtEnable) log.warn "${device.displayName} ignoring Close command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
+        if (logEnable) log.warn "${device.displayName} ignoring Close command (door was ${device.currentState('door').value} , contact was ${device.currentState('contact').value})"
     }
 }
 
@@ -260,7 +261,7 @@ def confirmClosed() {
     }
     else {
         sendDoorEvent("open")
-        if (txtEnable) {log.warn "${device.displayName} closing failed, contact sensor is still open!"}
+        if (logEnable) {log.warn "${device.displayName} closing failed, contact sensor is still open!"}
     }
 }
 
@@ -270,7 +271,7 @@ def confirmOpen() {
     }
     else {
         sendDoorEvent("closed")
-        if (txtEnable) {log.warn "${device.displayName} open failed, contact sensor is still closed!"}
+        if (logEnable) {log.warn "${device.displayName} open failed, contact sensor is still closed!"}
     }
 }
 
@@ -280,9 +281,16 @@ void initializeVars( boolean fullInit = true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.doorTimeout == null) device.updateSetting("doorTimeout", 15)   
+    
+    if (device.currentState('contact')?.value == null ) {
+        sendEvent(name : "contact",	value : "?", isStateChange : true)
+    }
+    if (device.currentState('door')?.value == null ) {
+        sendEvent(name : "door",	value : "?", isStateChange : true)
+    }
 }
 
 def initialize() {
@@ -306,6 +314,7 @@ def tuyaBlackMagic() {
 
 def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
+    checkDriverVersion()
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     sendZigbeeCommands(cmds)
@@ -322,8 +331,11 @@ def updated() {
 def installed() {
     log.info "Installing..."
     log.info "Debug logging will be automatically disabled after 24 hours"
-    device.updateSetting("logEnable",[type:"bool",value:"true"])
+    device.updateSetting("logEnable",[type:"bool",value:"false"])
     device.updateSetting("txtEnable",[type:"bool",value:"true"])
+    sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+    sendEvent(name : "door",	value : "?", isStateChange : true)
+    sendEvent(name : "contact",	value : "?", isStateChange : true)
     if (logEnable) runIn(86400, logsOff, [overwrite: true])
 }
 
@@ -356,7 +368,7 @@ def setContact( mode ) {
         sendContactEvent(mode, isDigital=true)
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} please select the Contact state"
+        if (logEnable) log.warn "${device.displayName} please select the Contact state"
     }
     
 }
