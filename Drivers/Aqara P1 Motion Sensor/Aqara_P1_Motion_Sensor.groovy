@@ -13,18 +13,19 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
+ * ver. 1.1.0 2022-06-28 kkossev  - test branch version
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/06/24 10:13 PM"}
+def version() { "1.1.0" }
+def timeStamp() {"2022/06/28 8:22 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = false
+@Field static final Boolean debug = true
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
@@ -33,6 +34,7 @@ metadata {
 		capability "Sensor"
 		capability "Battery"
         capability "PowerSource"
+        capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
         
         attribute "batteryVoltage", "string"
 
@@ -46,8 +48,10 @@ metadata {
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
         
-        if (debug) {
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI" 
+        if (debug == true) {
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "lumi.sensor_motion.aq2"  
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM" 
+            // TODO - add RTCZCGQ11LM ( FP1 )
         }
     }
 
@@ -139,6 +143,8 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
             break
         case "00F7" :
+            decodeXiaomiStruct(description)
+        /*
             // Battery : [6..7] LSB [8..9] MSB
             def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
             voltageAndBatteryEvents( rawVolts )
@@ -160,6 +166,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             value = Integer.parseInt(valueHex[96..97],16)
             device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
             if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(value)} (${value})"
+*/
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
@@ -515,10 +522,158 @@ def setMotion( mode ) {
     }
 }
 
+def decodeXiaomiStruct ( description )
+{
+//    def description = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+//    def description = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+	def MsgLength = valueHex.size()
+    
+    log.trace "decodeXiaomiStruct len = ${} valueHex = ${valueHex}"
+   	for (int i = 2; i < (MsgLength-3); ) {
+        def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
+        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
+        def rawValue = 0
+        // value: 0121=F50B 0328=1D 0421=0000 0521=0100 0821=0501 0A21=4F41 0C20=01 1320=00 1420=00 6410=00 6521=1900 6920=05 6A20=03 6B20=01"
+        switch (dataType) {
+            case 0x10 : // 1 byte boolean
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x64 :    // on/off
+                        log.trace "on/off is ${rawValue}"
+                        break
+                    case 0x65 :    // on/off EP 2
+                        log.trace "on/off EP 2 is ${rawValue}"
+                        break
+                    case 0x9b :    // consumer connected
+                        log.trace "consumer connected is ${rawValue}"
+                        break
+                    default :
+                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x20 : // 1 byte unsigned int
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x64 :    // curtain lift or smoke/gas density
+                        log.trace "lift % or gas density is ${rawValue}"
+                        break
+                    case 0x65 :    // battery percentage
+                        log.trace "battery percentage is ${rawValue}"
+                        break
+                    case 0x69 :    // duration (also charging for lumi.switch.n2aeu1)
+                        log.trace "duration is ${rawValue}"
+                        break
+                    case 0x6A :    // sensitivity
+                        log.trace "sensitivity is ${rawValue}"
+                        break
+                    case 0x6B :    // LED
+                        log.trace "LED is ${rawValue}"
+                        break
+                    case 0x06 : // unknown
+                    case 0x0B : // unknown
+                    case 0x0C : // unknown
+                    case 0x66 : // unknown or pressure
+                    case 0x67 : // unknown
+                    case 0x6B : // unknown
+                    case 0x6E : // unknown
+                    case 0x6F : // unknown
+                    case 0x94 : // unknown
+                    case 0x9A : // unknown
+                    default :
+                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x21 : // 2 bytes 16bitUINT
+                rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                switch (tag) {
+                    case 0x01 : // battery level
+                        log.trace "battery level is ${rawValue/1000}"
+                        break
+                    case 0x05 : // RSSI
+                        log.trace "RSSI is ${rawValue} ? db"
+                        break
+                    case 0x0A : // Parent NWK
+                        log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        break
+                    case 0x0B : // lightlevel 
+                        log.trace "lightlevel is ${rawValue}"
+                        break
+                    case 0x65 : // illuminance or humidity
+                        log.trace "illuminance is ${rawValue}"
+                        break
+                    case 0x04 : // unknown
+                    case 0x05 : // unknown
+                    case 0x08 : // unknown
+                    case 0x09 : // unknown
+                    case 0x66 : // pressure?
+                    case 0x6A : // unknown
+                    case 0x97 : // unknown
+                    case 0x98 : // unknown
+                    case 0x99 : // unknown
+                    case 0x9A : // unknown
+                    case 0x9B : // unknown
+                    default :
+                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 2) * 2
+                break
+            case 0x28 : // 1 byte 8 bit signed int
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x03 :    // device temperature
+                        log.trace "device temperature is ${rawValue}"
+                        break
+                    default :
+                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
+                // TODO !!! rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x06 :    // LQI ?
+                        log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        break
+                    default :
+                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
+                        break
+                }
+                i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
+                break;
+            // TODO: Zcl16BitInt tag == 0x64 -> temperature
+            // TODO: Zcl32BitInt tag == 0x66 -> pressure
+            // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
+            // TODO: Zcl48BitUint tag == 0x9a ?
+            // TODO: Zcl64BitUint tag == 0x07 ?
+            // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
+            default : 
+                log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
+                i = i + 1   // !!!
+                break
+        } // switch dataType
+	} // for 
+    
+    
+    
+      return  
+}
+
+
 def test( description ) {
 	List<String> cmds = []
     //
-    sendZigbeeCommands( cmds )  
+    //    def description = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+   def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+
+    decodeXiaomiStruct(xx)
 }
 
 
