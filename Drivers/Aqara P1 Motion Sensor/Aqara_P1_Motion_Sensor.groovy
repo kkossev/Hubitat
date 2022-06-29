@@ -13,12 +13,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-29 kkossev  - (test branch) - decodeXiaomiStruct()
+ * ver. 1.1.0 2022-06-29 kkossev  - (test branch) - decodeXiaomiStruct(); added RTCGQ13LM; added temperatureEvent
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/06/29 12:50 PM"}
+def timeStamp() {"2022/06/29 2:21 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -29,9 +29,10 @@ import hubitat.zigbee.zcl.DataType
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
+        capability "Sensor"
 		capability "Motion Sensor"
 		capability "Illuminance Measurement"
-		capability "Sensor"
+		capability "TemperatureMeasurement"        
 		capability "Battery"
         capability "PowerSource"
         capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
@@ -62,6 +63,7 @@ metadata {
         input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
         input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
         input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
+        input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
     }
 }
 
@@ -319,6 +321,23 @@ def illuminanceEventLux( Integer lux ) {
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
+
+def temperatureEvent( temperature ) {
+    def map = [:] 
+    map.name = "temperature"
+    map.unit = "°${location.temperatureScale}"
+    if ( location.temperatureScale == "F") {
+        temperature = (temperature * 1.8) + 32
+        map.unit = "\u00B0"+"F"
+    }
+    Integer tempConverted = temperature + (settings?.tempOffset?:0 as java.lang.Integer) 
+    map.value = tempConverted
+    map.isStateChange = true
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    sendEvent(map)
+}
+
+
 private handleMotion( Boolean motionActive ) {    
     if (motionActive) {
         def timeout = settings?.motionResetTimer ?: 30
@@ -453,6 +472,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)    
+    if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
 }
 
 def installed() {
@@ -605,8 +625,8 @@ def decodeXiaomiStruct ( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x03 :    // device temperature
-                        if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
-                        // TODO - send temperature event!
+                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
+                        temperatureEvent( rawValue )
                         break
                     default :
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
@@ -643,9 +663,9 @@ def decodeXiaomiStruct ( description )
 def test( description ) {
 	List<String> cmds = []
     //
-    def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+    //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
    //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-
+    def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
     decodeXiaomiStruct(xx)
 }
 
