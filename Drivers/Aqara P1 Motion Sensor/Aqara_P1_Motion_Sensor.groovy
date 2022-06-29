@@ -13,12 +13,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-28 kkossev  - test branch version
+ * ver. 1.1.0 2022-06-29 kkossev  - (test branch) - decodeXiaomiStruct()
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/06/28 8:22 PM"}
+def timeStamp() {"2022/06/29 12:50 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -47,10 +47,10 @@ metadata {
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM" 
         
         if (debug == true) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "lumi.sensor_motion.aq2"  
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM" 
             // TODO - add RTCZCGQ11LM ( FP1 )
         }
     }
@@ -144,29 +144,6 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "00F7" :
             decodeXiaomiStruct(description)
-        /*
-            // Battery : [6..7] LSB [8..9] MSB
-            def rawVolts = Integer.parseInt((valueHex[8..9] + valueHex[6..7]),16) / 1000
-            voltageAndBatteryEvents( rawVolts )
-            // device temperature [14..15]
-            def value = Integer.parseInt(valueHex[14..15],16)
-            if (txtEnable) log.info "${device.displayName} temperature is ${value} deg.C"
-            // Illuminance MSB-[78..79] LSB-[76..77]
-            value = Integer.parseInt((valueHex[78..79] + valueHex[76..77]),16)
-            illuminanceEventLux( value )
-            // Motion retrigger interval [84..85]
-            value = Integer.parseInt(valueHex[84..85],16)
-            device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
-            if (txtEnable) log.info "${device.displayName} retrigger interval is ${value} s."
-            // Sensitivity
-            value = Integer.parseInt(valueHex[90..91],16)
-            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(value)} (${value})"
-            // LED 
-            value = Integer.parseInt(valueHex[96..97],16)
-            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(value)} (${value})"
-*/
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
@@ -524,13 +501,10 @@ def setMotion( mode ) {
 
 def decodeXiaomiStruct ( description )
 {
-//    def description = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
-//    def description = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
 	def MsgLength = valueHex.size()
     
-    log.trace "decodeXiaomiStruct len = ${} valueHex = ${valueHex}"
+    if (logEnable) log.trace "decodeXiaomiStruct len = ${MsgLength} valueHex = ${valueHex}"
    	for (int i = 2; i < (MsgLength-3); ) {
         def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
         def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
@@ -541,16 +515,16 @@ def decodeXiaomiStruct ( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x64 :    // on/off
-                        log.trace "on/off is ${rawValue}"
+                        if (logEnable) log.trace "on/off is ${rawValue}"
                         break
                     case 0x65 :    // on/off EP 2
-                        log.trace "on/off EP 2 is ${rawValue}"
+                        if (logEnable) log.trace "on/off EP 2 is ${rawValue}"
                         break
                     case 0x9b :    // consumer connected
-                        log.trace "consumer connected is ${rawValue}"
+                        if (logEnable) log.trace "consumer connected is ${rawValue}"
                         break
                     default :
-                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (2 + 1) * 2
@@ -559,19 +533,22 @@ def decodeXiaomiStruct ( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x64 :    // curtain lift or smoke/gas density
-                        log.trace "lift % or gas density is ${rawValue}"
+                        if (logEnable) log.trace "lift % or gas density is ${rawValue}"
                         break
                     case 0x65 :    // battery percentage
-                        log.trace "battery percentage is ${rawValue}"
+                        if (logEnable) log.trace "battery percentage is ${rawValue}"
                         break
                     case 0x69 :    // duration (also charging for lumi.switch.n2aeu1)
-                        log.trace "duration is ${rawValue}"
+                        device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
+                        if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
                         break
                     case 0x6A :    // sensitivity
-                        log.trace "sensitivity is ${rawValue}"
+                        device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                        if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
                         break
                     case 0x6B :    // LED
-                        log.trace "LED is ${rawValue}"
+                        device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
+                        if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
                         break
                     case 0x06 : // unknown
                     case 0x0B : // unknown
@@ -584,7 +561,7 @@ def decodeXiaomiStruct ( description )
                     case 0x94 : // unknown
                     case 0x9A : // unknown
                     default :
-                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (2 + 1) * 2
@@ -593,19 +570,19 @@ def decodeXiaomiStruct ( description )
                 rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
                 switch (tag) {
                     case 0x01 : // battery level
-                        log.trace "battery level is ${rawValue/1000}"
+                        voltageAndBatteryEvents( rawValue/1000 )
                         break
                     case 0x05 : // RSSI
-                        log.trace "RSSI is ${rawValue} ? db"
+                        if (logEnable) log.trace "RSSI is ${rawValue} ? db"
                         break
                     case 0x0A : // Parent NWK
-                        log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        if (logEnable) log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
                         break
                     case 0x0B : // lightlevel 
-                        log.trace "lightlevel is ${rawValue}"
+                        if (logEnable) log.trace "lightlevel is ${rawValue}"
                         break
                     case 0x65 : // illuminance or humidity
-                        log.trace "illuminance is ${rawValue}"
+                        illuminanceEventLux( rawValue )
                         break
                     case 0x04 : // unknown
                     case 0x05 : // unknown
@@ -619,7 +596,7 @@ def decodeXiaomiStruct ( description )
                     case 0x9A : // unknown
                     case 0x9B : // unknown
                     default :
-                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (2 + 2) * 2
@@ -628,22 +605,22 @@ def decodeXiaomiStruct ( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x03 :    // device temperature
-                        log.trace "device temperature is ${rawValue}"
+                        if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
+                        // TODO - send temperature event!
                         break
                     default :
-                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (2 + 1) * 2
                 break;
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
-                // TODO !!! rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x06 :    // LQI ?
-                        log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        if (logEnable) log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
                         break
                     default :
-                        log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
                         break
                 }
                 i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
@@ -655,23 +632,19 @@ def decodeXiaomiStruct ( description )
             // TODO: Zcl64BitUint tag == 0x07 ?
             // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
             default : 
-                log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
+                if (logEnable) log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
                 i = i + 1   // !!!
                 break
         } // switch dataType
-	} // for 
-    
-    
-    
-      return  
+	} // for all tags in valueHex 
 }
 
 
 def test( description ) {
 	List<String> cmds = []
     //
-    //    def description = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
-   def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+    def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+   //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
 
     decodeXiaomiStruct(xx)
 }
