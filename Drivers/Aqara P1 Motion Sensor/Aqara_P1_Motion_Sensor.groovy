@@ -18,11 +18,12 @@
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
+ * ver. 1.1.1 2022-06-30 kkossev  - (test branch) - no any commands are sent immediately after pairing!
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2022/06/30 10:04 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2022/06/30 11:07 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -571,7 +572,6 @@ def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure()..."
     unschedule()
     initializeVars( fullInit )
-    updated()    
 }
 def initialize() {
     log.info "${device.displayName} Initialize()..."
