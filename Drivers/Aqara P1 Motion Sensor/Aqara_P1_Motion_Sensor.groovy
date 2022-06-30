@@ -23,7 +23,7 @@
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2022/06/30 11:07 PM"}
+def timeStamp() {"2022/06/30 11:19 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
