@@ -565,7 +565,7 @@ void initializeVars( boolean fullInit = false ) {
 }
 
 def installed() {
-    log.info "${device.displayName} installed()"
+    log.info "${device.displayName} installed() ${device.getName()} model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
 }
 
 def configure(boolean fullInit = true ) {
