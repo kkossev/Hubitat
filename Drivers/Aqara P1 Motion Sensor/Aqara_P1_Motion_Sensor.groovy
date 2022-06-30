@@ -1,5 +1,5 @@
 /**
- *  Aqara P1 Motion Sensor driver for Hubitat
+ *  Aqara Motion and Presence sensosr driver for Hubitat
  *
  *  https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/46?u=kkossev
  *
@@ -11,21 +11,25 @@
  *	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
+ *
+ *  Credits:
+ *      Mike Maxwell for Hubitat drivers code samples
+ *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for the shared information.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added RTCGQ13LM; added temperatureEvent; added FP1 parsing
+ * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/06/30 2:49 PM"}
+def timeStamp() {"2022/06/30 9:01 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
@@ -48,24 +52,34 @@ metadata {
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM"      // Aqara precision motion sensor
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.motion.ac01", manufacturer:"aqara", deviceJoinName: "Aqara FP1 Presence Sensor RTCZCGQ11LM"             // RTCZCGQ11LM ( FP1 )
         
         if (debug == true) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "lumi.sensor_motion.aq2"  
-            // TODO - add RTCZCGQ11LM ( FP1 )
         }
     }
 
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
-        input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "1..7200", defaultValue: 30)
-        input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
-        input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
-        input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
-        input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+        if (logEnable == true || logEnable == false) { // Groovy ... :) 
+            input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
+            input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "1..7200", defaultValue: 30)
+            if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
+                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
+            }
+            if (isRTCGQ14LM()) {
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
+            }
+            input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+        }
     }
 }
+
+def isRTCGQ13LM()   { return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
+def isRTCGQ14LM()   { return (device.getDataValue('model') in ['lumi.motion.ac02']) }     // Aqara P1 motion sensor (LED control)
+def isRTCZCGQ11LM() { return (device.getDataValue('model') in ['lumi.motion.ac01'])  }    // Aqara FP1 Presence sensor (microwave radar)
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -73,10 +87,6 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 private FP1_PRESENCE_EVENT_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
 
-
-private isRTCGQ13LM()   { return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Precision motion sensor
-private isRTCGQ14LM()   { return (device.getDataValue('model') in ['lumi.motion.ac02']) }    // P1
-private isRTCZCGQ11LM() { return false }    // FP1
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -490,20 +500,26 @@ def updated() {
         unschedule(logsOff)
     }
     def value = 0
-    if (settings?.motionLED != null ) {
-        value = safeToInt( motionLED )
-        if (settings?.logEnable) log.trace "${device.displayName} setting motionLED to ${motionLED}"
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
+    if (isRTCGQ14LM()) {
+        if (settings?.motionLED != null ) {
+            value = safeToInt( motionLED )
+            if (settings?.logEnable) log.trace "${device.displayName} setting motionLED to ${motionLED}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
     }
-    if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
-        value = safeToInt( motionSensitivity )
-        if (settings?.logEnable) log.trace "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
-        cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
+    if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
+        if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
+            value = safeToInt( motionSensitivity )
+            if (settings?.logEnable) log.trace "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
     }
-    if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
-        value = safeToInt( motionRetriggerInterval )
-        if (settings?.logEnable) log.trace "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+    if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
+        if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
+            value = safeToInt( motionRetriggerInterval )
+            if (settings?.logEnable) log.trace "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+        }
     }
     //
     if ( cmds != null ) {
@@ -582,7 +598,9 @@ def decodeXiaomiStruct ( description )
         def rawValue = 0
         // value: 0121=F50B 0328=1D 0421=0000 0521=0100 0821=0501 0A21=4F41 0C20=01 1320=00 1420=00 6410=00 6521=1900 6920=05 6A20=03 6B20=01"
         switch (dataType) {
+            case 0x08 : // 8 bit data
             case 0x10 : // 1 byte boolean
+            case 0x18 : // 8-bit bitmap
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x64 :    // on/off
@@ -597,7 +615,21 @@ def decodeXiaomiStruct ( description )
                 }
                 i = i + (2 + 1) * 2
                 break;
+            case 0x28 : // 1 byte 8 bit signed int
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x03 :    // device temperature
+                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
+                        temperatureEvent( rawValue )
+                        break
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
             case 0x20 : // 1 byte unsigned int
+            case 0x30 : // 8-bit enumeration
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
@@ -705,19 +737,14 @@ def decodeXiaomiStruct ( description )
                 }
                 i = i + (2 + 2) * 2
                 break
-            case 0x28 : // 1 byte 8 bit signed int
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
-                    case 0x03 :    // device temperature
-                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
-                        temperatureEvent( rawValue )
-                        break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (2 + 1) * 2
-                break;
+            case 0x0B : // 32-bit data
+            case 0x1B : // 32-bit bitmap
+            case 0x23 : // Unsigned 32-bit integer
+            case 0x2B : // Signed 32-bit integer
+                // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
+                if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 4 * 2    // TODO: check!
+                break
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
                 switch (tag) {
                     case 0x06 :    // LQI ?
@@ -729,12 +756,25 @@ def decodeXiaomiStruct ( description )
                 }
                 i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
                 break;
+            case 0x0C : // 40-bit data
+            case 0x1C : // 40-bit bitmap
+            case 0x24 : // Unsigned 40-bit integer
+            case 0x2C : // Signed 40-bit integer
+                if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 5 * 2    // TODO: check 40 or 48 bits ??
+                break
+            case 0x0D : // 48-bit data
+            case 0x1D : // 48-bit bitmap
+            case 0x25 : // Unsigned 48-bit integer
+            case 0x2D : // Signed 48-bit integer
+                // TODO: Zcl48BitUint tag == 0x9a ?
+                // TODO: Zcl64BitUint tag == 0x07 ?
+                if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 6 * 2    // TODO: check 40 or 48 bits ??
+                break
             // TODO: Zcl16BitInt tag == 0x64 -> temperature
-            // TODO: Zcl32BitInt tag == 0x66 -> pressure
-            // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
-            // TODO: Zcl48BitUint tag == 0x9a ?
-            // TODO: Zcl64BitUint tag == 0x07 ?
             // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
+            // https://github.com/SwoopX/deconz-rest-plugin/blob/1c09f60eb2001fef790450e70a142180e9494aa4/general.xml
             default : 
                 if (logEnable) log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
                 i = i + 1   // !!!
