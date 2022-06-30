@@ -14,7 +14,7 @@
  *
  *  Credits:
  *      Mike Maxwell for Hubitat drivers code samples
- *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for the shared information.
+ *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for all the shared information.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
@@ -22,7 +22,7 @@
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/06/30 9:01 PM"}
+def timeStamp() {"2022/06/30 10:04 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -40,9 +40,20 @@ metadata {
 		capability "Battery"
         capability "PowerSource"
         capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
+        capability "PresenceSensor"    //presence -ENUM ["present", "not present"]
         
         attribute "batteryVoltage", "string"
-
+        attribute "presence_type", "enum", [
+            "enter",        //
+            "leave",        //
+            "left_enter",   //
+            "right_leave",  //
+            "right_enter",  //
+            "left_leave",   //
+            "approach",     //
+            "away"          //
+        ]
+        
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
         if (debug) {
@@ -64,7 +75,7 @@ metadata {
         if (logEnable == true || logEnable == false) { // Groovy ... :) 
             input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
-            input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "1..7200", defaultValue: 30)
+            input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
             if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
@@ -77,15 +88,16 @@ metadata {
     }
 }
 
-def isRTCGQ13LM()   { return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
-def isRTCGQ14LM()   { return (device.getDataValue('model') in ['lumi.motion.ac02']) }     // Aqara P1 motion sensor (LED control)
-def isRTCZCGQ11LM() { return (device.getDataValue('model') in ['lumi.motion.ac01'])  }    // Aqara FP1 Presence sensor (microwave radar)
+def isRTCGQ13LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
+def isRTCGQ14LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac02']) }     // Aqara P1 motion sensor (LED control)
+def isRTCZCGQ11LM() { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac01']) }     // Aqara FP1 Presence sensor (microwave radar)
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
 private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null }
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
-private FP1_PRESENCE_EVENT_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
+private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
+private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
 
 
 def parse(String description) {
@@ -208,12 +220,12 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             handleMotion( true )
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
-            // TODO! payload.presence = {0: false, 1: true, 255: null}[value];
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 presence</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            def value = safeToInt(it.value)
+            presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
             break
-        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event
-            // TODO! presence_event = {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 presence_event</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
+            def value = safeToInt(it.value)
+            presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(value) )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             // TODO! monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
@@ -382,7 +394,6 @@ def illuminanceEventLux( Integer lux ) {
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
-
 def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
@@ -398,6 +409,16 @@ def temperatureEvent( temperature ) {
     sendEvent(map)
 }
 
+def presenceEvent( String status ) {
+    sendEvent("name": "presence", "value": status, "isStateChange": true)
+    if (settings?.txtEnable) log.info "${device.displayName} presence is <b>${status}</b>"
+}
+                                              
+// private FP1_PRESENCE_EVENT_TYPE_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
+def presenceTypeEvent( String type ) {
+    sendEvent("name": "presence_type", "value": type, "isStateChange": true)
+    if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${type}</b>"
+}
 
 private handleMotion( Boolean motionActive ) {    
     if (motionActive) {
@@ -647,7 +668,7 @@ def decodeXiaomiStruct ( description )
                     case 0x66 :    // (102)    FP1 
                         if (isRTCZCGQ11LM()) {
                             if (/* FP1 firmware version  < 50) */ true) {
-                                if (txtEnable) log.info "${device.displayName} presence is  ${FP1_PRESENCE_EVENT_NAME(rawValue)} (${rawValue} )"
+                                if (txtEnable) log.info "${device.displayName} presence is  ${FP1_PRESENCE_EVENT_TYPE_NAME(rawValue)} (${rawValue} )"
                                 // TODO ! sent presence event (enter, leave, ..... )!
                             }
                             else {
