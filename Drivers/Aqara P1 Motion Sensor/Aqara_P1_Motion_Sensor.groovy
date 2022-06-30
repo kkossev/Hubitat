@@ -13,12 +13,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-29 kkossev  - (test branch) - decodeXiaomiStruct(); added RTCGQ13LM; added temperatureEvent
+ * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added RTCGQ13LM; added temperatureEvent; added FP1 parsing
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/06/29 2:21 PM"}
+def timeStamp() {"2022/06/30 2:49 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -71,7 +71,12 @@ private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
 private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null }
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
+private FP1_PRESENCE_EVENT_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
 
+
+private isRTCGQ13LM()   { return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Precision motion sensor
+private isRTCGQ14LM()   { return (device.getDataValue('model') in ['lumi.motion.ac02']) }    // P1
+private isRTCZCGQ11LM() { return false }    // FP1
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -144,29 +149,75 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0005" :
             if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
             break
+        case "0064" :
+            if (txtEnable) log.info "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break
+        case "0065" :    // illuminance only? for RTCGQ12LM RTCGQ14LM
+            def value = safeToInt(it.value)
+            illuminanceEventLux( rawValue )
+            if (txtEnable) log.info "${device.displayName} <b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break
+        case "0069" : // (105) PIR sensitivity RTCGQ13LM; distance for RTCZCGQ11LM; detection (retrigger) interval for RTCGQ14LM
+            if (isRTCGQ13LM()) { 
+                // sensitivity
+                def value = safeToInt(it.value)
+                device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+                if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            }
+            else if (isRTCGQ14LM()) {
+                // retrigger interval
+                def value = safeToInt(it.value)
+                device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
+                if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            }
+            else if (isRTCZCGQ11LM()) {
+                def value = safeToInt(it.value)
+                if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            }
+            else {
+                if (logEnable) log.warn "${device.displayName} Received unknown device report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            }
+            break
         case "00F7" :
             decodeXiaomiStruct(description)
-            break
-        case "0112" : // Aqara P1 PIR motion Illuminance
-            def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
-            illuminanceEventLux( rawValue )
-            handleMotion( true )
-            break
-        case "0152" : // LED configuration
-            def value = safeToInt(it.value)
-            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"    //P1_LED_MODE_VALUE
-            break        
-        case "010C" : // PIR sensitivity
-            def value = safeToInt(it.value)
-            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0102" : // Retrigger interval
             def value = safeToInt(it.value)
             device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
             if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
+        case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
+        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM
+            def value = safeToInt(it.value)
+            device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            break
+        case "0112" : // Aqara P1 PIR motion Illuminance
+            def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
+            illuminanceEventLux( rawValue )
+            handleMotion( true )
+            break
+        case "0142" : // (322) FP1 RTCZCGQ11LM presence
+            // TODO! payload.presence = {0: false, 1: true, 255: null}[value];
+            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 presence</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            break
+        case "0143" : // (323) FP1 RTCZCGQ11LM presence_event
+            // TODO! presence_event = {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
+            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 presence_event</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            break
+        case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
+            // TODO! monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
+            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 monitoring_mode</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            break
+        case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
+            // TODO! approach_distance = {0: 'far', 1: 'medium', 2: 'near'}[value];
+            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 approach_distance</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            break
+        case "0152" : // LED configuration
+            def value = safeToInt(it.value)
+            device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"    //P1_LED_MODE_VALUE
+            break        
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
         break
@@ -537,9 +588,6 @@ def decodeXiaomiStruct ( description )
                     case 0x64 :    // on/off
                         if (logEnable) log.trace "on/off is ${rawValue}"
                         break
-                    case 0x65 :    // on/off EP 2
-                        if (logEnable) log.trace "on/off EP 2 is ${rawValue}"
-                        break
                     case 0x9b :    // consumer connected
                         if (logEnable) log.trace "consumer connected is ${rawValue}"
                         break
@@ -552,15 +600,51 @@ def decodeXiaomiStruct ( description )
             case 0x20 : // 1 byte unsigned int
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
-                    case 0x64 :    // curtain lift or smoke/gas density
+                    case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
                         if (logEnable) log.trace "lift % or gas density is ${rawValue}"
                         break
-                    case 0x65 :    // battery percentage
-                        if (logEnable) log.trace "battery percentage is ${rawValue}"
+                    case 0x65 :    // (101) FP1 presence
+                        if (isRTCZCGQ11LM()) { // FP1
+                            if (txtEnable) log.info "${device.displayName} presence is  ${rawValue==0?'not present':'present'} (${rawValue} )"
+                            // TODO ! sent presence (present/not present) event !
+                        }
+                        else {
+                            if (logEnable) log.trace "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
+                        }
                         break
-                    case 0x69 :    // duration (also charging for lumi.switch.n2aeu1)
-                        device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
-                        if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
+                    case 0x66 :    // (102)    FP1 
+                        if (isRTCZCGQ11LM()) {
+                            if (/* FP1 firmware version  < 50) */ true) {
+                                if (txtEnable) log.info "${device.displayName} presence is  ${FP1_PRESENCE_EVENT_NAME(rawValue)} (${rawValue} )"
+                                // TODO ! sent presence event (enter, leave, ..... )!
+                            }
+                            else {
+                                device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                                if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                            }
+                        }
+                        break
+                    case 0x67 : // (103) FP1 monitoring_mode
+                         if (txtEnable) log.info "${device.displayName} monitoring_mode is  ${rawValue==0?'undirected':'left_right'} (${rawValue} )"
+                         // TODO ! sent monitoring_mode (0: 'undirected', 1: 'left_right' event !
+                        break
+                    case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
+                        if (isRTCZCGQ11LM()) { // FP1
+                            // payload.approach_distance = {0: 'far', 1: 'medium', 2: 'near'}[value];
+                            // TODO !! make approach_distance Preference parameter !
+                        }
+                        else if (isRTCGQ13LM()) {
+                            // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
+                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                        }
+                        else if (isRTCGQ14LM()) {
+                            device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
+                            if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
+                        }
+                        else {
+                            if (logEnable) log.debug "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
                         break
                     case 0x6A :    // sensitivity
                         device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
