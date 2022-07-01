@@ -101,7 +101,7 @@ private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1
 
 
 def parse(String description) {
-    if (logEnable == true) log.debug "${device.displayName} ()parse: description is $description"
+    if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
@@ -131,6 +131,9 @@ def parse(String description) {
 		    }                 
             else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
+            }
+            else if (it.cluster == "0000" && it.attrId == "0001") {
+                if (logEnable) log.info "${device.displayName} Applicaiton version is ${it.value}"
             }
             else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
                 if (txtEnable) log.info "${device.displayName} device ${it.value} button was pressed "
@@ -169,7 +172,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     switch (it.attrId) {
         case "0005" :
-            if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed"
+            if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
             break
         case "0064" :
             if (txtEnable) log.info "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
@@ -202,6 +205,9 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "00F7" :
             decodeXiaomiStruct(description)
+            break
+        case "00FC" :
+            if (txtEnable) log.info "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0102" : // Retrigger interval
             def value = safeToInt(it.value)
@@ -304,6 +310,12 @@ def parseZDOcommand( Map descMap ) {
             break
         case "8021" : // bind response
             if (logEnable) log.info "${device.displayName} Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "8022" : //unbind request
+            if (logEnable) log.info "${device.displayName} Received unbind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "8034" : //leave response
+            if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
             break
         case "8038" : // Management Network Update Notify
             if (logEnable) log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}"
@@ -569,9 +581,9 @@ def installed() {
 
 def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
-    log.warn "${device.displayName} if the logs stop here, please pair the device again to HE"
     unschedule()
     initializeVars( fullInit )
+    log.warn "${device.displayName} <b>if no more logs, please pair the device again to HE!</b>"
 }
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
