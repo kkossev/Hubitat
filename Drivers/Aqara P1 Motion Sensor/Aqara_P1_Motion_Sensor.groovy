@@ -13,7 +13,6 @@
  *	for the specific language governing permissions and limitations under the License.
  *
  *  Credits:
- *      Mike Maxwell for Hubitat drivers code samples
  *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for all the shared information.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
@@ -23,7 +22,7 @@
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2022/07/01 7:55 AM"}
+def timeStamp() {"2022/07/01 8:29 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -102,7 +101,7 @@ private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1
 
 
 def parse(String description) {
-    if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
+    if (logEnable == true) log.debug "${device.displayName} ()parse: description is $description"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
@@ -512,7 +511,7 @@ def updated() {
     checkDriverVersion()
     ArrayList<String> cmds = []
     
-    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
+    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> (driver version ${driverVersionAndTimeStamp()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff)    // turn off debug logging after 24 hours
@@ -550,7 +549,7 @@ def updated() {
 }    
 
 void initializeVars( boolean fullInit = false ) {
-    if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    if (logEnable==true) log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
@@ -569,13 +568,13 @@ def installed() {
 }
 
 def configure(boolean fullInit = true ) {
-    log.info "${device.displayName} configure()..."
+    log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
     log.warn "${device.displayName} if the logs stop here, please pair the device again to HE"
     unschedule()
     initializeVars( fullInit )
 }
 def initialize() {
-    log.info "${device.displayName} Initialize()..."
+    log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
     configure(fullInit = true)
 }
 
