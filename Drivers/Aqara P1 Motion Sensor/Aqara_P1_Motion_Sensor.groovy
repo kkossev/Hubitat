@@ -18,11 +18,12 @@
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
+ * ver. 1.1.2 2022-07-02 kkossev  - (test branch) - PowerSource presence polling
  *
 */
 
-def version() { "1.1.1" }
-def timeStamp() {"2022/07/01 8:29 PM"}
+def version() { "1.1.2" }
+def timeStamp() {"2022/07/01 12:22 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -87,6 +88,9 @@ metadata {
         }
     }
 }
+
+@Field static final Integer presenceCountTreshold = 3
+@Field static final Integer defaultPollingInterval = 3600
 
 def isRTCGQ13LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
 def isRTCGQ14LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac02']) }     // Aqara P1 motion sensor (LED control)
@@ -495,7 +499,32 @@ def getSecondsInactive() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    sendEvent(name : "powerSource",	value : "battery", isStateChange : false)
+    sendEvent(name : "powerSource",	value : "battery" /*, isStateChange : false*/)
+    if (device.currentValue('powerSource', true) in ['unknown', '?']) {
+        if (settings?.txtEnable) log.info "${device.displayName} is present"
+    }    
+    state.notPresentCounter = 0    
+}
+
+def checkIfNotPresent() {
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter >= presenceCountTreshold) {
+            if (!(device.currentValue('powerSource', true) in ['unknown', '?'])) {
+    	        sendEvent(name: "powerSource", value: "unknown")
+                if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
+            }
+        }
+    }
+    else {
+        state.notPresentCounter = 0  
+    }
+}
+
+def pollPresence() {
+    if (logEnable) log.debug "${device.displayName} pollPresence()"
+    checkIfNotPresent()
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
 }
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
@@ -568,11 +597,15 @@ void initializeVars( boolean fullInit = false ) {
     }
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)    
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
+    
+     if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+
 }
 
 def installed() {
@@ -583,6 +616,7 @@ def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
     unschedule()
     initializeVars( fullInit )
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
     log.warn "${device.displayName} <b>if no more logs, please pair the device again to HE!</b>"
 }
 def initialize() {
