@@ -1,5 +1,5 @@
 /**
- *  Aqara Motion and Presence sensosr driver for Hubitat
+ *  Aqara Motion and Presence sensor driver for Hubitat
  *
  *  https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/46?u=kkossev
  *
@@ -18,12 +18,12 @@
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
- * ver. 1.1.1 2022-06-30 kkossev  - (test branch) - no any commands are sent immediately after pairing!
+ * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
  *
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2022/06/30 11:19 PM"}
+def timeStamp() {"2022/07/01 7:55 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -570,6 +570,7 @@ def installed() {
 
 def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure()..."
+    log.warn "${device.displayName} if the logs stop here, please pair the device again to HE"
     unschedule()
     initializeVars( fullInit )
 }
