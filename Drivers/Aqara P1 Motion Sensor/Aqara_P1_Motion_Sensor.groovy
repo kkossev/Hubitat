@@ -16,14 +16,14 @@
  *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for all the shared information.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeXiaomiStruct(); added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
+ * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
  * ver. 1.1.2 2022-07-02 kkossev  - (test branch) - PowerSource presence polling
  *
 */
 
 def version() { "1.1.2" }
-def timeStamp() {"2022/07/01 12:22 AM"}
+def timeStamp() {"2022/07/01 10:59 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -63,13 +63,12 @@ metadata {
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         }
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02", manufacturer:"LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"         // "Aqara P1 presence sensor RTCGQ14LM" {manufacturerCode: 0x115f}
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019", model:"lumi.motion.agl04", manufacturer:"LUMI", deviceJoinName: "Aqara Precision Motion Sensor RTCGQ13LM"      // Aqara precision motion sensor
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0", outClusters:"0003,0019", model:"lumi.motion.ac01", manufacturer:"aqara", deviceJoinName: "Aqara FP1 Presence Sensor RTCZCGQ11LM"             // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                 // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"          // Aqara precision motion sensor
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara Motion Sensor RTCGQ12LM"                    // RTCGQ12LM
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Presence Sensor RTCZCGQ11LM"            // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi presence sensor RTCGQ11LM"   // 
         
-        if (debug == true) {
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "lumi.sensor_motion.aq2"  
-        }
     }
 
     preferences {
@@ -81,8 +80,12 @@ metadata {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
             }
-            if (isRTCGQ14LM()) {
+            if (isRTCGQ14LM()) { // P1
                 input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
+            }
+            if (isRTCZCGQ11LM()) { // FP1
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: 0, options: [1:"far", 2:"medium", 3:"near" ])    // TODO check defaultValue !
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // TODO check defaultValue !
             }
             input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
         }
@@ -102,7 +105,8 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
 private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-
+private FP1_APPROACH_DISTANCE_NAME(value) { value == 0 ? "far" : value == 1 ? "medium" : value == 2 ? "near" : null }
+private FP1_MONITORING_MODE_NAME(value) { value == 0 ? "undirected" : value == 1 ? "left_right" : null }
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -183,8 +187,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "0065" :    // illuminance only? for RTCGQ12LM RTCGQ14LM
             def value = safeToInt(it.value)
-            illuminanceEventLux( rawValue )
-            if (txtEnable) log.info "${device.displayName} <b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (isRTCZCGQ11LM()) { // FP1
+                if (txtEnable) log.info "${device.displayName} presence is  ${value==0? 'not present':'present'} (${value} )"
+                presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
+            }
+            else {
+                illuminanceEventLux( value )
+                if (txtEnable) log.info "${device.displayName} <b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            }
             break
         case "0069" : // (105) PIR sensitivity RTCGQ13LM; distance for RTCZCGQ11LM; detection (retrigger) interval for RTCGQ14LM
             if (isRTCGQ13LM()) { 
@@ -202,13 +212,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             else if (isRTCZCGQ11LM()) {
                 def value = safeToInt(it.value)
                 if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )
             }
             else {
                 if (logEnable) log.warn "${device.displayName} Received unknown device report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             }
             break
         case "00F7" :
-            decodeXiaomiStruct(description)
+            decodeAqaraStruct(description)
             break
         case "00FC" :
             if (txtEnable) log.info "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
@@ -238,12 +249,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(value) )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
-            // TODO! monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 monitoring_mode</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            def value = safeToInt(it.value)
+            device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
+            if (txtEnable) log.info "${device.displayName} <b>received monitoring_modey report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
-            // TODO! approach_distance = {0: 'far', 1: 'medium', 2: 'near'}[value];
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0 approach_distance</b> report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            def value = safeToInt(it.value)
+            device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )
+            if (txtEnable) log.info "${device.displayName} <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
@@ -256,6 +269,204 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     }
     
 }
+
+def decodeAqaraStruct( description )
+{
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+	def MsgLength = valueHex.size()
+    
+    if (logEnable) log.trace "decodeAqaraStruct len = ${MsgLength} valueHex = ${valueHex}"
+   	for (int i = 2; i < (MsgLength-3); ) {
+        def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
+        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
+        def rawValue = 0
+        // value: 0121=F50B 0328=1D 0421=0000 0521=0100 0821=0501 0A21=4F41 0C20=01 1320=00 1420=00 6410=00 6521=1900 6920=05 6A20=03 6B20=01"
+        switch (dataType) {
+            case 0x08 : // 8 bit data
+            case 0x10 : // 1 byte boolean
+            case 0x18 : // 8-bit bitmap
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x64 :    // on/off
+                        if (logEnable) log.trace "on/off is ${rawValue}"
+                        break
+                    case 0x9b :    // consumer connected
+                        if (logEnable) log.trace "consumer connected is ${rawValue}"
+                        break
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x28 : // 1 byte 8 bit signed int
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x03 :    // device temperature
+                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
+                        temperatureEvent( rawValue )
+                        break
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x20 : // 1 byte unsigned int
+            case 0x30 : // 8-bit enumeration
+                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
+                switch (tag) {
+                    case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
+                        if (logEnable) log.trace "lift % or gas density is ${rawValue}"
+                        break
+                    case 0x65 :    // (101) FP1 presence
+                        if (isRTCZCGQ11LM()) { // FP1
+                            if (txtEnable) log.info "${device.displayName} presence is  ${rawValue==0?'not present':'present'} (${rawValue} )"
+                            presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(rawValue) )  
+                        }
+                        else {
+                            if (logEnable) log.trace "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
+                        }
+                        break
+                    case 0x66 :    // (102)    FP1 
+                        if (isRTCZCGQ11LM()) {
+                            if (/* FP1 firmware version  < 50) */ true) {
+                                if (logEnable) log.warn "${device.displayName} RTCZCGQ11LM tag 0x66 (${rawValue} )"
+                                presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(rawValue) )
+                            }
+                            else {
+                                device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                                if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                            }
+                        }
+                        break
+                    case 0x67 : // (103) FP1 monitoring_mode
+                        if (txtEnable) log.info "${device.displayName} monitoring_mode is  ${rawValue==0?'undirected':'left_right'} (${rawValue} )"
+                        device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
+                        break
+                    case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
+                        if (isRTCZCGQ11LM()) { // FP1
+                            device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
+                            if (txtEnable) log.info "${device.displayName} approach_distance is ${P1_APPROACH_DISTANCE_NAME(rawValue)} (${rawValue})"
+                        }
+                        else if (isRTCGQ13LM()) {
+                            // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
+                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                        }
+                        else if (isRTCGQ14LM()) {
+                            device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
+                            if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
+                        }
+                        else {
+                            if (logEnable) log.debug "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        }
+                        break
+                    case 0x6A :    // sensitivity
+                        device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                        if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                        break
+                    case 0x6B :    // LED
+                        device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
+                        if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
+                        break
+                    case 0x06 : // unknown
+                    case 0x0B : // unknown
+                    case 0x0C : // unknown
+                    case 0x66 : // unknown or pressure
+                    case 0x67 : // unknown
+                    case 0x6B : // unknown
+                    case 0x6E : // unknown
+                    case 0x6F : // unknown
+                    case 0x94 : // unknown
+                    case 0x9A : // unknown
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 1) * 2
+                break;
+            case 0x21 : // 2 bytes 16bitUINT
+                rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
+                switch (tag) {
+                    case 0x01 : // battery level
+                        voltageAndBatteryEvents( rawValue/1000 )
+                        break
+                    case 0x05 : // RSSI
+                        if (logEnable) log.trace "RSSI is ${rawValue} ? db"
+                        break
+                    case 0x0A : // Parent NWK
+                        if (logEnable) log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        break
+                    case 0x0B : // lightlevel 
+                        if (logEnable) log.trace "lightlevel is ${rawValue}"
+                        break
+                    case 0x65 : // illuminance or humidity
+                        illuminanceEventLux( rawValue )
+                        break
+                    case 0x04 : // unknown
+                    case 0x05 : // unknown
+                    case 0x08 : // unknown
+                    case 0x09 : // unknown
+                    case 0x66 : // pressure?
+                    case 0x6A : // unknown
+                    case 0x97 : // unknown
+                    case 0x98 : // unknown
+                    case 0x99 : // unknown
+                    case 0x9A : // unknown
+                    case 0x9B : // unknown
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        break
+                }
+                i = i + (2 + 2) * 2
+                break
+            case 0x0B : // 32-bit data
+            case 0x1B : // 32-bit bitmap
+            case 0x23 : // Unsigned 32-bit integer
+            case 0x2B : // Signed 32-bit integer
+                // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
+                if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 4 * 2    // TODO: check!
+                break
+            case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
+                switch (tag) {
+                    case 0x06 :    // LQI ?
+                        if (logEnable) log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        break
+                    default :
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
+                        break
+                }
+                i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
+                break;
+            case 0x0C : // 40-bit data
+            case 0x1C : // 40-bit bitmap
+            case 0x24 : // Unsigned 40-bit integer
+            case 0x2C : // Signed 40-bit integer
+                if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 5 * 2    // TODO: check 40 or 48 bits ??
+                break
+            case 0x0D : // 48-bit data
+            case 0x1D : // 48-bit bitmap
+            case 0x25 : // Unsigned 48-bit integer
+            case 0x2D : // Signed 48-bit integer
+                // TODO: Zcl48BitUint tag == 0x9a ?
+                // TODO: Zcl64BitUint tag == 0x07 ?
+                if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                i = i + 2 + 6 * 2    // TODO: check 40 or 48 bits ??
+                break
+            // TODO: Zcl16BitInt tag == 0x64 -> temperature
+            // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
+            // https://github.com/SwoopX/deconz-rest-plugin/blob/1c09f60eb2001fef790450e70a142180e9494aa4/general.xml
+            default : 
+                if (logEnable) log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
+                i = i + 1   // !!!
+                break
+        } // switch dataType
+	} // for all tags in valueHex 
+}
+
                      
 private parseBatteryFF01( valueHex ) {
 	def MsgLength = valueHex.size()
@@ -598,6 +809,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    //if (fullInit == true || state.lastBattery == null) state.lastBattery = "0 0 0"
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
@@ -653,202 +865,8 @@ def setMotion( mode ) {
     }
 }
 
-def decodeXiaomiStruct ( description )
-{
-    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-	def MsgLength = valueHex.size()
-    
-    if (logEnable) log.trace "decodeXiaomiStruct len = ${MsgLength} valueHex = ${valueHex}"
-   	for (int i = 2; i < (MsgLength-3); ) {
-        def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
-        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
-        def rawValue = 0
-        // value: 0121=F50B 0328=1D 0421=0000 0521=0100 0821=0501 0A21=4F41 0C20=01 1320=00 1420=00 6410=00 6521=1900 6920=05 6A20=03 6B20=01"
-        switch (dataType) {
-            case 0x08 : // 8 bit data
-            case 0x10 : // 1 byte boolean
-            case 0x18 : // 8-bit bitmap
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
-                    case 0x64 :    // on/off
-                        if (logEnable) log.trace "on/off is ${rawValue}"
-                        break
-                    case 0x9b :    // consumer connected
-                        if (logEnable) log.trace "consumer connected is ${rawValue}"
-                        break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (2 + 1) * 2
-                break;
-            case 0x28 : // 1 byte 8 bit signed int
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
-                    case 0x03 :    // device temperature
-                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
-                        temperatureEvent( rawValue )
-                        break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (2 + 1) * 2
-                break;
-            case 0x20 : // 1 byte unsigned int
-            case 0x30 : // 8-bit enumeration
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
-                    case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
-                        if (logEnable) log.trace "lift % or gas density is ${rawValue}"
-                        break
-                    case 0x65 :    // (101) FP1 presence
-                        if (isRTCZCGQ11LM()) { // FP1
-                            if (txtEnable) log.info "${device.displayName} presence is  ${rawValue==0?'not present':'present'} (${rawValue} )"
-                            // TODO ! sent presence (present/not present) event !
-                        }
-                        else {
-                            if (logEnable) log.trace "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
-                        }
-                        break
-                    case 0x66 :    // (102)    FP1 
-                        if (isRTCZCGQ11LM()) {
-                            if (/* FP1 firmware version  < 50) */ true) {
-                                if (txtEnable) log.info "${device.displayName} presence is  ${FP1_PRESENCE_EVENT_TYPE_NAME(rawValue)} (${rawValue} )"
-                                // TODO ! sent presence event (enter, leave, ..... )!
-                            }
-                            else {
-                                device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                                if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
-                            }
-                        }
-                        break
-                    case 0x67 : // (103) FP1 monitoring_mode
-                         if (txtEnable) log.info "${device.displayName} monitoring_mode is  ${rawValue==0?'undirected':'left_right'} (${rawValue} )"
-                         // TODO ! sent monitoring_mode (0: 'undirected', 1: 'left_right' event !
-                        break
-                    case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
-                        if (isRTCZCGQ11LM()) { // FP1
-                            // payload.approach_distance = {0: 'far', 1: 'medium', 2: 'near'}[value];
-                            // TODO !! make approach_distance Preference parameter !
-                        }
-                        else if (isRTCGQ13LM()) {
-                            // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
-                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
-                        }
-                        else if (isRTCGQ14LM()) {
-                            device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
-                            if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
-                        }
-                        else {
-                            if (logEnable) log.debug "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        }
-                        break
-                    case 0x6A :    // sensitivity
-                        device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                        if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
-                        break
-                    case 0x6B :    // LED
-                        device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
-                        if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
-                        break
-                    case 0x06 : // unknown
-                    case 0x0B : // unknown
-                    case 0x0C : // unknown
-                    case 0x66 : // unknown or pressure
-                    case 0x67 : // unknown
-                    case 0x6B : // unknown
-                    case 0x6E : // unknown
-                    case 0x6F : // unknown
-                    case 0x94 : // unknown
-                    case 0x9A : // unknown
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (2 + 1) * 2
-                break;
-            case 0x21 : // 2 bytes 16bitUINT
-                rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
-                switch (tag) {
-                    case 0x01 : // battery level
-                        voltageAndBatteryEvents( rawValue/1000 )
-                        break
-                    case 0x05 : // RSSI
-                        if (logEnable) log.trace "RSSI is ${rawValue} ? db"
-                        break
-                    case 0x0A : // Parent NWK
-                        if (logEnable) log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
-                        break
-                    case 0x0B : // lightlevel 
-                        if (logEnable) log.trace "lightlevel is ${rawValue}"
-                        break
-                    case 0x65 : // illuminance or humidity
-                        illuminanceEventLux( rawValue )
-                        break
-                    case 0x04 : // unknown
-                    case 0x05 : // unknown
-                    case 0x08 : // unknown
-                    case 0x09 : // unknown
-                    case 0x66 : // pressure?
-                    case 0x6A : // unknown
-                    case 0x97 : // unknown
-                    case 0x98 : // unknown
-                    case 0x99 : // unknown
-                    case 0x9A : // unknown
-                    case 0x9B : // unknown
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (2 + 2) * 2
-                break
-            case 0x0B : // 32-bit data
-            case 0x1B : // 32-bit bitmap
-            case 0x23 : // Unsigned 32-bit integer
-            case 0x2B : // Signed 32-bit integer
-                // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
-                if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 4 * 2    // TODO: check!
-                break
-            case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
-                switch (tag) {
-                    case 0x06 :    // LQI ?
-                        if (logEnable) log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
-                        break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
-                        break
-                }
-                i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
-                break;
-            case 0x0C : // 40-bit data
-            case 0x1C : // 40-bit bitmap
-            case 0x24 : // Unsigned 40-bit integer
-            case 0x2C : // Signed 40-bit integer
-                if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 5 * 2    // TODO: check 40 or 48 bits ??
-                break
-            case 0x0D : // 48-bit data
-            case 0x1D : // 48-bit bitmap
-            case 0x25 : // Unsigned 48-bit integer
-            case 0x2D : // Signed 48-bit integer
-                // TODO: Zcl48BitUint tag == 0x9a ?
-                // TODO: Zcl64BitUint tag == 0x07 ?
-                if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 6 * 2    // TODO: check 40 or 48 bits ??
-                break
-            // TODO: Zcl16BitInt tag == 0x64 -> temperature
-            // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
-            // https://github.com/SwoopX/deconz-rest-plugin/blob/1c09f60eb2001fef790450e70a142180e9494aa4/general.xml
-            default : 
-                if (logEnable) log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
-                i = i + 1   // !!!
-                break
-        } // switch dataType
-	} // for all tags in valueHex 
-}
+
+// state.lastBattery = "0 0 0"
 
 
 def test( description ) {
@@ -857,7 +875,7 @@ def test( description ) {
     //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
    //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
     def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-    decodeXiaomiStruct(xx)
+    decodeAqaraStruct(xx)
 }
 
 
