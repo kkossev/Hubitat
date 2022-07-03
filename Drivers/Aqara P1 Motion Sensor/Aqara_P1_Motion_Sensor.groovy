@@ -18,12 +18,12 @@
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
- * ver. 1.1.2 2022-07-02 kkossev  - (test branch) - PowerSource presence polling
+ * ver. 1.1.2 2022-07-03 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
  *
 */
 
 def version() { "1.1.2" }
-def timeStamp() {"2022/07/01 10:59 PM"}
+def timeStamp() {"2022/07/03 2:42 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -96,8 +96,8 @@ metadata {
 @Field static final Integer defaultPollingInterval = 3600
 
 def isRTCGQ13LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
-def isRTCGQ14LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac02']) }     // Aqara P1 motion sensor (LED control)
-def isRTCZCGQ11LM() { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac01']) }     // Aqara FP1 Presence sensor (microwave radar)
+def isRTCGQ14LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }    // Aqara P1 motion sensor (LED control)
+def isRTCZCGQ11LM() { if (debug) return true else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }    // Aqara FP1 Presence sensor (microwave radar)
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -209,7 +209,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
                 device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
                 if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             }
-            else if (isRTCZCGQ11LM()) {
+            else if (isRTCZCGQ11LM()) { // FP1
                 def value = safeToInt(it.value)
                 if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
                 device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )
@@ -347,7 +347,7 @@ def decodeAqaraStruct( description )
                     case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
                         if (isRTCZCGQ11LM()) { // FP1
                             device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
-                            if (txtEnable) log.info "${device.displayName} approach_distance is ${P1_APPROACH_DISTANCE_NAME(rawValue)} (${rawValue})"
+                            if (txtEnable) log.info "${device.displayName} approach_distance is ${FP1_APPROACH_DISTANCE_NAME(rawValue)} (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
                             // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
@@ -373,9 +373,6 @@ def decodeAqaraStruct( description )
                     case 0x06 : // unknown
                     case 0x0B : // unknown
                     case 0x0C : // unknown
-                    case 0x66 : // unknown or pressure
-                    case 0x67 : // unknown
-                    case 0x6B : // unknown
                     case 0x6E : // unknown
                     case 0x6F : // unknown
                     case 0x94 : // unknown
@@ -408,7 +405,6 @@ def decodeAqaraStruct( description )
                     case 0x05 : // unknown
                     case 0x08 : // unknown
                     case 0x09 : // unknown
-                    case 0x66 : // pressure?
                     case 0x6A : // unknown
                     case 0x97 : // unknown
                     case 0x98 : // unknown
@@ -820,8 +816,15 @@ void initializeVars( boolean fullInit = false ) {
 
 }
 
+def aqaraBlackMagic() {
+    ArrayList<String> cmd = []
+    cmd += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}", "delay 50", ]
+    sendZigbeeCommands(cmd)
+}
+
 def installed() {
     log.info "${device.displayName} installed() ${device.getName()} model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+    aqaraBlackMagic()
 }
 
 def configure(boolean fullInit = true ) {
