@@ -18,12 +18,12 @@
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
- * ver. 1.1.2 2022-07-03 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
+ * ver. 1.1.2 2022-07-04 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
  *
 */
 
 def version() { "1.1.2" }
-def timeStamp() {"2022/07/03 2:42 PM"}
+def timeStamp() {"2022/07/04 6:45 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -144,7 +144,7 @@ def parse(String description) {
                 if (logEnable) log.info "${device.displayName} Applicaiton version is ${it.value}"
             }
             else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
-                if (txtEnable) log.info "${device.displayName} device ${it.value} button was pressed "
+                if (txtEnable) log.info "${device.displayName} (parse) device ${it.value} button was pressed "
             }
             else if (descMap.cluster == "FCC0") {    // Aqara P1
                 parseAqaraClusterFCC0( description, descMap, it )
@@ -180,7 +180,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     switch (it.attrId) {
         case "0005" :
-            if (logEnable) log.info "${device.displayName} device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
+            if (logEnable) log.info "${device.displayName} (parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
             break
         case "0064" :
             if (txtEnable) log.info "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
@@ -816,15 +816,8 @@ void initializeVars( boolean fullInit = false ) {
 
 }
 
-def aqaraBlackMagic() {
-    ArrayList<String> cmd = []
-    cmd += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}", "delay 50", ]
-    sendZigbeeCommands(cmd)
-}
-
 def installed() {
     log.info "${device.displayName} installed() ${device.getName()} model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
-    aqaraBlackMagic()
 }
 
 def configure(boolean fullInit = true ) {
