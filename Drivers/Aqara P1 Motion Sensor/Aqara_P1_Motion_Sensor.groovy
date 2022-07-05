@@ -64,9 +64,9 @@ metadata {
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                 // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"          // Aqara precision motion sensor
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"     // Aqara precision motion sensor
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara Motion Sensor RTCGQ12LM"                    // RTCGQ12LM
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Presence Sensor RTCZCGQ11LM"            // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi presence sensor RTCGQ11LM"   // 
         
     }
@@ -84,8 +84,10 @@ metadata {
                 input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
             }
             if (isRTCZCGQ11LM()) { // FP1
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: 0, options: [1:"far", 2:"medium", 3:"near" ])    // TODO check defaultValue !
-                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // TODO check defaultValue !
+                // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: 0, options: [1:"far", 2:"medium", 3:"near" ])    // 'medium'is default?
+                // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // Undirected is default?
             }
             input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
         }
@@ -212,7 +214,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             else if (isRTCZCGQ11LM()) { // FP1
                 def value = safeToInt(it.value)
                 if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
-                device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )
+                device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
             else {
                 if (logEnable) log.warn "${device.displayName} Received unknown device report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -255,7 +257,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
             def value = safeToInt(it.value)
-            device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )
+            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             if (txtEnable) log.info "${device.displayName} <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0152" : // LED configuration
@@ -297,7 +299,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (2 + 1) * 2
+                i = i + (1 + 2) * 2
                 break;
             case 0x28 : // 1 byte 8 bit signed int
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
@@ -310,7 +312,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (2 + 1) * 2
+                i = i + (1 + 2) * 2
                 break;
             case 0x20 : // 1 byte unsigned int
             case 0x30 : // 8-bit enumeration
@@ -346,7 +348,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
                         if (isRTCZCGQ11LM()) { // FP1
-                            device.updateSetting( "approach_distance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
+                            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
                             if (txtEnable) log.info "${device.displayName} approach_distance is ${FP1_APPROACH_DISTANCE_NAME(rawValue)} (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
@@ -381,7 +383,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (2 + 1) * 2
+                i = i + (1 + 2) * 2
                 break;
             case 0x21 : // 2 bytes 16bitUINT
                 rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
@@ -415,7 +417,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (2 + 2) * 2
+                i = i + (1 + 3) * 2
                 break
             case 0x0B : // 32-bit data
             case 0x1B : // 32-bit bitmap
@@ -423,7 +425,7 @@ def decodeAqaraStruct( description )
             case 0x2B : // Signed 32-bit integer
                 // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
                 if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 4 * 2    // TODO: check!
+                i = i + (1 + 4) * 2    // TODO: check!
                 break
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
                 switch (tag) {
@@ -434,14 +436,14 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
                         break
                 }
-                i = i + (6 + 1) * 2    // TODO: check 40 or 48 bits ??
+                i = i + (1 + 6) * 2
                 break;
             case 0x0C : // 40-bit data
             case 0x1C : // 40-bit bitmap
             case 0x24 : // Unsigned 40-bit integer
             case 0x2C : // Signed 40-bit integer
                 if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 5 * 2    // TODO: check 40 or 48 bits ??
+                i = i + (1 + 6) * 2
                 break
             case 0x0D : // 48-bit data
             case 0x1D : // 48-bit bitmap
@@ -450,14 +452,14 @@ def decodeAqaraStruct( description )
                 // TODO: Zcl48BitUint tag == 0x9a ?
                 // TODO: Zcl64BitUint tag == 0x07 ?
                 if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + 2 + 6 * 2    // TODO: check 40 or 48 bits ??
+                i = i + (1 + 6) * 2
                 break
             // TODO: Zcl16BitInt tag == 0x64 -> temperature
             // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
             // https://github.com/SwoopX/deconz-rest-plugin/blob/1c09f60eb2001fef790450e70a142180e9494aa4/general.xml
             default : 
                 if (logEnable) log.warn "unknown dataType 0x${valueHex[(i+2)..(i+3)]} at index ${i}"
-                i = i + 1   // !!!
+                i = i + 1*2
                 break
         } // switch dataType
 	} // for all tags in valueHex 
@@ -791,6 +793,19 @@ def updated() {
         }
     }
     //
+    if (isRTCZCGQ11LM()) { // FP1
+        if (settings?.approachDistance != null && settings?.approachDistance != 0) {    // [1:"far", 2:"medium", 3:"near" ]
+            value = safeToInt( approachDistance )
+            if (settings?.logEnable) log.trace "${device.displayName} setting approachDistance to ${approachDistance}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
+            value = safeToInt( monitoringMode )
+            if (settings?.logEnable) log.trace "${device.displayName} setting monitoringMode to ${monitoringMode}"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+    }
+    //
     if ( cmds != null ) {
         sendZigbeeCommands( cmds )     
     }
@@ -868,9 +883,9 @@ def setMotion( mode ) {
 def test( description ) {
 	List<String> cmds = []
     //
-    //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+    def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
    //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-    def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+    //def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
     decodeAqaraStruct(xx)
 }
 
