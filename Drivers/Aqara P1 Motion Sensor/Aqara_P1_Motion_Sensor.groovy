@@ -16,14 +16,15 @@
  *      Hubitat, SmartThings, ZHA, Zigbee2MQTT, deCONZ and all other home automation communities for all the shared information.
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
- * ver. 1.1.0 2022-06-30 kkossev  - (test branch) - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
+ * ver. 1.1.0 2022-06-30 kkossev  - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
  * ver. 1.1.2 2022-07-04 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
+ * ver. 1.1.3 2022-07-04 kkossev  - (test branch) - FP1 approachDistance and monitoringMode parameters update
  *
 */
 
-def version() { "1.1.2" }
-def timeStamp() {"2022/07/04 6:45 PM"}
+def version() { "1.1.3" }
+def timeStamp() {"2022/07/05 7:42 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
