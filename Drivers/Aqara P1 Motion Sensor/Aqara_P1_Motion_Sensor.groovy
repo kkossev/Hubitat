@@ -20,16 +20,19 @@
  * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
  * ver. 1.1.2 2022-07-04 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
  * ver. 1.1.3 2022-07-04 kkossev  - (test branch) - FP1 approachDistance and monitoringMode parameters update
+ * ver. 1.1.4 2022-07-07 kkossev  - (test branch) - aqaraBlackMagic()
  *
 */
 
-def version() { "1.1.3" }
-def timeStamp() {"2022/07/05 7:42 PM"}
+def version() { "1.1.4" }
+def timeStamp() {"2022/07/07 9:59 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
+import hubitat.helper.HexUtils
+
 
 @Field static final Boolean debug = false
 
@@ -514,6 +517,7 @@ def parseZDOcommand( Map descMap ) {
             break
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            aqaraBlackMagic()
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -605,6 +609,36 @@ def parseZHAcommand( Map descMap) {
             if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
 }
+
+
+def parseSimpleDescriptorResponse(Map descMap) {
+    log.info "Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+    log.info "Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
+    def inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
+    def inputClusterList = ""
+    for (int i in 1..inputClusterCount) {
+        inputClusterList += descMap.data[13+(i-1)*2] + descMap.data[12+(i-1)*2] + ","
+    }
+    inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
+    log.info "Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
+    if (getDataValue("inClusters") != inputClusterList)  {
+        log.warn "inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
+        updateDataValue("inClusters", inputClusterList)
+    }
+    
+    def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12+inputClusterCount*2])
+    def outputClusterList = ""
+    for (int i in 1..outputClusterCount) {
+        outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+    }
+    outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
+    log.info "Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
+    if (getDataValue("outClusters") != outputClusterList)  {
+        log.warn "outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
+        updateDataValue("outClusters", outputClusterList)
+    }
+}
+
 
 
 
@@ -879,15 +913,55 @@ def setMotion( mode ) {
 
 
 // state.lastBattery = "0 0 0"
+String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) {
+    return integerToHexString(value.intValue(), minBytes, reverse=reverse)
+}
+
+String integerToHexString(Integer value, Integer minBytes, boolean reverse=false) {
+    if(reverse == true) {
+        return HexUtils.integerToHexString(value, minBytes).split("(?<=\\G..)").reverse().join()
+    } else {
+        return HexUtils.integerToHexString(value, minBytes)
+    }
+    
+}
+
+
+ArrayList<String> zigbeeWriteHexStringAttribute(Integer cluster, Integer attributeId, Integer dataType, String value, Map additionalParams = [:], int delay = 209) {
+    log.debug "zigbeeWriteBigIntegerAttribute()"
+    String mfgCode = ""
+    if(additionalParams.containsKey("mfgCode")) {
+        //mfgCode = " {${integerToHexString(HexUtils.hexStringToInt(additionalParams.get("mfgCode")), 2, reverse=true)}}"
+        mfgCode = " 0x115F"
+    }
+    String wattrArgs = "0x${device.deviceNetworkId} 0x01 0x${HexUtils.integerToHexString(cluster, 2)} " + 
+                       "0x${HexUtils.integerToHexString(attributeId, 2)} " + 
+                       "0x${HexUtils.integerToHexString(dataType, 1)} " + 
+                       "{${value.split("(?<=\\G..)").reverse().join()}}" + 
+                       "$mfgCode"
+    ArrayList<String> cmd = ["he wattr $wattrArgs", "delay $delay"]
+    
+    log.debug "zigbeeWriteBigIntegerAttribute cmd=$cmd"
+    return cmd
+}
+
+
+
+def aqaraBlackMagic() {
+    List<String> cmds = []
+    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])
+    sendZigbeeCommands( cmds )       
+}
 
 
 def test( description ) {
 	List<String> cmds = []
     //
-    def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
+    //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
    //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
     //def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-    decodeAqaraStruct(xx)
+    //decodeAqaraStruct(xx)
+    aqaraBlackMagic()
 }
 
 
