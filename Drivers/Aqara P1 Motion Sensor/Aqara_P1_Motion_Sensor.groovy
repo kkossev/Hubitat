@@ -17,15 +17,15 @@
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
- * ver. 1.1.1 2022-07-01 kkossev  - (test branch) - no any commands are sent immediately after pairing!
- * ver. 1.1.2 2022-07-04 kkossev  - (test branch) - PowerSource presence polling; FP1 pars
- * ver. 1.1.3 2022-07-04 kkossev  - (test branch) - FP1 approachDistance and monitoringMode parameters update
- * ver. 1.1.4 2022-07-07 kkossev  - (test branch) - aqaraBlackMagic()
+ * ver. 1.1.1 2022-07-01 kkossev  - (dev branch) - no any commands are sent immediately after pairing!
+ * ver. 1.1.2 2022-07-04 kkossev  - (dev branch) - PowerSource presence polling; FP1 pars
+ * ver. 1.1.3 2022-07-04 kkossev  - (dev branch) - FP1 approachDistance and monitoringMode parameters update
+ * ver. 1.1.4 2022-07-08 kkossev  - (test branch) - aqaraBlackMagic()
  *
 */
 
 def version() { "1.1.4" }
-def timeStamp() {"2022/07/07 9:59 AM"}
+def timeStamp() {"2022/07/08 10:47 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -191,13 +191,13 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0064" :
             if (txtEnable) log.info "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
-        case "0065" :    // illuminance only? for RTCGQ12LM RTCGQ14LM
+        case "0065" :
             def value = safeToInt(it.value)
             if (isRTCZCGQ11LM()) { // FP1
                 if (txtEnable) log.info "${device.displayName} presence is  ${value==0? 'not present':'present'} (${value} )"
                 presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
             }
-            else {
+            else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
                 illuminanceEventLux( value )
                 if (txtEnable) log.info "${device.displayName} <b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             }
@@ -231,7 +231,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (txtEnable) log.info "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0102" : // Retrigger interval
-            def value = safeToInt(it.value)
+            def value = Integer.parseInt(it.value, 16)
             device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
             if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
@@ -291,37 +291,21 @@ def decodeAqaraStruct( description )
             case 0x08 : // 8 bit data
             case 0x10 : // 1 byte boolean
             case 0x18 : // 8-bit bitmap
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
-                    case 0x64 :    // on/off
-                        if (logEnable) log.trace "on/off is ${rawValue}"
-                        break
-                    case 0x9b :    // consumer connected
-                        if (logEnable) log.trace "consumer connected is ${rawValue}"
-                        break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                        break
-                }
-                i = i + (1 + 2) * 2
-                break;
+            case 0x20 : // 1 byte unsigned int
             case 0x28 : // 1 byte 8 bit signed int
+            case 0x30 : // 8-bit enumeration
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x03 :    // device temperature
                         //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
                         temperatureEvent( rawValue )
                         break
-                    default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                    case 0x64 :    // on/off
+                        if (logEnable) log.trace "on/off is ${rawValue}"
                         break
-                }
-                i = i + (1 + 2) * 2
-                break;
-            case 0x20 : // 1 byte unsigned int
-            case 0x30 : // 8-bit enumeration
-                rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
-                switch (tag) {
+                    case 0x9b :    // consumer connected
+                        if (logEnable) log.trace "consumer connected is ${rawValue}"
+                        break
                     case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
                         if (logEnable) log.trace "lift % or gas density is ${rawValue}"
                         break
@@ -336,29 +320,29 @@ def decodeAqaraStruct( description )
                         break
                     case 0x66 :    // (102)    FP1 
                         if (isRTCZCGQ11LM()) {
-                            if (/* FP1 firmware version  < 50) */ true) {
+                            if (/* FP1 firmware version  < 50) */ false ) {
                                 if (logEnable) log.warn "${device.displayName} RTCZCGQ11LM tag 0x66 (${rawValue} )"
                                 presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(rawValue) )
                             }
                             else {
                                 device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                                if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                                if (txtEnable) log.info "${device.displayName} (tag 0x66) sensitivity is <b>${P1_SENSITIVITY_NAME(rawValue)}</b> (${rawValue})"
                             }
                         }
                         break
                     case 0x67 : // (103) FP1 monitoring_mode
-                        if (txtEnable) log.info "${device.displayName} monitoring_mode is  ${rawValue==0?'undirected':'left_right'} (${rawValue} )"
+                        if (txtEnable) log.info "${device.displayName} monitoring_mode is <b> ${rawValue==0?'undirected':'left_right'}</b> (${rawValue} )"
                         device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
                         break
-                    case 0x69 : // (105) duration (also charging for lumi.switch.n2aeu1)
+                    case 0x69 : // (105) 
                         if (isRTCZCGQ11LM()) { // FP1
                             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
-                            if (txtEnable) log.info "${device.displayName} approach_distance is ${FP1_APPROACH_DISTANCE_NAME(rawValue)} (${rawValue})"
+                            if (txtEnable) log.info "${device.displayName} approach_distance is <b>${FP1_APPROACH_DISTANCE_NAME(rawValue)}</b> (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
                             // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                            if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                            if (txtEnable) log.info "${device.displayName} (tag 0x69) sensitivity is <b>${P1_SENSITIVITY_NAME(rawValue)}</b> (${rawValue})"
                         }
                         else if (isRTCGQ14LM()) {
                             device.updateSetting( "motionRetriggerInterval",  [value:rawValue.toString(), type:"number"] )
@@ -370,7 +354,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6A :    // sensitivity
                         device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                        if (txtEnable) log.info "${device.displayName} sensitivity is ${P1_SENSITIVITY_NAME(rawValue)} (${rawValue})"
+                        if (txtEnable) log.info "${device.displayName} (tag 0x6A) sensitivity is <b>${P1_SENSITIVITY_NAME(rawValue)}</b> (${rawValue})"
                         break
                     case 0x6B :    // LED
                         device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
@@ -387,7 +371,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (1 + 2) * 2
+                i = i + (1 + 1 + 1) * 2
                 break;
             case 0x21 : // 2 bytes 16bitUINT
                 rawValue = Integer.parseInt((valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]),16)
@@ -421,7 +405,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
-                i = i + (1 + 3) * 2
+                i = i + (1 + 1 + 2) * 2
                 break
             case 0x0B : // 32-bit data
             case 0x1B : // 32-bit bitmap
@@ -429,7 +413,7 @@ def decodeAqaraStruct( description )
             case 0x2B : // Signed 32-bit integer
                 // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
                 if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + (1 + 4) * 2    // TODO: check!
+                i = i + (1 + 1 + 4) * 2    // TODO: check!
                 break
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
                 switch (tag) {
@@ -440,14 +424,14 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
                         break
                 }
-                i = i + (1 + 6) * 2
+                i = i + (1 + 1 + 5) * 2
                 break;
             case 0x0C : // 40-bit data
             case 0x1C : // 40-bit bitmap
             case 0x24 : // Unsigned 40-bit integer
             case 0x2C : // Signed 40-bit integer
                 if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + (1 + 6) * 2
+                i = i + (1 + 1 + 5) * 2
                 break
             case 0x0D : // 48-bit data
             case 0x1D : // 48-bit bitmap
@@ -456,7 +440,7 @@ def decodeAqaraStruct( description )
                 // TODO: Zcl48BitUint tag == 0x9a ?
                 // TODO: Zcl64BitUint tag == 0x07 ?
                 if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
-                i = i + (1 + 6) * 2
+                i = i + (1 + 1 + 6) * 2
                 break
             // TODO: Zcl16BitInt tag == 0x64 -> temperature
             // TODO: ZclSingleFloat tag == 0x95 (consumption) tag == 0x96 (voltage) tag == 0x97 (current) tag == 0x98 (power)
@@ -517,7 +501,7 @@ def parseZDOcommand( Map descMap ) {
             break
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
-            aqaraBlackMagic()
+            //aqaraBlackMagic()
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -867,7 +851,8 @@ void initializeVars( boolean fullInit = false ) {
 }
 
 def installed() {
-    log.info "${device.displayName} installed() ${device.getName()} model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+    log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+    runIn( 33, aqaraBlackMagic)
 }
 
 def configure(boolean fullInit = true ) {
@@ -876,6 +861,7 @@ def configure(boolean fullInit = true ) {
     initializeVars( fullInit )
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
     log.warn "${device.displayName} <b>if no more logs, please pair the device again to HE!</b>"
+    runIn( 30, aqaraBlackMagic, [overwrite: true])
 }
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
@@ -949,7 +935,26 @@ ArrayList<String> zigbeeWriteHexStringAttribute(Integer cluster, Integer attribu
 
 def aqaraBlackMagic() {
     List<String> cmds = []
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])
+
+    if (device.getDataValue('model')=='lumi.motion.agl02') {             // RTCGQ12LM Aqara T1 human body movement and illuminance sensor
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)     // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)
+    }
+    else if (isRTCGQ13LM()) {         // Aqara high precision motion sensor
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isRTCGQ14LM()) {    // Aqara P1 human body movement and illuminance sensor
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C, 0x0152], [mfgCode: 0x115F], delay=200)
+        //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])    // P1 : octets string bytes are reversed ! ( in WireShark: 54:01:09 ..... 32:61 )
+    }
+    else if (isRTCZCGQ11LM()) {  // Aqara presence detector FP1 
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
+    }
+    else {
+        if (logEnable) log.warn "${device.displayName} unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
+    }    
+    
     sendZigbeeCommands( cmds )       
 }
 
@@ -959,7 +964,11 @@ def test( description ) {
     //
     //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
    //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-    //def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+   // def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
+    
+    
+   def xx = "FP1 debug log (SmartThings): ****************, value: 8309281F05210100082135010A2100000C20141020011220006520016620036720006820006920016A20016B2003" 
+    
     //decodeAqaraStruct(xx)
     aqaraBlackMagic()
 }
