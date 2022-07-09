@@ -1,10 +1,10 @@
 {
   "packageName": "Aqara P1 Motion Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.1.4",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-06-24",
-  "releaseNotes": "ver 1.0.0 2022-06-24 - first release version\n",
+  "dateReleased": "2022-07-09",
+  "releaseNotes": "1.1.4 2022-07-08 - PowerSource presence polling; FP1 support improvements\n1.1.1 2022-07-01 - added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) inital support\n1.0.0 2022-06-24 - first release version\n",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Aqara%20P1%20Motion%20Sensor/README.MD",
   "communityLink": "https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/63?u=kkossev",
   "drivers": [

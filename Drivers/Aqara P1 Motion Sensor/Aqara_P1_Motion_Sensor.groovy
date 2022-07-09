@@ -17,10 +17,10 @@
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
- * ver. 1.1.1 2022-07-01 kkossev  - (dev branch) - no any commands are sent immediately after pairing!
- * ver. 1.1.2 2022-07-04 kkossev  - (dev branch) - PowerSource presence polling; FP1 pars
- * ver. 1.1.3 2022-07-04 kkossev  - (dev branch) - FP1 approachDistance and monitoringMode parameters update
- * ver. 1.1.4 2022-07-08 kkossev  - (test branch) - aqaraBlackMagic()
+ * ver. 1.1.1 2022-07-01 kkossev  - no any commands are sent immediately after pairing!
+ * ver. 1.1.2 2022-07-04 kkossev  - PowerSource presence polling; FP1 pars
+ * ver. 1.1.3 2022-07-04 kkossev  - FP1 approachDistance and monitoringMode parameters update
+ * ver. 1.1.4 2022-07-08 kkossev  - aqaraBlackMagic()
  *
 */
 
