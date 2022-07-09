@@ -17,15 +17,18 @@
  * 
  * ver. 1.0.0 2022-06-24 kkossev  - first test version
  * ver. 1.1.0 2022-06-30 kkossev  - decodeAqaraStruct; added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) parsing
- * ver. 1.1.1 2022-07-01 kkossev  - (dev branch) - no any commands are sent immediately after pairing!
- * ver. 1.1.2 2022-07-04 kkossev  - (dev branch) - PowerSource presence polling; FP1 pars
- * ver. 1.1.3 2022-07-04 kkossev  - (dev branch) - FP1 approachDistance and monitoringMode parameters update
- * ver. 1.1.4 2022-07-08 kkossev  - (test branch) - aqaraBlackMagic()
+ * ver. 1.1.1 2022-07-01 kkossev  - no any commands are sent immediately after pairing!
+ * ver. 1.1.2 2022-07-04 kkossev  - PowerSource presence polling; FP1 pars
+ * ver. 1.1.3 2022-07-04 kkossev  - FP1 approachDistance and monitoringMode parameters update
+ * ver. 1.1.4 2022-07-08 kkossev  - aqaraBlackMagic()
+ * ver. 1.1.5 2022-07-09 kkossev  - (test branch) -  when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
+ *     TODO: Aqara P1: 
+ * 
  *
 */
 
-def version() { "1.1.4" }
-def timeStamp() {"2022/07/08 10:47 PM"}
+def version() { "1.1.5" }
+def timeStamp() {"2022/07/09 2:28 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -102,8 +105,8 @@ metadata {
 @Field static final Integer defaultPollingInterval = 3600
 
 def isRTCGQ13LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
-def isRTCGQ14LM()   { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }    // Aqara P1 motion sensor (LED control)
-def isRTCZCGQ11LM() { if (debug) return true else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }    // Aqara FP1 Presence sensor (microwave radar)
+def isRTCGQ14LM()   { if (debug) return true else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }    // Aqara P1 motion sensor (LED control)
+def isRTCZCGQ11LM() { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }    // Aqara FP1 Presence sensor (microwave radar)
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -281,7 +284,7 @@ def decodeAqaraStruct( description )
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
 	def MsgLength = valueHex.size()
     
-    if (logEnable) log.trace "decodeAqaraStruct len = ${MsgLength} valueHex = ${valueHex}"
+    if (logEnable) log.debug "decodeAqaraStruct len = ${MsgLength} valueHex = ${valueHex}"
    	for (int i = 2; i < (MsgLength-3); ) {
         def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
         def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
@@ -301,13 +304,13 @@ def decodeAqaraStruct( description )
                         temperatureEvent( rawValue )
                         break
                     case 0x64 :    // on/off
-                        if (logEnable) log.trace "on/off is ${rawValue}"
+                        if (logEnable) log.debug "on/off is ${rawValue}"
                         break
                     case 0x9b :    // consumer connected
-                        if (logEnable) log.trace "consumer connected is ${rawValue}"
+                        if (logEnable) log.debug "consumer connected is ${rawValue}"
                         break
                     case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
-                        if (logEnable) log.trace "lift % or gas density is ${rawValue}"
+                        if (logEnable) log.debug "lift % or gas density is ${rawValue}"
                         break
                     case 0x65 :    // (101) FP1 presence
                         if (isRTCZCGQ11LM()) { // FP1
@@ -315,7 +318,7 @@ def decodeAqaraStruct( description )
                             presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(rawValue) )  
                         }
                         else {
-                            if (logEnable) log.trace "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
+                            if (logEnable) log.debug "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
                         }
                         break
                     case 0x66 :    // (102)    FP1 
@@ -380,13 +383,13 @@ def decodeAqaraStruct( description )
                         voltageAndBatteryEvents( rawValue/1000 )
                         break
                     case 0x05 : // RSSI
-                        if (logEnable) log.trace "RSSI is ${rawValue} ? db"
+                        if (logEnable) log.debug "RSSI is ${rawValue} ? db"
                         break
                     case 0x0A : // Parent NWK
-                        if (logEnable) log.trace "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
+                        if (logEnable) log.debug "Parent NWK is ${valueHex[(i+6)..(i+7)] + valueHex[(i+4)..(i+5)]}"
                         break
                     case 0x0B : // lightlevel 
-                        if (logEnable) log.trace "lightlevel is ${rawValue}"
+                        if (logEnable) log.debug "lightlevel is ${rawValue}"
                         break
                     case 0x65 : // illuminance or humidity
                         illuminanceEventLux( rawValue )
@@ -418,7 +421,7 @@ def decodeAqaraStruct( description )
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
                 switch (tag) {
                     case 0x06 :    // LQI ?
-                        if (logEnable) log.trace "device LQI is ${valueHex[(i+4)..(i+14)]}"
+                        if (logEnable) log.debug "device LQI is ${valueHex[(i+4)..(i+14)]}"
                         break
                     default :
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
@@ -453,7 +456,7 @@ def decodeAqaraStruct( description )
 	} // for all tags in valueHex 
 }
 
-                     
+// called by parseAqaraAttributeFF01 (cluster "0000")
 private parseBatteryFF01( valueHex ) {
 	def MsgLength = valueHex.size()
    	for (int i = 0; i < (MsgLength-3); i+=2) {
@@ -476,13 +479,15 @@ private parseBatteryFF01( valueHex ) {
 		name: 'battery',
 		value: roundedPct,
 		unit: "%",
+        type:  isDigital == true ? "digital" : "physical",
 		isStateChange: true,
 		descriptionText: descText
 	]
+    state.lastBattery = roundedPct.toString()
 	return result
 }
 
-def voltageAndBatteryEvents( rawVolts )
+def voltageAndBatteryEvents( rawVolts, isDigital=false  )
 {
 	def minVolts = 2.5
 	def maxVolts = 3.0
@@ -490,8 +495,14 @@ def voltageAndBatteryEvents( rawVolts )
 	def roundedPct = Math.min(100, Math.round(pct * 100))
 	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
     if (txtEnable) log.info "${device.displayName} ${descText}"
-    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", isStateChange: true )
-    sendEvent(name: 'battery', value: roundedPct, unit: "%", isStateChange: true )
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", isStateChange: true )
+    sendBatteryEvent( roundedPct, isDigital )
+    state.lastBattery = roundedPct.toString()
+    //log.trace "set state.lastBattery = ${roundedPct.toString()}"
+}
+
+def sendBatteryEvent( roundedPct, isDigital=false ) {
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
 }
 
 def parseZDOcommand( Map descMap ) {
@@ -628,13 +639,13 @@ def parseSimpleDescriptorResponse(Map descMap) {
 
 def illuminanceEvent( rawLux ) {
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 def illuminanceEventLux( Integer lux ) {
     if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
+    sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
@@ -664,7 +675,7 @@ def presenceTypeEvent( String type ) {
     if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${type}</b>"
 }
 
-private handleMotion( Boolean motionActive ) {    
+private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
         def timeout = settings?.motionResetTimer ?: 30
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
@@ -681,10 +692,10 @@ private handleMotion( Boolean motionActive ) {
             return [:]   // do not process a second motion inactive event!
         }
     }
-	return getMotionResult(motionActive)
+	return getMotionResult(motionActive, isDigital)
 }
 
-def getMotionResult( Boolean motionActive ) {
+def getMotionResult( Boolean motionActive, isDigital=false ) {
 	def descriptionText = "Detected motion"
     if (!motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()} s."
@@ -697,6 +708,7 @@ def getMotionResult( Boolean motionActive ) {
 			name			: 'motion',
 			value			: motionActive ? 'active' : 'inactive',
             //isStateChange   : true,
+            type            : isDigital == true ? "digital" : "physical",
 			descriptionText : descriptionText
 	)
 }
@@ -708,6 +720,7 @@ def resetToMotionInactive() {
 			name : "motion",
 			value : "inactive",
 			isStateChange : true,
+            type:  "digital",
 			descriptionText : descText
 		)
         if (txtEnable) log.info "${device.displayName} ${descText}"
@@ -725,22 +738,53 @@ def getSecondsInactive() {
     }
 }
 
+def powerSourceEvent( state = null) {
+    if (state != null && state == 'unknown' ) {
+        sendEvent(name : "powerSource",	value : "unknown", descriptionText: "device is OFFLINE", type: "digital")
+    }
+    else if (isRTCZCGQ11LM()) {
+        sendEvent(name : "powerSource",	value : "dc", descriptionText: "device is back online", type: "digital")
+    }
+    else {
+        sendEvent(name : "powerSource",	value : "battery", descriptionText: "device is back online", type: "digital")
+    }
+}
+
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    sendEvent(name : "powerSource",	value : "battery" /*, isStateChange : false*/)
+    powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
+        //log.trace "device.currentValue('battery', true) = ${device.currentValue('battery', true)}"
+        if (device.currentValue('battery', true) == 0 ) {
+            if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
+                //log.trace "restoring battery level to ${safeToInt(state.lastBattery)}"
+                sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+            }
+        }
     }    
     state.notPresentCounter = 0    
 }
 
+// called every 60 minutes from pollPresence()
 def checkIfNotPresent() {
+    //log.trace "checkIfNotPresent()"
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter >= presenceCountTreshold) {
-            if (!(device.currentValue('powerSource', true) in ['unknown', '?'])) {
-    	        sendEvent(name: "powerSource", value: "unknown")
+            if (!(device.currentValue('powerSource', true) in ['unknown'])) {
+    	        powerSourceEvent("unknown")
                 if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
+            }
+            if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
+                handleMotion(false, isDigital=true)
+                if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
+            }
+            //log.trace "battery was ${safeToInt(device.currentValue('battery', true))}"
+            if (safeToInt(device.currentValue('battery', true)) != 0) {
+                //handleMotion(false) // duplicated event?
+                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
+                sendBatteryEvent( 0, isDigital=true )
             }
         }
     }
@@ -749,6 +793,7 @@ def checkIfNotPresent() {
     }
 }
 
+// check for device offline every 60 minutes
 def pollPresence() {
     if (logEnable) log.debug "${device.displayName} pollPresence()"
     checkIfNotPresent()
@@ -793,21 +838,21 @@ def updated() {
     if (isRTCGQ14LM()) {
         if (settings?.motionLED != null ) {
             value = safeToInt( motionLED )
-            if (settings?.logEnable) log.trace "${device.displayName} setting motionLED to ${motionLED}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionLED to ${motionLED}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0152, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
     if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
-            if (settings?.logEnable) log.trace "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
     if (isRTCGQ13LM() || isRTCGQ14LM() || isRTCZCGQ11LM()) {
         if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
             value = safeToInt( motionRetriggerInterval )
-            if (settings?.logEnable) log.trace "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
         }
     }
@@ -815,12 +860,12 @@ def updated() {
     if (isRTCZCGQ11LM()) { // FP1
         if (settings?.approachDistance != null && settings?.approachDistance != 0) {    // [1:"far", 2:"medium", 3:"near" ]
             value = safeToInt( approachDistance )
-            if (settings?.logEnable) log.trace "${device.displayName} setting approachDistance to ${approachDistance}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistance}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
         if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
             value = safeToInt( monitoringMode )
-            if (settings?.logEnable) log.trace "${device.displayName} setting monitoringMode to ${monitoringMode}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringMode}"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
@@ -839,7 +884,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    //if (fullInit == true || state.lastBattery == null) state.lastBattery = "0 0 0"
+    if (state.lastBattery == null) state.lastBattery = "0"
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
@@ -877,19 +922,19 @@ Double safeToDouble(val, Double defaultVal=0.0) {
 }
 
 void sendZigbeeCommands(List<String> cmds) {
-    if (logEnable) {log.trace "${device.displayName} sending ZigbeeCommands : ${cmds}"}
+    if (logEnable) {log.debug "${device.displayName} <b>sending</b> ZigbeeCommands : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
-
+// device Web UI command
 def setMotion( mode ) {
     switch (mode) {
         case "active" : 
-            handleMotion(true)
+            handleMotion(true, isDigital=true)
             break
         case "inactive" :
-            handleMotion(false)
+            handleMotion(false, isDigital=true)
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
@@ -898,7 +943,7 @@ def setMotion( mode ) {
 }
 
 
-// state.lastBattery = "0 0 0"
+
 String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) {
     return integerToHexString(value.intValue(), minBytes, reverse=reverse)
 }
