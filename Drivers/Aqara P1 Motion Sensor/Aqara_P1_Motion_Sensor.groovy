@@ -20,15 +20,15 @@
  * ver. 1.1.1 2022-07-01 kkossev  - no any commands are sent immediately after pairing!
  * ver. 1.1.2 2022-07-04 kkossev  - PowerSource presence polling; FP1 pars
  * ver. 1.1.3 2022-07-04 kkossev  - FP1 approachDistance and monitoringMode parameters update
- * ver. 1.1.4 2022-07-08 kkossev  - aqaraBlackMagic()
- * ver. 1.1.5 2022-07-09 kkossev  - (test branch) -  when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
- *     TODO: Aqara P1: 
+ * ver. 1.1.4 2022-07-08 kkossev  - aqaraReadAttributes()
+ * ver. 1.1.5 2022-07-09 kkossev  - (dev branch) -  when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
+ * ver. 1.1.6 2022-07-11 kkossev  - (test branch) - aqaraBlackMagic
  * 
  *
 */
 
-def version() { "1.1.5" }
-def timeStamp() {"2022/07/09 2:28 PM"}
+def version() { "1.1.6" }
+def timeStamp() {"2022/07/09 11:25 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -512,7 +512,8 @@ def parseZDOcommand( Map descMap ) {
             break
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
-            //aqaraBlackMagic()
+            aqaraBlackMagic()
+            //aqaraReadAttributes()
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -897,7 +898,8 @@ void initializeVars( boolean fullInit = false ) {
 
 def installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
-    runIn( 33, aqaraBlackMagic)
+    //runIn( 33, aqaraReadAttributes)
+    aqaraBlackMagic()
 }
 
 def configure(boolean fullInit = true ) {
@@ -906,7 +908,7 @@ def configure(boolean fullInit = true ) {
     initializeVars( fullInit )
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
     log.warn "${device.displayName} <b>if no more logs, please pair the device again to HE!</b>"
-    runIn( 30, aqaraBlackMagic, [overwrite: true])
+    runIn( 30, aqaraReadAttributes, [overwrite: true])
 }
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
@@ -978,7 +980,7 @@ ArrayList<String> zigbeeWriteHexStringAttribute(Integer cluster, Integer attribu
 
 
 
-def aqaraBlackMagic() {
+def aqaraReadAttributes() {
     List<String> cmds = []
 
     if (device.getDataValue('model')=='lumi.motion.agl02') {             // RTCGQ12LM Aqara T1 human body movement and illuminance sensor
@@ -1004,6 +1006,14 @@ def aqaraBlackMagic() {
 }
 
 
+def aqaraBlackMagic() {
+    List<String> cmds = []
+    
+    cmds += "he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}"
+
+    sendZigbeeCommands( cmds )      
+}
+
 def test( description ) {
 	List<String> cmds = []
     //
@@ -1015,6 +1025,7 @@ def test( description ) {
    def xx = "FP1 debug log (SmartThings): ****************, value: 8309281F05210100082135010A2100000C20141020011220006520016620036720006820006920016A20016B2003" 
     
     //decodeAqaraStruct(xx)
+    //aqaraReadAttributes()
     aqaraBlackMagic()
 }
 
