@@ -22,13 +22,13 @@
  * ver. 1.1.3 2022-07-04 kkossev  - FP1 approachDistance and monitoringMode parameters update
  * ver. 1.1.4 2022-07-08 kkossev  - aqaraReadAttributes()
  * ver. 1.1.5 2022-07-09 kkossev  - (dev branch) -  when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
- * ver. 1.1.6 2022-07-11 kkossev  - (test branch) - aqaraBlackMagic
+ * ver. 1.1.6 2022-07-12 kkossev  - (test branch) - aqaraBlackMagic
  * 
  *
 */
 
 def version() { "1.1.6" }
-def timeStamp() {"2022/07/09 11:25 PM"}
+def timeStamp() {"2022/07/12 7:27 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1008,8 +1008,9 @@ def aqaraReadAttributes() {
 
 def aqaraBlackMagic() {
     List<String> cmds = []
-    
+    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])
     cmds += "he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"    //, delay 50" 
 
     sendZigbeeCommands( cmds )      
 }
