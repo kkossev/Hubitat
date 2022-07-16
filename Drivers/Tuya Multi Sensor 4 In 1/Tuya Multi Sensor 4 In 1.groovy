@@ -19,13 +19,13 @@
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
  * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  * ver. 1.0.6 2022-07-10 kkossev  - (dev. branch) battery set to 0% and motion inactive when the device goes OFFLINE;
- * ver. 1.0.7 2022-07-16 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix
+ * ver. 1.0.7 2022-07-16 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed lastBattery state for radars
  *                    TODO: radars: 
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/07/16 11:02 AM"}
+def timeStamp() {"2022/07/16 12:45 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -55,13 +55,13 @@ metadata {
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         //command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
-        /*
+        if (debug == true) {
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
             [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
             [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
         ]
-        */
+        }
         if (debug == true) {
             command "testX"
         }
@@ -275,12 +275,11 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value})"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
-            //  dni:7CC5, endpoint:01, cluster:0000, size:14, attrId:0007, encoding:30, command:01, value:03, clusterInt:0, attrInt:7, additionalAttrs:[[value:00, encoding:30, attrId:FFFE, consumedBytes:4, attrInt:65534]]]
-            // ["battery", "dc", "mains", "unknown"]
             def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
-            if (settings?.logEnable) log.info "${device.displayName} Power source is ${descMap?.value}"
-            //sendEvent(name : "powerSource",	value : value, isStateChange : true)
-            powerSourceEvent( value )
+            if (settings?.logEnable) log.info "${device.displayName} reported Power source ${descMap?.value}"
+            if (!isRadar()) {     // for radars force powerSource 'dc'
+                powerSourceEvent( value )
+            }
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
@@ -754,7 +753,7 @@ def handleTuyaBatteryLevel( fncmd ) {
     else if (fncmd == 1) rawValue = 75       // Battery High
     else if (fncmd == 2) rawValue = 50       // Battery Medium
     else if (fncmd == 3) rawValue = 25       // Battery Low
-    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered ! -> PowerSource = USB     capability "PowerSource" Attributes powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered
     else rawValue = fncmd
     getBatteryPercentageResult(rawValue*2)
 }
@@ -1012,6 +1011,11 @@ def updated() {
             }
         }
         //
+        if (isRadar()) {
+            if (settings?.ignoreDistance == true )
+                device.deleteCurrentState('distance')
+        }
+        //
         state.hashStringPars = calcParsHashString()
     }
     else {
@@ -1072,7 +1076,9 @@ void initializeVars( boolean fullInit = false ) {
     state.rxCounter = 0
     state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (state.lastBattery == null) state.lastBattery = "0"
+    if (!isRadar()) {
+        if (state.lastBattery == null) state.lastBattery = "0"
+    }
     //
     if (fullInit == true || settings.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
@@ -1375,10 +1381,12 @@ def setPresent() {
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
         //log.trace "device.currentValue('battery', true) = ${device.currentValue('battery', true)}"
-        if (device.currentValue('battery', true) == 0 ) {
-            if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                //log.trace "restoring battery level to ${safeToInt(state.lastBattery)}"
-                sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+        if (!isRadar()) {
+            if (device.currentValue('battery', true) == 0 ) {
+                if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
+                    //log.trace "restoring battery level to ${safeToInt(state.lastBattery)}"
+                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+                }
             }
         }
     }    
