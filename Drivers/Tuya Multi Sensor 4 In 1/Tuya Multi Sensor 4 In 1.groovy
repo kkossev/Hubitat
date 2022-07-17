@@ -19,13 +19,13 @@
  * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
  * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  * ver. 1.0.6 2022-07-10 kkossev  - (dev. branch) battery set to 0% and motion inactive when the device goes OFFLINE;
- * ver. 1.0.7 2022-07-16 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed lastBattery state for radars
- *                    TODO: radars: _TZE200_auin8mzr (isHumanPresenceSensorAIR) radar dp parsing
+ * ver. 1.0.7 2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
+ *                    TODO: radars: _TZE200_auin8mzr (isHumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; 
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/07/16 7:38 PM"}
+def timeStamp() {"2022/07/17 8:10 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -48,13 +48,15 @@ metadata {
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Refresh"
 
-		attribute "distance", "number"        // Tuya Radar
+        attribute "distance", "number"                // Tuya Radar
+        attribute "unacknowledgedTime", "number"      // AIR models
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         //command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
+        
         if (debug == true) {
         command "test", [
             [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -193,7 +195,7 @@ def isTS0601() { return (device.getDataValue('model') in ['TS0601']) }
 //def isConfigurable() { return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9'] }   // TS0202 models
 def isConfigurable() { return isIAS() }   // TS0202 models
 
-def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_lu01t0zl', '_TZE200_vrfecyku', '_TZE200_auin8mzr', '_TZE200_ikvncluo', '_TZE200_lyetpprm'] }
+def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm'] }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
 
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
@@ -276,7 +278,7 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
             def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
             if (settings?.logEnable) log.info "${device.displayName} reported Power source ${descMap?.value}"
-            if (!isRadar()) {     // for radars force powerSource 'dc'
+            if (!(isRadar() || isHumanPresenceSensorAIR())) {     // for radars force powerSource 'dc'
                 powerSourceEvent( value )
             }
         } 
@@ -511,7 +513,8 @@ def processTuyaCluster( descMap ) {
                 break            
             case 0x69 :    // 105 
                 if (isHumanPresenceSensorAIR()) {
-                    if (settings?.logEnable) log.info "${device.displayName} reported VacantConfirmTime (Unacknowledged Time) ${fncmd} s"
+                    if (settings?.txtEnable) log.info "${device.displayName} reported unacknowledgedTime ${fncmd} s"
+                        sendEvent(name : "unacknowledgedTime", value : fncmd, unit : "s")
                 }
                 else if (isHumanPresenceSensorFall()) {
                     // trsfTumbleSwitch for TuYa Radar Sensor with fall function
@@ -872,7 +875,7 @@ def powerSourceEvent( state = null) {
         sendEvent(name : "powerSource",	value : state, descriptionText: "device is back online", type: "digital")
     }
     else {
-        if (isRadar()) {
+        if (isRadar() || isHumanPresenceSensorAIR()) {
             sendEvent(name : "powerSource",	value : "dc", descriptionText: "device is back online", type: "digital")
         }
         else {
@@ -982,7 +985,7 @@ def updated() {
         }
         //
         if (isRadar()) {
-            if (settings?.ignoreDistance == true )
+            if (settings?.ignoreDistance == true ) 
                 device.deleteCurrentState('distance')
         }
         //
@@ -1025,6 +1028,16 @@ def checkDriverVersion() {
         if (state.lastPresenceState != null) {
             state.remove('lastPresenceState')    // removed in version 1.0.6 
         }
+        if (isRadar() || isHumanPresenceSensorAIR()) {
+            if (settings?.ignoreDistance == true ) {
+                device.deleteCurrentState('distance')
+            }
+            state.remove('lastBattery')        // removed in version 1.0.7 for DC powered radars
+            device.deleteCurrentState('battery')
+            device.deleteCurrentState('tamper')
+            device.deleteCurrentState('temperature')
+            
+        }
     }
 }
 
@@ -1055,7 +1068,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.motionReset == null) device.updateSetting("motionReset", false)
     if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 60)
     if (fullInit == true || settings.advancedOptions == null) {
-        if (isRadar()) {
+        if (isRadar() || isHumanPresenceSensorAIR()) {
             device.updateSetting("advancedOptions", true)
             //log.trace "device.updateSetting('advancedOptions', true)"
         }
