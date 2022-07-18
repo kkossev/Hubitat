@@ -20,12 +20,13 @@
  * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  * ver. 1.0.6 2022-07-10 kkossev  - (dev. branch) battery set to 0% and motion inactive when the device goes OFFLINE;
  * ver. 1.0.7 2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
- *                    TODO: radars: _TZE200_auin8mzr (isHumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode
+ * ver. 1.0.7 2022-07-18 kkossev  - radars: _TZE200_auin8mzr (HumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode commands and preferences'
+ *                    TODO: 
  *
 */
 
-def version() { "1.0.7" }
-def timeStamp() {"2022/07/17 9:02 PM"}
+def version() { "1.0.8" }
+def timeStamp() {"2022/07/18 10:51 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -53,7 +54,7 @@ metadata {
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
-        command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
+        command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["No selection", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         //command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
         
@@ -171,18 +172,19 @@ metadata {
                 // Minimum detection distance, meters
             }
             if (isHumanPresenceSensorAIR()) {
-                input (name: "ledStatus", type: "enum", title: "LED Status", description:"Select LED Status", defaultValue: -1, options: ledStatusOptions)
+                input (name: "ledStatusAIR", type: "enum", title: "LED Status", description:"Select LED Status", defaultValue: -1, options: ledStatusOptions)
                 input (name: "detectionMode", type: "enum", title: "Detection Mode", description:"Select Detection Mode", defaultValue: -1, options: detectionModeOptions)
             }
         }
     }
 }
 
-@Field static final Map inductionStateOptions = [ 0:"Occupied", 1:"Vacancy" ]
-@Field static final Map vSensitivityOptions = [ 0:"Speed Priority", 1:"Standard", 2:"Accuracy Priority" ]
-@Field static final Map oSensitivityOptions = [ 0:"Sensitive", 1:"Normal", 2:"Cautious" ]
-@Field static final Map detectionModeOptions = [ 99:"--- Select ---", 0:"General Model", 1:"Temporay Stay", 2:"Basic Detecton", 3:"PIR Sensor Test" ]
-@Field static final Map ledStatusOptions = [ 99:"--- Select ---", 0:"On", 1:"Off" ]
+@Field static final Map inductionStateOptions = [ "0":"Occupied", "1":"Vacancy" ]
+@Field static final Map vSensitivityOptions =   [ "0":"Speed Priority", "1":"Standard", "2":"Accuracy Priority" ]
+@Field static final Map oSensitivityOptions =   [ "0":"Sensitive", "1":"Normal", "2":"Cautious" ]
+@Field static final Map detectionModeOptions =  [ "99":"No selection", "0":"General Model", "1":"Temporary Stay", "2":"Basic Detecton", "3":"PIR Sensor Test" ]
+@Field static final Map ledStatusOptions =      [ "99" : "No selection", "0" : "On", "1" : "Off" ]
+
 
 
 
@@ -514,7 +516,8 @@ def processTuyaCluster( descMap ) {
                     illuminanceEventLux( fncmd )
                 }
                 else if (isHumanPresenceSensorAIR()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported Detection Mode <b>${detectionModeOptions[fncmd]}</b> (${fncmd})"
+                    if (settings?.txtEnable) log.info "${device.displayName} reported Detection Mode <b>${detectionModeOptions[fncmd.toString()]}</b> (${fncmd})"
+                    device.updateSetting("detectionMode", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isHumanPresenceSensorScene()) { // detection data  for TuYa Radar Sensor with scene
                     if (settings?.logEnable) log.info "${device.displayName} radar detection data is ${fncmd}"
@@ -600,7 +603,8 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x6E : // (110) Tuya 4 in 1
                 if (isHumanPresenceSensorAIR()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported Led Status <b>${ledStatusOptions[fncmd]}</b> (${fncmd})"
+                    if (settings?.txtEnable) log.info "${device.displayName} reported Led Status <b>${ledStatusOptions[fncmd.toString()]}</b> (${fncmd})"
+                    device.updateSetting("ledStatusAIR", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isRadar()){
                     if (settings?.txtEnable) log.info "${device.displayName} radar LED status is ${fncmd}"                
@@ -1007,6 +1011,22 @@ def updated() {
                 device.deleteCurrentState('distance')
         }
         //
+        if (isHumanPresenceSensorAIR()) {
+            if (ledStatusAIR != null && ledStatusAIR != "99") {
+                def value = safeToInt(ledStatusAIR.value)
+                def dpValHex = zigbee.convertToHexString(value as int, 2)
+                //log.warn "xxxxxxxxxxxxxxxxxxxx value = ${value}"
+                cmds += sendTuyaCommand("6E", DP_TYPE_ENUM, dpValHex)
+                if (settings?.logEnable) log.warn "${device.displayName} changing radarAIR LED status : ${ledStatusOptions[value.toString()]} (${value})"                
+            }
+            if (detectionMode != null && detectionMode != "99") {
+                def value = safeToInt(detectionMode.value)
+                def dpValHex = zigbee.convertToHexString(value as int, 2)
+                cmds += sendTuyaCommand("68", DP_TYPE_ENUM, dpValHex)
+                if (settings?.logEnable) log.warn "${device.displayName} changing radarAIR detection mode : ${detectionModeOptions[value.toString()]} (${value})"                
+            }
+        }
+        //
         state.hashStringPars = calcParsHashString()
     }
     else {
@@ -1319,11 +1339,20 @@ def calcHashParam(num) {
 }
 
 def testX() {
+    /*
     //sendSensitivity("high")
     def str = getSensitivityString(2)
     log.trace "str = ${str}"
 //    device.updateSetting("sensitivity", [value:"No selection", type:"enum"])
     device.updateSetting("sensitivity", [value:str, type:"enum"])
+*/
+    
+    def str = "Off"
+    log.trace "str = ${str}"
+//    device.updateSetting("sensitivity", [value:"No selection", type:"enum"])
+    // "testType", [type:"text", value: "auto"]
+    device.updateSetting("ledStatusAIR", [type:"enum", value: 1.toString()])
+    
 }
 
 def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
@@ -1335,7 +1364,6 @@ def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : s
 def readSensitivity()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
 def readKeepTime()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
 
-//  input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["--- Select ---":"--- Select ---", "low":"low", "medium":"medium", "high":"high"])
 def sendSensitivity( String mode ) {
     if (mode == null) {
         if (settings?.logEnable) log.warn "${device.displayName} sensitivity is not set for ${device.getDataValue('manufacturer')}"
@@ -1455,9 +1483,9 @@ def deleteAllStatesAndJobs() {
 
 
 def setLEDMode(String mode) {
-    log.trace "modeName = ${mode}"
-    Short paramVal = ledStatusOptions.find{ it.value == mode }?.key    
-    log.trace "paramVal = ${paramVal}"
+    //log.trace "modeName = ${mode}"
+    Short paramVal = safeToInt(ledStatusOptions.find{ it.value == mode }?.key)    
+    //log.trace "paramVal = ${paramVal}"
     if (paramVal != null && paramVal != 99) {
         ArrayList<String> cmds = []
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
@@ -1470,9 +1498,7 @@ def setLEDMode(String mode) {
 }
 
 def setDetectionMode(String mode) {
-    log.trace "modeName = ${mode}"
-    Short paramVal = detectionModeOptions.find{ it.value == mode }?.key    
-    log.trace "paramVal = ${paramVal}"
+    Short paramVal = safeToInt(detectionModeOptions.find{ it.value == mode }?.key)    
     if (paramVal != null && paramVal != 99) {
         ArrayList<String> cmds = []
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
