@@ -26,7 +26,7 @@
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/07/21 12:16 PM"}
+def timeStamp() {"2022/07/21 8:53 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -56,9 +56,10 @@ metadata {
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["No selection", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
-        //command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
+        //command "force_TZE200_9qayzqa8"
         
         if (debug == true) {
+            command "deleteAllStatesAndJobs",   [[name: "Delete all states and jobs before switching to another driver"]] 
             command "test", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -736,8 +737,20 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x8D : // (141)
                 //if (isBlackSensor()) {
+                    // motion_type is coming back as: enum8.undefined_0x03 when there's little movement, enum8.undefined_0x02 when there's activity (which seems backwards), and 1 when there's no motion for certain.
                     if (settings?.logEnable) log.info "${device.displayName} (0x8D) motion type is ${fncmd}"
                     if (settings?.txtEnable) log.debug "${device.displayName} enum (${fncmd}) = <b>${blackSensorMotionTypeOptions[fncmd.toString()]}</b> "
+                    // TODO - new attribute motionType
+/*
+    """Type of motion detected enum."""
+
+    EMPTY = 0x00
+    NONE = 0x01
+    ACTIVE = 0x02
+    PRESENCE = 0x03
+    UNKNOWN = 0x04
+*/
+            
                 //}
                 break
             default :
@@ -1489,6 +1502,7 @@ def pollPresence() {
 
 
 def deleteAllStatesAndJobs() {
+/*    
     state.clear()
     unschedule()
     device.deleteCurrentState('motion')
@@ -1500,10 +1514,26 @@ def deleteAllStatesAndJobs() {
     device.deleteCurrentState('powerSource')
     device.deleteCurrentState('*')
     device.deleteCurrentState('')
-    //device.removeDataValue("anyAddedCustomData")
+*/
+    device.removeDataValue("softwareBuild")
     log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}"
 }
 
+def force_TZE200_9qayzqa8() {
+    log.warn "${device.displayName} is forced to manufacturer <b>_TZE200_9qayzqa8</b> parameters!"
+    device.updateDataValue("endpointId", "01")
+    device.updateDataValue("outClusters", "0019,000A")
+    device.updateDataValue("model", "TS0601")
+    device.updateDataValue("application", "46")
+    device.updateDataValue("inClusters", "0004,0005,EF00,0000")
+    device.updateDataValue("manufacturer", "_TZE200_9qayzqa8")
+    List<String> cmds = []
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0004 {${device.zigbeeId}} {}", "delay 200", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 200", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xEF00 {${device.zigbeeId}} {}", "delay 200", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 200", ]
+    sendZigbeeCommands(cmds)    
+}
 
 
 def setLEDMode(String mode) {
