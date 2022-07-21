@@ -20,13 +20,13 @@
  * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  * ver. 1.0.6 2022-07-10 kkossev  - (dev. branch) battery set to 0% and motion inactive when the device goes OFFLINE;
  * ver. 1.0.7 2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
- * ver. 1.0.7 2022-07-18 kkossev  - radars: _TZE200_auin8mzr (HumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode commands and preferences'
- *                    TODO: 
+ * ver. 1.0.8 2022-07-21 kkossev  - radars: _TZE200_auin8mzr (HumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode commands and preferences'; _TZE200_9qayzqa8 DP decoding
+ *                    TODO: _TZE200_9qayzqa8 Preference parameters
  *
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/07/18 10:51 PM"}
+def timeStamp() {"2022/07/21 12:16 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -85,6 +85,9 @@ metadata {
         
         // Human presence sensor AIR - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Human presence sensor AIR"        // Tuya LY-TAD-K616S-ZB
+        
+        // Human presence sensor (Black)
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_9qayzqa8", deviceJoinName: "Smart PIR Human Motion Presence Sensor (Black)"
         
         // Human presence sensor 'MIR-HE200-TY' - illuminance, presence, occupancy, motion_speed, motion_direction, radar_sensitivity, radar_scene ('default', 'area', 'toilet', 'bedroom', 'parlour', 'office', 'hotel')
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrfecyku", deviceJoinName: "Tuya Human presence sensor MIR-HE200-TY"
@@ -184,8 +187,8 @@ metadata {
 @Field static final Map oSensitivityOptions =   [ "0":"Sensitive", "1":"Normal", "2":"Cautious" ]
 @Field static final Map detectionModeOptions =  [ "99":"No selection", "0":"General Model", "1":"Temporary Stay", "2":"Basic Detecton", "3":"PIR Sensor Test" ]
 @Field static final Map ledStatusOptions =      [ "99" : "No selection", "0" : "On", "1" : "Off" ]
-
-
+@Field static final Map blackSensorDistanceOptions =   [ "0":"0.5 m", "1":"1.0 m", "2":"1.5 m", "3":"2.0 m", "4":"2.5 m", "5":"3.0 m", "6":"3.5 m", "7":"4.0 m", "8":"4.5 m", "9":"5.0 m" ]
+@Field static final Map blackSensorMotionTypeOptions =   [ "0":"None", "1":"Presence", "2":"Peacefull", "3":"Small Move", "4":"Large Move"]
 
 
 @Field static final Integer numberOfconfigParams = 11
@@ -217,6 +220,7 @@ def isConfigurable() { return isIAS() }   // TS0202 models
 
 def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm'] }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
+def isBlackSensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
 
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
@@ -395,7 +399,7 @@ def processTuyaCluster( descMap ) {
         if (settings?.logEnable) log.debug "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR
-                if (settings?.logEnable) log.debug "${device.displayName} motion event 0x01 fncmd = ${fncmd}"
+                if (settings?.logEnable) log.debug "${device.displayName} (DP=0x01) motion event fncmd = ${fncmd}"
                 handleMotion(motionActive=fncmd)
                 break
             case 0x02 :
@@ -485,7 +489,11 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd]}</b> (${fncmd})"
                 }
                 else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {                     // trsfMotionState: (102) for TuYa Radar Sensor with fall function
-                    if (settings?.logEnable) log.info "${device.displayName} motion state is ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} (0x66) motion state is ${fncmd}"
+                    handleMotion(motionActive=fncmd)
+                }
+                else if (isBlackSensor()) {
+                    if (settings?.txtEnable) log.info "${device.displayName} (0x66) induction time is ${fncmd}"
                 }
                 else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
@@ -536,6 +544,10 @@ def processTuyaCluster( descMap ) {
                 if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unacknowledgedTime ${fncmd} s"
                         sendEvent(name : "unacknowledgedTime", value : fncmd, unit : "s")
+                }
+                else if (isBlackSensor()) {
+                    if (settings?.txtEnable) log.info "${device.displayName} (0x69) target distance is ${fncmd}"
+                    if (settings?.txtEnable) log.debug "${device.displayName} enum (${fncmd}) = <b>${blackSensorDistanceOptions[fncmd.toString()]}</b> "
                 }
                 else if (isHumanPresenceSensorFall()) {
                     // trsfTumbleSwitch for TuYa Radar Sensor with fall function
@@ -715,6 +727,18 @@ def processTuyaCluster( descMap ) {
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar fall sensitivity  0x76 fncmd = ${fncmd}"
                 }
+                break
+            case 0x77 : // (119)
+                //if (isBlackSensor()) {
+                    if (settings?.logEnable) log.info "${device.displayName} (0x77) motion state is ${fncmd}"
+                    handleMotion(motionActive=fncmd)
+                //}
+                break
+            case 0x8D : // (141)
+                //if (isBlackSensor()) {
+                    if (settings?.logEnable) log.info "${device.displayName} (0x8D) motion type is ${fncmd}"
+                    if (settings?.txtEnable) log.debug "${device.displayName} enum (${fncmd}) = <b>${blackSensorMotionTypeOptions[fncmd.toString()]}</b> "
+                //}
                 break
             default :
                 /*if (settings?.logEnable)*/ log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
