@@ -20,14 +20,14 @@
  * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
  * ver. 1.0.6 2022-07-10 kkossev  - (dev. branch) battery set to 0% and motion inactive when the device goes OFFLINE;
  * ver. 1.0.7 2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
- * ver. 1.0.8 2022-07-22 kkossev  - Human Presence Sensors: _TZE200_auin8mzr (HumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode commands and preferences'; 
- *                                - _TZE200_9qayzqa8 (black sensor) DP decoding; Attribute: motionType; preferences: inductionTime; targetDistance. 
- *                    TODO: _TZE200_9qayzqa8
+ * ver. 1.0.8 2022-07-24 kkossev  - Human Presence Sensors: _TZE200_auin8mzr (HumanPresenceSensorAIR) radar dp parsing; unacknowledgedTime; setLEDMode; setDetectionMode commands and preferences'; 
+ *                                - _TZE200_9qayzqa8 (black sensor) DP decoding; Attribute: motionType; preferences: inductionTime; targetDistance. _TZE200_auin8mzr preferences: vSensitivity; oSensitivity
+ *                    TODO:  _TZE200_auin8mzr preferences: vacancyDelay
  *
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/07/22 6:12 PM"}
+def timeStamp() {"2022/07/24 12:34 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -182,8 +182,8 @@ metadata {
             if (isHumanPresenceSensorAIR()) {
                 input (name: "ledStatusAIR", type: "enum", title: "LED Status", description:"Select LED Status", defaultValue: -1, options: ledStatusOptions)
                 input (name: "detectionMode", type: "enum", title: "Detection Mode", description:"Select Detection Mode", defaultValue: -1, options: detectionModeOptions)
-                //input (name: "vSensitivity", type: "enum", title: "V Sensitivity", description:"Select V Sensitivity", defaultValue: -1, options: vSensitivityOptions)
-                //input (name: "oSensitivity", type: "enum", title: "O Sensitivity", description:"Select O Sensitivity", defaultValue: -1, options: oSensitivityOptions)
+                input (name: "vSensitivity", type: "enum", title: "V Sensitivity", description:"Select V Sensitivity", defaultValue: -1, options: vSensitivityOptions)
+                input (name: "oSensitivity", type: "enum", title: "O Sensitivity", description:"Select O Sensitivity", defaultValue: -1, options: oSensitivityOptions)
             }
             if (isBlackSensor()) {
 		        input (name: "inductionTime", type: "decimal", title: "Induction Time", description: "Induction time (24..300) seconds", range: "24..300", defaultValue: 24)   
@@ -196,8 +196,8 @@ metadata {
 @Field static final Map inductionStateOptions = [ "0":"Occupied", "1":"Vacancy" ]
 @Field static final Map vSensitivityOptions =   [ "0":"Speed Priority", "1":"Standard", "2":"Accuracy Priority" ]    // HumanPresenceSensorAIR
 @Field static final Map oSensitivityOptions =   [ "0":"Sensitive", "1":"Normal", "2":"Cautious" ]                    // HumanPresenceSensorAIR
-@Field static final Map detectionModeOptions =  [ "99":"No selection", "0":"General Model", "1":"Temporary Stay", "2":"Basic Detecton", "3":"PIR Sensor Test" ]    // HumanPresenceSensorAIR
-@Field static final Map ledStatusOptions =      [ "99" : "No selection", "0" : "On", "1" : "Off" ]                   // HumanPresenceSensorAIR
+@Field static final Map detectionModeOptions =  [ "0":"General Model", "1":"Temporary Stay", "2":"Basic Detecton", "3":"PIR Sensor Test" ]    // HumanPresenceSensorAIR
+@Field static final Map ledStatusOptions =      [ "0" : "Switch On", "1" : "Switch Off", "2" : "Unknown"  ]      // HumanPresenceSensorAIR
 @Field static final Map blackSensorDistanceOptions =   [ "0":"0.5 m", "1":"1.0 m", "2":"1.5 m", "3":"2.0 m", "4":"2.5 m", "5":"3.0 m", "6":"3.5 m", "7":"4.0 m", "8":"4.5 m", "9":"5.0 m" ]    // BlackSensor - not working!
 @Field static final Map blackSensorMotionTypeOptions =   [ "0":"None", "1":"Presence", "2":"Peacefull", "3":"Small Move", "4":"Large Move"]    // BlackSensor - not working!
 
@@ -516,6 +516,7 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
+                    device.updateSetting("vSensitivity", [type:"enum", value: fncmd.toString()])
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.debug "{device.displayName} motion event 0x65 fncmd = ${fncmd}"
@@ -530,6 +531,7 @@ def processTuyaCluster( descMap ) {
                 }                    
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
+                    device.updateSetting("oSensitivity", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {                     // trsfMotionState: (102) for TuYa Radar Sensor with fall function
                     if (settings?.logEnable) log.info "${device.displayName} (0x66) motion state is ${fncmd}"
@@ -1069,13 +1071,25 @@ def updated() {
                 def dpValHex = zigbee.convertToHexString(value as int, 2)
                 //log.warn "xxxxxxxxxxxxxxxxxxxx value = ${value}"
                 cmds += sendTuyaCommand("6E", DP_TYPE_ENUM, dpValHex)
-                if (settings?.logEnable) log.warn "${device.displayName} changing radarAIR LED status : ${ledStatusOptions[value.toString()]} (${value})"                
+                if (settings?.logEnable) log.warn "${device.displayName} setting Sensor AIR LED status : ${ledStatusOptions[value.toString()]} (${value})"                
             }
             if (detectionMode != null && detectionMode != "99") {
                 def value = safeToInt(detectionMode.value)
                 def dpValHex = zigbee.convertToHexString(value as int, 2)
                 cmds += sendTuyaCommand("68", DP_TYPE_ENUM, dpValHex)
-                if (settings?.logEnable) log.warn "${device.displayName} changing radarAIR detection mode : ${detectionModeOptions[value.toString()]} (${value})"                
+                if (settings?.logEnable) log.warn "${device.displayName} setting Sensor AIR detection mode : ${detectionModeOptions[value.toString()]} (${value})"                
+            }
+            if (vSensitivity != null) {
+                def value = safeToInt(vSensitivity.value)
+                def dpValHex = zigbee.convertToHexString(value as int, 2)
+                cmds += sendTuyaCommand("65", DP_TYPE_ENUM, dpValHex)
+                if (settings?.logEnable) log.warn "${device.displayName} setting Sensor AIR v-sensitivity : ${vSensitivityOptions[value.toString()]} (${value})"                
+            }
+            if (oSensitivity != null) {
+                def value = safeToInt(oSensitivity.value)
+                def dpValHex = zigbee.convertToHexString(value as int, 2)
+                cmds += sendTuyaCommand("66", DP_TYPE_ENUM, dpValHex)
+                if (settings?.logEnable) log.warn "${device.displayName} setting Sensor AIR o-sensitivity : ${oSensitivityOptions[value.toString()]} (${value})"                
             }
         }
         if (isBlackSensor()) {
