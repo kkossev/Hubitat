@@ -25,13 +25,12 @@
  * ver. 1.1.6 2022-07-12 kkossev  - aqaraBlackMagic; 
  * ver. 1.1.7 2022-07-23 kkossev  - added MCCGQ14LM for tests
  * ver. 1.2.0 2022-07-28 kkossev  - FP1 first successful initializaiton.
- 
  * 
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2022/07/28 10:16 PM"}
+def timeStamp() {"2022/07/28 10:50 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -40,7 +39,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 @Field static final Boolean deviceSimulation = false
 
 metadata {
@@ -1013,7 +1012,7 @@ def aqaraReadAttributes() {
     }
     else if (isFP1()) {  // Aqara presence detector FP1 
         log.warn "aqaraReadAttributes() FP1"
-        //cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isE1()) {   // E1 contact sensor
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    //  battery voltage
@@ -1029,18 +1028,7 @@ def aqaraReadAttributes() {
 
 def aqaraBlackMagic() {
     List<String> cmds = []
-    /*
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-    cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61 32 61 89 91 13 60 83 79 42 40 28 17 09 01 54"+"10", [mfgCode: 0x115F], delay=200)
-*/
+
     if (isP1()) {
         //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
@@ -1052,61 +1040,20 @@ def aqaraBlackMagic() {
     }
     else if (isFP1()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
-        /*
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]     // FP1 write attr 0xFF
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]     // FP1 write attr 0xFF
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]     // FP1 write attr 0xFF
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]     // FP1 write attr 0xFF
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
-*/
-        
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]     // FP1 write attr 0xFF 16 bytes
-       
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]      // FP1 write attr 0xFF 16 bytes
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 01 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 write attr 0x0150 8 bytes
-
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                 // FP1 (seq:5) write attr 0x0150 4 bytes
-
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 02 ff ff 00 00 ff}  {0x0104}", "delay 50",]                      // FP1 (seq:6) write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:5) write attr 0x0150 4 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 02 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 (seq:6) write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:7) write attr 0x0150 4 bytes
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                                // FP1 (seq 8) write attr 0x155 : 01
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
         
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                 // FP1 (seq:7) write attr 0x0150 4 bytes
-        
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                    // FP1 (seq 8) write attr 0x155 : 01
-        
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                      // FP1 (seq:9) write attr 0xfff2 8 bytes
-        
-        
-        
-        
-        /*
+        //cmds += activeEndpoints()         
 
-07 01 01 ff ff 00 00 ff
-
-0000   03 06 55 35
-
-aa 74 02 44 00 9c 03 20
-
-
-
-*/
-        
-        
-        
-    //cmds += activeEndpoints()         
-
-/*        
-
- 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36
-
- 36 72 55 21 12 18 87 28 48 16 79 20 76 71 32 02 10 
-        
-*/
         log.warn "aqaraBlackMagic() for FP1"
     }
     else {
-                log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
+        log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
     }
     
@@ -1141,22 +1088,6 @@ def test( description ) {
     //decodeAqaraStruct(xx)
     //aqaraReadAttributes()
    // aqaraBlackMagic()
-    
-    //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "45188027277479908919044138863489"+"10", [mfgCode:0x115F], delay=200)
-    //  [he wattr 0x51DA 0x01 0xFFC0 0x00FF 0x41 {1489348638410419899079742727801845} 0x115F, delay 200]
-    //  10 89 34 86 38 41 04 19 89 90 79 74 27 27 80 18 45
-    //                 
-    //  4518802727747990891904413886348910
-    
-    //cmds += "he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0x1000 {09 01 40 00 00 01 01}  {0x0104}"
-    
-    cmds += "he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFFC0 {14 5F 11 01 02 FF 00 41 10 89 34 86 38 41 04 19 89 90 79 74 27 27 80 18 45}  {0x0104}"
-
-    //        11 -> Frame Control Field
-    //        12 -> ???
-    //        13 -> Command
-    //        14 -> ?
-    //        15 -> ?    
     
     
    sendZigbeeCommands( cmds )
