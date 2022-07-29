@@ -25,13 +25,14 @@
  * ver. 1.1.6 2022-07-12 kkossev  - aqaraBlackMagic; 
  * ver. 1.1.7 2022-07-23 kkossev  - added MCCGQ14LM for tests
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
- *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; 
+ *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
+ *            monitoring_mode info log fix; approachDistance bug fix
  * 
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2022/07/29 5:19 PM"}
+def timeStamp() {"2022/07/29 6:07 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -107,11 +108,11 @@ metadata {
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: 0, options: [1:"far", 2:"medium", 3:"near" ])    // 'medium'is default?
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "2", options: ["1":"far", "2":"medium", "3":"near" ])    // 'medium'is default?
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
                 input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // Undirected is default?
             }
-            input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+            input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
         }
     }
 }
@@ -130,7 +131,7 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
 private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-private FP1_APPROACH_DISTANCE_NAME(value) { value == 0 ? "far" : value == 1 ? "medium" : value == 2 ? "near" : null }
+private FP1_APPROACH_DISTANCE_NAME(value) { value == 1 ? "far" : value == 2 ? "medium" : value == 3 ? "near" : null }
 private FP1_MONITORING_MODE_NAME(value) { value == 0 ? "undirected" : value == 1 ? "left_right" : null }
 
 def parse(String description) {
@@ -242,7 +243,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             }
             else if (isFP1()) { // FP1
                 def value = safeToInt(it.value)
-                if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                if (txtEnable) log.info "${device.displayName} (0x69) <b>received approach_distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
             else {
@@ -283,12 +284,12 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             def value = safeToInt(it.value)
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            if (txtEnable) log.info "${device.displayName} <b>received monitoring_modey report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} <b>received monitoring_mode report: ${FP1_MONITORING_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
             def value = safeToInt(it.value)
             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} (0x0146) <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
@@ -362,7 +363,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x69 : // (105) 
                         if (isFP1()) { // FP1
-                            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
+                            device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
                             if (txtEnable) log.info "${device.displayName} approach_distance is <b>${FP1_APPROACH_DISTANCE_NAME(rawValue)}</b> (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
@@ -674,7 +675,7 @@ def temperatureEvent( temperature ) {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
     }
-    Integer tempConverted = temperature + (settings?.tempOffset?:0 as java.lang.Integer) 
+    Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int /* java.lang.Integer*/) 
     map.value = tempConverted
     map.isStateChange = true
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
@@ -881,7 +882,7 @@ def updated() {
     if (isFP1()) { // FP1
         if (settings?.approachDistance != null && settings?.approachDistance != 0) {    // [1:"far", 2:"medium", 3:"near" ]
             value = safeToInt( approachDistance )
-            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistance}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${FP1_APPROACH_DISTANCE_NAME(value)} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
         if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
