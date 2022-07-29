@@ -26,13 +26,13 @@
  * ver. 1.1.7 2022-07-23 kkossev  - added MCCGQ14LM for tests
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
- *            monitoring_mode info log fix; approachDistance bug fix
+ *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * 
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2022/07/29 6:07 PM"}
+def timeStamp() {"2022/07/29 8:39 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -53,7 +53,6 @@ metadata {
 		capability "Battery"
         capability "PowerSource"
         capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
-        //capability "PresenceSensor"    //presence -ENUM ["present", "not present"]
         
         attribute "batteryVoltage", "string"
         attribute "presence", "enum", [
@@ -72,9 +71,9 @@ metadata {
         ]
         
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         
         if (debug) {
-            command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
             command "aqaraReadAttributes"
@@ -677,27 +676,44 @@ def temperatureEvent( temperature ) {
     }
     Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int /* java.lang.Integer*/) 
     map.value = tempConverted
-    map.isStateChange = true
+    // map.isStateChange = true removed in ver 1.2.0
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
 
-def presenceEvent( String status ) {
+def presenceEvent( String status, isDigital=false ) {
     if (status != null) {
-        sendEvent("name": "presence", "value": status, "isStateChange": true)                    // TODO - check if forcing isStateCHange to true is neccesery
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "presence", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
         if (settings?.txtEnable) log.info "${device.displayName} presence is <b>${status}</b>"
+        if (status == "present") {
+            handleMotion(true, isDigital=true)
+        }
+        else {
+            handleMotion(false, isDigital=true)
+        }
     }
 }
                                               
 // private FP1_PRESENCE_EVENT_TYPE_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-def presenceTypeEvent( String type ) {
-    sendEvent("name": "presence_type", "value": type, "isStateChange": true)
-    if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${type}</b>"
+def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
+    if (presenceTypeEvent != null) {
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "presence_type", "value": presenceTypeEvent, "type": type)                // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${presenceTypeEvent}</b>"
+        if (presenceTypeEvent in ["enter", "left_enter", "right_enter"] ) {
+            handleMotion(true, isDigital=true)
+        }
+        else if (presenceTypeEvent in ["leave", "left_leave", "right_leave" ]) {
+            handleMotion(false, isDigital=true)
+        }        
+    }
 }
 
 private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
-        def timeout = settings?.motionResetTimer ?: 30
+        def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
+        //log.warn "handleMotion timeout = ${timeout}"
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
             runIn(timeout, resetToMotionInactive, [overwrite: true])
@@ -910,7 +926,11 @@ void initializeVars( boolean fullInit = false ) {
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)    
+    if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
+    if (isFP1()) {
+        device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
+        //log.warn "forcing motionResetTimer to ${settings?.motionResetTimer}"
+    }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
     
      if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
@@ -955,9 +975,17 @@ def setMotion( mode ) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
+            if (isFP1()) {
+                presenceEvent("present", isDigital=true)
+                presenceTypeEvent("enter", isDigital=true)
+            }
             break
         case "inactive" :
             handleMotion(false, isDigital=true)
+            if (isFP1()) {
+                presenceEvent("not present", isDigital=true)
+                presenceTypeEvent("leave", isDigital=true)
+            }
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
