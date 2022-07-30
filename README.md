@@ -3,7 +3,7 @@ Find me on the Hubitat Community: https://community.hubitat.com/u/kkossev/summar
 
 # My [Hubitat Elevation ](https://hubitat.com/)drivers and apps
 
-* [Aqara New Motion Sensors](https://github.com/kkossev/Hubitat/tree/main/Drivers/Aqara%20P1%20Motion%20Sensor) - Aqara P1, Aqara High Precision Sensor, the attempt to bring FP1 continues.
+* [Aqara New Motion Sensors](https://github.com/kkossev/Hubitat/tree/main/Drivers/Aqara%20P1%20Motion%20Sensor) - Aqara P1, Aqara High Precision Sensor, now Aqara FP1 Human Presence Sensor is working! :) 
 * [Tuya Zigbee Metering Plug](https://github.com/kkossev/Hubitat/tree/main/Drivers/Tuya%20Zigbee%20Metering%20Plug) - moere than 20 different Tuya metering plugs models, DIN rails and automatic circuit breakers; configurable reporting intervals; configurable power-on behaviour, LED and child lock modes
 * [Tuya Wall Thermostat](https://github.com/kkossev/Hubitat-Tuya-Wall-Thermostat) - Moes, AVATTO, Beok and other lables water/gas wall thermostats + BRT-100
 * [Tuya Multi Sensor 4 In 1](https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy) - more than 35 different Tuya motion sensors, including 4in1, 3in1. 2in1 and the new Tuya Human Presence radars.
