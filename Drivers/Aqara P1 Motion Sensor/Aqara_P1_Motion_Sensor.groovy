@@ -23,12 +23,16 @@
  * ver. 1.1.4 2022-07-08 kkossev  - aqaraReadAttributes()
  * ver. 1.1.5 2022-07-09 kkossev  - when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type
  * ver. 1.1.6 2022-07-12 kkossev  - aqaraBlackMagic; 
+ * ver. 1.1.7 2022-07-23 kkossev  - added MCCGQ14LM for tests
+ * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
+ *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
+ *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * 
  *
 */
 
-def version() { "1.1.6" }
-def timeStamp() {"2022/07/12 7:03 PM"}
+def version() { "1.2.0" }
+def timeStamp() {"2022/07/29 8:39 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -38,6 +42,7 @@ import hubitat.helper.HexUtils
 
 
 @Field static final Boolean debug = false
+@Field static final Boolean deviceSimulation = false
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
@@ -48,9 +53,12 @@ metadata {
 		capability "Battery"
         capability "PowerSource"
         capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
-        capability "PresenceSensor"    //presence -ENUM ["present", "not present"]
         
         attribute "batteryVoltage", "string"
+        attribute "presence", "enum", [
+            "present",
+            "not present"
+        ]
         attribute "presence_type", "enum", [
             "enter",        //
             "leave",        //
@@ -63,11 +71,13 @@ metadata {
         ]
         
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+        command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         
         if (debug) {
-            command "setMotion", [[name: "Force motion active/inactive (when testing automations)", type: "ENUM", constraints: ["--- Select ---", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
             command "test", [[name: "Cluster", type: "STRING", description: "Zigbee Cluster (Hex)", defaultValue : "0001"]]
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+            command "aqaraReadAttributes"
+            command "activeEndpoints"
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                 // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
@@ -75,6 +85,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara Motion Sensor RTCGQ12LM"                    // RTCGQ12LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi presence sensor RTCGQ11LM"   // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                   // tests only
         
     }
 
@@ -82,9 +93,13 @@ metadata {
         if (logEnable == true || logEnable == false) { // Groovy ... :) 
             input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
-            input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
-            if (isRTCGQ13LM() || isP1() || isFP1()) {
+            if (!isFP1()) {
+                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
+            }    
+            if (isRTCGQ13LM() || isP1()) {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
+            }
+            if (isRTCGQ13LM() || isP1() || isFP1()) {
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
             }
             if (isP1()) {
@@ -92,11 +107,11 @@ metadata {
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: 0, options: [1:"far", 2:"medium", 3:"near" ])    // 'medium'is default?
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "2", options: ["1":"far", "2":"medium", "3":"near" ])    // 'medium'is default?
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
                 input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // Undirected is default?
             }
-            input (name: "tempOffset", type: "number", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+            input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
         }
     }
 }
@@ -104,9 +119,10 @@ metadata {
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 3600
 
-def isRTCGQ13LM() { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }    // Aqara Precision motion sensor
-def isP1()        { if (debug) return true else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
-def isFP1()       { if (debug) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }    // Aqara FP1 Presence sensor (microwave radar)
+def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
+def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
+def isFP1()       { if (deviceSimulation) return true else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }      // Aqara FP1 Presence sensor (microwave radar)
+def isE1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.magnet.acn001'] ) }   // Aqara E1 contact sensor
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -114,7 +130,7 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
 private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-private FP1_APPROACH_DISTANCE_NAME(value) { value == 0 ? "far" : value == 1 ? "medium" : value == 2 ? "near" : null }
+private FP1_APPROACH_DISTANCE_NAME(value) { value == 1 ? "far" : value == 2 ? "medium" : value == 3 ? "near" : null }
 private FP1_MONITORING_MODE_NAME(value) { value == 0 ? "undirected" : value == 1 ? "left_right" : null }
 
 def parse(String description) {
@@ -158,6 +174,9 @@ def parse(String description) {
             else if (it.cluster == "0000" && it.attrId == "0005") {    // lumi.sensor_motion.aq2 button is pressed
                 if (txtEnable) log.info "${device.displayName} (parse attr 5) device ${it.value} button was pressed "
             }
+            else if (it.cluster == "0001" && it.attrId == "0020") {    // contact sensor
+                voltageAndBatteryEvents( Integer.parseInt(it.value,16) / 10.0)
+            }
             else if (descMap.cluster == "FCC0") {    // Aqara P1
                 parseAqaraClusterFCC0( description, descMap, it )
             }
@@ -200,7 +219,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0065" :
             def value = safeToInt(it.value)
             if (isFP1()) { // FP1
-                if (txtEnable) log.info "${device.displayName} presence is  ${value==0? 'not present':'present'} (${value} )"
+                if (txtEnable) log.info "${device.displayName} (attr 0x065) presence is  ${value==0? 'not present':'present'} (${value})"
                 presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
             }
             else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
@@ -223,7 +242,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             }
             else if (isFP1()) { // FP1
                 def value = safeToInt(it.value)
-                if (txtEnable) log.info "${device.displayName} <b>received distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                if (txtEnable) log.info "${device.displayName} (0x69) <b>received approach_distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
             else {
@@ -236,7 +255,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "00FC" :
             if (txtEnable) log.info "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
-        case "0102" : // Retrigger interval
+        case "0102" : // Retrigger interval (duration)
             def value = Integer.parseInt(it.value, 16)
             device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
             if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
@@ -245,7 +264,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM
             def value = safeToInt(it.value)
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} (${it.attrId}) <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
@@ -254,6 +273,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
             def value = safeToInt(it.value)
+            if (txtEnable) log.info "${device.displayName} (attr. 0x0142) presence is  ${value==0?'not present':'present'} (${value})"
             presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
@@ -263,12 +283,12 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             def value = safeToInt(it.value)
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            if (txtEnable) log.info "${device.displayName} <b>received monitoring_modey report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} <b>received monitoring_mode report: ${FP1_MONITORING_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
             def value = safeToInt(it.value)
             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} (0x0146) <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
@@ -292,7 +312,7 @@ def decodeAqaraStruct( description )
         def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
         def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
         def rawValue = 0
-        // value: 0121=F50B 0328=1D 0421=0000 0521=0100 0821=0501 0A21=4F41 0C20=01 1320=00 1420=00 6410=00 6521=1900 6920=05 6A20=03 6B20=01"
+        //
         switch (dataType) {
             case 0x08 : // 8 bit data
             case 0x10 : // 1 byte boolean
@@ -317,7 +337,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x65 :    // (101) FP1 presence
                         if (isFP1()) { // FP1
-                            if (txtEnable) log.info "${device.displayName} presence is  ${rawValue==0?'not present':'present'} (${rawValue} )"
+                            if (txtEnable) log.info "${device.displayName} (0x65) presence is  ${rawValue==0?'not present':'present'} (${rawValue})"
                             presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(rawValue) )  
                         }
                         else {
@@ -342,7 +362,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x69 : // (105) 
                         if (isFP1()) { // FP1
-                            device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
+                            device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
                             if (txtEnable) log.info "${device.displayName} approach_distance is <b>${FP1_APPROACH_DISTANCE_NAME(rawValue)}</b> (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
@@ -359,20 +379,23 @@ def decodeAqaraStruct( description )
                         }
                         break
                     case 0x6A :    // sensitivity
-                        device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
-                        if (txtEnable) log.info "${device.displayName} (tag 0x6A) sensitivity is <b>${P1_SENSITIVITY_NAME(rawValue)}</b> (${rawValue})"
+                        if (isFP1()) {
+                            if (txtEnable) log.info "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
+                        }
+                        else {
+                            device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
+                            if (txtEnable) log.info "${device.displayName} (tag 0x6A) sensitivity is <b>${P1_SENSITIVITY_NAME(rawValue)}</b> (${rawValue})"
+                        }
                         break
                     case 0x6B :    // LED
-                        device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
-                        if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
+                        if (isFP1()) {
+                            if (txtEnable) log.info "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
+                        }
+                        else {
+                            device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
+                            if (txtEnable) log.info "${device.displayName} LED is ${P1_LED_MODE_NAME(rawValue)} (${rawValue})"
+                        }
                         break
-                    case 0x06 : // unknown
-                    case 0x0B : // unknown
-                    case 0x0C : // unknown
-                    case 0x6E : // unknown
-                    case 0x6F : // unknown
-                    case 0x94 : // unknown
-                    case 0x9A : // unknown
                     default :
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
@@ -397,16 +420,6 @@ def decodeAqaraStruct( description )
                     case 0x65 : // illuminance or humidity
                         illuminanceEventLux( rawValue )
                         break
-                    case 0x04 : // unknown
-                    case 0x05 : // unknown
-                    case 0x08 : // unknown
-                    case 0x09 : // unknown
-                    case 0x6A : // unknown
-                    case 0x97 : // unknown
-                    case 0x98 : // unknown
-                    case 0x99 : // unknown
-                    case 0x9A : // unknown
-                    case 0x9B : // unknown
                     default :
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
@@ -661,27 +674,46 @@ def temperatureEvent( temperature ) {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
     }
-    Integer tempConverted = temperature + (settings?.tempOffset?:0 as java.lang.Integer) 
+    Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int /* java.lang.Integer*/) 
     map.value = tempConverted
-    map.isStateChange = true
+    // map.isStateChange = true removed in ver 1.2.0
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
 
-def presenceEvent( String status ) {
-    sendEvent("name": "presence", "value": status, "isStateChange": true)
-    if (settings?.txtEnable) log.info "${device.displayName} presence is <b>${status}</b>"
+def presenceEvent( String status, isDigital=false ) {
+    if (status != null) {
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "presence", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} presence is <b>${status}</b>"
+        if (status == "present") {
+            handleMotion(true, isDigital=true)
+        }
+        else {
+            handleMotion(false, isDigital=true)
+        }
+    }
 }
                                               
 // private FP1_PRESENCE_EVENT_TYPE_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-def presenceTypeEvent( String type ) {
-    sendEvent("name": "presence_type", "value": type, "isStateChange": true)
-    if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${type}</b>"
+def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
+    if (presenceTypeEvent != null) {
+        def type = isDigital == true ? "digital" : "physical"
+        sendEvent("name": "presence_type", "value": presenceTypeEvent, "type": type)                // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${presenceTypeEvent}</b>"
+        if (presenceTypeEvent in ["enter", "left_enter", "right_enter"] ) {
+            handleMotion(true, isDigital=true)
+        }
+        else if (presenceTypeEvent in ["leave", "left_leave", "right_leave" ]) {
+            handleMotion(false, isDigital=true)
+        }        
+    }
 }
 
 private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
-        def timeout = settings?.motionResetTimer ?: 30
+        def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
+        //log.warn "handleMotion timeout = ${timeout}"
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
             runIn(timeout, resetToMotionInactive, [overwrite: true])
@@ -851,11 +883,11 @@ def updated() {
     if (isRTCGQ13LM() || isP1() || isFP1()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
-            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${motionSensitivity}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${P1_SENSITIVITY_NAME(value)} (${motionSensitivity})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
-    if (isRTCGQ13LM() || isP1() || isFP1()) {
+    if (isRTCGQ13LM() || isP1()) {
         if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
             value = safeToInt( motionRetriggerInterval )
             if (settings?.logEnable) log.debug "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
@@ -866,12 +898,12 @@ def updated() {
     if (isFP1()) { // FP1
         if (settings?.approachDistance != null && settings?.approachDistance != 0) {    // [1:"far", 2:"medium", 3:"near" ]
             value = safeToInt( approachDistance )
-            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistance}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${FP1_APPROACH_DISTANCE_NAME(value)} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
         if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
             value = safeToInt( monitoringMode )
-            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringMode}"
+            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${FP1_MONITORING_MODE_NAME(value)} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
@@ -894,7 +926,11 @@ void initializeVars( boolean fullInit = false ) {
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)    
+    if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
+    if (isFP1()) {
+        device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
+        //log.warn "forcing motionResetTimer to ${settings?.motionResetTimer}"
+    }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
     
      if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
@@ -939,9 +975,17 @@ def setMotion( mode ) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
+            if (isFP1()) {
+                presenceEvent("present", isDigital=true)
+                presenceTypeEvent("enter", isDigital=true)
+            }
             break
         case "inactive" :
             handleMotion(false, isDigital=true)
+            if (isFP1()) {
+                presenceEvent("not present", isDigital=true)
+                presenceTypeEvent("leave", isDigital=true)
+            }
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
@@ -1001,7 +1045,12 @@ def aqaraReadAttributes() {
         //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])    // P1 : octets string bytes are reversed ! ( in WireShark: 54:01:09 ..... 32:61 )
     }
     else if (isFP1()) {  // Aqara presence detector FP1 
+        log.warn "aqaraReadAttributes() FP1"
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
+    }
+    else if (isE1()) {   // E1 contact sensor
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    //  battery voltage
+        cmds += zigbee.readAttribute(0x0002, 0x0500, [mfgCode: 0x115F], delay=200)    //  open/close IAS Zone 2
     }
     else {
         if (logEnable) log.warn "${device.displayName} unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
@@ -1013,21 +1062,53 @@ def aqaraReadAttributes() {
 
 def aqaraBlackMagic() {
     List<String> cmds = []
-    
-    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
 
     if (isP1()) {
         //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
     }
-    
-
-    if (/*isP1() ||*/ isFP1()) {
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}", "delay 200",]
+    else if (isE1()) {
+        log.warn "aqaraBlackMagic() for E1"
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 89 34 86 38 41 04 19 89 90 79 74 27 27 80 18 45}  {0x0104}", "delay 200",]     // contact sensor write attr 0xFF
     }
+    else if (isFP1()) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 02 32 71 76 20 79 16 48 28 87 18 12 21 55 72 36}  {0x0104}", "delay 50",]      // FP1 write attr 0xFF 16 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 01 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:5) write attr 0x0150 4 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 07 01 02 ff ff 00 00 ff}  {0x0104}", "delay 50",]                                 // FP1 (seq:6) write attr 0x0150 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 50 01 41 03 06 55 35}  {0x0104}", "delay 50",]                                             // FP1 (seq:7) write attr 0x0150 4 bytes
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                                // FP1 (seq 8) write attr 0x0155 : 1 byte 01
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
+        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
+        
+        //cmds += activeEndpoints()         
 
-    sendZigbeeCommands( cmds )      
+        log.warn "aqaraBlackMagic() for FP1"
+    }
+    else {
+        log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+    }
+    
+    
+//    cmds += activeEndpoints()
+    sendZigbeeCommands( cmds )
+
 }
+
+def activeEndpoints() {
+    List<String> cmds = []
+    
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
+    String endpointIdTemp = endpointId == null ? "01" : endpointId
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
+    
+    return cmds    
+}
+
+
 
 def test( description ) {
 	List<String> cmds = []
@@ -1037,11 +1118,14 @@ def test( description ) {
    // def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
     
     
-   def xx = "FP1 debug log (SmartThings): ****************, value: 8309281F05210100082135010A2100000C20141020011220006520016620036720006820006920016A20016B2003" 
+  // def xx = "FP1 debug log (SmartThings): ****************, value: 8309281F05210100082135010A2100000C20141020011220006520016620036720006820006920016A20016B2003" 
     
     //decodeAqaraStruct(xx)
     //aqaraReadAttributes()
-    aqaraBlackMagic()
+   // aqaraBlackMagic()
+    
+    
+   sendZigbeeCommands( cmds )
 }
 
 
