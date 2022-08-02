@@ -27,12 +27,13 @@
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
- * 
+ * ver. 1.2.1 2022-08-02 kkossev  - (dev. branch) - code / traces cleanup; change device name on initialize() 
+ *                            
  *
 */
 
-def version() { "1.2.0" }
-def timeStamp() {"2022/07/29 8:39 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2022/08/02 1:09 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -84,7 +85,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"     // Aqara precision motion sensor
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara Motion Sensor RTCGQ12LM"                    // RTCGQ12LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi presence sensor RTCGQ11LM"   // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"   // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                   // tests only
         
     }
@@ -214,7 +215,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (logEnable) log.info "${device.displayName} (parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
             break
         case "0064" :
-            if (txtEnable) log.info "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (logEnable) log.warn "${device.displayName} <b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0065" :
             def value = safeToInt(it.value)
@@ -253,7 +254,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             decodeAqaraStruct(description)
             break
         case "00FC" :
-            if (txtEnable) log.info "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (logEnable) log.warn "${device.displayName} received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0102" : // Retrigger interval (duration)
             def value = Integer.parseInt(it.value, 16)
@@ -375,12 +376,12 @@ def decodeAqaraStruct( description )
                             if (txtEnable) log.info "${device.displayName} motion retrigger interval is ${rawValue} s."
                         }
                         else {
-                            if (logEnable) log.debug "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                            if (logEnable) log.warn "unknown device ${device.getDataValue('model')} tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         }
                         break
                     case 0x6A :    // sensitivity
                         if (isFP1()) {
-                            if (txtEnable) log.info "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
+                            if (logEnable) log.warn "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
@@ -389,7 +390,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6B :    // LED
                         if (isFP1()) {
-                            if (txtEnable) log.info "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
+                            if (logEnable) log.warn "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
@@ -397,7 +398,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.warn "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 1) * 2
@@ -913,10 +914,32 @@ def updated() {
     }
 }    
 
+void setDeviceName() {
+    String deviceName
+    
+    if (isP1())
+        deviceName = "Aqara P1 Motion Sensor"                                   // 'lumi.motion.ac02'         RTCGQ14LM
+    else if (isRTCGQ13LM()) 
+        deviceName = "Aqara Precision Motion Sensor"                             // 'lumi.motion.agl04'        RTCGQ13LM
+    else if (isFP1()) 
+        deviceName = "Aqara FP1 Presence Sensor"                                 // 'lumi.motion.ac01'         RTCZCGQ11LM
+    else if (device.getDataValue('model') in ['lumi.sensor_motion.aq2']) 
+        deviceName = "Xiaomi Motion Sensor"                                      // 'lumi.sensor_motion.aq2'   RTCGQ11LM
+    else if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
+        deviceName = "Aqara Sensor"
+    else {
+        log.warn "${device.displayName} unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+        return
+    }
+    device.setName(deviceName)
+    log.info "${device.displayName} device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
+}
+
 void initializeVars( boolean fullInit = false ) {
     if (logEnable==true) log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
     if (fullInit == true ) {
         state.clear()
+        setDeviceName()
         state.driverVersion = driverVersionAndTimeStamp()
     }
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
@@ -1009,26 +1032,6 @@ String integerToHexString(Integer value, Integer minBytes, boolean reverse=false
 }
 
 
-ArrayList<String> zigbeeWriteHexStringAttribute(Integer cluster, Integer attributeId, Integer dataType, String value, Map additionalParams = [:], int delay = 209) {
-    log.debug "zigbeeWriteBigIntegerAttribute()"
-    String mfgCode = ""
-    if(additionalParams.containsKey("mfgCode")) {
-        //mfgCode = " {${integerToHexString(HexUtils.hexStringToInt(additionalParams.get("mfgCode")), 2, reverse=true)}}"
-        mfgCode = " 0x115F"
-    }
-    String wattrArgs = "0x${device.deviceNetworkId} 0x01 0x${HexUtils.integerToHexString(cluster, 2)} " + 
-                       "0x${HexUtils.integerToHexString(attributeId, 2)} " + 
-                       "0x${HexUtils.integerToHexString(dataType, 1)} " + 
-                       "{${value.split("(?<=\\G..)").reverse().join()}}" + 
-                       "$mfgCode"
-    ArrayList<String> cmd = ["he wattr $wattrArgs", "delay $delay"]
-    
-    log.debug "zigbeeWriteBigIntegerAttribute cmd=$cmd"
-    return cmd
-}
-
-
-
 def aqaraReadAttributes() {
     List<String> cmds = []
 
@@ -1042,7 +1045,6 @@ def aqaraReadAttributes() {
     }
     else if (isP1()) {    // Aqara P1 human body movement and illuminance sensor
         cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C, 0x0152], [mfgCode: 0x115F], delay=200)
-        //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F])    // P1 : octets string bytes are reversed ! ( in WireShark: 54:01:09 ..... 32:61 )
     }
     else if (isFP1()) {  // Aqara presence detector FP1 
         log.warn "aqaraReadAttributes() FP1"
@@ -1064,7 +1066,6 @@ def aqaraBlackMagic() {
     List<String> cmds = []
 
     if (isP1()) {
-        //cmds += zigbeeWriteHexStringAttribute(65472, 255, 65, "61326189911360837942402817090154"+"10", [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
     }
     else if (isE1()) {
@@ -1082,18 +1083,14 @@ def aqaraBlackMagic() {
         cmds += zigbee.writeAttribute(0xFCC0, 0x0155, 0x20, 0x01, [mfgCode: 0x115F], delay=50)                                                                                                // FP1 (seq 8) write attr 0x0155 : 1 byte 01
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
-        
         //cmds += activeEndpoints()         
-
         log.warn "aqaraBlackMagic() for FP1"
     }
     else {
         log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
     }
-    
-    
-//    cmds += activeEndpoints()
+    //cmds += activeEndpoints()
     sendZigbeeCommands( cmds )
 
 }
