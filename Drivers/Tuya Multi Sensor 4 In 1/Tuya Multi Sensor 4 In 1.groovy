@@ -26,7 +26,7 @@
 */
 
 def version() { "1.0.9" }
-def timeStamp() {"2022/08/06 10:23 AM"}
+def timeStamp() {"2022/08/06 10:54 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -191,6 +191,11 @@ metadata {
             if (isBlackPIRsensor()) {
 		        input (name: "inductionTime", type: "decimal", title: "Induction Time", description: "Induction time (24..300) seconds", range: "24..300", defaultValue: 24)   
                 input (name: "targetDistance", type: "enum", title: "Target Distance", description:"Select target distance", defaultValue: -1, options: blackSensorDistanceOptions)
+            }
+            if (isBlackSquareRadar()) {
+		        input (name: "Parameter101", type: "decimal", title: "Parameter101", description: "Parameter101", range: "0..300", defaultValue: 1)   
+		        input (name: "Parameter102", type: "decimal", title: "Parameter102", description: "Parameter102", range: "0..300", defaultValue: 0)   
+		        input (name: "Parameter103", type: "decimal", title: "Parameter103", description: "Parameter103", range: "0..300", defaultValue: 1)   
             }
         }
     }
@@ -524,7 +529,8 @@ def processTuyaCluster( descMap ) {
                     device.updateSetting("vSensitivity", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isBlackSquareRadar()) {
-                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown event 0x65(101) fncmd = ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown parameter 0x65(101) value = ${fncmd}"
+                    device.updateSetting("Parameter101", [value:fncmd as int , type:"decimal"])
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.debug "${device.displayName} motion event 0x65 fncmd = ${fncmd}"
@@ -550,7 +556,8 @@ def processTuyaCluster( descMap ) {
                     device.updateSetting("inductionTime", [value:fncmd as int , type:"decimal"])
                 }
                 else if (isBlackSquareRadar()) {
-                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown event 0x66(102) fncmd = ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown parameter 0x66(102) value = ${fncmd}"
+                    device.updateSetting("Parameter102", [value:fncmd as int , type:"decimal"])
                 }
                 else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
@@ -569,7 +576,8 @@ def processTuyaCluster( descMap ) {
                     device.updateSetting("vacancyDelay", [value:fncmd as int , type:"decimal"])
                 }
                 else if (isBlackSquareRadar()) {
-                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown event 0x67(103) fncmd = ${fncmd}"
+                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar unknown parameter 0x67(103) value = ${fncmd}"
+                    device.updateSetting("Parameter103", [value:fncmd as int , type:"decimal"])
                 }
                 else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) { // trsfIlluminanceLux for TuYa Radar Sensor with fall function
                     illuminanceEventLux( fncmd )
@@ -1122,6 +1130,23 @@ def updated() {
                 def dpValHex = zigbee.convertToHexString(value as int, 2)
                 cmds += sendTuyaCommand("69", DP_TYPE_ENUM, dpValHex)
                 if (settings?.logEnable) log.warn "${device.displayName} setting target distance to : ${blackSensorDistanceOptions[value.toString()]} (${value})"                
+            }
+        }
+        if (isBlackSquareRadar()) {
+            if (Parameter101 != null) {
+                def val = settings?.Parameter101
+                cmds += sendTuyaCommand("65", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
+                if (settings?.logEnable) log.debug "${device.displayName} setting Parameter101 to : ${val}"                
+            }
+            if (Parameter102 != null) {
+                def val = settings?.Parameter102
+                cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
+                if (settings?.logEnable) log.debug "${device.displayName} setting Parameter102 to : ${val}"                
+            }
+            if (Parameter103 != null) {
+                def val = settings?.Parameter103
+                cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
+                if (settings?.logEnable) log.debug "${device.displayName} setting Parameter103 to : ${val}"                
             }
         }
         //
