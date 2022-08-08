@@ -21,12 +21,13 @@
  * ver. 1.0.8 2022-08-08 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
  *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm; removed temperatureScaleParameter,
  *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is converted to minutes; humiditySensitivity and temperatureSensitivity bug fixes; added temperature and humidity offesets; faster sending of congig. pars
- *                                   TODO:
+ *                                  configuration is sent immediately after Zigbee pairing!
+ *
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/08 8:59 PM"}
+def timeStamp() {"2022/08/08 9:50 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -684,7 +685,9 @@ def configure() {
     if (settings?.txtEnable) log.info "${device.displayName} configure().."
     List<String> cmds = []
     cmds += tuyaBlackMagic()    
-    sendZigbeeCommands(cmds)    
+    sendZigbeeCommands(cmds) 
+    //
+    updated() // send the default or previously configured preference parameters during the Zigbee pairing process..
 }
 
 def initialize() {
@@ -692,7 +695,7 @@ def initialize() {
     unschedule()
     initializeVars(fullInit = true)
     installed()
-    updated()
+    //updated()
     configure()
     runIn( 3, logInitializeRezults)
 }
