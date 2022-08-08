@@ -18,15 +18,15 @@
  * ver. 1.0.5 2022-04-25 kkossev  - added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
- * ver. 1.0.8 2022-06-19 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
- *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm
- *                        
- *                                   TODO: remove temperatureScaleParameter,
+ * ver. 1.0.8 2022-08-08 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
+ *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm; removed temperatureScaleParameter,
+ *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is comverted to minutes;
+ *                                   TODO:
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/07 10:49 AM"}
+def timeStamp() {"2022/08/08 7:26 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -95,11 +95,10 @@ metadata {
     }
 }
 
+
 @Field static final Integer numberOfconfigParams = 8
 @Field static Map configParams = [
-/*        1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
-                   // no limit */
-        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, C", defaultValue: 0.5, range: "0.1..5.0",
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..5.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
         3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
@@ -120,16 +119,16 @@ metadata {
         8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, %", defaultValue: 60, range: "0..100",            // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]], 
     
-        9: [input: [name: "minReportingTimeTemp", type: "number", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 60, range: "10..3600",
+        9: [input: [name: "minReportingTimeTemp", type: "decomal", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 60, range: "10..3600",
                    limit:["Zigbee NON-Tuya"]]],
     
-       10: [input: [name: "maxReportingTimeTemp", type: "number", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
+       10: [input: [name: "maxReportingTimeTemp", type: "decimal", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
                    limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
-       11: [input: [name: "minReportingTimeHumidity", type: "number", title: "Minimum time between humidity reports", description: "Minimum time between humidity reporting, seconds", defaultValue: 60, range: "10..3600",
+       11: [input: [name: "minReportingTimeHumidity", type: "decimal", title: "Minimum time between humidity reports", description: "Minimum time between humidity reporting, seconds", defaultValue: 60, range: "10..3600",
                    limit:["Zigbee NON-Tuya"]]],
     
-       12: [input: [name: "maxReportingTimeHumidity", type: "number", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
+       12: [input: [name: "maxReportingTimeHumidity", type: "decimal", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
                    limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
        13: [input: [name: "alarmTempPar", type: "enum", title: "Temperature Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min temp", 1:"Over max temp", 2:"off"],
@@ -384,17 +383,19 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
                 }                
                 break
-            case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only?) 
-                if (settings?.txtEnable) log.info "${device.displayName} temperature max reporting interval is ${fncmd} min"
+            case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
+                if (settings?.txtEnable) log.info "${device.displayName} temperature max reporting interval is ${fncmd} min (fncmd*60) seconds"
+                device.updateSetting("maxReportingTimeTemp", [value:fncmd*60, type:"decimal"])
                 break                
             case 0x12 : // (18) humidity max reporting interval, default 120 min (Haozee only?) 
-                if (settings?.txtEnable) log.info "${device.displayName} humidity max reporting interval is ${fncmd} min"
+                if (settings?.txtEnable) log.info "${device.displayName} humidity max reporting interval is ${fncmd} min (fncmd*60) seconds"
+                device.updateSetting("maxReportingTimeHumidity", [value:fncmd*60, type:"decimal"])
                 break                
             case 0x13 : // (19) temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
                 if (settings?.txtEnable) log.info "${device.displayName} temperature sensitivity reported by device is: ${fncmd/10.0} C"
                 device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
                 break                
-            case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
+            case 0x14 : // (20) humidity sensitivity default 3%  (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity sensitivity is ${fncmd} %"
                 device.updateSetting("humiditySensitivity", [value:fncmd, type:"decimal"])
                 break
@@ -550,9 +551,18 @@ def updated() {
         */
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
-        fncmd = safeToInt( humiditySensitivity )
-        if (settings?.logEnable) log.trace "${device.displayName} changing humiditySensitivity to= ${fncmd}"
+        fncmd = safeToInt( settings?.humiditySensitivity )
+        if (settings?.logEnable) log.trace "${device.displayName} setting  humiditySensitivity to= ${fncmd}"
         cmds += sendTuyaCommand("14", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        //
+        Integer intValue = (settings?.maxReportingTimeTemp as int) / 60
+        if (settings?.logEnable) log.trace "${device.displayName} setting Temperature Max reporting time to ${intValue} minutes"
+        cmds += sendTuyaCommand("11", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
+        //
+        intValue = (settings?.maxReportingTimeHumidity as int) / 60
+        if (settings?.logEnable) log.trace "${device.displayName} setting Humidity Max reporting time to ${intValue} minutes"
+        cmds += sendTuyaCommand("12", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
+        
         /*
         fncmd = safeToInt( maxHumidityAlarmPar )
         if (settings?.logEnable) log.trace "${device.displayName} changing maxHumidityAlarm to= ${fncmd}"
