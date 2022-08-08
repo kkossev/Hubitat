@@ -26,7 +26,7 @@
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/08 7:40 PM"}
+def timeStamp() {"2022/08/08 8:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -482,7 +482,7 @@ def humidityEvent( humidity ) {
     map.value = map.value < 0.0 ? 0.0 : map.value > 100.0 ? 100.0 : map.value
     map.unit = "% RH"
     map.isStateChange = true
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((map.value) * 10) / 10} ${map.unit}"}
     sendEvent(map)
 }
 
