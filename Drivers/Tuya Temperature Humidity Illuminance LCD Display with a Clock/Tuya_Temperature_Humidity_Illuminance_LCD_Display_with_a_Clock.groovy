@@ -20,13 +20,13 @@
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
  * ver. 1.0.8 2022-08-08 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
  *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm; removed temperatureScaleParameter,
- *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is comverted to minutes;
+ *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is converted to minutes; humiditySensitivity and temperatureSensitivity bug fixes;
  *                                   TODO:
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/08 7:26 AM"}
+def timeStamp() {"2022/08/08 8:02 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -452,7 +452,6 @@ def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
     def Scale = location.temperatureScale
-    
     if (Scale == "F") {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
@@ -536,9 +535,9 @@ def updated() {
             if (settings?.logEnable) log.warn "${device.displayName} temperatureScaleParameter NOT MATCH!"
         }
         */
-        fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
-        if (settings?.logEnable) log.trace "${device.displayName} changing temperatureSensitivity to= ${fncmd/10.0}"
-        cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        Integer intValue = ((safeToDouble(settings?.temperatureSensitivity )) * 10.0) as int
+        if (settings?.logEnable) log.trace "${device.displayName} setting temperatureSensitivity to ${(intValue as Double)/10.0} C"
+        cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         
         /*
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
@@ -551,11 +550,11 @@ def updated() {
         */
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
-        fncmd = safeToInt( settings?.humiditySensitivity )
-        if (settings?.logEnable) log.trace "${device.displayName} setting  humiditySensitivity to= ${fncmd}"
-        cmds += sendTuyaCommand("14", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        Integer intValue = settings?.humiditySensitivity as int
+        if (settings?.logEnable) log.trace "${device.displayName} setting  humiditySensitivity to ${intValue} %"
+        cmds += sendTuyaCommand("14", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
-        Integer intValue = (settings?.maxReportingTimeTemp as int) / 60
+        intValue = (settings?.maxReportingTimeTemp as int) / 60
         if (settings?.logEnable) log.trace "${device.displayName} setting Temperature Max reporting time to ${intValue} minutes"
         cmds += sendTuyaCommand("11", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
@@ -646,7 +645,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
     //if (fullInit == true || settings?.temperatureScaleParameter == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
     if (fullInit == true || settings?.temperatureSensitivity == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
-    if (fullInit == true || settings?.humiditySensitivity == null)     device.updateSetting("temperatureSensitivity", [value:5, type:"decimal"])
+    if (fullInit == true || settings?.humiditySensitivity == null)     device.updateSetting("humiditySensitivity", [value:5, type:"decimal"])
     if (fullInit == true || settings?.illuminanceSensitivity == null)     device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
     if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar",  [value:0.0, type:"number"])
     if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar",  [value:39.0, type:"number"])
@@ -677,7 +676,7 @@ def configure() {
 def initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
-    initializeVars()
+    initializeVars(fullInit = true)
     installed()
     updated()
     configure()
