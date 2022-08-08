@@ -20,13 +20,13 @@
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
  * ver. 1.0.8 2022-08-08 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
  *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm; removed temperatureScaleParameter,
- *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is converted to minutes; humiditySensitivity and temperatureSensitivity bug fixes;
+ *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is converted to minutes; humiditySensitivity and temperatureSensitivity bug fixes; added temperature and humidity offesets; faster sending of congig. pars
  *                                   TODO:
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/08 8:02 AM"}
+def timeStamp() {"2022/08/08 7:40 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,7 +86,8 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each { 
-                if (it.value.input.limit == null || getModelGroup() in it.value.input.limit) {
+                //log.warn "it.value.input.limit = ${it.value.input.limit}"
+                if (it.value.input.limit == null || 'ALL' in it.value.input.limit || getModelGroup() in it.value.input.limit) {
                     //log.trace "it = ${it.value.input.limit}"
                     input it.value.input 
                 }
@@ -98,6 +99,13 @@ metadata {
 
 @Field static final Integer numberOfconfigParams = 8
 @Field static Map configParams = [
+    
+        0: [input: [name: "temperatureOffset", type: "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", defaultValue: 0.0, range: "-100.0..100.0",
+                   limit:['ALL']]],
+    
+        1: [input: [name: "humidityOffset", type: "number", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", defaultValue: 0.0, range: "-100.0..100.0",
+                   limit:['ALL']]],
+    
         2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..5.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
@@ -146,7 +154,6 @@ metadata {
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock    
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       // 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
-    
     '_TZ2000_a476raq2'  : 'TS0201',     
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
     '_TZ2000_xogb73am'  : 'TS0201',     
@@ -154,12 +161,14 @@ metadata {
     '_TYZB01_a476raq2'  : 'TS0201',     
     '_TYZB01_hjsgdkfl'  : 'TS0201',     
     '_TZ2000_hjsgdkfl'  : 'TS0201',             // "AVATTO S-H02"   
-    '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! 
-
+    '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py 
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
-    ''                  : 'UNKNOWN'
+    ''                  : 'UNKNOWN',
+    'ALL'               : 'ALL',
+    'TEST'              : 'TEST'
+    
 ]
 
 
@@ -459,7 +468,8 @@ def temperatureEvent( temperature ) {
     else {
         map.unit = "\u00B0"+"C"
     }
-    map.value  =  Math.round((temperature - 0.05) * 10) / 10
+    def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
+    map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
     map.isStateChange = true
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
@@ -468,7 +478,8 @@ def temperatureEvent( temperature ) {
 def humidityEvent( humidity ) {
     def map = [:] 
     map.name = "humidity"
-    map.value = humidity as int
+    map.value = (humidity as int) + (safeToDouble(settings?.humidityOffset) as int)
+    map.value = map.value < 0.0 ? 0.0 : map.value > 100.0 ? 100.0 : map.value
     map.unit = "% RH"
     map.isStateChange = true
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
@@ -520,6 +531,11 @@ def updated() {
         unschedule(logsOff)
     }
     Integer fncmd
+    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
+        Integer intValue = ((safeToDouble(settings?.temperatureSensitivity )) * 10.0) as int
+        if (settings?.logEnable) log.trace "${device.displayName} setting temperatureSensitivity to ${(intValue as Double)/10.0} C"
+        cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
+    }
     if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee', 'TS0201_LCZ030']) {
         //if (settings?.logEnable) log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
         /*
@@ -535,10 +551,7 @@ def updated() {
             if (settings?.logEnable) log.warn "${device.displayName} temperatureScaleParameter NOT MATCH!"
         }
         */
-        Integer intValue = ((safeToDouble(settings?.temperatureSensitivity )) * 10.0) as int
-        if (settings?.logEnable) log.trace "${device.displayName} setting temperatureSensitivity to ${(intValue as Double)/10.0} C"
-        cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
-        
+
         /*
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0 as double}"
@@ -642,11 +655,12 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", "Auto detect")
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.temperatureOffset == null) device.updateSetting("temperatureOffset", [value:0.0, type:"number"])
+    if (fullInit == true || settings?.humidityOffset == null) device.updateSetting("humidityOffset", [value:0.0, type:"number"])
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
-    //if (fullInit == true || settings?.temperatureScaleParameter == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
-    if (fullInit == true || settings?.temperatureSensitivity == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
-    if (fullInit == true || settings?.humiditySensitivity == null)     device.updateSetting("humiditySensitivity", [value:5, type:"decimal"])
-    if (fullInit == true || settings?.illuminanceSensitivity == null)     device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
+    if (fullInit == true || settings?.temperatureSensitivity == null) device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
+    if (fullInit == true || settings?.humiditySensitivity == null) device.updateSetting("humiditySensitivity", [value:5, type:"decimal"])
+    if (fullInit == true || settings?.illuminanceSensitivity == null) device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
     if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar",  [value:0.0, type:"number"])
     if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar",  [value:39.0, type:"number"])
     if (fullInit == true || settings?.minHumidityAlarmPar == null) device.updateSetting("minHumidityAlarmPar",  [value:20, type:"decimal"])
@@ -685,7 +699,7 @@ def initialize() {
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
