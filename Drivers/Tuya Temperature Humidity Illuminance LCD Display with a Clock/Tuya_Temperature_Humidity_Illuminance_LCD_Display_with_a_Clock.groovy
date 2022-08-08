@@ -18,12 +18,15 @@
  * ver. 1.0.5 2022-04-25 kkossev  - added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
- * ver. 1.0.8 2022-06-19 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes;
+ * ver. 1.0.8 2022-06-19 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes; 
+ *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm
+ *                        
+ *                                   TODO: remove temperatureScaleParameter,
  *                                   TODO: force reading Temp and Humidity in Refresh() for TS0201 Neo CoolcaM ! temperature and humidity are on endpoint 2, not 1!
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/06/19 7:48 PM"}
+def timeStamp() {"2022/08/07 10:49 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -42,10 +45,10 @@ metadata {
         capability "IlluminanceMeasurement"
         //capability "ContactSensor"    // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
 
-        attribute "minTempAlarm", "enum", ["inactive","active"]        // (TS0601_Tuya and TS0601_Haozee only)
-        attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
-        attribute "minHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
-        attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
+        //attribute "minTempAlarm", "enum", ["inactive","active"]        // (TS0601_Tuya and TS0601_Haozee only)
+        //attribute "maxTempAlarm", "enum", ["inactive","active"]        // (TS0601_Haozee only)
+        //attribute "minHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
+        //attribute "maxHumidityAlarm", "enum", ["inactive","active"]    // (TS0601_Haozee only)
 
 /*        
         command "zTest", [
@@ -60,7 +63,7 @@ metadata {
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" // https://de.aliexpress.com/item/1005003634353180.html 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
@@ -94,9 +97,9 @@ metadata {
 
 @Field static final Integer numberOfconfigParams = 8
 @Field static Map configParams = [
-        1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
-                   // no limit
-        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, °C", defaultValue: 0.5, range: "0.1..5.0",
+/*        1: [input: [name: "temperatureScaleParameter", type: "enum", title: "Temperature Scale", description:"Auto detect or force Celsius/Fahrenheit", defaultValue: 0, options: [0:"Auto detect", 1:"Celsius", 2:"Fahrenheit"]]],
+                   // no limit */
+        2: [input: [name: "temperatureSensitivity", type: "number", title: "Temperature Sensitivity", description: "Temperature change for reporting, C", defaultValue: 0.5, range: "0.1..5.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
         3: [input: [name: "humiditySensitivity", type: "decimal", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
@@ -105,17 +108,17 @@ metadata {
         4: [input: [name: "illuminanceSensitivity", type: "decimal", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
     
-        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, °C", defaultValue: 18.0, range: "-20.0..60.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_LCZ030']]],
+        5: [input: [name: "minTempAlarmPar", type: "number", title: "Minimum Temperature Alarm", description: "Minimum Temperature Alarm, C", defaultValue: 0.0, range: "-20.0..60.0",
+                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
     
-        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, °C", defaultValue: 28.0, range: "-20.0..60.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_LCZ030']]],
+        6: [input: [name: "maxTempAlarmPar", type: "number", title: "Maximum Temperature Alarm", description: "Maximum Temperature Alarm, C", defaultValue: 39.0, range: "-20.0..60.0",
+                   limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
     
-        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, %", defaultValue: 10, range: "0..100",           // 'TS0601_Haozee' only!
-                   limit:['TS0601_Haozee', 'TS0201_LCZ030']]], 
+        7: [input: [name: "minHumidityAlarmPar", type: "decimal", title: "Minimal Humidity Alarm", description: "Minimum Humidity Alarm, %", defaultValue: 20, range: "0..100",           // 'TS0601_Haozee' only!
+                   limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]], 
     
-        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, %", defaultValue: 90, range: "0..100",            // 'TS0601_Haozee' only!
-                   limit:['TS0601_Haozee', 'TS0201_LCZ030']]], 
+        8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, %", defaultValue: 60, range: "0..100",            // 'TS0601_Haozee' only!
+                   limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]], 
     
         9: [input: [name: "minReportingTimeTemp", type: "number", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 60, range: "10..3600",
                    limit:["Zigbee NON-Tuya"]]],
@@ -130,10 +133,10 @@ metadata {
                    limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
     
        13: [input: [name: "alarmTempPar", type: "enum", title: "Temperature Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min temp", 1:"Over max temp", 2:"off"],
-                   limit:['TS0201_LCZ030']]],
+                   limit:[/*'TS0201_LCZ030'*/]]],
             
        14: [input: [name: "alarmHumidityPar", type: "enum", title: "Humidity Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min hum.", 1:"Over max hum", 2:"off"],
-                   limit:['TS0201_LCZ030']]]
+                   limit:[/*'TS0201_LCZ030'*/]]]
     
     
 ]
@@ -141,7 +144,7 @@ metadata {
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601_Tuya',         // Tuya Temperature Humidity LCD Display with a Clock
     '_TZE200_c7emyjom'  : 'TS0601_Tuya',         // Tuya Temperature Humidity LCD Display with a Clock
-    '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
+    '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock    
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       // 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     
@@ -327,35 +330,35 @@ def processTuyaCluster( descMap ) {
             case 0x09: // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
                 if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' :'Celsius' }"
                 break
-            case 0x0A: // Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} °C"
-                device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
+            case 0x0A: // (10) Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm upper limit reported by device is: ${fncmd/10.0 as double} C"
+                //device.updateSetting("maxTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
                 break
-            case 0x0B: // Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee)
-                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} °C "
-                device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
+            case 0x0B: // (11) Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee)
+                if (settings?.txtEnable) log.info "${device.displayName} temperature alarm lower limit reported by device is: ${fncmd/10.0 as double} C "
+                //device.updateSetting("minTempAlarmPar", [value:fncmd/10.0 as double, type:"number"])
                 break
             case 0x0C: // Max?. Humidity Alarm    (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity alarm upper limit is ${fncmd} "
-                device.updateSetting("maxHumidityAlarmPar", [value:fncmd, type:"number"])
+                //device.updateSetting("maxHumidityAlarmPar", [value:fncmd, type:"number"])
                 break
             case 0x0D: // Min?. Humidity Alarm    (Haozee only?)
                 if (settings?.txtEnable) log.info "${device.displayName} humidity alarm lower limit is ${fncmd} "
-                device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
+                //device.updateSetting("minHumidityAlarmPar", [value:fncmd, type:"number"])
                 break
             case 0x0E: // Temperature Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared
                 if (fncmd == 1) {
-                    sendEvent("name": "minTempAlarm", "value": "active")
+                    //sendEvent("name": "minTempAlarm", "value": "active")
                     if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0E=${fncmd}) is active"
                 }
                 else if (fncmd == 0) {    // TS0601_Haozee only?
-                    sendEvent("name": "maxTempAlarm", "value": "active")
+                    //sendEvent("name": "maxTempAlarm", "value": "active")
                     if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0E=${fncmd}) is active"
                 }
                 else if (fncmd == 2 ) {
-                    sendEvent("name": "minTempAlarm", "value": "inactive")
+                    //sendEvent("name": "minTempAlarm", "value": "inactive")
                     if (getModelGroup() in ['TS0601_Haozee']) {
-                        sendEvent("name": "maxTempAlarm", "value": "inactive")
+                        //sendEvent("name": "maxTempAlarm", "value": "inactive")
                     }
                     if (settings?.txtEnable) log.info "${device.displayName} Temperature Alarms (0x0E=${fncmd}) are inactive"
                 }
@@ -365,30 +368,30 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x0F: // humidity Alarm 0 = low alarm? 1 = high alarm? 2 = alarm cleared    (Haozee only?) 
                 if (fncmd == 1) {
-                    sendEvent("name": "minHumidityAlarm", "value": "active")
+                    //sendEvent("name": "minHumidityAlarm", "value": "active")
                     if (settings?.txtEnable) log.info "${device.displayName} Minimal Temperature Alarm (0x0F=${fncmd}) is active"
                 }
                 else if (fncmd == 0) {
-                    sendEvent("name": "maxHumidityAlarm", "value": "active")
+                    //sendEvent("name": "maxHumidityAlarm", "value": "active")
                     if (settings?.txtEnable) log.info "${device.displayName} Maximal Temperature Alarm (0x0F=${fncmd}) is active"
                 }
                 else if (fncmd == 2 ) {
-                    sendEvent("name": "minHumidityAlarm", "value": "inactive")
-                    sendEvent("name": "maxHumidityAlarm", "value": "inactive")
+                    //sendEvent("name": "minHumidityAlarm", "value": "inactive")
+                    //sendEvent("name": "maxHumidityAlarm", "value": "inactive")
                     if (settings?.txtEnable) log.info "${device.displayName} Humidity Alarm (0x0F=${fncmd}) is inactive"
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} Temperature Alarm (0x0E) UNKNOWN value ${fncmd}" // 1 if alarm (lower alarm) ? 2 if lower alam is cleared
                 }                
                 break
-            case 0x11 : // temperature max reporting interval, default 120 min (Haozee only?) 
+            case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only?) 
                 if (settings?.txtEnable) log.info "${device.displayName} temperature max reporting interval is ${fncmd} min"
                 break                
-            case 0x12 : // humidity max reporting interval, default 120 min (Haozee only?) 
+            case 0x12 : // (18) humidity max reporting interval, default 120 min (Haozee only?) 
                 if (settings?.txtEnable) log.info "${device.displayName} humidity max reporting interval is ${fncmd} min"
                 break                
-            case 0x13 : // temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
-                if (settings?.txtEnable) log.info "${device.displayName} temperature sensitivity reported by device is: ${fncmd/10.0} °C"
+            case 0x13 : // (19) temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
+                if (settings?.txtEnable) log.info "${device.displayName} temperature sensitivity reported by device is: ${fncmd/10.0} C"
                 device.updateSetting("temperatureSensitivity", [value:fncmd/10.0, type:"number"])
                 break                
             case 0x14 : // humidity sensitivity default 3%  (Haozee only?)
@@ -449,7 +452,7 @@ def temperatureEvent( temperature ) {
     map.name = "temperature"
     def Scale = location.temperatureScale
     
-    if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && Scale == "F")) {
+    if (Scale == "F") {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
     }
@@ -517,23 +520,26 @@ def updated() {
         unschedule(logsOff)
     }
     Integer fncmd
-    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
-        if (settings?.logEnable) log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
-        if (temperatureScaleParameter == "1" || (temperatureScaleParameter == "0" && location.temperatureScale== "C")) {    // Celsius
+    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee', 'TS0201_LCZ030']) {
+        //if (settings?.logEnable) log.trace "${device.displayName} temperatureScaleParameter = ${temperatureScaleParameter}"
+        /*
+        if (location.temperatureScale == "C") {    // Celsius
             cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
-            if (settings?.logEnable) log.warn "${device.displayName} changing to Celsius: ${cmds}"
+            if (settings?.logEnable) log.trace "${device.displayName} setting temperature scale to Celsius: ${cmds}"
         }
-        else if (temperatureScaleParameter == "2" || (temperatureScaleParameter == "0" && location.temperatureScale== "F")) {    // Fahrenheit
+        else if (location.temperatureScale == "F")) {    // Fahrenheit
             cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "01")
-            if (settings?.logEnable) log.warn "${device.displayName} changing to Fahrenheit: ${cmds}"
+            if (settings?.logEnable) log.trace "${device.displayName} setting temperature scale to Fahrenheit: ${cmds}"
         }
         else {
             if (settings?.logEnable) log.warn "${device.displayName} temperatureScaleParameter NOT MATCH!"
         }
+        */
         fncmd = (safeToDouble( temperatureSensitivity ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing temperatureSensitivity to= ${fncmd/10.0}"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         
+        /*
         fncmd = (safeToDouble( maxTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing maxTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0A", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
@@ -541,18 +547,20 @@ def updated() {
         fncmd = (safeToDouble( minTempAlarmPar ) * 10) as int
         if (settings?.logEnable) log.trace "${device.displayName} changing minTempAlarm to= ${fncmd/10.0 as double}"
         cmds += sendTuyaCommand("0B", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
-        
+        */
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
         fncmd = safeToInt( humiditySensitivity )
         if (settings?.logEnable) log.trace "${device.displayName} changing humiditySensitivity to= ${fncmd}"
         cmds += sendTuyaCommand("14", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        /*
         fncmd = safeToInt( maxHumidityAlarmPar )
         if (settings?.logEnable) log.trace "${device.displayName} changing maxHumidityAlarm to= ${fncmd}"
         cmds += sendTuyaCommand("0C", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
         fncmd = safeToInt( minHumidityAlarmPar )
         if (settings?.logEnable) log.trace "${device.displayName} changing minHumidityAlarm to= ${fncmd}"
         cmds += sendTuyaCommand("0D", DP_TYPE_VALUE, zigbee.convertToHexString(fncmd as int, 8))
+        */
     }
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400 
@@ -626,14 +634,14 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
-    if (fullInit == true || settings?.temperatureScaleParameter == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
+    //if (fullInit == true || settings?.temperatureScaleParameter == null) device.updateSetting("temperatureScaleParameter",  [value:"Auto detect", type:"enum"])
     if (fullInit == true || settings?.temperatureSensitivity == null)     device.updateSetting("temperatureSensitivity", [value:0.5, type:"number"])
     if (fullInit == true || settings?.humiditySensitivity == null)     device.updateSetting("temperatureSensitivity", [value:5, type:"decimal"])
     if (fullInit == true || settings?.illuminanceSensitivity == null)     device.updateSetting("illuminanceSensitivity", [value:12, type:"decimal"])
-    if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar",  [value:18.0, type:"number"])
-    if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar",  [value:28.0, type:"number"])
-    if (fullInit == true || settings?.minHumidityAlarmPar == null) device.updateSetting("minHumidityAlarmPar",  [value:10, type:"decimal"])
-    if (fullInit == true || settings?.maxHumidityAlarmPar == null) device.updateSetting("maxHumidityAlarmPar",  [value:90, type:"decimal"])
+    if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar",  [value:0.0, type:"number"])
+    if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar",  [value:39.0, type:"number"])
+    if (fullInit == true || settings?.minHumidityAlarmPar == null) device.updateSetting("minHumidityAlarmPar",  [value:20, type:"decimal"])
+    if (fullInit == true || settings?.maxHumidityAlarmPar == null) device.updateSetting("maxHumidityAlarmPar",  [value:60, type:"decimal"])
     if (fullInit == true || settings?.minReportingTimeTemp == null) device.updateSetting("minReportingTimeTemp",  [value:60, type:"decimal"])
     if (fullInit == true || settings?.maxReportingTimeTemp == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"decimal"])
     if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity",  [value:60, type:"decimal"])
@@ -710,6 +718,7 @@ def getBatteryPercentageResult(rawValue) {
         result.value = Math.round(rawValue / 2)
         result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
+        result.unit = "%"
         sendEvent(result)
     }
     else {
@@ -735,6 +744,7 @@ private Map getBatteryResult(rawValue) {
         result.descriptionText = "${linkText} battery is ${result.value}%"
         result.name = 'battery'
         result.isStateChange = true
+        result.unit = "%"
         sendEvent(result)
     }
     else {
