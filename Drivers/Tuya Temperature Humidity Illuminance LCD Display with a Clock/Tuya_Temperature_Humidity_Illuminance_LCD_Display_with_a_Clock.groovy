@@ -28,7 +28,7 @@
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/10 9:24 PM"}
+def timeStamp() {"2022/08/10 10:53 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -36,7 +36,9 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
- 
+@Field static final Integer defaultMinReportingTime = 10
+
+
 metadata {
     definition (name: "Tuya Temperature Humidity Illuminance LCD Display with a Clock", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya_Temperature_Humidity_Illuminance_LCD_Display_with_a_Clock.groovy", singleThreaded: true ) {
         capability "Refresh"
@@ -127,7 +129,7 @@ metadata {
         8: [input: [name: "maxHumidityAlarmPar", type: "decimal", title: "Maximum Humidity Alarm", description: "Maximum Humidity Alarm, %", defaultValue: 60, range: "0..100",            // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]], 
     
-        9: [input: [name: "minReportingTimeTemp", type: "decomal", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 10, range: "1..3600",
+        9: [input: [name: "minReportingTimeTemp", type: "decimal", title: "Minimum time between temperature reports", description: "Minimum time between temperature reporting, seconds", defaultValue: 10, range: "1..3600",
                    limit:['ALL']]],
     
        10: [input: [name: "maxReportingTimeTemp", type: "decimal", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
@@ -500,6 +502,7 @@ def temperatureEvent( temperature, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     //
     Float lastTempEvent = device.latestValue("temperature")
+    if (lastTempEvent == null) lastTempEvent = 0
     def timeElapsed = Math.round((now() - state.lastTemp)/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
     if (Math.abs(lastTempEvent - map.value ) <= 0.01 ) {
@@ -534,6 +537,7 @@ def humidityEvent( humidity, isDigital=false ) {
     map.descriptionText = "${map.name} is ${Math.round((map.value) * 10) / 10} ${map.unit}"
     //
     Float lastHumiEvent = device.latestValue("humidity")
+    if (lastHumiEvent == null) lastHumiEvent = 0
     def timeElapsed = Math.round((now() - state.lastHumi)/1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
     if (Math.abs(lastHumiEvent - map.value ) <= 0.01 ) {
@@ -712,8 +716,8 @@ def logInitializeRezults() {
 }
 
 // called by initialize() button
-void initializeVars(boolean fullInit = false ) {
-    if (settings?.txtEnable) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+void initializeVars(boolean fullInit = true ) {
+    log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
@@ -741,14 +745,14 @@ void initializeVars(boolean fullInit = false ) {
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"decimal"])
     //
     if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
-    if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - minReportingTimeTemp * 1000
-    if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - minReportingTimeHumidity * 1000
+    if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
+    if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
     //if (fullInit == true || state.lastIllu == null) state.lastIllu = now() - 10 * 1000
     
 }
 
 def tuyaBlackMagic() {
-     List<String> cmds = []
+    List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
     cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
     return  cmds
