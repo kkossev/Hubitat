@@ -502,35 +502,30 @@ def temperatureEvent( temperature, isDigital=false ) {
     map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    //
-    Float lastTempEvent = device.latestValue("temperature")
-    if (lastTempEvent == null) lastTempEvent = 0
+    if (state.lastTemp == null ) state.lastTemp = now() - (minReportingTimeTemp * 2000)
     def timeElapsed = Math.round((now() - state.lastTemp)/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
-    if (Math.abs(lastTempEvent - map.value ) <= 0.01 ) {
-        if (settings?.logEnable) {log.info "${device.displayName} IGNORING duplicated event: ${map.name} is ${map.value} ${map.unit}"}
-        return    // do nothing
-    }
     if (timeElapsed >= minReportingTimeTemp) {
-        state.lastTemp = now()
-        unschedule('sendDelayedEventTemp')
-        if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+		if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+		unschedule('sendDelayedEventTemp')		//get rid of stale queued reports
+		state.lastTemp = now()
         sendEvent(map)
-    }
-    else {         // queue the event 
+	}		
+    else {         // queue the event
+    	map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventTemp',  [overwrite: true, data: map])
     }
 }
 
 private void sendDelayedEventTemp(Map map) {
-    map.type = "digital"
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
+	state.lastTemp = now()
     sendEvent(map)
 }
 
 def humidityEvent( humidity, isDigital=false ) {
-    def map = [:] 
+    def map = [:]
     map.name = "humidity"
     map.value = (humidity as int) + (safeToDouble(settings?.humidityOffset) as int)
     map.value = map.value < 0.0 ? 0.0 : map.value > 100.0 ? 100.0 : map.value
@@ -538,30 +533,26 @@ def humidityEvent( humidity, isDigital=false ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${Math.round((map.value) * 10) / 10} ${map.unit}"
     //
-    Float lastHumiEvent = device.latestValue("humidity")
-    if (lastHumiEvent == null) lastHumiEvent = 0
+    if (state.lastHumi == null ) state.lastHumi = now() - (minReportingTimeHumidity * 2000)
     def timeElapsed = Math.round((now() - state.lastHumi)/1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
-    if (Math.abs(lastHumiEvent - map.value ) <= 0.01 ) {
-        if (settings?.logEnable) {log.info "${device.displayName} IGNORING duplicated event: ${map.name} is ${map.value} ${map.unit}"}
-        return    // do nothing
-    }
     if (timeElapsed >= minReportingTimeHumidity) {
-        state.lastHumi = now()
-        unschedule('sendDelayedEventHumi')
         if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+        unschedule('sendDelayedEventHumi')
+        state.lastHumi = now()
         sendEvent(map)
     }
     else {         // queue the event 
+    	map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventHumi',  [overwrite: true, data: map])
     }
 }
 
 private void sendDelayedEventHumi(Map map) {
-    map.type = "digital"
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
-    sendEvent(map)
+	state.lastHumi = now()
+	sendEvent(map)
 }
 
 def switchEvent( value ) {
