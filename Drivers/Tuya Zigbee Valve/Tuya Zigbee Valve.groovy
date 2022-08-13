@@ -15,6 +15,8 @@
  *
  *  ver. 1.0.0 2022-04-22 kkossev - inital version
  *  ver. 1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource
+ *  ver. 1.0.2 2022-08-13 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only)
+ *            TODO Presence check timer
  *
  *
  */
@@ -22,8 +24,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/04/23 10:10 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/08/13 9:57 AM"}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
@@ -31,7 +33,6 @@ metadata {
         capability "Valve"
         capability "Refresh"
         capability "Configuration"
-        //capability "Initialize"
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
 
         /*
@@ -49,6 +50,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"     // clusters verified! model: 'ZN231392'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"     // clusters verified
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"     // WaterIrrigationValve https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js 
         
         
    
@@ -75,6 +77,7 @@ metadata {
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
+def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }
 
 def parse(String description) {
     if (logEnable==true) {log.debug "description is $description"}
@@ -262,6 +265,15 @@ def parseZHAcommand( Map descMap) {
                         def cmd = descMap.data[2]
                         switch (cmd) {
                             case "01" : // switch
+                                if (!isWaterIrrigationValve()) {
+                                    switchEvent(value==0 ? "off" : "on")
+                                }
+                                else {
+                                    if (txtEnable==true) log.info "${device.displayName} Water Valve Mode ${cmd} is: ${value}"
+                                }
+                                break
+                            case "02" : // isWaterIrrigationValve() - WaterValveState
+                                if (txtEnable==true) log.info "${device.displayName} Water Valve State is: ${value}"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "07" : // Countdown
@@ -272,6 +284,17 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "13" : // inching switch(
                                 if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
+                                break
+                            case "65" : // (101) WaterValveIrrigationStartTime
+                            case "66" : // (102) WaterValveIrrigationEndTime
+                            case "67" : // (103) WaterValveCycleIrrigationNumTimes
+                            case "68" : // (104) WaterValveIrrigationTarget
+                            case "69" : // (105) WaterValveCycleIrrigationInterval
+                            case "6A" : // (106) WaterValveCurrentTempurature
+                            case "6C" : // (108) WaterValveBattery
+                            case "6F" : // (111) WaterValveWaterConsumed
+                            case "72" : // (114) WaterValveLastIrrigationDuration
+                                if (txtEnable==true) log.info "${device.displayName} parameter ${cmd} is: ${value}"
                                 break
                             case "D1" : // cycle timer
                                 if (txtEnable==true) log.info "${device.displayName} cycle timeris: ${value}"
@@ -370,8 +393,11 @@ def close() {
     state.isDigital = true
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} closing"}
-    def cmds = zigbee.off()
-    if (state.model == "TS0601") {
+    def cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster
+    if (isWaterIrrigationValve()) {
+        cmds = zigbee.command(0xEF00, 0x0, "00020101000100")    // PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd 
+    }
+    else if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
@@ -383,7 +409,10 @@ def open() {
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} opening"}
     def cmds = zigbee.on()
-    if (state.model == "TS0601") {
+    if (isWaterIrrigationValve()) {
+        cmds = zigbee.command(0xEF00, 0x0, "00020101000101")
+    }
+    else if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
