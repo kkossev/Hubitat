@@ -18,18 +18,13 @@
  * ver. 1.0.5 2022-04-25 kkossev  - added TS0601_AUBESS (illuminance only); ModelGroup is shown in State Variables
  * ver. 1.0.6 2022-05-09 kkossev  - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
- * ver. 1.0.8 2022-08-11 kkossev  - (dev. branch) _TZE200_pay2byax contact state and battery reporting fixes;
- *                                  removed degrees symbol from the logs; temporary commented out minTempAlarm maxTempAlarm minHumidityAlarm maxHumidityAlarm; removed temperatureScaleParameter,
- *                                  Max Temp and Humi reporting time for 'TS0601_Haozee' is converted to minutes; humiditySensitivity and temperatureSensitivity bug fixes; added temperature and humidity offesets; faster sending of congig. pars
- *                                  configuration is sent immediately after Zigbee pairing! isStateChange = true removed for T/H events; temperatureSensitivity for Haozee sensor is scaled by 20; C/F restored sending C/F scale to device;
- *                                  restored minTempAlarmPar, maxTempAlarmPar for TS0201_LCZ030; minReportingTimeTemp / Humidity preferences prevent sending multiple events for all type of sensors!; minimum Temperature Sensitivity limited to 0.25 C
- *                                  decimal vs number bug fixes;
+ * ver. 1.0.8 2022-08-13 kkossev  - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes;
+ *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
  *
- *                                  TODO: check and rewritte the humber/decimal values comparision
 */
 
 def version() { "1.0.8" }
-def timeStamp() {"2022/08/11 10:31 AM"}
+def timeStamp() {"2022/08/13 4:27 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -110,7 +105,7 @@ metadata {
         1: [input: [name: "humidityOffset", type: "decimal", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", defaultValue: 0.0, range: "-100.0..100.0",
                    limit:['ALL']]],
 
-        2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.25..5.0",
+        2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..5.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
 
         3: [input: [name: "humiditySensitivity", type: "number", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
