@@ -91,6 +91,23 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "7f55f65d-dc8e-4742-a2e2-bc74582613b3",
+      "name": "Aqara P1 Motion Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/packageManifest.json",
+      "description": "Aqara P1 Motion Sensor Zigbee driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "f70af857-af94-4bca-8c13-444bf3bc8139",
+      "name": "Tuya Multi Sensor 4 In 1 (PIR and mmWave Radars)",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/packageManifest.json",
+      "description": "Tuya PIR Motion Sensors and mmWave Radars - driver for Hubitat Elevation hub"
     }
   ]
 }
