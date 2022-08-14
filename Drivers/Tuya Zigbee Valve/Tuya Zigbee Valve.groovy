@@ -25,7 +25,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/08/14 8:24 PM"}
+def timeStamp() {"2022/08/14 8:51 PM"}
 
 @Field static final Boolean debug = false
 
@@ -80,7 +80,7 @@ metadata {
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
-def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }    // https://www.aliexpress.com/item/1005004222098040.html
+def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }    // https://www.aliexpress.com/item/1005004222098040.html
 
 def parse(String description) {
     if (logEnable==true) {log.debug "${device.displayName} description is $description"}
