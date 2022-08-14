@@ -25,7 +25,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/08/14 9:59 PM"}
+def timeStamp() {"2022/08/14 11:18 PM"}
 
 @Field static final Boolean debug = false
 
@@ -80,6 +80,19 @@ metadata {
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
+
+private getCLUSTER_TUYA()       { 0xEF00 }
+private getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
+private getSETDATA()            { 0x00 }
+private getSETTIME()            { 0x24 }
+
+// tuya DP type
+private getDP_TYPE_RAW()        { "01" }    // [ bytes ]
+private getDP_TYPE_BOOL()       { "01" }    // [ 0/1 ]
+private getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ]
+private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
+private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
+private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }    // https://www.aliexpress.com/item/1005004222098040.html
 
@@ -298,11 +311,11 @@ def parseZHAcommand( Map descMap) {
                                     switchEvent(value==0 ? "off" : "on")
                                 }
                                 else {
-                                    if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
+                                    if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                 }
                                 break
                             case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff                               
-                                if (txtEnable==true) log.info "${device.displayName} Water Valve State (${cmd}) is: ${value}"
+                                if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value}"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "07" : // Countdown
@@ -378,6 +391,9 @@ def parseZHAcommand( Map descMap) {
                 }
             }
             break
+        case "11" :    // Tuya specific
+            if (logEnable==true) log.info "${device.displayName} Tuya specific command: cluster=${descMap.clusterId} command=${descMap.command} data=${descMap.data}"
+            break
         case "24" :    // Tuya time sync
             //log.trace "Tuya time sync"
             if (descMap?.clusterInt==0xEF00 && descMap?.command == "24") {        //getSETTIME
@@ -426,36 +442,43 @@ def close() {
     state.isDigital = true
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} closing"}
-    def cmds
+    //def cmds
+    ArrayList<String> cmds = []
     if (isWaterIrrigationValve()) {
-        cmds = zigbee.command(0xEF00, 0x0, "00020101000100")    // PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd 
+        Short paramVal = 0
+        def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
+        cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (state.model == "TS0601") {
-        cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
+        cmds = sendTuyaCommand("01", DP_TYPE_BOOL, "00")
     }
     else {
         cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster   
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
-    return cmds
+    sendZigbeeCommands( cmds )
 }
 
 def open() {
     state.isDigital = true
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} opening"}
-    def cmds
+    ArrayList<String> cmds = []
     if (isWaterIrrigationValve()) {
-        cmds = zigbee.command(0xEF00, 0x0, "00020101000101")
+        Short paramVal = 1
+        def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
+        cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (state.model == "TS0601") {
-        cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
+        cmds = sendTuyaCommand("01", DP_TYPE_BOOL, "01")
     }
     else {
         cmds =  zigbee.on()
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
-    return cmds
+    sendZigbeeCommands( cmds )
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
@@ -480,7 +503,9 @@ def poll() {
     checkDriverVersion()
     List<String> cmds = []
     state.isRefreshRequest = true
-    cmds = zigbee.onOffRefresh()
+    if (device.getDataValue("model") != 'TS0601') {
+        cmds = zigbee.onOffRefresh()
+    }
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     return cmds
 }
@@ -563,7 +588,7 @@ void initializeVars( boolean fullInit = true ) {
     def ep = device.getEndpointId()
     if ( ep  != null) {
         //state.destinationEP = ep
-        if (logEnable==true) log.trace " destinationEP = ${state.destinationEP}"
+        if (logEnable==true) log.trace " destinationEP = ${ep}"
     }
     else {
         if (txtEnable==true) log.warn " Destination End Point not found, please re-pair the device!"
@@ -585,7 +610,6 @@ def checkDriverVersion() {
 }
 
 def logInitializeRezults() {
-    if (logEnable==true) log.info "${device.displayName} switchPollingSupported  = ${state.switchPollingSupported}"
     if (logEnable==true) log.info "${device.displayName} Initialization finished"
 }
 
@@ -635,10 +659,6 @@ def checkIfNotPresent() {
     }
 }
 
-private getCLUSTER_TUYA()       { 0xEF00 }
-private getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
-private getSETDATA()            { 0x00 }
-private getSETTIME()            { 0x24 }
 
 private getPACKET_ID() {
     state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
@@ -710,4 +730,5 @@ def test( dpCommand, dpValue, dpTypeString ) {
     log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }    
+ 
 
