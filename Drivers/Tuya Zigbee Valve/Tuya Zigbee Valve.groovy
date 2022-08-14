@@ -15,7 +15,7 @@
  *
  *  ver. 1.0.0 2022-04-22 kkossev - inital version
  *  ver. 1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource
- *  ver. 1.0.2 2022-08-14 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only); fingerprint inClusters correction
+ *  ver. 1.0.2 2022-08-14 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only); fingerprint inClusters correction; battery capability; open/close commands changes
  *            TODO Presence check timer
  *
  *
@@ -25,18 +25,19 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.2" }
-def timeStamp() {"2022/08/14 8:51 PM"}
+def timeStamp() {"2022/08/14 9:59 PM"}
 
 @Field static final Boolean debug = false
 
 metadata {
-    definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve%20Plug.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy", singleThreaded: true ) {
         capability "Actuator"    
         capability "Valve"
         capability "Refresh"
         capability "Configuration"
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
-
+        capability "Battery"
+        
         if (debug == true) {        
             command "test", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -287,11 +288,10 @@ def parseZHAcommand( Map descMap) {
                 switch (descMap.clusterId) {
                     case "EF00" :
                         if (logEnable==true) log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
-                        def attribute = getAttribute(descMap.data)
-                        def value = getAttributeValue(descMap.data)
-                        if (logEnable==true) log.trace "${device.displayName} Tuya cluster attribute=${attribute} value=${value}"
-                        def map = [:]
                         def cmd = descMap.data[2]
+                        def value = getAttributeValue(descMap.data)
+                        if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value}"
+                        def map = [:]
                         switch (cmd) {
                             case "01" : // switch
                                 if (!isWaterIrrigationValve()) {
@@ -332,8 +332,9 @@ def parseZHAcommand( Map descMap) {
                             case "6A" : // (106) WaterValveCurrentTempurature
                                 if (txtEnable==true) log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}"        // ignore!
                                 break
-                            case "6C" : // (108) WaterValveBattery
+                            case "6C" : // (108) WaterValveBattery - _TZE200_sh1btabb
                                 if (txtEnable==true) log.info "${device.displayName} Battery (${cmd}) is: ${value}"
+                                sendBatteryEvent(value)
                                 break
                             case "6F" : // (111) WaterValveWaterConsumed
                                 if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value}"
@@ -403,19 +404,6 @@ def parseZHAcommand( Map descMap) {
     }
 }
 
-private String getAttribute(ArrayList _data) {
-    String retValue = ""
-    if (_data.size() >= 5) {
-        if (_data[2] == "01" && _data[3] == "01" && _data[4] == "00") {
-            retValue = "switch"
-        }
-        else if (_data[2] == "02" && _data[3] == "02" && _data[4] == "00") {
-            retValue = "level"
-        }
-    }
-    return retValue
-}
-
 private int getAttributeValue(ArrayList _data) {
     int retValue = 0
     try {    
@@ -438,12 +426,15 @@ def close() {
     state.isDigital = true
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} closing"}
-    def cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster
+    def cmds
     if (isWaterIrrigationValve()) {
         cmds = zigbee.command(0xEF00, 0x0, "00020101000100")    // PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd 
     }
     else if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
+    }
+    else {
+        cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster   
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     return cmds
@@ -453,16 +444,24 @@ def open() {
     state.isDigital = true
     //log.trace "state.isDigital = ${state.isDigital}"
     if (logEnable) {log.debug "${device.displayName} opening"}
-    def cmds = zigbee.on()
+    def cmds
     if (isWaterIrrigationValve()) {
         cmds = zigbee.command(0xEF00, 0x0, "00020101000101")
     }
     else if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
+    else {
+        cmds =  zigbee.on()
+    }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     return cmds
 }
+
+def sendBatteryEvent( roundedPct, isDigital=false ) {
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
+}
+
 
 def clearIsDigital() { state.isDigital = false; /*log.trace "clearIsDigital()"*/ }
 def switchDebouncingClear() { state.switchDebouncing = false; /*log.trace "switchDebouncingClear()" */ }
@@ -508,7 +507,7 @@ def configure() {
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     cmds += refresh()
-    cmds += zigbee.onOffConfig()
+    cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
     sendZigbeeCommands(cmds)
 }
 
