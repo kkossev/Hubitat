@@ -12,21 +12,22 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-04-16 kkossev  - Inital test version
- * ver. 1.0.1 2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
- * ver. 1.0.2 2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
- * ver. 1.0.3 2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
- * ver. 1.0.4 2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
- * ver. 1.0.5 2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
- * ver. 1.0.6 2022-07-10 kkossev  - battery set to 0% and motion inactive when the device goes OFFLINE;
- * ver. 1.0.7 2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
- * ver. 1.0.8 2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
- * ver. 1.0.9 2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
+ * ver. 1.0.0  2022-04-16 kkossev  - Inital test version
+ * ver. 1.0.1  2022-04-18 kkossev  - IAS cluster multiple TS0202, TS0210 and RH3040 Motion Sensors fingerprints; ignore repeated motion inactive events
+ * ver. 1.0.2  2022-04-21 kkossev  - setMotion command; state.HashStringPars; advancedOptions: ledEnable (4in1); all DP info logs for 3in1!; _TZ3000_msl6wxk9 and other TS0202 devices inClusters correction
+ * ver. 1.0.3  2022-05-05 kkossev  - '_TZE200_ztc6ggyl' 'Tuya ZigBee Breath Presence Sensor' tests; Illuminance unit changed to 'lx'
+ * ver. 1.0.4  2022-05-06 kkossev  - DeleteAllStatesAndJobs; added isHumanPresenceSensorAIR(); isHumanPresenceSensorScene(); isHumanPresenceSensorFall(); convertTemperatureIfNeeded
+ * ver. 1.0.5  2022-06-11 kkossev  - _TZE200_3towulqd +battery; 'Reset Motion to Inactive' made explicit option; sensitivity and keepTime for IAS sensors (TS0202-tested OK) and TS0601(not tested); capability "PowerSource" used as presence
+ * ver. 1.0.6  2022-07-10 kkossev  - battery set to 0% and motion inactive when the device goes OFFLINE;
+ * ver. 1.0.7  2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
+ * ver. 1.0.8  2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
+ * ver. 1.0.9  2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
+ * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
  *
 */
 
-def version() { "1.0.9" }
-def timeStamp() {"2022/08/11 10:59 PM"}
+def version() { "1.0.10" }
+def timeStamp() {"2022/08/15 7:17 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -141,12 +142,14 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406",      outClusters:"0003",                model:"OCP305", manufacturer:"OWON"            // 
     }
+    
     preferences {
         if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
             input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-            if (!(isRadar() || isBlackSquareRadar())) {
+            if (!(isRadar() || isBlackSquareRadar() || isOWONRadar())) {
                 input (name: "motionReset", type: "bool", title: "Reset Motion to Inactive", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
                 if (motionReset.value == true) {
     		        input ("motionResetTimer", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
@@ -157,6 +160,9 @@ metadata {
                 input ("humidityOffset", "decimal", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
                 input ("luxOffset", "decimal", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
             }
+            if (isLuxMeter()) {
+		        input ("luxThreshold", "number", title: "Lux threshold", description: "Minimum change in the illuminocity which will trigger an event", range: "0..100", defaultValue: 1)   
+            }
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
@@ -164,13 +170,13 @@ metadata {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
             if (is2in1() || isConfigurable() ) {
-                input (name: "sensitivity", type: "enum", title: "Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
+                input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
             }
             if (is2in1()) {
-                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
+                input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
             }
             if (isConfigurable()) {
-                input (name: "keepTime", type: "enum", title: "Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
+                input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
             }
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
@@ -232,14 +238,14 @@ def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'
 def isIAS()  { return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) }
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
-//def isConfigurable() { return device.getDataValue('manufacturer') in ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9'] }   // TS0202 models
-def isConfigurable() { return isIAS() }   // TS0202 models
+def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
+def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
 def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm'] }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
 def isBlackPIRsensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
 def isBlackSquareRadar() { return device.getDataValue('manufacturer') in ['_TZE200_0u3bj3rc'] }
-
+def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
 
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
@@ -306,6 +312,10 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             humidityEvent( raw / 1.0 )
 		}
+        else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
+            def raw = Integer.parseInt(descMap.value,16)
+            handleMotion( raw & 0x01 )
+		}
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         }
@@ -321,7 +331,7 @@ def parse(String description) {
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
             def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
             if (settings?.logEnable) log.info "${device.displayName} reported Power source ${descMap?.value}"
-            if (!(isRadar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() )) {     // for radars force powerSource 'dc'
+            if (!(isRadar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor() )) {     // for radars force powerSource 'dc'
                 powerSourceEvent( value )
             }
         } 
@@ -794,6 +804,20 @@ def processTuyaCluster( descMap ) {
                 break
         }
     } // Tuya commands '01' and '02'
+    else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "11" ) {
+        // dont'know what command "11" means, it is sent by the square black radar when powered on. Will use it to restore the LED on/off configuration :) 
+        if (settings?.logEnable) log.debug "${device.displayName} Tuya <b>descMap?.command = ${descMap?.command}</b> descMap.data = ${descMap?.data}" 
+        if (isBlackSquareRadar())  {
+            if (settings?.indicatorLight != null) {
+                ArrayList<String> cmds = []
+                def value = safeToInt(indicatorLight.value)
+                def dpValHex = zigbee.convertToHexString(value as int, 2) 
+                cmds += sendTuyaCommand("67", DP_TYPE_BOOL, dpValHex)
+                if (settings?.logEnable) log.info "${device.displayName} restoring indicator light to : ${blackRadarLedOptions[value.toString()]} (${value})"  
+                sendZigbeeCommands( cmds ) 
+            }
+        }
+    }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
     }
@@ -959,13 +983,14 @@ def humidityEvent( humidity ) {
 
 def illuminanceEvent( rawLux ) {
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
-    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    illuminanceEventLux( lux ) 
 }
 
 def illuminanceEventLux( Integer lux ) {
-    sendEvent("name": "illuminance", "value": lux, "unit": "lx")
-    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    if (device.currentValue("illuminance", true) == null ||  Math.abs(device.currentValue("illuminance") - lux) > settings?.luxThreshold) {
+        sendEvent("name": "illuminance", "value": lux, "unit": "lx")
+        if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    }
 }
 
 def existanceTimeEvent( Integer time ) {
@@ -990,7 +1015,7 @@ def powerSourceEvent( state = null) {
         sendEvent(name : "powerSource",	value : state, descriptionText: "device is back online", type: "digital")
     }
     else {
-        if (isRadar() || isHumanPresenceSensorAIR() || isBlackSquareRadar()) {
+        if (isRadar() || isHumanPresenceSensorAIR() || isBlackSquareRadar() || isBlackPIRsensor() || isOWONRadar()) {
             sendEvent(name : "powerSource",	value : "dc", descriptionText: "device is back online", type: "digital")
         }
         else {
@@ -1153,7 +1178,7 @@ def updated() {
                 def value = safeToInt(indicatorLight.value)
                 def dpValHex = zigbee.convertToHexString(value as int, 2) 
                 cmds += sendTuyaCommand("67", DP_TYPE_BOOL, dpValHex)
-                if (settings?.logEnable) log.debug "${device.displayName} setting indicator light to : ${blackRadarLedOptions[fncmd.toString()]} (${fncmd})"  
+                if (settings?.logEnable) log.debug "${device.displayName} setting indicator light to : ${blackRadarLedOptions[value.toString()]} (${value})"  
             }
         }
         //
@@ -1256,6 +1281,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", [value:60.0, type:"decimal"])
     if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", [value:0.25, type:"decimal"])
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance",[value:8.0, type:"decimal"])
+    if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:1, type:"number"])
     //
     if (fullInit == true) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
     //
