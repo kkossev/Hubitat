@@ -31,6 +31,7 @@
 | Tuya Smart ZigBee Smart Ceiling-mounted Human Presence Sensor <br> **w/ 'Fall Alarm'** <br> ![image](https://user-images.githubusercontent.com/6189950/167121956-1b390a19-efa6-4861-b76f-30c99a9c21bb.png) | Zigbee ID: "TS0601"; "__TZE200_lu01t0zl" <br>Price range: High   <br> AliExpress: [(link)](https://www.aliexpress.com/item/1005003870853288.html) |
 |  Tuya/Zigbee Smart Body Human Presence Sensor Millimeter Radar <br> ![image](https://user-images.githubusercontent.com/6189950/172944587-975c553e-6fb1-43bf-a8b4-e43f2394c218.png) | AliExpress: [(link)](https://www.aliexpress.com/item/1005004374487938.html)   |
 | Tuya Square Black 24GHz radar w/ LED  <br> ![image](https://user-images.githubusercontent.com/6189950/184286533-1637eddf-872f-4dc5-9539-4af54c342503.png) | <br> Price Range: Mid <br> AliExpress:  [(link)](https://www.aliexpress.com/item/1005004532077450.html)) |
+| ![image](https://user-images.githubusercontent.com/6189950/184812511-ff85832a-787d-4859-bf7e-deb26da0b0c5.png) | |
 |---|---|
 
 -----------------------------
