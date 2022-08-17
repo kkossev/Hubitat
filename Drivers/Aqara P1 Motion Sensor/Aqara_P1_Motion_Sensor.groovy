@@ -27,13 +27,13 @@
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
- * ver. 1.2.1 2022-08-02 kkossev  - (dev. branch) - code / traces cleanup; change device name on initialize() 
+ * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize() 
  *                            
  *
 */
 
 def version() { "1.2.1" }
-def timeStamp() {"2022/08/02 1:09 PM"}
+def timeStamp() {"2022/08/10 4:13 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -61,14 +61,14 @@ metadata {
             "not present"
         ]
         attribute "presence_type", "enum", [
-            "enter",        //
-            "leave",        //
-            "left_enter",   //
-            "right_leave",  //
-            "right_enter",  //
-            "left_leave",   //
-            "approach",     //
-            "away"          //
+            "enter",
+            "leave",
+            "left_enter",
+            "right_leave",
+            "right_enter",
+            "left_leave",
+            "approach",
+            "away"
         ]
         
         command "configure", [[name: "Initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
@@ -85,8 +85,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"     // Aqara precision motion sensor
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara Motion Sensor RTCGQ12LM"                    // RTCGQ12LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"   // 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                   // tests only
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"     // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                  // tests only
         
     }
 
@@ -108,9 +108,9 @@ metadata {
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "2", options: ["1":"far", "2":"medium", "3":"near" ])    // 'medium'is default?
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "2", options: ["1":"far", "2":"medium", "3":"near" ])
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
-                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])         // Undirected is default?
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])
             }
             input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
         }
@@ -185,7 +185,7 @@ def parse(String description) {
                 parseAqaraAttributeFF01( description )
             }
             else {
-                if (logEnable) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                if (logEnable) log.debug "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
             }
         } // for each attribute
     } // if attribute report
@@ -297,7 +297,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"    //P1_LED_MODE_VALUE
             break        
         default :
-            if (logEnable) log.warn "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            if (logEnable) log.debug "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
         break
     }
     
@@ -324,7 +324,6 @@ def decodeAqaraStruct( description )
                 rawValue = Integer.parseInt(valueHex[(i+4)..(i+5)], 16)
                 switch (tag) {
                     case 0x03 :    // device temperature
-                        //if (txtEnable) log.info "${device.displayName} temperature is ${rawValue} deg.C"
                         temperatureEvent( rawValue )
                         break
                     case 0x64 :    // on/off
@@ -381,7 +380,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6A :    // sensitivity
                         if (isFP1()) {
-                            if (logEnable) log.warn "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
+                            if (logEnable) log.debug "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
@@ -390,7 +389,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6B :    // LED
                         if (isFP1()) {
-                            if (logEnable) log.warn "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
+                            if (logEnable) log.debug "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
@@ -398,7 +397,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     default :
-                        if (logEnable) log.warn "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 1) * 2
@@ -515,7 +514,6 @@ def voltageAndBatteryEvents( rawVolts, isDigital=false  )
     sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", isStateChange: true )
     sendBatteryEvent( roundedPct, isDigital )
     state.lastBattery = roundedPct.toString()
-    //log.trace "set state.lastBattery = ${roundedPct.toString()}"
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
@@ -552,7 +550,7 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}"
             break
         default :
-            if (logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            if (logEnable) log.debug "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
 }
 
@@ -619,7 +617,7 @@ def parseZHAcommand( Map descMap) {
             }
             break
         default :
-            if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            if (logEnable==true) log.debug "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
     }
 }
 
@@ -670,14 +668,13 @@ def illuminanceEventLux( Integer lux ) {
 def temperatureEvent( temperature ) {
     def map = [:] 
     map.name = "temperature"
-    map.unit = "°${location.temperatureScale}"
+    map.unit = "\u00B0"+"C"
     if ( location.temperatureScale == "F") {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0"+"F"
     }
-    Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int /* java.lang.Integer*/) 
+    Integer tempConverted = temperature + ((settings?.tempOffset?:0) as int) 
     map.value = tempConverted
-    // map.isStateChange = true removed in ver 1.2.0
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
     sendEvent(map)
 }
@@ -714,7 +711,6 @@ def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
 private handleMotion( Boolean motionActive, isDigital=false ) {    
     if (motionActive) {
         def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
-        //log.warn "handleMotion timeout = ${timeout}"
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
             runIn(timeout, resetToMotionInactive, [overwrite: true])
@@ -744,7 +740,6 @@ def getMotionResult( Boolean motionActive, isDigital=false ) {
 	sendEvent (
 			name			: 'motion',
 			value			: motionActive ? 'active' : 'inactive',
-            //isStateChange   : true,
             type            : isDigital == true ? "digital" : "physical",
 			descriptionText : descriptionText
 	)
@@ -794,10 +789,8 @@ def setPresent() {
     powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
-        //log.trace "device.currentValue('battery', true) = ${device.currentValue('battery', true)}"
         if (device.currentValue('battery', true) == 0 ) {
             if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                //log.trace "restoring battery level to ${safeToInt(state.lastBattery)}"
                 sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
             }
         }
@@ -807,7 +800,6 @@ def setPresent() {
 
 // called every 60 minutes from pollPresence()
 def checkIfNotPresent() {
-    //log.trace "checkIfNotPresent()"
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter >= presenceCountTreshold) {
@@ -819,9 +811,7 @@ def checkIfNotPresent() {
                 handleMotion(false, isDigital=true)
                 if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
             }
-            //log.trace "battery was ${safeToInt(device.currentValue('battery', true))}"
             if (safeToInt(device.currentValue('battery', true)) != 0) {
-                //handleMotion(false) // duplicated event?
                 if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
                 sendBatteryEvent( 0, isDigital=true )
             }
@@ -843,7 +833,6 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-        //log.trace "${device.displayName} driverVersion is the same ${driverVersionAndTimeStamp()}"
     }
     else {
         if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
@@ -945,6 +934,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    if (fullInit == true || state.motionStarted == null) state.motionStarted = now()
     if (state.lastBattery == null) state.lastBattery = "0"
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
@@ -952,7 +942,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
-        //log.warn "forcing motionResetTimer to ${settings?.motionResetTimer}"
     }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
     
@@ -1122,7 +1111,9 @@ def test( description ) {
    // aqaraBlackMagic()
     
     
-   sendZigbeeCommands( cmds )
+   //sendZigbeeCommands( cmds )
+    // Parent NWK is 3288
+
 }
 
 
