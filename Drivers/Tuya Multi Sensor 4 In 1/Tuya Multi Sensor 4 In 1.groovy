@@ -23,12 +23,12 @@
  * ver. 1.0.8  2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
  * ver. 1.0.9  2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
  * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
- * ver. 1.0.11 2022-08-18 kkossev  - IAS devices initialization improvements
+ * ver. 1.0.11 2022-08-18 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours
  *
 */
 
 def version() { "1.0.11" }
-def timeStamp() {"2022/08/18 8:16 AM"}
+def timeStamp() {"2022/08/18 3:37 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -229,7 +229,7 @@ metadata {
 @Field static final Integer radarSensitivityParamIndex = 10
 
 
-@Field static final Integer presenceCountTreshold = 3
+@Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
 
 
@@ -1398,7 +1398,7 @@ def getBatteryPercentageResult(rawValue) {
     }
 }
 
-private Map getBatteryResult(rawValue) {
+def getBatteryResult(rawValue) {
     if (settings?.logEnable) log.debug "${device.displayName} batteryVoltage = ${(double)rawValue / 10.0} V"
     def result = [:]
     def volts = rawValue / 10
@@ -1407,8 +1407,7 @@ private Map getBatteryResult(rawValue) {
         def maxVolts = 3.0
         def pct = (volts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0)
-        roundedPct = 1
+        if (roundedPct <= 0) roundedPct = 1
         result.value = Math.min(100, roundedPct)
         result.descriptionText = "${device.displayName} battery is ${result.value}% (${volts} V)"
         result.name = 'battery'
@@ -1424,6 +1423,8 @@ private Map getBatteryResult(rawValue) {
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
+    if (roundedPct > 100) roundedPct = 100
+    if (roundedPct < 0)   roundedPct = 0
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
 }
 
