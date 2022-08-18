@@ -22,12 +22,13 @@
  * ver. 1.0.7  2022-07-17 kkossev  - _TZE200_ikvncluo (MOES) and _TZE200_lyetpprm radars; scale fadingTime and detectionDelay by 10; initialize() will resets to defaults; radar parameters update bug fix; removed unused states and attributes for radars
  * ver. 1.0.8  2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
  * ver. 1.0.9  2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
- * ver. 1.0.10 2022-08-15 kkossev  - (dev. branch) - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
+ * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
+ * ver. 1.0.11 2022-08-18 kkossev  - IAS devices initialization improvements
  *
 */
 
-def version() { "1.0.10" }
-def timeStamp() {"2022/08/15 7:17 AM"}
+def version() { "1.0.11" }
+def timeStamp() {"2022/08/18 8:16 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1303,9 +1304,14 @@ def configure() {
     if (settings?.txtEnable) log.info "${device.displayName} configure().."
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
     state.motionStarted = now()
-    List<String> cmds = []
+    ArrayList<String> cmds = []
     cmds += tuyaBlackMagic()    
-    if (!isRadar()) {    // skip the binding for all the radars!
+    
+    if (isIAS() ) {
+        cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        if (settings?.logEnable) log.debug "${device.displayName} IAS device: ${cmds}"
+    }
+    else if (!isRadar()) {    // skip the binding for all the radars!
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
         cmds += "delay 200"
@@ -1313,6 +1319,7 @@ def configure() {
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0400 {${device.zigbeeId}} {}"
     }
+
     sendZigbeeCommands(cmds)    
 }
 
