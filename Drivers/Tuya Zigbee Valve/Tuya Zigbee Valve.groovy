@@ -16,6 +16,7 @@
  *  ver. 1.0.0 2022-04-22 kkossev - inital version
  *  ver. 1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource
  *  ver. 1.0.2 2022-08-14 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only); fingerprint inClusters correction; battery capability; open/close commands changes
+ *  ver. 1.0.3 2022-08-19 kkossev - (dev branch) - decreased delay betwen Tuya commands to 200 milliseconds; irrigation valve open/close commands are sent 2 times; digital/physicla timer changed to 3 seconds;
  *            TODO Presence check timer
  *
  *
@@ -24,8 +25,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.2" }
-def timeStamp() {"2022/08/14 11:18 PM"}
+def version() { "1.0.3" }
+def timeStamp() {"2022/08/19 8:19 AM"}
 
 @Field static final Boolean debug = false
 
@@ -77,7 +78,7 @@ metadata {
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 15
 @Field static final Integer debouncingTimer = 300
-@Field static final Integer digitalTimer = 1000
+@Field static final Integer digitalTimer = 3000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
@@ -300,10 +301,10 @@ def parseZHAcommand( Map descMap) {
             else {
                 switch (descMap.clusterId) {
                     case "EF00" :
-                        if (logEnable==true) log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
+                        //if (logEnable==true) log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
                         def cmd = descMap.data[2]
                         def value = getAttributeValue(descMap.data)
-                        if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value}"
+                        if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
                         def map = [:]
                         switch (cmd) {
                             case "01" : // switch
@@ -315,7 +316,7 @@ def parseZHAcommand( Map descMap) {
                                 }
                                 break
                             case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff                               
-                                if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value}"
+                                if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value} (data=${descMap.data})"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "07" : // Countdown
@@ -448,6 +449,7 @@ def close() {
         Short paramVal = 0
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (state.model == "TS0601") {
@@ -469,6 +471,7 @@ def open() {
         Short paramVal = 1
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (state.model == "TS0601") {
@@ -667,7 +670,8 @@ private getPACKET_ID() {
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
