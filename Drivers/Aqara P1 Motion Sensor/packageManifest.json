@@ -1,10 +1,10 @@
 {
   "packageName": "Aqara P1 Motion Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-08-17",
-  "releaseNotes": "1.2.1 2022-08-10 - code cleanup; change device name on initialize\n1.2.0 2022-07-29 - Aqara FP1 Human Presence Sensor support\n1.1.5 2022-07-09 - when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type \n1.1.4 2022-07-08 - PowerSource presence polling; FP1 support improvements\n1.1.1 2022-07-01 - added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) inital support\n1.0.0 2022-06-24 - first release version\n",
+  "dateReleased": "2022-08-21",
+  "releaseNotes": "1.2.2 2022-08-21 - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM\n1.2.1 2022-08-10 - code cleanup; change device name on initialize\n1.2.0 2022-07-29 - Aqara FP1 Human Presence Sensor support\n1.1.5 2022-07-09 - when going offline the battery level is set to 0 (zero); when back online, the last known battery level is restored; when switching offline, motion is reset to 'inactive'; added digital and physical events type \n1.1.4 2022-07-08 - PowerSource presence polling; FP1 support improvements\n1.1.1 2022-07-01 - added temperatureEvent;  RTCGQ13LM; RTCZCGQ11LM (FP1) inital support\n1.0.0 2022-06-24 - first release version\n",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Aqara%20P1%20Motion%20Sensor/README.MD",
   "communityLink": "https://community.hubitat.com/t/aqara-p1-motion-sensor/92987/63?u=kkossev",
   "drivers": [
