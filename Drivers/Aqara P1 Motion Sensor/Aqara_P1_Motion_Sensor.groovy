@@ -27,13 +27,13 @@
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
- * ver. 1.2.1 2022-08-20 kkossev  - code / traces cleanup; change device name on initialize() ; motionRetriggerInterval for T1 model;
+ * ver. 1.2.1 2022-08-21 kkossev  - code / traces cleanup; change device name on initialize(); added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  *                            
  *
 */
 
 def version() { "1.2.1" }
-def timeStamp() {"2022/08/20 8:57 AM"}
+def timeStamp() {"2022/08/21 8:48 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -269,9 +269,11 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             if (txtEnable) log.info "${device.displayName} (${it.attrId}) <b>received PIR sensitivity report: ${P1_SENSITIVITY_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
-            def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
-            illuminanceEventLux( rawValue )
-            handleMotion( true )
+            if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
+                def rawValue = Integer.parseInt((valueHex[(2)..(3)] + valueHex[(0)..(1)]),16)
+                illuminanceEventLux( rawValue )
+                handleMotion( true )    // TODO !!
+            }
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
             def value = safeToInt(it.value)
@@ -424,7 +426,9 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "lightlevel is ${rawValue}"
                         break
                     case 0x65 : // illuminance or humidity
-                        illuminanceEventLux( rawValue )
+                        if (!isRTCGQ13LM()) {    // filter for high precision sensor - no illuminance!
+                            illuminanceEventLux( rawValue )
+                        }
                         break
                     default :
                         if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
@@ -1084,8 +1088,12 @@ def aqaraBlackMagic() {
         log.warn "aqaraBlackMagic() for FP1"
     }
     else {
-        log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
+        //log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
     }
     //cmds += activeEndpoints()
     sendZigbeeCommands( cmds )
