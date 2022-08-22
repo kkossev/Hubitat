@@ -23,12 +23,12 @@
  * ver. 1.0.8  2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
  * ver. 1.0.9  2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
  * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
- * ver. 1.0.11 2022-08-22 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours; 3in1 exceptions bug fixes; 
+ * ver. 1.0.11 2022-08-22 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours; 3in1 exceptions bug fixes; 3in1 and 4in1 exceptions bug fixes;
  *
 */
 
 def version() { "1.0.11" }
-def timeStamp() {"2022/08/22 9:07 PM"}
+def timeStamp() {"2022/08/22 9:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -984,7 +984,7 @@ def humidityEvent( humidity ) {
 
 def illuminanceEvent( rawLux ) {
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
-    illuminanceEventLux( lux ) 
+    illuminanceEventLux( lux as Integer) 
 }
 
 def illuminanceEventLux( Integer lux ) {
@@ -1083,6 +1083,7 @@ def updated() {
             }
             else if (isTS0601_PIR()) {
                 def val = getKeepTimeValue( keepTime.toString() )
+                //log.trace "keepTime=${keepTime} val=${val}"
                 cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 8))
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
             }
