@@ -23,12 +23,12 @@
  * ver. 1.0.8  2022-07-24 kkossev  - _TZE200_auin8mzr (HumanPresenceSensorAIR) unacknowledgedTime; setLEDMode; setDetectionMode commands and  vSensitivity; oSensitivity, vacancyDelay preferences; _TZE200_9qayzqa8 (black sensor) Attributes: motionType; preferences: inductionTime; targetDistance.
  * ver. 1.0.9  2022-08-11 kkossev  - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix
  * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
- * ver. 1.0.11 2022-08-18 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours
+ * ver. 1.0.11 2022-08-22 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours; 3in1 exceptions bug fixes; 
  *
 */
 
 def version() { "1.0.11" }
-def timeStamp() {"2022/08/18 3:37 PM"}
+def timeStamp() {"2022/08/22 9:07 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -170,13 +170,13 @@ metadata {
             if (is4in1()) {
                 input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             }
-            if (is2in1() || isConfigurable() ) {
+            if (is3in1() || is2in1() || isConfigurable() ) {
                 input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
             }
-            if (is2in1()) {
+            if ( is2in1()) {
                 input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
             }
-            if (isConfigurable()) {
+            if (isConfigurable() || is3in1()) {
                 input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
             }
             if (isRadar()) {
@@ -327,7 +327,7 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0004") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value})"
+            if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
             def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
@@ -542,7 +542,7 @@ def processTuyaCluster( descMap ) {
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.debug "${device.displayName} motion event 0x65 fncmd = ${fncmd}"
-                    sendEvent(handleMotion(motionActive=fncmd))
+                    handleMotion(motionActive=fncmd)
                 }
                 break            
             case 0x66 :     // (102)
@@ -1270,8 +1270,8 @@ void initializeVars( boolean fullInit = false ) {
             device.updateSetting("advancedOptions", false)
         }
     }
-    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"No selection", type:"enum"])
-    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"No selection", type:"enum"])
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"medium", type:"enum"])
+    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"30", type:"enum"])
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("temperatureOffset",[value:0.0, type:"decimal"])
