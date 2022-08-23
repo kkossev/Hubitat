@@ -20,11 +20,11 @@
  * ver. 1.0.7 2022-06-09 kkossev  - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx;  Bug fix - all settings were reset back in to the defaults on hub reboot
  * ver. 1.0.8 2022-08-13 kkossev  - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes;
  *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
- *
+ * ver. 1.0.9 2022-08-22 kkossev  - (dev. branch) - configure _TZ2000_a476raq2 reporting time?; added TS0601 _TZE200_bjawzodf
 */
 
-def version() { "1.0.8" }
-def timeStamp() {"2022/08/13 4:27 PM"}
+def version() { "1.0.9" }
+def timeStamp() {"2022/08/23 5:00 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -67,6 +67,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" // https://de.aliexpress.com/item/1005003634353180.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_a476raq2", deviceJoinName: "Tuya Temperature Humidity LCD display" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"
@@ -74,6 +75,11 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,E002,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_itnrsufe", deviceJoinName: "Tuya temperature and humidity sensor RCTW1Z"         
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display" // not tested
+        
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -81,7 +87,7 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options:
                ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0601_AUBESS":"TS0601_AUBESS", "TS0201":"TS0201", "TS0222":"TS0222", 'TS0201_LCZ030': 'TS0201_LCZ030',
-                "TS0222_2":"TS0222_2","Zigbee NON-Tuya":"Zigbee NON-Tuya"])
+                "TS0222_2":"TS0222_2", "TS0201_TH":"TS0201_TH", "Zigbee NON-Tuya":"Zigbee NON-Tuya"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             configParams.each {
@@ -106,10 +112,10 @@ metadata {
                    limit:['ALL']]],
 
         2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..5.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
 
         3: [input: [name: "humiditySensitivity", type: "number", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', "Zigbee NON-Tuya"]]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
 
         4: [input: [name: "illuminanceSensitivity", type: "number", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
@@ -130,13 +136,13 @@ metadata {
                    limit:['ALL']]],
     
        10: [input: [name: "maxReportingTimeTemp", type: "number", title: "Maximum time between temperature reports", description: "Maximum time between temperature reporting, seconds", defaultValue: 3600, range: "10..43200",
-                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
+                   limit:['TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
   
        11: [input: [name: "minReportingTimeHumidity", type: "number", title: "Minimum time between humidity reports", description: "Minimum time between humidity reporting, seconds", defaultValue: 10, range: "1..3600",
                    limit:['ALL']]],
     
        12: [input: [name: "maxReportingTimeHumidity", type: "number", title: "Maximum time between humidity reports", description: "Maximum time between humidity reporting, seconds", defaultValue: 3600, range: "10..43200",
-                   limit:['TS0601_Haozee', "Zigbee NON-Tuya"]]],
+                   limit:['TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
 
        13: [input: [name: "alarmTempPar", type: "enum", title: "Temperature Alarm", description:"Temperature Alarm", defaultValue: 0, options: [0:"Below min temp", 1:"Over max temp", 2:"off"],
                    limit:[/*'TS0201_LCZ030'*/]]],
@@ -153,7 +159,7 @@ metadata {
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
-    '_TZ2000_a476raq2'  : 'TS0201',
+    '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
     '_TZ2000_xogb73am'  : 'TS0201',
     '_TZ2000_avdnvykf'  : 'TS0201',
@@ -164,6 +170,7 @@ metadata {
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
+    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -206,7 +213,7 @@ def parse(String description) {
             if (descMap.attrInt == 0x0021) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value,16))
             } else if (descMap.attrInt == 0x0020){
-                log.trace "descMap.attrInt == 0x0020"
+                //log.trace "descMap.attrInt == 0x0020"
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
             }
             else {
@@ -236,7 +243,12 @@ def parse(String description) {
 		}
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value,16)
-            humidityEvent( raw / 100.0 )
+            if (getModelGroup() != 'TS0201_TH') {
+                humidityEvent( raw / 100.0 )
+            }
+            else {
+                 humidityEvent( raw / 10.0 )    // also _TZE200_bjawzodf ?
+            }
 		}
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
@@ -325,7 +337,12 @@ def processTuyaCluster( descMap ) {
                     getBatteryPercentageResult(fncmd * 2)
                 }
                 else {
-                    humidityEvent( fncmd )
+                    if (device.getDataValue("manufacturer") == "_TZE200_bjawzodf") {
+                        humidityEvent( (fncmd / 10.0) as int )
+                    }
+                    else {
+                        humidityEvent( fncmd )
+                    }
                 }
                 break
             case 0x03 : // illuminance - NOT TESTED!
@@ -649,6 +666,17 @@ def updated() {
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400
     }
+    
+    if (getModelGroup() in ['TS0201_TH']) {    // //temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity *100) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, humiditySensitivity as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
+    }
+    // 
+    if (getModelGroup() in ["Zigbee NON-Tuya"]) {    // //temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity *100) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, humiditySensitivity as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
+    } 
+    
     /* 2022-05-09 - do not configre reporting for multi-EP devices like TS0201 _TZ3000_qaaysllp !!! (binds to wrong EP ?)
     if (getModelGroup() in ["Zigbee NON-Tuya", 'TS0201_LCZ030']) {
     	cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.INT16, 10, 600, 5, [:], 200)  // Configure Illuminance - Report after 10 seconds if any change, every 10 minutes if no change, 5 Lux change?
