@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Multi Sensor 4 In 1",
   "author": "Krassimir Kossev",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-08-15",
-  "releaseNotes": "1.0.10 2022-08-15 - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor\n1.0.9 2022-08-11 - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix\n",
+  "dateReleased": "2022-08-23",
+  "releaseNotes": "1.0.11 2022-08-22 - IAS devices initialization improvements; presence threshold increased to 4 hours; 3in1 exceptions bug fixes; 3in1 and 4in1 exceptions bug fixes;\n1.0.10 2022-08-15 - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor\n1.0.9 2022-08-11 - degrees Celsius symbol bug fix; added square black radar _TZE200_0u3bj3rc support, temperatureOffset bug fix; decimal/number type prferences bug fix\n",
   "documentationLink": "https://community.hubitat.com/t/beta-tuya-zigbee-multi-sensor-4-in-1/92441/2",
   "communityLink": "https://community.hubitat.com/t/beta-tuya-zigbee-multi-sensor-4-in-1/92441",  
   "drivers": [
