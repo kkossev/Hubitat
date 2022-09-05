@@ -108,6 +108,16 @@
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/packageManifest.json",
       "description": "Tuya PIR Motion Sensors and mmWave Radars - driver for Hubitat Elevation hub"
+    },
+    {
+      "id": "2d09ce90-729a-444c-8159-7c90ca1857f6",
+      "name": "Tuya Wall Thermostat",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-Tuya-Wall-Thermostat/main/packageManifest.json",
+      "description": "Tuya Wall Thermostat - AVATTO, Moes, BEOK - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]	  
     }
   ]
 }
