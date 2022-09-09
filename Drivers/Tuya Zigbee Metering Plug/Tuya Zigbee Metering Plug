@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/09 10:17 PM"}
+def timeStamp() {"2022/09/09 11:54 PM"}
 
 @Field static final Boolean debug = false
 
@@ -119,9 +119,9 @@ metadata {
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
         input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
-            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two reports. Recommended value is <b>60 seconds</b></i>", 
+            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended value is <b>30 seconds</b></i>", 
                 range: "10..86399", defaultValue: 30)
-            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without reports. Recommended value is <b>3600 seconds</b></i>", 
+            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended value is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
             input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting On or Off</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
@@ -341,57 +341,81 @@ def switchEvent( value ) {
     clearIsDigital()
 }
 
-def voltageEvent( voltage ) {
+def voltageEvent( voltage, isDigital=false ) {
     def map = [:] 
     map.name = "voltage"
     map.value = voltage
     map.unit = "V"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastVoltage != voltage || optimizations == false || state.isRefreshRequest == true ) {
-        state.lastVoltage = voltage
-        if (settings?.reportVoltage == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-            sendEvent(map)
+        if (Math.abs((voltage as int) - (state.lastVoltage as int)) >= (voltageTreshold as int)) {
+            state.lastVoltage = voltage
+            if (settings?.reportVoltage == true) {
+                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+                sendEvent(map)
+            }
+        }
+        else {
+            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastVoltage} is less than ${voltageTreshold} V)"}
         }
     }
 }
 
-def powerEvent( power ) {
+def powerEvent( power, isDigital=false ) {
     def map = [:] 
     map.name = "power"
     map.value = power
     map.unit = "W"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastPower != power || optimizations == false || state.isRefreshRequest == true ) {
-        state.lastPower = power    
-        if (settings?.reportPower == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-            sendEvent(map)
+        if (Math.abs((power as int) - (state.lastPower as int)) >= (powerTreshold as int)) {
+            state.lastPower = power    
+            if (settings?.reportPower == true) {
+                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+                sendEvent(map)
+            }
         }
+        else {
+            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastPower} is less than ${powerTreshold} W)"}
+        }
+        
     }
 }
 
-def amperageEvent( amperage ) {
+def amperageEvent( amperage, isDigital=false ) {
     def map = [:] 
     map.name = "amperage"
     map.value = amperage
     map.unit = "A"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
-        state.lastAmperage = amperage    
-        if (settings?.reportAmperage == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
-            sendEvent(map)
+        if (Math.abs((amperage*1000 as int) - (state.lastAmperage*1000 as int)) >= (amperageTreshold as int)) {
+            state.lastAmperage = amperage    
+            if (settings?.reportAmperage == true) {
+                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+                sendEvent(map)
+            }
+        }
+        else {
+            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastAmperage} is less than ${amperageTreshold} mA)"}
         }
     }
 }
 
-def energyEvent( energy ) {
+def energyEvent( energy, isDigital=false ) {
     def map = [:] 
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
         state.lastEnergy = energy
         if (true) {        // energy is reported once per hour without being polled!
-            if (txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
             sendEvent(map)
         }
     }
