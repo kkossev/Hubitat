@@ -31,6 +31,7 @@
 | Tuya Smart ZigBee Smart Ceiling-mounted Human Presence Sensor <br> **w/ 'Fall Alarm'** <br> ![image](https://user-images.githubusercontent.com/6189950/167121956-1b390a19-efa6-4861-b76f-30c99a9c21bb.png) | Zigbee ID: "TS0601"; "__TZE200_lu01t0zl" <br>Price range: High   <br> AliExpress: [(link)](https://www.aliexpress.com/item/1005003870853288.html) |
 |  Tuya/Zigbee Smart Body Human Presence Sensor Millimeter Radar <br> ![image](https://user-images.githubusercontent.com/6189950/172944587-975c553e-6fb1-43bf-a8b4-e43f2394c218.png) | AliExpress: [(link)](https://www.aliexpress.com/item/1005004374487938.html)   |
 | Tuya Square Black 24GHz radar w/ LED  <br> ![image](https://user-images.githubusercontent.com/6189950/184286533-1637eddf-872f-4dc5-9539-4af54c342503.png) | <br> Price Range: Mid <br> AliExpress:  [(link)](https://www.aliexpress.com/item/1005004532077450.html)) |
+| ![image](https://user-images.githubusercontent.com/6189950/184812511-ff85832a-787d-4859-bf7e-deb26da0b0c5.png) | |
 |---|---|
 
 -----------------------------
@@ -41,8 +42,15 @@
 | Tuya TS0121 (BlitzWolf) <br> ![image](https://user-images.githubusercontent.com/6189950/147770858-9dbc5b28-7e06-48ae-ab98-8a9c3477dd48.png) |  AliExpress: [link](https://www.aliexpress.com/store/group/Zigbee-smart-socket/4685106_10000001855269.html?spm=a2g0o.detail.100008.16.77b67a1e7L07Tx)) |
 | Tuya Metering Plugs ![image](https://user-images.githubusercontent.com/6189950/147770322-e42d4f3f-47ff-4a21-9e90-3f3a98ba7241.png)  | Hubitat: https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> AliExpress: TODO<br> Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Remote-Control-Monitor/dp/B09L4LB8HY |
 | Lellki WK35 Plug Wall Socket EU BR IT JP FR IL <br> ![image](https://user-images.githubusercontent.com/6189950/167282480-825ad7cc-64fe-4bf9-b635-7168ee05690f.png) | Hubitat: https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> AliExpress: https://www.aliexpress.com/item/4001243518512.html <br> |
+| NEO ZigBee On Off Power Metering Plug <br> ![image](https://user-images.githubusercontent.com/6189950/189312590-ed18639c-fc4a-4d7e-b51e-2fcb1e47c922.png)  | Ultrasmart : [(link)](https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81) | 
+| Ajax / Zignito Zigbee Plug 13Amps with Energy Monitoring ![image](https://user-images.githubusercontent.com/6189950/189325364-856c3d3d-e4ed-4ca7-a288-b02a5d09ca18.png) |Amazon: https://www.amazon.co.uk/dp/B09N43BBC1?ref_=cm_sw_r_cp_ud_dp_YPHV2YS437AY5BXFVMSV |
+| Plugue Zigbee 16a brasil br tomada de energia <br> ![image](https://user-images.githubusercontent.com/6189950/189314116-6600399f-3437-4376-9edd-4cb81fa1220e.png) | AliExpress:[(link)](https://pt.aliexpress.com/item/1005004019211620.html)| 
 | 20A Tuya Zigbee Smart Plug Mini US Power Outlet <br> ![image](https://user-images.githubusercontent.com/6189950/170115134-3b8368a4-3098-46aa-93b3-9b3ee2df5d98.png) | AliExpress: [[link](https://www.aliexpress.com/item/1005004128965720.html)] <br> |
 | Smart ZigBee Socket NOUS A1Z <br> ![image](https://user-images.githubusercontent.com/6189950/170118989-46f0757f-3afa-4d53-8096-25333b97b7f1.png) | Site: [https://nous.technology/product/a1z-1.html](url) |
+| Tuya Smart Zigbee Plug AU 16A <br> ![image](https://user-images.githubusercontent.com/6189950/189305196-b51cd908-a341-4553-a250-0a92dda71c52.png)
+ | [AliExpress](https://www.aliexpress.com/item/1005004505868292.html) <br>   |
+ | Lellki Smart Wall Socket 220v <br> ![image](https://user-images.githubusercontent.com/6189950/189319812-375f24a8-829d-4ae5-9ffe-d1e6c1ce0975.png) | Alixpress: https://www.aliexpress.com/item/1005003642268555.html|
+ | DIN rail metering switch <br> ![image](https://user-images.githubusercontent.com/6189950/189324623-fed488ca-2c3c-42a4-9dd9-0fb979e937dc.png) | AliExpress: https://www.aliexpress.com/item/1005002983983361.html |
 |  Energy Meters  ![image](https://user-images.githubusercontent.com/6189950/147771140-a29c2401-9cd8-4e80-a777-93e0c5e183be.png)  | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://www.aliexpress.com/item/1005002409588154.html |
 |  Circuit Breakers ![image](https://user-images.githubusercontent.com/6189950/154424284-7cd1eea2-b0b9-4a89-9634-9876e4445005.png) | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://fr.aliexpress.com/item/1005003726599840.html  |
 | |

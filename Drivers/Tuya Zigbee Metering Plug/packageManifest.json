@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Metering Plug",
   "author": "Krassimir Kossev",
-  "version": "1.5.0",
+  "version": "1.5.2",
   "minimumHEVersion": "2.2.0",
-  "dateReleased": "2022-06-05",
-  "releaseNotes": "1.2.0 - major refactoring and optimizations\n1.3.0 - added 'HIKING TOMZN DDS238-2 TS0601', 'AlwaysOn' and 'Optimizations' options\n1.4.0 - debug & trace logging cleanup; initialize switch and energy automatic reporting mode; energy and switch are excluded from polling; debug loging is disabled and optimizations are enabled by default; switch digital/physical bug fixed; added driver version check\n1.4.2 - missing Switch capability bug fix\n1.4.3 2022-02-15 - added 'Tuya RC-RCBO Circuit Breaker'\n1.4.4 2022-05-08 - added new fingerprints; [overwrite: true] explicit option for runIn timers; settings reset bug fix1.4.5 2022-05-24 - _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix; childLock, ledMode, powerOnState configuration commands; importURL is the development branch\n1.4.6 2022-06-04 - _TZ3000_gjnozsaz;  on/off switches for power, amperage, voltage and energy reporting (logs+Events); device display name in all logs\n1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode",
+  "dateReleased": "2022-09-09",
+  "releaseNotes": "1.5.2 2022-09-09 - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; automatic reporting configuration bug fixes\n1.5.1 2022-06-12 - ChildLock bug fix\n1.5.0 2022-06-05 - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode\n1.4.6 2022-06-04 - _TZ3000_gjnozsaz;  on/off switches for power, amperage, voltage and energy reporting (logs+Events); device display name in all logs\n1.4.5 2022-05-24 - _TZ3000_5f43h46b XUELILI 16A UK; _TZ3000_r6buo8ba; _TZ3000_ksw8qtmt NOUS A1Z; _TZ3000_1h2x4akh Ajax/Zignito; _TZ3000_ky0fq4ho DIN Relay; GreenPower cluster 0xF2 fix; childLock, ledMode, powerOnState configuration commands; importURL is the development branch\n1.4.2 - missing Switch capability bug fix\n",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20Zigbee%20Metering%20Plug/README.MD",
   "communityLink": "https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465",
   "drivers": [
