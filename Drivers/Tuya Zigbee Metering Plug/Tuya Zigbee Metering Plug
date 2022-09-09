@@ -36,6 +36,7 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; automatic reporting configuration bug fixes
+ *  ver. 1.6.0 2022-09-09 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests
  * 
  *
  */
@@ -43,8 +44,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.5.2" }
-def timeStamp() {"2022/09/09 1:46 PM"}
+def version() { "1.6.0" }
+def timeStamp() {"2022/09/09 3:40 PM"}
 
 @Field static final Boolean debug = false
 
@@ -58,10 +59,10 @@ metadata {
         capability "Switch"
         capability "Outlet"
         capability "Refresh"
-        capability "Health Check"
+        //capability "Health Check"
         capability "Sensor"
         capability "PresenceSensor"
-        capability "Polling"
+        //capability "Polling"
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
@@ -102,6 +103,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"  // 
     }
     
     
@@ -699,13 +701,6 @@ def clearIsDigital() { state.isDigital = false }
 def isRefreshRequestClear() { state.isRefreshRequest = false }
 
 def switchDebouncingClear() { state.switchDebouncing = false }
-
-
-
-// * PING is used by Device-Watch in attempt to reach the Device
-def ping() {
-    return refresh()
-}
 
 def pollPower() {
     if (logEnable) {log.debug "${device.displayName} pollPower().."}
