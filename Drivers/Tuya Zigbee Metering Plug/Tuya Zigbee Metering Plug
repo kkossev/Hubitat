@@ -35,8 +35,8 @@
  *  ver. 1.4.6 2022-06-04 kkossev - added _TZ3000_gjnozsaz;  added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
- *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; automatic reporting configuration bug fixes
- *  ver. 1.6.0 2022-09-09 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests
+ *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
+ *  ver. 1.6.0 2022-09-09 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes
  * 
  *
  */
@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/09 3:40 PM"}
+def timeStamp() {"2022/09/09 5:44 PM"}
 
 @Field static final Boolean debug = false
 
@@ -579,7 +579,15 @@ def parseZHAcommand( Map descMap) {
                 def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
                 def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
                 def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
-                if (logEnable==true) log.info "${device.displayName} Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max}"
+                def delta = 0
+                if (descMap.data.size()>=10) { 
+                    delta = zigbee.convertHexToInt(descMap.data[10]+descMap.data[9])
+                    if (logEnable==true) log.info "${device.displayName} descMap.data.size = ${descMap.data.size()}"
+                }
+                else {
+                    if (logEnable==true) log.debug "${device.displayName} descMap.data.size = ${descMap.data.size()}"
+                }
+                if (logEnable==true) log.info "${device.displayName} Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
             }
             else {
                 if (logEnable==true) log.info "${device.displayName} <b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
@@ -752,7 +760,7 @@ def poll( refreshAll = false ) {
 
 
 def refresh() {
-    if (logEnable) {log.debug "${device.displayName} refresh()..."}
+    if (txtEnable) {log.info "${device.displayName} refresh()..."}
     poll( true )
 }
 
@@ -1166,9 +1174,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
             if (operation == "Write") {
                 cmds += zigbee.onOffConfig(intMinTime, intMaxTime)  // Configure On/Off 
             }
-            else {
-                cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [:], 250)
-            }
+            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [:], 250)    // read it back
             break
         case ENERGY :
             if (operation == "Write") {
@@ -1180,27 +1186,21 @@ def configureReporting(String operation, String measurement,  String minTime, St
             break
         case POWER :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.UINT48, intMinTime, intMaxTime)    // bug fixes in ver 1.5.2 
+                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver  1.6.0 - thanks @guyee
             }
-            else {
-                cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [:], 250)
-            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [:], 250)
             break
         case VOLTAGE :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT48, intMinTime, intMaxTime)
+                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
             }
-            else {
-                cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [:], 250)
-            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [:], 250)
             break
         case AMPERAGE :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT48, intMinTime, intMaxTime)    // bug fixes in ver 1.5.2 
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
             }
-            else {
-                cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [:], 250)
-            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [:], 250)
             break
         default :
             break
