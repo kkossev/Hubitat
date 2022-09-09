@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/09 5:44 PM"}
+def timeStamp() {"2022/09/09 7:25 PM"}
 
 @Field static final Boolean debug = false
 
@@ -70,6 +70,7 @@ metadata {
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         
         if (debug == true) {
+            command "activeEndpoints"
             command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for OSRAM plug only :( 
             command "configureReporting", [ 
                 [name: "operation*",   type: "ENUM", constraints: ["--- Select ---", "Read", "Write"]],
@@ -78,7 +79,7 @@ metadata {
                 [name: "Maximum Reporting Interval (seconds)", type: "STRING", defaultValue : "3600", description: "Select Maximim reporting time (in seconds)"],
                 [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
             ]
-            //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
         }
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
@@ -419,6 +420,16 @@ def parseZDOcommand( Map descMap ) {
     }
 }
 
+def activeEndpoints() {
+    List<String> cmds = []
+    
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
+    String endpointIdTemp = endpointId == null ? "01" : endpointId
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
+    
+    sendZigbeeCommands(cmds) 
+}
+
 def parseSimpleDescriptorResponse(Map descMap) {
     //log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
     if (logEnable==true) log.info "${device.displayName} Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
@@ -582,7 +593,6 @@ def parseZHAcommand( Map descMap) {
                 def delta = 0
                 if (descMap.data.size()>=10) { 
                     delta = zigbee.convertHexToInt(descMap.data[10]+descMap.data[9])
-                    if (logEnable==true) log.info "${device.displayName} descMap.data.size = ${descMap.data.size()}"
                 }
                 else {
                     if (logEnable==true) log.debug "${device.displayName} descMap.data.size = ${descMap.data.size()}"
@@ -688,6 +698,7 @@ def off() {
         }
         runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
+        if (logEnable==true) log.trace "${device.displayName} off() sending ${cmds}"
         return cmds
     }
 }
@@ -701,6 +712,7 @@ def on() {
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    if (logEnable==true) log.trace "${device.displayName} on() sending ${cmds}"
     return cmds
 }
 
@@ -796,8 +808,22 @@ def configure() {
     cmds += tuyaBlackMagic()
     cmds += refresh()
     cmds += zigbee.onOffConfig()
-    cmds += zigbee.configureReporting(0x0702, 0x0000, DataType.UINT48, energyMinReportingTime as int, energyMaxReportingTime as int, energyTreshold as int)// +    // Energy reporting
-           //zigbee.electricMeasurementPowerConfig(1, 600, 1) 
+
+    // reportEnergy reportPower reportVoltage reportAmperage     energyMinReportingTime   energyMaxReportingTime    energyTreshold
+
+    if (reportEnergy == true) {
+        cmds += configureReporting("Write", ENERGY,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyTreshold.toString(), sendNow=false)
+    }
+    if (reportPower == true) {
+        cmds += configureReporting("Write", POWER,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyTreshold.toString(), sendNow=false)
+    }
+    if (reportVoltage == true) {
+        cmds += configureReporting("Write", VOLTAGE,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyTreshold.toString(), sendNow=false)
+    }
+    if (reportAmperage == true) {
+        cmds += configureReporting("Write", AMPERAGE,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyTreshold.toString(), sendNow=false)
+    }
+    
     sendZigbeeCommands(cmds)
 }
 
@@ -1160,7 +1186,7 @@ def identify() {
 	return cmds;
 }
 
-def configureReporting(String operation, String measurement,  String minTime, String maxTime, String delta ) {
+def configureReporting(String operation, String measurement,  String minTime, String maxTime, String delta, Boolean sendNow=true ) {
     int intMinTime = safeToInt(minTime)
     int intMaxTime = safeToInt(maxTime)
     int intDelta = safeToInt(delta)
@@ -1178,11 +1204,9 @@ def configureReporting(String operation, String measurement,  String minTime, St
             break
         case ENERGY :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime)
+                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, intDelta)
             }
-            else {
-                cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [:], 250)
-            }
+            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [:], 250)
             break
         case POWER :
             if (operation == "Write") {
@@ -1206,19 +1230,23 @@ def configureReporting(String operation, String measurement,  String minTime, St
             break
     }
     if (cmds != null) {
-        sendZigbeeCommands(cmds)
+        if (sendNow == true) {
+            sendZigbeeCommands(cmds)
+        }
+        else {
+            return cmds
+        }
     }
 }
  
 def test(String description)
 {
-    //  await endpoint.write('genBasic', {0xffde: {value: 0x13, type: 0x20}});
-    //  await endpoint.read('genOnOff', [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003]);
     List<String> cmds = []
-    cmds += tuyaBlackMagic()
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13)
-    cmds += zigbee.readAttribute(0x0006, [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003], [:], delay=200) 
-    log.warn "${device.displayName} test"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0702 {${device.zigbeeId}} {}"
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0B04 {${device.zigbeeId}} {}"
+    cmds += "he cmd 0x${device.deviceNetworkId} 0x01 6 2 {}, delay 200"
+    log.trace "sending test: ${cmds}"
     sendZigbeeCommands(cmds)
 }
 
