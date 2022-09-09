@@ -35,8 +35,8 @@
  *  ver. 1.4.6 2022-06-04 kkossev - added _TZ3000_gjnozsaz;  added on/off switches for power, amperage, voltage and energy reporting (logs+Events); added device display name in all logs
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
- *  ver. 1.5.2 2022-09-09 kkossev - (dev. branch) - added _TZ3000_cehuw1lw _TZ3000_typdpbpg
- *                                  TODO: 
+ *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; automatic reporting configuration bug fixes
+ * 
  *
  */
 import groovy.json.*
@@ -44,9 +44,9 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.5.2" }
-def timeStamp() {"2022/09/09 11:29 AM"}
+def timeStamp() {"2022/09/09 1:46 PM"}
 
-
+@Field static final Boolean debug = false
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -63,21 +63,22 @@ metadata {
         capability "PresenceSensor"
         capability "Polling"
         
-        //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
-        //command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for OSRAM plug only :( 
-        /*
-        command "configureReporting", [ 
-            [name: "operation*",   type: "ENUM", constraints: ["--- Select ---", "Read", "Write"]],
-            [name: "measurement*", type: "ENUM", constraints: ["--- Select ---", ONOFF, ENERGY, POWER, VOLTAGE, AMPERAGE], description: "Select measurement to configure"],
-            [name: "Minimum Reporting Interval (seconds)", type: "STRING", defaultValue : "10", description: "Select Minimum reporting time (in seconds)"],
-            [name: "Maximum Reporting Interval (seconds)", type: "STRING", defaultValue : "3600", description: "Select Maximim reporting time (in seconds)"],
-            [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
-        ]
-        */
+        
+        if (debug == true) {
+            command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for OSRAM plug only :( 
+            command "configureReporting", [ 
+                [name: "operation*",   type: "ENUM", constraints: ["--- Select ---", "Read", "Write"]],
+                [name: "measurement*", type: "ENUM", constraints: ["--- Select ---", ONOFF, ENERGY, POWER, VOLTAGE, AMPERAGE], description: "Select measurement to configure"],
+                [name: "Minimum Reporting Interval (seconds)", type: "STRING", defaultValue : "10", description: "Select Minimum reporting time (in seconds)"],
+                [name: "Maximum Reporting Interval (seconds)", type: "STRING", defaultValue : "3600", description: "Select Maximim reporting time (in seconds)"],
+                [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
+            ]
+            //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+        }
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_3ooaz3ng", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug        
@@ -1160,7 +1161,8 @@ def configureReporting(String operation, String measurement,  String minTime, St
     int intMinTime = safeToInt(minTime)
     int intMaxTime = safeToInt(maxTime)
     int intDelta = safeToInt(delta)
-    log.trace "configureReporting operation=${operation}, measurement=${measurement}  minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
+    
+    if (settings?.logEnable) log.trace "${device.displayName} configureReporting operation=${operation}, measurement=${measurement}  minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
 
     List<String> cmds = []      
     
@@ -1183,10 +1185,10 @@ def configureReporting(String operation, String measurement,  String minTime, St
             break
         case POWER :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0B04,  DataType.UINT48, intMinTime, intMaxTime)
+                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.UINT48, intMinTime, intMaxTime)    // bug fixes in ver 1.5.2 
             }
             else {
-                cmds += zigbee.reportingConfiguration(0x0B04, 0x0B04, [:], 250)
+                cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [:], 250)
             }
             break
         case VOLTAGE :
@@ -1199,13 +1201,13 @@ def configureReporting(String operation, String measurement,  String minTime, St
             break
         case AMPERAGE :
             if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT48, intMinTime, intMaxTime)
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT48, intMinTime, intMaxTime)    // bug fixes in ver 1.5.2 
             }
             else {
-                cmds += igbee.reportingConfiguration(0x0B04, 0x0508, [:], 250)
+                cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [:], 250)
             }
             break
-        defaukt :
+        default :
             break
     }
     if (cmds != null) {
