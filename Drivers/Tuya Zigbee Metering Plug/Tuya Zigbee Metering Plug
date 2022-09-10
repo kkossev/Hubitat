@@ -36,8 +36,8 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
- *  ver. 1.6.0 2022-09-09 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
- *                                  added individual thresholds for W,A,V; 
+ *  ver. 1.6.0 2022-09-10 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
+ *                                  added individual thresholds for W,A,V; added resetEnergy command
  *
  */
 import groovy.json.*
@@ -45,9 +45,10 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/09 11:54 PM"}
+def timeStamp() {"2022/09/10 12:56 PM"}
 
 @Field static final Boolean debug = false
+@Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -66,6 +67,9 @@ metadata {
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
+        if (enerygyCostCalculation==true) {
+            command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
+        }
         
         if (debug == true) {
             command "activeEndpoints"
@@ -317,8 +321,8 @@ def switchEvent( value ) {
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "${device.displayName} Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
+        runInMillis(5500, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
         if (autoPollingEnabled == true) {
-            runInMillis(5000, pollPower, [overwrite: true])
             runIn( pollingInterval, autoPoll, [overwrite: true]) // restart polling interval timer
         }
         state.switchDebouncing = true
@@ -357,7 +361,7 @@ def voltageEvent( voltage, isDigital=false ) {
             }
         }
         else {
-            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastVoltage} is less than ${voltageTreshold} V)"}
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastVoltage} is less than ${voltageTreshold} V)"}
         }
     }
 }
@@ -378,7 +382,7 @@ def powerEvent( power, isDigital=false ) {
             }
         }
         else {
-            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastPower} is less than ${powerTreshold} W)"}
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastPower} is less than ${powerTreshold} W)"}
         }
         
     }
@@ -400,13 +404,17 @@ def amperageEvent( amperage, isDigital=false ) {
             }
         }
         else {
-            if (txtEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastAmperage} is less than ${amperageTreshold} mA)"}
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastAmperage} is less than ${amperageTreshold} mA)"}
         }
     }
 }
 
-def energyEvent( energy, isDigital=false ) {
+def energyEvent( energy_total, isDigital=false ) {
     def map = [:] 
+    def energy = energy_total
+    if (enerygyCostCalculation == true) {
+        energy = energy_total - safeToDouble(state.lastResetEnergy)
+    }
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
@@ -919,6 +927,8 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
+    if (fullInit == true || state.lastResetEnergy == null) state.lastResetEnergy = 0
+    if (fullInit == true || state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
@@ -1281,7 +1291,30 @@ def configureReporting(String operation, String measurement,  String minTime, St
         }
     }
 }
+
+
+def resetEnergy() {
+    def totalEnergy = safeToDouble(device.latestValue("energy"))
+    def now = FormattedDateTimeFromUnix( now() )
+    state.lastResetEnergy = totalEnergy
+    state.lastResetDate = now
+    if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
+}
  
+@Field static final String dateFormat = 'yyyy-MM-dd HH:mm:ss.SSS'
+
+def unixFromFormattedDateTime( formattedDateTime ) {
+    def unixDateTime = Date.parse(dateFormat, formattedDateTime).time
+    //log.trace "unixDateTime=${unixDateTime}"
+    return unixDateTime
+}
+
+def FormattedDateTimeFromUnix( unixDateTime ) {
+    def formattedDateTime = new Date(unixDateTime).format(dateFormat, location.timeZone) 
+    //log.trace "formattedDateTime=${formattedDateTime}"
+    return formattedDateTime
+}
+
 def test(String description)
 {
     List<String> cmds = []
