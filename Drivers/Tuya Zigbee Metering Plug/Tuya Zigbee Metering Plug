@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/10 12:56 PM"}
+def timeStamp() {"2022/09/10 1:02 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
@@ -413,7 +413,7 @@ def energyEvent( energy_total, isDigital=false ) {
     def map = [:] 
     def energy = energy_total
     if (enerygyCostCalculation == true) {
-        energy = energy_total - safeToDouble(state.lastResetEnergy)
+        energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
     }
     map.name = "energy"
     map.value = energy
