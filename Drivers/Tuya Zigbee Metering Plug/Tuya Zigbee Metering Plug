@@ -37,15 +37,15 @@
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-10 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
- *                                  added individual thresholds for W,A,V; added resetEnergy command
- *
+ *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes current states are now deleted; 
+ *                                  TODO: convert Energy delta from Wh to KWh ?
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/10 1:02 PM"}
+def timeStamp() {"2022/09/10 11:39 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
@@ -69,6 +69,9 @@ metadata {
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         if (enerygyCostCalculation==true) {
             command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
+        }
+        if (debug == true) {
+            command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
         }
         
         if (debug == true) {
@@ -114,7 +117,7 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default value is <b>false</b></i>", defaultValue: false)
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value == true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
@@ -127,21 +130,21 @@ metadata {
                 range: "10..86399", defaultValue: 30)
             input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended value is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
-            input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting On or Off</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
-                input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "0..10000", defaultValue: 1)
+                input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
             input (name: "reportPower", type:    "bool", title: "<b>Power Reporting Off or On</b>",  description:   "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportPower?.value == true) {
-                input (name: "powerTreshold", type: "number", title: "<b>Power minimum change to be reported</b>, W", description: "<i>The minimum Power change that will trigger reporting.</i>", range: "0..10000", defaultValue: 1)
+                input (name: "powerTreshold", type: "number", title: "<b>Power minimum change to be reported</b>, W", description: "<i>The minimum Power change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
             input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting Off or On</b>", description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportAmperage?.value == true) {
-                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "0..10000", defaultValue: 100)
+                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 100)
             }
             input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportVoltage?.value == true) {
-                input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "0..10000", defaultValue: 1)
+                input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
             // energyTreshold powerTreshold amperageTreshold voltageTreshold
         } 
@@ -422,9 +425,12 @@ def energyEvent( energy_total, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
         state.lastEnergy = energy
-        if (true) {        // energy is reported once per hour without being polled!
+        if (reportEnergy == true) {        // energy is reported once per hour without being polled!
             if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
             sendEvent(map)
+        }
+        else {
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
         }
     }
     else {
@@ -851,6 +857,19 @@ def configure() {
 
     // reportEnergy reportPower reportVoltage reportAmperage     energyMinReportingTime   energyMaxReportingTime    energyTreshold
     // energyTreshold powerTreshold amperageTreshold voltageTreshold
+    
+    if (reportEnergy == false) {
+        device.deleteCurrentState("energy")
+    }
+    if (reportPower == false) {
+        device.deleteCurrentState("power")
+    }
+    if (reportVoltage == false) {
+        device.deleteCurrentState("voltage")
+    }
+    if (reportAmperage == false) {
+        device.deleteCurrentState("amperage")
+    }
 
     if (autoReportingEnabled == true ) {
         if (reportEnergy == true) {
@@ -927,22 +946,22 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
-    if (fullInit == true || state.lastResetEnergy == null) state.lastResetEnergy = 0
-    if (fullInit == true || state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )
+    if (state.lastResetEnergy == null) state.lastResetEnergy = 0                                 // do not reset on Initialize!
+    if (state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )    // do not reset on Initialize!
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
-    if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", true)
+    if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
     if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
     if (fullInit == true || settings?.reportEnergy == null) device.updateSetting("reportEnergy", true)
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
-    if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", 30)
-    if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", 900)
-    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", 1)
-    if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", 1)
-    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold", 100)
+    if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
+    if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", [value:900, type:"number"])
+    if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", [value:1, type:"number"])
+    if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
+    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:100, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
     
     
