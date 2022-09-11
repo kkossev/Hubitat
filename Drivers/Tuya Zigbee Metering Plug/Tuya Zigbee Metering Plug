@@ -47,7 +47,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/11 10:22 AM"}
+def timeStamp() {"2022/09/11 10:36 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
@@ -451,6 +451,9 @@ def updateEnergyCost( previousE, newE) {
     def newEnergy = safeToDouble(newE)
     //log.trace "previousEnergy=${previousEnergy} newEnergy=${newEnergy}"
     def deltaPrice = (newEnergy - previousEnergy) * safeToDouble( energyPrice )
+    if (deltaPrice < 0.0) {
+        deltaPrice = 0.0
+    }
     //log.trace "deltaPrice = ${deltaPrice} oldPrice=${state.lastEnergyCost?:0}"
     def newTotalCost = (state.lastEnergyCost?:0 as double) + (deltaPrice as double)
     state.lastEnergyCost = newTotalCost
