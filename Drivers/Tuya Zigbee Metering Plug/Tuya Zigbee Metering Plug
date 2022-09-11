@@ -38,7 +38,7 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-11 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
  *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
- *                                  added setEnergyPrice command; added energyCost calculation and event
+ *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
  *                                  TODO: on ResetEnergy - send a 0 reset event! (digital)
  *                                  TODO: convert Energy delta from Wh to KWh ?
  */
@@ -47,7 +47,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.0" }
-def timeStamp() {"2022/09/11 10:36 AM"}
+def timeStamp() {"2022/09/11 1:31 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
@@ -137,7 +137,7 @@ metadata {
                 range: "120..86400", defaultValue: 900)
             input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
-                input (name: "energyPrice", type: "decimal", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", range: "0.01..99.99", defaultValue: 0.12)
+                input (name: "energyPrice", type: "decimal", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", /*range: "0.01..99.99",*/ defaultValue: 0.12)
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
             input (name: "reportPower", type:    "bool", title: "<b>Power Reporting Off or On</b>",  description:   "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
@@ -423,6 +423,9 @@ def energyEvent( energy_total, isDigital=false ) {
     def energy = energy_total
     if (enerygyCostCalculation == true) {
         energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
+        if (energy < 0.0) {
+            energy = 0.0
+        }
     }
     map.name = "energy"
     map.value = energy
@@ -464,10 +467,10 @@ def updateEnergyCost( previousE, newE) {
 def energyCostEvent( cost, isDigital=false ) {
     def map = [:] 
     map.name = "energyCost"
-    map.value = cost.round(2)
+    map.value = safeToDouble(cost).round(2)
     map.unit = "\$"
     map.type = isDigital == true ? "digital" : "physical"
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.descriptionText = "${map.name} is ${map.unit}${map.value} "
     if (true) {
         if (true) {
             if (settings?.reportEnergy == true) {
@@ -1370,10 +1373,14 @@ def setEnergyPrice( price )
 }
 
 def resetEnergy() {
-    def totalEnergy = safeToDouble(device.latestValue("energy"))
+    def totalEnergy = safeToDouble(device.latestValue("energy"))    // last corrected energy value
     def now = FormattedDateTimeFromUnix( now() )
-    state.lastResetEnergy = totalEnergy
+    state.lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
     state.lastResetDate = now
+    state.lastEnergyCost = 0.0
+    updateEnergyCost( state.lastEnergyCost , 0 )
+    energyEvent( 0, isDigital=true )
+    energyCostEvent( 0, isDigital=true ) 
     if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
 }
  
