@@ -27,9 +27,9 @@
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
- * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
+ * ver. 1.2.1 2022-08-21 kkossev  - code / traces cleanup; change device name on initialize(); added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- *                            
+ *
  *
 */
 
