@@ -39,9 +39,8 @@
  *  ver. 1.6.0 2022-09-12 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
  *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
  *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
- *  ver. 1.6.1 2022-09-12 kkossev - (TEST. branch) - 
- *                                  TODO: research on HTML option
- *                                  TODO: research on schhedule()
+ *  ver. 1.6.1 2022-09-12 kkossev - (TEST. branch) - added html 
+ *                                  TODO: research on schedule()
  *                                  TODO: send [digital] event on Max Reporting time !
  *                                  TODOL add energyDuratuin
  *                                  TODO: convert Energy delta from Wh to KWh ?
@@ -51,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/12 9:46 PM"}
+def timeStamp() {"2022/09/12 11:56 PM"}
 
 @Field static final Boolean debug = true
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
@@ -160,10 +159,10 @@ metadata {
             if (reportVoltage?.value == true) {
                 input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
-            // energyTreshold powerTreshold amperageTreshold voltageTreshold
+            // energyTreshold powerTreshold amperageTreshold voltageTreshold        reportEnergy reportPower reportAmperage reportVoltage
         } 
         if (debug == true) {
-            input("attribEnable", "bool", title: "Enable HTML Attribute Creation?", defaultValue: false, required: false, submitOnChange: true)
+            input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
         }        
     }
 }
@@ -361,6 +360,7 @@ def switchEvent( value ) {
     {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
         sendEvent(map)
+        formatAttrib()
     }
     clearIsDigital()
 }
@@ -378,6 +378,7 @@ def voltageEvent( voltage, isDigital=false ) {
             if (settings?.reportVoltage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                formatAttrib()
             }
         }
         else {
@@ -399,6 +400,7 @@ def powerEvent( power, isDigital=false ) {
             if (settings?.reportPower == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                formatAttrib()
             }
         }
         else {
@@ -421,6 +423,7 @@ def amperageEvent( amperage, isDigital=false ) {
             if (settings?.reportAmperage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                formatAttrib()
             }
         }
         else {
@@ -450,6 +453,7 @@ def energyEvent( energy_total, isDigital=false ) {
             state.lastEnergy = energy
             if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} energyCost=${newTotalCost.round(2)} (rate=${energyPrice.round(5)})"}
             sendEvent(map)
+            formatAttrib()
         }
         else {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
@@ -487,6 +491,7 @@ def energyCostEvent( cost, isDigital=false ) {
             if (settings?.reportEnergy == true) {
                 //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
                 sendEvent(map)
+                formatAttrib()
             }
         }
         else {
@@ -976,9 +981,9 @@ def updated(){
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
     
     if (debug == true) {    // test
-        if (attribEnable)
+        if (attribEnable == true )
             formatAttrib()
-        else if(location.hub.firmwareVersionString < "2.2.8.141")
+        else 
             sendEvent(name: "html", value: "<table></table>", isChanged: true)
     }
 		
@@ -1030,8 +1035,10 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
     if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:100, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
-    
-    
+    if (debug == true) {
+        if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
+    }
+
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
@@ -1126,6 +1133,7 @@ def checkIfNotPresent() {
     	        sendEvent(name: "presence", value: "not present")
                 state.lastPresenceState = "not present"
                 if (logEnable==true) log.warn "${device.displayName} not present!"
+                formatAttrib()
             }
         }
     }
@@ -1419,17 +1427,33 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
 }
 
 void formatAttrib() {
-    if (debug == false)
+    if (debug == false) {
         return
-    
+    }
+    if (attribEnable == false) {
+        sendEvent(name: "html", value: "<table></table>", isChanged: false)        
+        return
+    }
     if (settings?.logEnable) log.debug "formatAttrib"
     String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
     
-    attrStr += addToAttr("Presence","presence")
+    //  reportEnergy reportPower reportAmperage reportVoltage
+    
+    attrStr += addToAttr("Presence", "presence")
     attrStr += addToAttr("Switch","switch")
-    attrStr += addToAttr("Power","power")
-    attrStr += addToAttr("Energy","energy")
-    attrStr += addToAttr("EnergyCost","energyCost")
+    if (reportPower == true) {
+        attrStr += addToAttr("Power", "power", convert ="int")
+    }
+    if (reportVoltage == true) {
+        attrStr += addToAttr("Voltage","voltage")
+    }
+    if (reportAmperage == true) {
+        attrStr += addToAttr("Amperage","amperage", convert = "double")
+    }
+    if (reportEnergy == true) {
+        attrStr += addToAttr("Energy","energy")
+        attrStr += addToAttr("Cost","energyCost")
+    }
 
     /*
      List combineH = ["hubModel", "hubVersion"]
@@ -1512,9 +1536,12 @@ String addToAttr(String name, String key, String convert = "none") {
     if (attrUnit == null) attrUnit = ""
 
     def curVal = device.currentValue(key,true)
-    if(curVal) {
+    if (curVal != null) {
         if (convert == "int") {
-            retResult += curVal.toInteger().toString() + " " + attrUnit
+              retResult += safeToInt(curVal).toString() + " " + attrUnit
+        } 
+        else if (convert == "double") {
+            retResult += safeToDouble(curVal).toString() + " " + attrUnit
         } 
         else 
             retResult += curVal.toString() + " " + attrUnit
