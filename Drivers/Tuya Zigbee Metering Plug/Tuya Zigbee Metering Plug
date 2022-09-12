@@ -36,20 +36,24 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
- *  ver. 1.6.0 2022-09-11 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
+ *  ver. 1.6.0 2022-09-12 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
  *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
  *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
- *                                  TODO: on ResetEnergy - send a 0 reset event! (digital)
+ *  ver. 1.6.1 2022-09-12 kkossev - (TEST. branch) - 
+ *                                  TODO: research on HTML option
+ *                                  TODO: research on schhedule()
+ *                                  TODO: send [digital] event on Max Reporting time !
+ *                                  TODOL add energyDuratuin
  *                                  TODO: convert Energy delta from Wh to KWh ?
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.0" }
-def timeStamp() {"2022/09/11 1:31 PM"}
+def version() { "1.6.1" }
+def timeStamp() {"2022/09/12 9:46 PM"}
 
-@Field static final Boolean debug = false
+@Field static final Boolean debug = true
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
 
 metadata {
@@ -66,6 +70,9 @@ metadata {
         capability "PresenceSensor"
         
         attribute "energyCost", "string"
+        if (debug == true) {
+            attribute "html", "string"    // test
+        }
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
@@ -77,6 +84,7 @@ metadata {
         }
         if (debug == true) {
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command "formatAttrib"
         }
         
         if (debug == true) {
@@ -120,20 +128,20 @@ metadata {
     
     
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default value is <b>false</b></i>", defaultValue: false)
-        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended setting is <b>off</b></i>", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended setting is <b>on</b></i>", defaultValue: true)
+        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>", defaultValue: false)
+        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value == true) {
-            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
+            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
-        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
+        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>", defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
-            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended value is <b>30 seconds</b></i>", 
+            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b></i>", 
                 range: "10..86399", defaultValue: 30)
-            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended value is <b>900 seconds</b></i>", 
+            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
             input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
@@ -154,6 +162,9 @@ metadata {
             }
             // energyTreshold powerTreshold amperageTreshold voltageTreshold
         } 
+        if (debug == true) {
+            input("attribEnable", "bool", title: "Enable HTML Attribute Creation?", defaultValue: false, required: false, submitOnChange: true)
+        }        
     }
 }
 
@@ -435,7 +446,7 @@ def energyEvent( energy_total, isDigital=false ) {
     if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
         if (reportEnergy == true) {        // energy is reported once per hour without being polled!
             def newTotalCost = updateEnergyCost(state.lastEnergy, energy )
-            energyCostEvent(newTotalCost)
+            energyCostEvent(newTotalCost, isDigital)
             state.lastEnergy = energy
             if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} energyCost=${newTotalCost.round(2)} (rate=${energyPrice.round(5)})"}
             sendEvent(map)
@@ -963,6 +974,15 @@ def updated(){
         if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>disabled</b>"
     }
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
+    
+    if (debug == true) {    // test
+        if (attribEnable)
+            formatAttrib()
+        else if(location.hub.firmwareVersionString < "2.2.8.141")
+            sendEvent(name: "html", value: "<table></table>", isChanged: true)
+    }
+		
+    
     configure()
 }
 
@@ -1397,6 +1417,120 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
     //log.trace "formattedDateTime=${formattedDateTime}"
     return formattedDateTime
 }
+
+void formatAttrib() {
+    if (debug == false)
+        return
+    
+    if (settings?.logEnable) log.debug "formatAttrib"
+    String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
+    
+    attrStr += addToAttr("Presence","presence")
+    attrStr += addToAttr("Switch","switch")
+    attrStr += addToAttr("Power","power")
+    attrStr += addToAttr("Energy","energy")
+    attrStr += addToAttr("EnergyCost","energyCost")
+
+    /*
+     List combineH = ["hubModel", "hubVersion"]
+     attrStr += combineAttr("Version", combineH)
+    
+    if(publicIPEnable) {
+        List combine = ["localIP", "publicIP"]
+        attrStr += combineAttr("IP Local/Public", combine)
+    } else
+        attrStr += addToAttr("IP Addr","localIP")
+    
+    if(freeMemPollEnabled)
+           attrStr += addToAttr("Free Mem","freeMemory","int")
+    
+    if(cpuPollEnabled) {
+ 
+        if(device.currentValue("cpu5Min")){
+            List combine = ["cpu5Min", "cpuPct"]
+            attrStr += combineAttr("CPU Load/Load%", combine)
+        }
+        if(location.hub.firmwareVersionString <= "2.2.8.0"){
+            List combineA = ["jvmTotal", "jvmFree", "jvmFreePct"]
+            attrStr += combineAttr("JVM Tot/Free/%", combineA)
+        }
+    }
+
+    if(device.currentValue("dbSize")) attrStr +=addToAttr("DB Size","dbSize")
+    if(evtStateDaysEnable){
+        List combine = ["maxEvtDays", "maxStateDays"]
+        attrStr += combineAttr("Max Evt/State Days", combine)
+    }
+
+    attrStr += addToAttr("Last Restart","lastHubRestartFormatted")
+    attrStr += addToAttr("Uptime","formattedUptime")
+
+    if(tempPollEnable) {
+        String tempAttrib = location.temperatureScale=="C" ? "temperatureC" : "temperatureF"
+        attrStr += addToAttr("Temperature",tempAttrib)
+    }
+    if(!suppressData)
+        attrStr += addToAttr("ZB Channel","zigbeeChannel")
+    
+    if (device.currentValue("zwaveVersion")){
+        List combine = ["zwaveVersion","zwaveSDKVersion"]
+        attrStr += combineAttr("ZW Radio/SDK", combine)   
+    }
+*/
+    
+    attrStr += "</table>"
+
+    if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
+    updateAttr("html", attrStr)
+    if (attrStr.length() > 1024) updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}")
+}
+
+String combineAttr(String name, List<String> keys) {
+    if (settings?.logEnable) log.debug "adding $name, $keys.length"
+
+    String retResult = '<tr><td align="left">'
+    retResult += name + '</td><td align="left">'
+    
+    String keyResult = ""
+    for (i = 0;i < keys.size(); i++) {
+        keyResult += device.currentValue(keys[i],true)
+        String attrUnit = getUnitFromState(keys[i])
+        if (attrUnit != null) keyResult += " " + attrUnit
+        if (i < keys.size() - 1) keyResult += " / "
+    }
+            
+    retResult += keyResult + '</td></tr>'
+    return retResult
+}
+
+String addToAttr(String name, String key, String convert = "none") {
+    if (settings?.logEnable) log.debug "adding $name, $key"
+    String retResult = '<tr><td>'
+    retResult += name + '</td><td>'
+
+    String attrUnit = getUnitFromState(key)
+    if (attrUnit == null) attrUnit = ""
+
+    def curVal = device.currentValue(key,true)
+    if(curVal) {
+        if (convert == "int") {
+            retResult += curVal.toInteger().toString() + " " + attrUnit
+        } 
+        else 
+            retResult += curVal.toString() + " " + attrUnit
+    }
+    retResult += '</td></tr>'
+    return retResult
+}
+
+String getUnitFromState(String attrName){
+   	return device.currentState(attrName)?.unit
+}
+
+void updateAttr(String aKey, aValue, String aUnit = "") {
+    sendEvent(name:aKey, value:aValue, unit:aUnit)
+}
+
 
 def test(String description)
 {
