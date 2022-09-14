@@ -46,10 +46,10 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/14 7:55 AM"}
+def timeStamp() {"2022/09/14 8:01 AM"}
 
 @Field static final Boolean debug = false
-@Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
+@Field static final Boolean enerygyCostCalculation = true    // work in progress
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -65,16 +65,15 @@ metadata {
         capability "PresenceSensor"
         
         attribute "energyCost", "string"
-        attribute "html", "string"    // test
+		attribute "energyDuration", "string"
+        attribute "html", "string"
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
-        if (enerygyCostCalculation==true) {
-            command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
-        }
+        command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
         if (debug == true) {
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
             command "formatAttrib"
@@ -155,9 +154,7 @@ metadata {
             }
             // energyTreshold powerTreshold amperageTreshold voltageTreshold        reportEnergy reportPower reportAmperage reportVoltage
         } 
-        if (debug == true) {
-            input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
-        }        
+        input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
     }
 }
 
@@ -429,11 +426,9 @@ def amperageEvent( amperage, isDigital=false ) {
 def energyEvent( energy_total, isDigital=false ) {
     def map = [:] 
     def energy = energy_total
-    if (enerygyCostCalculation == true) {
-        energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
-        if (energy < 0.0) {
-            energy = 0.0
-        }
+    energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
+    if (energy < 0.0) {
+        energy = 0.0
     }
     map.name = "energy"
     map.value = energy
