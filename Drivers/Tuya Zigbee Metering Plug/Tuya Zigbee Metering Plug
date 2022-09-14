@@ -40,10 +40,7 @@
  *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
  *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
  *  ver. 1.6.1 2022-09-12 kkossev - (TEST. branch) - added html 
- *                                  TODO: research on schedule()
- *                                  TODO: send [digital] event on Max Reporting time !
- *                                  TODOL add energyDuratuin
- *                                  TODO: convert Energy delta from Wh to KWh ?
+ *
  */
 import groovy.json.*
 import groovy.transform.Field
@@ -153,7 +150,7 @@ metadata {
             }
             input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting Off or On</b>", description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportAmperage?.value == true) {
-                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 100)
+                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 25)
             }
             input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportVoltage?.value == true) {
@@ -467,15 +464,15 @@ def energyEvent( energy_total, isDigital=false ) {
 def updateEnergyCost( previousE, newE) {
     def previousEnergy = safeToDouble(previousE)
     def newEnergy = safeToDouble(newE)
-    //log.trace "previousEnergy=${previousEnergy} newEnergy=${newEnergy}"
+    //log.trace "updateEnergyCost: previousEnergy=${previousEnergy} newEnergy=${newEnergy}"
     def deltaPrice = (newEnergy - previousEnergy) * safeToDouble( energyPrice )
     if (deltaPrice < 0.0) {
         deltaPrice = 0.0
     }
-    //log.trace "deltaPrice = ${deltaPrice} oldPrice=${state.lastEnergyCost?:0}"
+    //log.trace "updateEnergyCost: deltaPrice = ${deltaPrice} oldPrice=${state.lastEnergyCost?:0}"
     def newTotalCost = (state.lastEnergyCost?:0 as double) + (deltaPrice as double)
     state.lastEnergyCost = newTotalCost
-    //log.trace "newTotalCost = ${newTotalCost}"
+    //log.trace "updateEnergyCost: newTotalCost = ${newTotalCost}"
     return newTotalCost
 }
 
@@ -1033,7 +1030,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", [value:1, type:"number"])
     if (fullInit == true || settings?.energyPrice == null) device.updateSetting("energyPrice", [value:0.12, type:"decimal"])
     if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
-    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:100, type:"number"])
+    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
     if (debug == true) {
         if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
