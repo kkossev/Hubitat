@@ -46,9 +46,9 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/12 11:56 PM"}
+def timeStamp() {"2022/09/14 7:00 AM"}
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress, not quite ready yet!
 
 metadata {
