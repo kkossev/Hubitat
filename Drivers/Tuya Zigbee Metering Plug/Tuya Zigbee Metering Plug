@@ -36,10 +36,9 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
- *  ver. 1.6.0 2022-09-12 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
- *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
- *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
- *  ver. 1.6.1 2022-09-12 kkossev - (TEST. branch) - added html 
+ *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
+ *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
+ *  ver. 1.6.1 2022-09-12 kkossev - (dev. branch) - added html attribute
  *
  */
 import groovy.json.*
@@ -1452,53 +1451,6 @@ void formatAttrib() {
         attrStr += addToAttr("Cost","energyCost")
     }
 
-    /*
-     List combineH = ["hubModel", "hubVersion"]
-     attrStr += combineAttr("Version", combineH)
-    
-    if(publicIPEnable) {
-        List combine = ["localIP", "publicIP"]
-        attrStr += combineAttr("IP Local/Public", combine)
-    } else
-        attrStr += addToAttr("IP Addr","localIP")
-    
-    if(freeMemPollEnabled)
-           attrStr += addToAttr("Free Mem","freeMemory","int")
-    
-    if(cpuPollEnabled) {
- 
-        if(device.currentValue("cpu5Min")){
-            List combine = ["cpu5Min", "cpuPct"]
-            attrStr += combineAttr("CPU Load/Load%", combine)
-        }
-        if(location.hub.firmwareVersionString <= "2.2.8.0"){
-            List combineA = ["jvmTotal", "jvmFree", "jvmFreePct"]
-            attrStr += combineAttr("JVM Tot/Free/%", combineA)
-        }
-    }
-
-    if(device.currentValue("dbSize")) attrStr +=addToAttr("DB Size","dbSize")
-    if(evtStateDaysEnable){
-        List combine = ["maxEvtDays", "maxStateDays"]
-        attrStr += combineAttr("Max Evt/State Days", combine)
-    }
-
-    attrStr += addToAttr("Last Restart","lastHubRestartFormatted")
-    attrStr += addToAttr("Uptime","formattedUptime")
-
-    if(tempPollEnable) {
-        String tempAttrib = location.temperatureScale=="C" ? "temperatureC" : "temperatureF"
-        attrStr += addToAttr("Temperature",tempAttrib)
-    }
-    if(!suppressData)
-        attrStr += addToAttr("ZB Channel","zigbeeChannel")
-    
-    if (device.currentValue("zwaveVersion")){
-        List combine = ["zwaveVersion","zwaveSDKVersion"]
-        attrStr += combineAttr("ZW Radio/SDK", combine)   
-    }
-*/
-    
     attrStr += "</table>"
 
     if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
