@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/14 8:01 AM"}
+def timeStamp() {"2022/09/14 8:07 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -969,13 +969,10 @@ def updated(){
     }
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
     
-    if (debug == true) {    // test
-        if (attribEnable == true )
-            formatAttrib()
-        else 
-            sendEvent(name: "html", value: "<table></table>", isChanged: true)
-    }
-		
+    if (attribEnable == true )
+        formatAttrib()
+    else 
+        sendEvent(name: "html", value: "<table></table>", isChanged: true)
     
     configure()
 }
@@ -1024,9 +1021,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
     if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
-    if (debug == true) {
-        if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
-    }
+    if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
 
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
@@ -1416,9 +1411,6 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
 }
 
 void formatAttrib() {
-    if (debug == false) {
-        return
-    }
     if (attribEnable == false) {
         sendEvent(name: "html", value: "<table></table>", isChanged: false)        
         return
