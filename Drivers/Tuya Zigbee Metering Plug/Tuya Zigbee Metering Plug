@@ -38,7 +38,7 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-12 kkossev - (dev. branch) - added html attribute
+ *  ver. 1.6.1 2022-09-14 kkossev - (dev. branch) - added html attribute; added energyDuration
  *
  */
 import groovy.json.*
@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/14 8:07 AM"}
+def timeStamp() {"2022/09/14 9:19 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -440,9 +440,11 @@ def energyEvent( energy_total, isDigital=false ) {
             def newTotalCost = updateEnergyCost(state.lastEnergy, energy )
             energyCostEvent(newTotalCost, isDigital)
             state.lastEnergy = energy
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} energyCost=${newTotalCost.round(2)} (rate=${energyPrice.round(5)})"}
             sendEvent(map)
+            def duration = calculateEnergyDuration()
+            energyDurationtEvent( duration )
             formatAttrib()
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice.round(5)}), duration=${duration}"}
         }
         else {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
@@ -489,6 +491,18 @@ def energyCostEvent( cost, isDigital=false ) {
     }
     
 }
+
+def energyDurationtEvent( duration, isDigital=false ) {
+    def map = [:] 
+    map.name = "energyDuration"
+    map.value = duration
+    map.unit = ""
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.unit}${map.value} "
+    //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
+    sendEvent(map)
+}
+
 
 def parseZDOcommand( Map descMap ) {
     switch (descMap.clusterId) {
@@ -1395,6 +1409,36 @@ def resetEnergy() {
     energyCostEvent( 0, isDigital=true ) 
     if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
 }
+
+def calculateEnergyDuration() {
+	def energyTimeMS = unixFromFormattedDateTime( state.lastResetDate )
+	if (!energyTimeMS) {
+		return "Unknown"
+	}
+    def duration = roundTwoPlaces((new Date().time - energyTimeMS) / 60000)
+		
+		if (duration >= (24 * 60)) {
+			return getFormattedDuration(duration, (24 * 60), "Day")
+		}
+		else if (duration >= 60) {
+			return getFormattedDuration(duration, 60, "Hour")
+		}
+		else {
+			return getFormattedDuration(duration, 0, "Minute")
+		}
+}
+
+def getFormattedDuration(duration, divisor, name) {
+	if (divisor) {
+		duration = roundTwoPlaces(duration / divisor)
+	}	
+	return "${duration} ${name}${duration == 1 ? '' : 's'}"
+}
+
+def roundTwoPlaces(val) {
+	return Math.round(safeToDouble(val) * 100) / 100
+}
+
  
 @Field static final String dateFormat = 'yyyy-MM-dd HH:mm:ss.SSS'
 
@@ -1434,6 +1478,7 @@ void formatAttrib() {
     if (reportEnergy == true) {
         attrStr += addToAttr("Energy","energy")
         attrStr += addToAttr("Cost","energyCost")
+        attrStr += addToAttr("Duration","energyDuration")
     }
 
     attrStr += "</table>"
