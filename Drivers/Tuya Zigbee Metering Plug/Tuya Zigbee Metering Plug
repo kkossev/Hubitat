@@ -38,7 +38,7 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-14 kkossev - (dev. branch) - added html attribute; added energyDuration
+ *  ver. 1.6.1 2022-09-17 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; 
  *
  */
 import groovy.json.*
@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/14 9:19 PM"}
+def timeStamp() {"2022/09/17 10:08 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -67,8 +67,10 @@ metadata {
         attribute "energyCost", "string"
 		attribute "energyDuration", "string"
         attribute "html", "string"
+        attribute "hourlyEnergy", "string"
+        //attribute "dailyEnergy", "string"
         
-        command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+        command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
@@ -455,6 +457,66 @@ def energyEvent( energy_total, isDigital=false ) {
     }
 }
 
+def scheduleHourlyAndDailyEnergy() {
+// http://www.quartz-scheduler.org/documentation/     
+// https://freeformatter.com/cron-expression-generator-quartz.html 
+/*    
+Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
+0    	0	    *	    ?	            *	    *	        *            // 0 0 * ? * * *  -> every hour
+0	    0	    0	    ?	            *	    *	        *            // 0 0 0 ? * * *  -> every day
+// 0 * 0 ? * * * -> every minute
+*/
+
+    /*
+    try
+    {
+        unschedule()
+    }
+    catch (e)
+    {
+        if (txtEnable==true) log.erroro "${device.displayName} exception caught on unschedule()..."
+    }
+    */
+   
+    //schedule("* * * ? * *", hourlyEnergyEvent)     // test every second
+    //schedule("0 * * ? * *", hourlyEnergyEvent)    // test every 1 minute
+    schedule("0 0 * ? * * * ", hourlyEnergyEvent)
+
+
+}
+
+def calculateHourlyEnergy() {
+    def energy = safeToDouble(device.currentValue("energy")) - safeToDouble(state.lastHourlyEnergy)
+    if (energy < 0.0) {
+        energy = 0.0
+        log.warn "negative energy"
+    }
+    return energy as double
+}
+
+def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
+    //log.trace "hourlyEnergyEvent hourlyEnergy=${hourlyEnergy}"
+    def map = [:] 
+    double energy
+    map.name = "hourlyEnergy"
+    if (hourlyEnergy != null) {
+        map.value = hourlyEnergy    // as set 
+    }
+    else {    // CRON
+        energy = calculateHourlyEnergy().round(3)
+        map.value = energy
+        //log.trace "energy=${energy}"
+        state.lastHourlyEnergy = device.currentValue("energy")
+    }
+    map.unit = "kWh"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
+    sendEvent(map)
+}
+
+
 def updateEnergyCost( previousE, newE) {
     def previousEnergy = safeToDouble(previousE)
     def newEnergy = safeToDouble(newE)
@@ -527,6 +589,7 @@ def parseZDOcommand( Map descMap ) {
             break
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break    // 2022/09/16
     }
 }
 
@@ -761,6 +824,7 @@ def parseZHAcommand( Map descMap) {
             break
         default :
             if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break    // 9/16/2022
     }
 }
 
@@ -914,6 +978,9 @@ def tuyaBlackMagic() {
 */
 def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
+
+    scheduleHourlyAndDailyEnergy()
+        
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     cmds += refresh()
@@ -1006,6 +1073,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
     if (fullInit == true || state.lastEnergy == null) state.lastEnergy = 0.0
     if (fullInit == true || state.lastEnergyCost == null) state.lastEnergyCost = 0.0
+    if (fullInit == true || state.lastHourlyEnergy == null) state.lastHourlyEnergy = 0.0
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
     if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
@@ -1088,6 +1156,7 @@ def initialize() {
     initializeVars()
     updated()            // calls also configure()
     runIn( 12, logInitializeRezults, [overwrite: true])
+    scheduleHourlyAndDailyEnergy()
 }
 
 // This method is called when the device is first created.
@@ -1198,19 +1267,19 @@ boolean otherTuyaOddities( String description ) {
         switch (it.cluster) {
             case "0000" :
                 if (it.attrId in ["0001"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFFE", "FFDF"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else {
-                    //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} (Cluster ${cluster}) attrId ${it.attrId} N/A, skipping"
+                    if (logEnable) log.debug "${device.displayName} otherTuyaOddities - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
                 }
                 break
             case "0006" :
@@ -1401,11 +1470,14 @@ def setEnergyPrice( price )
 def resetEnergy() {
     def totalEnergy = safeToDouble(device.latestValue("energy"))    // last corrected energy value
     def now = FormattedDateTimeFromUnix( now() )
-    state.lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
+    def lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
+    state.lastResetEnergy = lastResetEnergy
+    state.lastHourlyEnergy = lastResetEnergy
     state.lastResetDate = now
     state.lastEnergyCost = 0.0
     updateEnergyCost( state.lastEnergyCost , 0 )
     energyEvent( 0, isDigital=true )
+    hourlyEnergyEvent( 0, isDigital=true )
     energyCostEvent( 0, isDigital=true ) 
     if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
 }
@@ -1424,7 +1496,7 @@ def calculateEnergyDuration() {
 			return getFormattedDuration(duration, 60, "Hour")
 		}
 		else {
-			return getFormattedDuration(duration, 0, "Minute")
+			return getFormattedDuration(duration, 0, "Min")    // was "Minute"
 		}
 }
 
@@ -1462,8 +1534,6 @@ void formatAttrib() {
     if (settings?.logEnable) log.debug "formatAttrib"
     String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
     
-    //  reportEnergy reportPower reportAmperage reportVoltage
-    
     attrStr += addToAttr("Presence", "presence")
     attrStr += addToAttr("Switch","switch")
     if (reportPower == true) {
@@ -1483,13 +1553,13 @@ void formatAttrib() {
 
     attrStr += "</table>"
 
-    if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
+    //if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
     updateAttr("html", attrStr)
-    if (attrStr.length() > 1024) updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}")
+    if (attrStr.length() > 1024) { updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
 }
 
 String combineAttr(String name, List<String> keys) {
-    if (settings?.logEnable) log.debug "adding $name, $keys.length"
+    //if (settings?.logEnable) log.debug "adding $name, $keys.length"
 
     String retResult = '<tr><td align="left">'
     retResult += name + '</td><td align="left">'
@@ -1507,7 +1577,7 @@ String combineAttr(String name, List<String> keys) {
 }
 
 String addToAttr(String name, String key, String convert = "none") {
-    if (settings?.logEnable) log.debug "adding $name, $key"
+    //if (settings?.logEnable) log.debug "adding $name, $key"
     String retResult = '<tr><td>'
     retResult += name + '</td><td>'
 
@@ -1537,6 +1607,9 @@ void updateAttr(String aKey, aValue, String aUnit = "") {
     sendEvent(name:aKey, value:aValue, unit:aUnit)
 }
 
+def deviceNotification(text) {
+    if (settings?.logEnable) log.debug "deviceNotification: ${text}"
+}
 
 def test(String description)
 {
