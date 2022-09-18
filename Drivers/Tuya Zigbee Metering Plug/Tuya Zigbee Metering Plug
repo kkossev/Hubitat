@@ -38,7 +38,7 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-18 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize()
+ *  ver. 1.6.1 2022-09-18 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize(); energyCost and hourlyEnergy type changed to NUMBER;
  *
  */
 import groovy.json.*
@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/18 6:30 PM"}
+def timeStamp() {"2022/09/18 8:42 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -64,10 +64,10 @@ metadata {
         capability "Sensor"
         capability "PresenceSensor"
         
-        attribute "energyCost", "string"
+        attribute "energyCost", "NUMBER"
 		attribute "energyDuration", "string"
         attribute "html", "string"
-        attribute "hourlyEnergy", "string"
+        attribute "hourlyEnergy", "NUMBER"
         //attribute "dailyEnergy", "string"
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
