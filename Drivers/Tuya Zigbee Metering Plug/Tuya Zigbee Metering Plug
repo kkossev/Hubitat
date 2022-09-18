@@ -38,7 +38,7 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-17 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; 
+ *  ver. 1.6.1 2022-09-18 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize()
  *
  */
 import groovy.json.*
@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/17 10:08 PM"}
+def timeStamp() {"2022/09/18 6:30 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -430,6 +430,7 @@ def energyEvent( energy_total, isDigital=false ) {
     def energy = energy_total
     energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
     if (energy < 0.0) {
+        log.warn "negative energy ${energy}, correcting it to 0!"
         energy = 0.0
     }
     map.name = "energy"
@@ -486,10 +487,11 @@ Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
 }
 
 def calculateHourlyEnergy() {
-    def energy = safeToDouble(device.currentValue("energy")) - safeToDouble(state.lastHourlyEnergy)
+    def energy = safeToDouble(device.currentValue("energy", true)) - safeToDouble(state.lastHourlyEnergy)
     if (energy < 0.0) {
+        log.warn "calculateHourlyEnergy: negative energy ${energy}, correcting it to 0!"
+        if (logEnable) {log.trace "device.currentValue=${safeToDouble(device.currentValue("energy", true))}, state.lastHourlyEnergy=${safeToDouble(state.lastHourlyEnergy)}"}
         energy = 0.0
-        log.warn "negative energy"
     }
     return energy as double
 }
@@ -506,7 +508,7 @@ def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
         energy = calculateHourlyEnergy().round(3)
         map.value = energy
         //log.trace "energy=${energy}"
-        state.lastHourlyEnergy = device.currentValue("energy")
+        state.lastHourlyEnergy = device.currentValue("energy", true)
     }
     map.unit = "kWh"
     map.type = isDigital == true ? "digital" : "physical"
@@ -915,6 +917,7 @@ def pollPower() {
 
 
 // Sends refresh / readAttribute commands to the plug
+//
 def poll( refreshAll = false ) {
     if (logEnable) {log.trace "${device.displayName} polling.. refreshAll is ${refreshAll}"}
     checkDriverVersion()
@@ -1025,7 +1028,7 @@ def configure() {
 
 // This method is called when the preferences of a device are updated.
 def updated(){
-    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
+    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence", true)} AlwaysOn is <b>${alwaysOn}</b> "
     if (txtEnable==true) log.info "${device.displayName} Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
@@ -1061,21 +1064,25 @@ def updated(){
 
 
 void initializeVars( boolean fullInit = true ) {
+    
+    def preservedResetEnergy = state.lastResetEnergy?:0            // preserve state.lastResetEnergy even on full reset!
+    def preservedlastHourlyEnergy = state.lastHourlyEnergy?:0  
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
+        if (logEnable==true) log.warn "${device.displayName} clearing states and preferences ..."
+        if (logEnable==true) log.warn "${device.displayName} preservedResetEnergy = ${preservedResetEnergy}"
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
-    if (fullInit == true || state.txCounter == null) state.txCounter = 0
+    state.rxCounter = 0
+    state.txCounter = 0
     if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
     if (fullInit == true || state.lastVoltage == null) state.lastVoltage = 0.0
     if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
-    if (fullInit == true || state.lastEnergy == null) state.lastEnergy = 0.0
-    if (fullInit == true || state.lastEnergyCost == null) state.lastEnergyCost = 0.0
-    if (fullInit == true || state.lastHourlyEnergy == null) state.lastHourlyEnergy = 0.0
-    if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
+    if (state.lastEnergy == null) state.lastEnergy = 0.0
+    if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
+    if (state.lastSwitchState == null) state.lastSwitchState = "unknown"
+    if (state.lastPresenceState == null) state.lastPresenceState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.switchPollingSupported == null) state.switchPollingSupported = true
     if (fullInit == true || state.voltagePollingSupported == null) state.voltagePollingSupported = true
@@ -1085,9 +1092,16 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
-    if (state.lastResetEnergy == null) state.lastResetEnergy = 0                                 // do not reset on Initialize!
+    if (state.lastResetEnergy == null) {
+        log.warn "state.lastResetEnergy = ${state.lastResetEnergy}, resetting it back to ${preservedResetEnergy}!"
+        state.lastResetEnergy = preservedResetEnergy                               // do not reset on Initialize!
+    }
+    if (state.lastHourlyEnergy == null) {
+        state.lastHourlyEnergy = preservedlastHourlyEnergy
+    }
     if (state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )    // do not reset on Initialize!
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (debug == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false) }
+    else                { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
     if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
@@ -1151,10 +1165,12 @@ def logInitializeRezults() {
 }
 
 def initialize() {
-    if (txtEnable==true) log.info "${device.displayName} Initialize()..."
+    if (txtEnable==true) log.warn "${device.displayName} Initialize()..."
     unschedule()
     initializeVars()
-    updated()            // calls also configure()
+    runIn( 1, resetEnergy, [overwrite: true])      // 09/18/2022
+    runIn( 2, refresh, [overwrite: true])      // 09/18/2022
+    runIn( 11, updated, [overwrite: true])          // calls also configure()
     runIn( 12, logInitializeRezults, [overwrite: true])
     scheduleHourlyAndDailyEnergy()
 }
@@ -1162,7 +1178,7 @@ def initialize() {
 // This method is called when the device is first created.
 def installed() {
     if (txtEnable==true) log.info "${device.displayName} Installed()..."
-    initializeVars()
+    initializeVars(fullInit = true)
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "${device.displayName} calling initialize() after 5 seconds..."
     // HE will autoomaticall call configure() method here
@@ -1479,6 +1495,7 @@ def resetEnergy() {
     energyEvent( 0, isDigital=true )
     hourlyEnergyEvent( 0, isDigital=true )
     energyCostEvent( 0, isDigital=true ) 
+    energyDurationtEvent( 0, isDigital=true  )
     if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
 }
 
