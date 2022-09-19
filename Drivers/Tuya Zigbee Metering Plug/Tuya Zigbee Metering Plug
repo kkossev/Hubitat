@@ -38,7 +38,8 @@
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-18 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize(); energyCost and hourlyEnergy type changed to NUMBER;
+ *  ver. 1.6.1 2022-09-19 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize(); energyCost and hourlyEnergy type changed to NUMBER;
+ *                                - fixed bug '@Field static String UNKNOWN' (missing 'final')
  *
  */
 import groovy.json.*
@@ -46,7 +47,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.1" }
-def timeStamp() {"2022/09/18 8:42 PM"}
+def timeStamp() {"2022/09/19 11:02 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true    // work in progress
@@ -169,7 +170,7 @@ metadata {
 @Field static final Integer debouncingTimer = 300
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
-@Field static String UNKNOWN = "UNKNOWN"
+@Field static final String UNKNOWN = "UNKNOWN"
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
 @Field static final String ENERGY = "Energy"
@@ -333,10 +334,12 @@ def switchEvent( value ) {
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "${device.displayName} Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
-        runInMillis(5500, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
+        runInMillis(6000, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
+        /*  commented out 9/19/2022
         if (autoPollingEnabled == true) {
             runIn( pollingInterval, autoPoll, [overwrite: true]) // restart polling interval timer
         }
+        */
         state.switchDebouncing = true
         state.lastSwitchState = value
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
@@ -353,7 +356,7 @@ def switchEvent( value ) {
     {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
         sendEvent(map)
-        formatAttrib()
+        runIn( 1, formatAttrib, [overwrite: true])    
     }
     clearIsDigital()
 }
@@ -371,7 +374,7 @@ def voltageEvent( voltage, isDigital=false ) {
             if (settings?.reportVoltage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
-                formatAttrib()
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -393,7 +396,7 @@ def powerEvent( power, isDigital=false ) {
             if (settings?.reportPower == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
-                formatAttrib()
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -416,7 +419,7 @@ def amperageEvent( amperage, isDigital=false ) {
             if (settings?.reportAmperage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
-                formatAttrib()
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -446,7 +449,7 @@ def energyEvent( energy_total, isDigital=false ) {
             sendEvent(map)
             def duration = calculateEnergyDuration()
             energyDurationtEvent( duration )
-            formatAttrib()
+            runIn( 1, formatAttrib, [overwrite: true])    
             if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice.round(5)}), duration=${duration}"}
         }
         else {
@@ -478,7 +481,7 @@ Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
         if (txtEnable==true) log.erroro "${device.displayName} exception caught on unschedule()..."
     }
     */
-   
+   // "${Math.round(Math.random() * 60)} ${Calendar.instance.get(Calendar.MINUTE)} * ? * * *"
     //schedule("* * * ? * *", hourlyEnergyEvent)     // test every second
     //schedule("0 * * ? * *", hourlyEnergyEvent)    // test every 1 minute
     schedule("0 0 * ? * * * ", hourlyEnergyEvent)
@@ -546,7 +549,7 @@ def energyCostEvent( cost, isDigital=false ) {
             if (settings?.reportEnergy == true) {
                 //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
                 sendEvent(map)
-                formatAttrib()
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -956,12 +959,14 @@ def refresh() {
 def autoPoll() {
     if (logEnable) {log.debug "${device.displayName} autoPoll()"}
     checkIfNotPresent()
+    /* commented out 09/19/2022
     if (autoPollingEnabled?.value == true) {
         if ( pollingInterval != null ) 
             runIn( pollingInterval, autoPoll, [overwrite: true])
         else
             runIn( defaultPollingInterval, autoPoll, [overwrite: true])
     }
+    */
     if (optimizations == true) 
         poll( refreshAll = false )
     else 
@@ -1025,6 +1030,27 @@ def configure() {
     sendZigbeeCommands(cmds)
 }
 
+def autoCron( timeInSeconds ) {
+    if (timeInSeconds < 60) {
+        schedule("*/$timeInSeconds * * ? * * *", autoPoll)
+        return timeInSeconds.toString() + " seconds"
+    }
+    else {
+        def minutes = (timeInSeconds / 60 ) as int
+        if (minutes < 60) {
+            schedule("0 */$minutes * ? * *", autoPoll)    
+            return minutes.toString() + " minutes"
+        }
+        else {
+            def hours = (minutes / 60 ) as int
+            if (hours > 23) hours = 23
+            schedule("0 0 */$hours ? * *", autoPoll)                    
+            return hours.toString() + " hours"
+        }
+    }
+}
+
+
 
 // This method is called when the preferences of a device are updated.
 def updated(){
@@ -1037,27 +1063,28 @@ def updated(){
     else {
         unschedule(logsOff)
     }
-
+    def autoPollTime
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) {
-            runIn( pollingInterval, autoPoll, [overwrite: true])
-            if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
+            autoPollTime = autoCron( pollingInterval )
         }
         else {
-            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
+            autoPollTime = autoCron( defaultPollingInterval )
         }
+        if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>enabled</b>, polling interval is ${autoPollTime} "
     }
     else {
         unschedule(autoPoll)
-        if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>disabled</b>"
+        log.info "${device.displayName} Auto polling is <b>disabled</b>"
     }
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
     
-    if (attribEnable == true )
-        formatAttrib()
-    else 
+    if (attribEnable == true ) {
+        runIn( 1, formatAttrib, [overwrite: true])    
+    }
+    else {
         sendEvent(name: "html", value: "<table></table>", isChanged: true)
-    
+    }
     configure()
 }
 
@@ -1216,7 +1243,7 @@ def checkIfNotPresent() {
     	        sendEvent(name: "presence", value: "not present")
                 state.lastPresenceState = "not present"
                 if (logEnable==true) log.warn "${device.displayName} not present!"
-                formatAttrib()
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
     }
