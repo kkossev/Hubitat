@@ -36,21 +36,20 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
- *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
- *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;added setEnergyPrice command; added energyCost calculation and event;
- *  ver. 1.6.1 2022-09-19 kkossev - (dev. branch) - added html attribute; added energyDuration; added hourlyEnergy; fixed autoPoll bug; energy and energyCosts are reset on Initialize(); energyCost and hourlyEnergy type changed to NUMBER;
- *                                - fixed bug '@Field static String UNKNOWN' (missing 'final')
+ *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
+ *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
+ *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
+ *  ver. 1.6.2 2022-09-20 kkossev - (dev. branch) 
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.1" }
-def timeStamp() {"2022/09/19 11:02 PM"}
+def version() { "1.6.2" }
+def timeStamp() {"2022/09/20 11:47 PM"}
 
 @Field static final Boolean debug = false
-@Field static final Boolean enerygyCostCalculation = true    // work in progress
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -79,7 +78,6 @@ metadata {
         command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
         if (debug == true) {
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
-            command "formatAttrib"
         }
         
         if (debug == true) {
@@ -216,7 +214,6 @@ def parse(String description) {
         return null //event
     }
     else {
-        //List result = []
         def descMap = [:]
         try {
             descMap = zigbee.parseDescriptionAsMap(description)
@@ -256,14 +253,6 @@ def parse(String description) {
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
                     energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
-                /*
-                else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
-                    if (logEnable) {log.debug "${device.displayName} Tuya specific attribute ${it.attrId}  cluster ${it.cluster } reported: value=${it.value}" }    // not tested
-                }
-                else if ( it.cluster == "0006" && it.attrId in ["8000", "8001", "8002"]) {
-                    parseOnOffAttributes(it)
-                }
-                */
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
@@ -279,7 +268,7 @@ def parse(String description) {
         else {
             if (logEnable==true)  log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
-        return null //result
+        return null
     } // descMap
 }
 
@@ -462,31 +451,9 @@ def energyEvent( energy_total, isDigital=false ) {
 }
 
 def scheduleHourlyAndDailyEnergy() {
-// http://www.quartz-scheduler.org/documentation/     
-// https://freeformatter.com/cron-expression-generator-quartz.html 
-/*    
-Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
-0    	0	    *	    ?	            *	    *	        *            // 0 0 * ? * * *  -> every hour
-0	    0	    0	    ?	            *	    *	        *            // 0 0 0 ? * * *  -> every day
-// 0 * 0 ? * * * -> every minute
-*/
-
-    /*
-    try
-    {
-        unschedule()
-    }
-    catch (e)
-    {
-        if (txtEnable==true) log.erroro "${device.displayName} exception caught on unschedule()..."
-    }
-    */
-   // "${Math.round(Math.random() * 60)} ${Calendar.instance.get(Calendar.MINUTE)} * ? * * *"
-    //schedule("* * * ? * *", hourlyEnergyEvent)     // test every second
-    //schedule("0 * * ? * *", hourlyEnergyEvent)    // test every 1 minute
+    // http://www.quartz-scheduler.org/documentation/     
+    // https://freeformatter.com/cron-expression-generator-quartz.html 
     schedule("0 0 * ? * * * ", hourlyEnergyEvent)
-
-
 }
 
 def calculateHourlyEnergy() {
@@ -510,7 +477,6 @@ def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
     else {    // CRON
         energy = calculateHourlyEnergy().round(3)
         map.value = energy
-        //log.trace "energy=${energy}"
         state.lastHourlyEnergy = device.currentValue("energy", true)
     }
     map.unit = "kWh"
@@ -959,14 +925,6 @@ def refresh() {
 def autoPoll() {
     if (logEnable) {log.debug "${device.displayName} autoPoll()"}
     checkIfNotPresent()
-    /* commented out 09/19/2022
-    if (autoPollingEnabled?.value == true) {
-        if ( pollingInterval != null ) 
-            runIn( pollingInterval, autoPoll, [overwrite: true])
-        else
-            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
-    }
-    */
     if (optimizations == true) 
         poll( refreshAll = false )
     else 
@@ -994,11 +952,11 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()
 
-    // reportEnergy reportPower reportVoltage reportAmperage     energyMinReportingTime   energyMaxReportingTime    energyTreshold
-    // energyTreshold powerTreshold amperageTreshold voltageTreshold
-    
     if (reportEnergy == false) {
         device.deleteCurrentState("energy")
+        device.deleteCurrentState("energyCost")
+        device.deleteCurrentState("energyDuration")
+        device.deleteCurrentState("hourlyEnergy")
     }
     if (reportPower == false) {
         device.deleteCurrentState("power")
@@ -1032,7 +990,7 @@ def configure() {
 
 def autoCron( timeInSeconds ) {
     if (timeInSeconds < 60) {
-        schedule("*/$timeInSeconds * * ? * * *", autoPoll)
+        schedule("*/$timeInSeconds * * * * ? *", autoPoll)
         return timeInSeconds.toString() + " seconds"
     }
     else {
@@ -1091,7 +1049,7 @@ def updated(){
 
 
 void initializeVars( boolean fullInit = true ) {
-    
+    //
     def preservedResetEnergy = state.lastResetEnergy?:0            // preserve state.lastResetEnergy even on full reset!
     def preservedlastHourlyEnergy = state.lastHourlyEnergy?:0  
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
@@ -1253,7 +1211,6 @@ void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    // TODO - multiple commands ???
 }
 
 def logsOff(){
@@ -1270,8 +1227,6 @@ boolean isTuyaE00xCluster( String description )
     else
         return false
 }
-
-
 
 // return true if further processing in the main parse method should be cancelled !
 boolean otherTuyaOddities( String description ) {
@@ -1560,13 +1515,11 @@ def roundTwoPlaces(val) {
 
 def unixFromFormattedDateTime( formattedDateTime ) {
     def unixDateTime = Date.parse(dateFormat, formattedDateTime).time
-    //log.trace "unixDateTime=${unixDateTime}"
     return unixDateTime
 }
 
 def FormattedDateTimeFromUnix( unixDateTime ) {
     def formattedDateTime = new Date(unixDateTime).format(dateFormat, location.timeZone) 
-    //log.trace "formattedDateTime=${formattedDateTime}"
     return formattedDateTime
 }
 
@@ -1594,17 +1547,12 @@ void formatAttrib() {
         attrStr += addToAttr("Cost","energyCost")
         attrStr += addToAttr("Duration","energyDuration")
     }
-
     attrStr += "</table>"
-
-    //if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
     updateAttr("html", attrStr)
     if (attrStr.length() > 1024) { updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
 }
 
 String combineAttr(String name, List<String> keys) {
-    //if (settings?.logEnable) log.debug "adding $name, $keys.length"
-
     String retResult = '<tr><td align="left">'
     retResult += name + '</td><td align="left">'
     
@@ -1621,7 +1569,6 @@ String combineAttr(String name, List<String> keys) {
 }
 
 String addToAttr(String name, String key, String convert = "none") {
-    //if (settings?.logEnable) log.debug "adding $name, $key"
     String retResult = '<tr><td>'
     retResult += name + '</td><td>'
 
@@ -1657,12 +1604,5 @@ def deviceNotification(text) {
 
 def test(String description)
 {
-    List<String> cmds = []
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}"
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0702 {${device.zigbeeId}} {}"
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0B04 {${device.zigbeeId}} {}"
-    cmds += "he cmd 0x${device.deviceNetworkId} 0x01 6 2 {}, delay 200"
-    log.trace "sending test: ${cmds}"
-    sendZigbeeCommands(cmds)
 }
 
