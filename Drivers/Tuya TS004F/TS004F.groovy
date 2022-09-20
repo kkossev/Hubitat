@@ -25,12 +25,14 @@
  * ver. 2.4.0 2022-03-31 kkossev     - added support for 'MOES remote TS0044', singleThreaded: true; bug fix: debouncing timer was not started for TS0044
  * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms  
  * ver. 2.4.2 2022-05-07 kkossev     - added LoraTap 6 button Scene Controller; device.getDataValue bug fix;
+ * ver. 2.4.3 2022-09-18 kkossev     - added TS0042 Tuya Zigbee 2 Gang Wireless Smart Switch; removed 'release' event for TS0044 switches (not supported by hardware); 'release' digital event bug fix.
+ *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.2" }
-def timeStamp() {"2022/05/07 6:03 PM"}
+def version() { "2.4.3" }
+def timeStamp() {"2022/09/18 9:51 AM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -62,7 +64,8 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044F"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
-        
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_tzvbimpq", deviceJoinName: "Tuya 2 button Scene Switch"        
+       
     }
     preferences {
         input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
@@ -249,11 +252,16 @@ def installed()
 
 def initialize() {
     tuyaMagic()
-    def numberOfButtons
-    def supportedValues
+    def numberOfButtons = 4
+    def supportedValues = ["pushed", "double", "held"]
     if (device.getDataValue("model") == "TS0041") {
     	numberOfButtons = 1
-        supportedValues = ["pushed", "double", "held"]
+    }
+    else if (device.getDataValue("model") == "TS0042") {
+    	numberOfButtons = 2
+    }
+    else if (device.getDataValue("model") == "TS0043") {
+    	numberOfButtons = 3
     }
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
         if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {    // Smart Knob 
@@ -262,12 +270,12 @@ def initialize() {
         }
         else {
         	numberOfButtons = 4
-            supportedValues = ["pushed", "double", "held", "release"]
+            supportedValues = ["pushed", "double", "held"]    // no release events are generated in scene switch mode
         }
     }
     else if (device.getDataValue("model") == "TS0601") {
         numberOfButtons = 6
-        supportedValues = ["pushed", "double", "held"]    }
+    }
     else {
     	numberOfButtons = 4	// unknown
         supportedValues = ["pushed", "double", "held", "release"]
@@ -317,6 +325,11 @@ def doubleTap(buttonNumber) {
 def hold(buttonNumber) {
     buttonEvent(buttonNumber, "held")
 }
+
+def release(buttonNumber) {
+    buttonEvent(buttonNumber, "release")
+}
+
 
 //    command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
 def switchMode( mode ) {
