@@ -36,16 +36,17 @@
  *  ver. 1.5.0 2022-06-05 kkossev - Bug fix - all settings were reset back in to the defaults on hub reboot; parsing 'other Tuya oddities..'; over current alarm 0x8003; 'Freeze' LED mode (sets the backlight to the current state); 
  *  ver. 1.5.1 2022-06-12 kkossev - ChildLock bug fix
  *  ver. 1.5.2 2022-09-09 kkossev - added _TZ3000_cehuw1lw _TZ3000_typdpbpg; 
- *  ver. 1.6.0 2022-09-11 kkossev - (dev. branch) removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); added _TZ3000_okaz9tjs fingerprint for tests; automatic reporting configuration bug fixes;
- *                                  added individual thresholds for W,A,V; added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added add energyPrice (decimal) preference;
- *                                  added setEnergyPrice command; added energyCost calculation and event; resetEnergy bug fix
+ *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
+ *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
+ *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
+ * 
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.0" }
-def timeStamp() {"2022/09/11 1:31 PM"}
+def version() { "1.6.1" }
+def timeStamp() {"2022/09/19 11:02 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean enerygyCostCalculation = true
@@ -63,18 +64,21 @@ metadata {
         capability "Sensor"
         capability "PresenceSensor"
         
-        attribute "energyCost", "string"
+        attribute "energyCost", "NUMBER"
+		attribute "energyDuration", "string"
+        attribute "html", "string"
+        attribute "hourlyEnergy", "NUMBER"
+        //attribute "dailyEnergy", "string"
         
-        command "initialize", [[name: "Manually initialize the plug after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
+        command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
-        if (enerygyCostCalculation==true) {
-            command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
-        }
+        command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
         if (debug == true) {
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command "formatAttrib"
         }
         
         if (debug == true) {
@@ -118,20 +122,20 @@ metadata {
     
     
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
-        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default value is <b>false</b></i>", defaultValue: false)
-        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended setting is <b>off</b></i>", defaultValue: false)
+        input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended setting is <b>on</b></i>", defaultValue: true)
+        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>", defaultValue: false)
+        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value == true) {
-            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended value is <b>60 seconds</b></i>", 
+            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>", 
                    range: "10..3600", defaultValue: defaultPollingInterval)
         }
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
-        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>true</b>", defaultValue: true)
+        input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>", defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
-            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended value is <b>30 seconds</b></i>", 
+            input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b></i>", 
                 range: "10..86399", defaultValue: 30)
-            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended value is <b>900 seconds</b></i>", 
+            input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
             input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
             if (reportEnergy?.value == true) {
@@ -144,14 +148,15 @@ metadata {
             }
             input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting Off or On</b>", description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportAmperage?.value == true) {
-                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 100)
+                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 25)
             }
             input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportVoltage?.value == true) {
                 input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
-            // energyTreshold powerTreshold amperageTreshold voltageTreshold
+            // energyTreshold powerTreshold amperageTreshold voltageTreshold        reportEnergy reportPower reportAmperage reportVoltage
         } 
+        input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
     }
 }
 
@@ -164,7 +169,7 @@ metadata {
 @Field static final Integer debouncingTimer = 300
 @Field static final Integer digitalTimer = 1000
 @Field static final Integer refreshTimer = 3000
-@Field static String UNKNOWN = "UNKNOWN"
+@Field static final String UNKNOWN = "UNKNOWN"
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
 @Field static final String ENERGY = "Energy"
@@ -328,10 +333,12 @@ def switchEvent( value ) {
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "${device.displayName} Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
-        runInMillis(5500, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
+        runInMillis(6000, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
+        /*  commented out 9/19/2022
         if (autoPollingEnabled == true) {
             runIn( pollingInterval, autoPoll, [overwrite: true]) // restart polling interval timer
         }
+        */
         state.switchDebouncing = true
         state.lastSwitchState = value
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
@@ -348,6 +355,7 @@ def switchEvent( value ) {
     {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
         sendEvent(map)
+        runIn( 1, formatAttrib, [overwrite: true])    
     }
     clearIsDigital()
 }
@@ -365,6 +373,7 @@ def voltageEvent( voltage, isDigital=false ) {
             if (settings?.reportVoltage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -386,6 +395,7 @@ def powerEvent( power, isDigital=false ) {
             if (settings?.reportPower == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -408,6 +418,7 @@ def amperageEvent( amperage, isDigital=false ) {
             if (settings?.reportAmperage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -419,12 +430,12 @@ def amperageEvent( amperage, isDigital=false ) {
 def energyEvent( energy_total, isDigital=false ) {
     def map = [:] 
     def energy = energy_total
-    if (enerygyCostCalculation == true) {
-        energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
-        if (energy < 0.0) {
-            energy = 0.0
-        }
+    energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
+    if (energy < 0.0) {
+        log.warn "negative energy ${energy}, correcting it to 0!"
+        energy = 0.0
     }
+    if (logEnable) {log.trace "energy_total=${energy_total}, state.lastResetEnergy=${safeToDouble(state.lastResetEnergy)}"}
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
@@ -433,10 +444,13 @@ def energyEvent( energy_total, isDigital=false ) {
     if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
         if (reportEnergy == true) {        // energy is reported once per hour without being polled!
             def newTotalCost = updateEnergyCost(state.lastEnergy, energy )
-            energyCostEvent(newTotalCost)
+            energyCostEvent(newTotalCost, isDigital)
             state.lastEnergy = energy
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText} energyCost=${newTotalCost.round(2)} (rate=${energyPrice.round(5)})"}
             sendEvent(map)
+            def duration = calculateEnergyDuration()
+            energyDurationtEvent( duration )
+            runIn( 1, formatAttrib, [overwrite: true])    
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice.round(5)}), duration=${duration}"}
         }
         else {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
@@ -447,18 +461,79 @@ def energyEvent( energy_total, isDigital=false ) {
     }
 }
 
+def scheduleHourlyAndDailyEnergy() {
+// http://www.quartz-scheduler.org/documentation/     
+// https://freeformatter.com/cron-expression-generator-quartz.html 
+/*    
+Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
+0    	0	    *	    ?	            *	    *	        *            // 0 0 * ? * * *  -> every hour
+0	    0	    0	    ?	            *	    *	        *            // 0 0 0 ? * * *  -> every day
+// 0 * 0 ? * * * -> every minute
+*/
+
+    /*
+    try
+    {
+        unschedule()
+    }
+    catch (e)
+    {
+        if (txtEnable==true) log.erroro "${device.displayName} exception caught on unschedule()..."
+    }
+    */
+   // "${Math.round(Math.random() * 60)} ${Calendar.instance.get(Calendar.MINUTE)} * ? * * *"
+    //schedule("* * * ? * *", hourlyEnergyEvent)     // test every second
+    //schedule("0 * * ? * *", hourlyEnergyEvent)    // test every 1 minute
+    schedule("0 0 * ? * * * ", hourlyEnergyEvent)
+
+
+}
+
+def calculateHourlyEnergy() {
+    def energy = safeToDouble(device.currentValue("energy", true)) - safeToDouble(state.lastHourlyEnergy)
+    if (energy < 0.0) {
+        log.warn "calculateHourlyEnergy: negative energy ${energy}, correcting it to 0!"
+        if (logEnable) {log.trace "device.currentValue=${safeToDouble(device.currentValue("energy", true))}, state.lastHourlyEnergy=${safeToDouble(state.lastHourlyEnergy)}"}
+        energy = 0.0
+    }
+    return energy as double
+}
+
+def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
+    //log.trace "hourlyEnergyEvent hourlyEnergy=${hourlyEnergy}"
+    def map = [:] 
+    double energy
+    map.name = "hourlyEnergy"
+    if (hourlyEnergy != null) {
+        map.value = hourlyEnergy    // as set 
+    }
+    else {    // CRON
+        energy = calculateHourlyEnergy().round(3)
+        map.value = energy
+        //log.trace "energy=${energy}"
+        state.lastHourlyEnergy = device.currentValue("energy", true)
+    }
+    map.unit = "kWh"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
+    sendEvent(map)
+}
+
+
 def updateEnergyCost( previousE, newE) {
     def previousEnergy = safeToDouble(previousE)
     def newEnergy = safeToDouble(newE)
-    //log.trace "previousEnergy=${previousEnergy} newEnergy=${newEnergy}"
+    //log.trace "updateEnergyCost: previousEnergy=${previousEnergy} newEnergy=${newEnergy}"
     def deltaPrice = (newEnergy - previousEnergy) * safeToDouble( energyPrice )
     if (deltaPrice < 0.0) {
         deltaPrice = 0.0
     }
-    //log.trace "deltaPrice = ${deltaPrice} oldPrice=${state.lastEnergyCost?:0}"
+    //log.trace "updateEnergyCost: deltaPrice = ${deltaPrice} oldPrice=${state.lastEnergyCost?:0}"
     def newTotalCost = (state.lastEnergyCost?:0 as double) + (deltaPrice as double)
     state.lastEnergyCost = newTotalCost
-    //log.trace "newTotalCost = ${newTotalCost}"
+    //log.trace "updateEnergyCost: newTotalCost = ${newTotalCost}"
     return newTotalCost
 }
 
@@ -474,6 +549,7 @@ def energyCostEvent( cost, isDigital=false ) {
             if (settings?.reportEnergy == true) {
                 //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
                 sendEvent(map)
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
         else {
@@ -482,6 +558,18 @@ def energyCostEvent( cost, isDigital=false ) {
     }
     
 }
+
+def energyDurationtEvent( duration, isDigital=false ) {
+    def map = [:] 
+    map.name = "energyDuration"
+    map.value = duration
+    map.unit = ""
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.unit}${map.value} "
+    //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
+    sendEvent(map)
+}
+
 
 def parseZDOcommand( Map descMap ) {
     switch (descMap.clusterId) {
@@ -506,6 +594,7 @@ def parseZDOcommand( Map descMap ) {
             break
         default :
             if (logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break    // 2022/09/16
     }
 }
 
@@ -740,6 +829,7 @@ def parseZHAcommand( Map descMap) {
             break
         default :
             if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break    // 9/16/2022
     }
 }
 
@@ -830,6 +920,7 @@ def pollPower() {
 
 
 // Sends refresh / readAttribute commands to the plug
+//
 def poll( refreshAll = false ) {
     if (logEnable) {log.trace "${device.displayName} polling.. refreshAll is ${refreshAll}"}
     checkDriverVersion()
@@ -868,12 +959,14 @@ def refresh() {
 def autoPoll() {
     if (logEnable) {log.debug "${device.displayName} autoPoll()"}
     checkIfNotPresent()
+    /* commented out 09/19/2022
     if (autoPollingEnabled?.value == true) {
         if ( pollingInterval != null ) 
             runIn( pollingInterval, autoPoll, [overwrite: true])
         else
             runIn( defaultPollingInterval, autoPoll, [overwrite: true])
     }
+    */
     if (optimizations == true) 
         poll( refreshAll = false )
     else 
@@ -893,6 +986,9 @@ def tuyaBlackMagic() {
 */
 def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
+
+    scheduleHourlyAndDailyEnergy()
+        
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     cmds += refresh()
@@ -934,10 +1030,33 @@ def configure() {
     sendZigbeeCommands(cmds)
 }
 
+def autoCron( timeInSeconds ) {
+    if (timeInSeconds < 60) {
+        // */12 * * * * ? *
+        //schedule("*/$timeInSeconds * * ? * * *", autoPoll)
+        schedule("*/$timeInSeconds * * * * ? *", autoPoll)
+        return timeInSeconds.toString() + " seconds"
+    }
+    else {
+        def minutes = (timeInSeconds / 60 ) as int
+        if (minutes < 60) {
+            schedule("0 */$minutes * ? * *", autoPoll)    
+            return minutes.toString() + " minutes"
+        }
+        else {
+            def hours = (minutes / 60 ) as int
+            if (hours > 23) hours = 23
+            schedule("0 0 */$hours ? * *", autoPoll)                    
+            return hours.toString() + " hours"
+        }
+    }
+}
+
+
 
 // This method is called when the preferences of a device are updated.
 def updated(){
-    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence")} AlwaysOn is <b>${alwaysOn}</b> "
+    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence", true)} AlwaysOn is <b>${alwaysOn}</b> "
     if (txtEnable==true) log.info "${device.displayName} Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
@@ -946,41 +1065,53 @@ def updated(){
     else {
         unschedule(logsOff)
     }
-
+    def autoPollTime
     if (autoPollingEnabled?.value==true) {
         if ( pollingInterval != null ) {
-            runIn( pollingInterval, autoPoll, [overwrite: true])
-            if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>enabled</b>, polling interval is ${pollingInterval} seconds"
+            autoPollTime = autoCron( pollingInterval )
         }
         else {
-            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
+            autoPollTime = autoCron( defaultPollingInterval )
         }
+        if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>enabled</b>, polling interval is ${autoPollTime} "
     }
     else {
         unschedule(autoPoll)
-        if (txtEnable==true) log.info "${device.displayName} Auto polling is <b>disabled</b>"
+        log.info "${device.displayName} Auto polling is <b>disabled</b>"
     }
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
+    
+    if (attribEnable == true ) {
+        runIn( 1, formatAttrib, [overwrite: true])    
+    }
+    else {
+        sendEvent(name: "html", value: "<table></table>", isChanged: true)
+    }
     configure()
 }
 
 
 
 void initializeVars( boolean fullInit = true ) {
+    
+    def preservedResetEnergy = state.lastResetEnergy?:0            // preserve state.lastResetEnergy even on full reset!
+    def preservedlastHourlyEnergy = state.lastHourlyEnergy?:0  
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
+        if (logEnable==true) log.warn "${device.displayName} clearing states and preferences ..."
+        if (logEnable==true) log.warn "${device.displayName} preservedResetEnergy = ${preservedResetEnergy}"
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
-    if (fullInit == true || state.txCounter == null) state.txCounter = 0
+    state.rxCounter = 0
+    state.txCounter = 0
     if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
     if (fullInit == true || state.lastVoltage == null) state.lastVoltage = 0.0
     if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
-    if (fullInit == true || state.lastEnergy == null) state.lastEnergy = 0.0
-    if (fullInit == true || state.lastEnergyCost == null) state.lastEnergyCost = 0.0
-    if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
+    if (state.lastEnergy == null) state.lastEnergy = 0.0
+    if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
+    if (state.lastSwitchState == null) state.lastSwitchState = "unknown"
+    if (state.lastPresenceState == null) state.lastPresenceState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.switchPollingSupported == null) state.switchPollingSupported = true
     if (fullInit == true || state.voltagePollingSupported == null) state.voltagePollingSupported = true
@@ -990,9 +1121,16 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
-    if (state.lastResetEnergy == null) state.lastResetEnergy = 0                                 // do not reset on Initialize!
+    if (state.lastResetEnergy == null) {
+        log.warn "state.lastResetEnergy = ${state.lastResetEnergy}, resetting it back to ${preservedResetEnergy}!"
+        state.lastResetEnergy = preservedResetEnergy                               // do not reset on Initialize!
+    }
+    if (state.lastHourlyEnergy == null) {
+        state.lastHourlyEnergy = preservedlastHourlyEnergy
+    }
     if (state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )    // do not reset on Initialize!
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (debug == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false) }
+    else                { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
     if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
@@ -1006,10 +1144,10 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", [value:1, type:"number"])
     if (fullInit == true || settings?.energyPrice == null) device.updateSetting("energyPrice", [value:0.12, type:"decimal"])
     if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
-    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:100, type:"number"])
+    if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
-    
-    
+    if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
+
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
@@ -1056,17 +1194,20 @@ def logInitializeRezults() {
 }
 
 def initialize() {
-    if (txtEnable==true) log.info "${device.displayName} Initialize()..."
+    if (txtEnable==true) log.warn "${device.displayName} Initialize()..."
     unschedule()
     initializeVars()
-    updated()            // calls also configure()
+    runIn( 1, resetEnergy, [overwrite: true])      // 09/18/2022
+    runIn( 2, refresh, [overwrite: true])      // 09/18/2022
+    runIn( 11, updated, [overwrite: true])          // calls also configure()
     runIn( 12, logInitializeRezults, [overwrite: true])
+    scheduleHourlyAndDailyEnergy()
 }
 
 // This method is called when the device is first created.
 def installed() {
     if (txtEnable==true) log.info "${device.displayName} Installed()..."
-    initializeVars()
+    initializeVars(fullInit = true)
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "${device.displayName} calling initialize() after 5 seconds..."
     // HE will autoomaticall call configure() method here
@@ -1104,6 +1245,7 @@ def checkIfNotPresent() {
     	        sendEvent(name: "presence", value: "not present")
                 state.lastPresenceState = "not present"
                 if (logEnable==true) log.warn "${device.displayName} not present!"
+                runIn( 1, formatAttrib, [overwrite: true])    
             }
         }
     }
@@ -1170,19 +1312,19 @@ boolean otherTuyaOddities( String description ) {
         switch (it.cluster) {
             case "0000" :
                 if (it.attrId in ["0001"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFFE", "FFDF"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else {
-                    //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} (Cluster ${cluster}) attrId ${it.attrId} N/A, skipping"
+                    if (logEnable) log.debug "${device.displayName} otherTuyaOddities - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
                 }
                 break
             case "0006" :
@@ -1373,14 +1515,48 @@ def setEnergyPrice( price )
 def resetEnergy() {
     def totalEnergy = safeToDouble(device.latestValue("energy"))    // last corrected energy value
     def now = FormattedDateTimeFromUnix( now() )
-    state.lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
+    def lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
+    state.lastResetEnergy = lastResetEnergy
+    state.lastHourlyEnergy = lastResetEnergy
     state.lastResetDate = now
     state.lastEnergyCost = 0.0
     updateEnergyCost( state.lastEnergyCost , 0 )
     energyEvent( 0, isDigital=true )
+    hourlyEnergyEvent( 0, isDigital=true )
     energyCostEvent( 0, isDigital=true ) 
+    energyDurationtEvent( 0, isDigital=true  )
     if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
 }
+
+def calculateEnergyDuration() {
+	def energyTimeMS = unixFromFormattedDateTime( state.lastResetDate )
+	if (!energyTimeMS) {
+		return "Unknown"
+	}
+    def duration = roundTwoPlaces((new Date().time - energyTimeMS) / 60000)
+		
+		if (duration >= (24 * 60)) {
+			return getFormattedDuration(duration, (24 * 60), "Day")
+		}
+		else if (duration >= 60) {
+			return getFormattedDuration(duration, 60, "Hour")
+		}
+		else {
+			return getFormattedDuration(duration, 0, "Min")    // was "Minute"
+		}
+}
+
+def getFormattedDuration(duration, divisor, name) {
+	if (divisor) {
+		duration = roundTwoPlaces(duration / divisor)
+	}	
+	return "${duration} ${name}${duration == 1 ? '' : 's'}"
+}
+
+def roundTwoPlaces(val) {
+	return Math.round(safeToDouble(val) * 100) / 100
+}
+
  
 @Field static final String dateFormat = 'yyyy-MM-dd HH:mm:ss.SSS'
 
@@ -1394,6 +1570,91 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
     def formattedDateTime = new Date(unixDateTime).format(dateFormat, location.timeZone) 
     //log.trace "formattedDateTime=${formattedDateTime}"
     return formattedDateTime
+}
+
+void formatAttrib() {
+    if (attribEnable == false) {
+        sendEvent(name: "html", value: "<table></table>", isChanged: false)        
+        return
+    }
+    if (settings?.logEnable) log.debug "formatAttrib"
+    String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
+    
+    attrStr += addToAttr("Presence", "presence")
+    attrStr += addToAttr("Switch","switch")
+    if (reportPower == true) {
+        attrStr += addToAttr("Power", "power", convert ="int")
+    }
+    if (reportVoltage == true) {
+        attrStr += addToAttr("Voltage","voltage")
+    }
+    if (reportAmperage == true) {
+        attrStr += addToAttr("Amperage","amperage", convert = "double")
+    }
+    if (reportEnergy == true) {
+        attrStr += addToAttr("Energy","energy")
+        attrStr += addToAttr("Cost","energyCost")
+        attrStr += addToAttr("Duration","energyDuration")
+    }
+
+    attrStr += "</table>"
+
+    //if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
+    updateAttr("html", attrStr)
+    if (attrStr.length() > 1024) { updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
+}
+
+String combineAttr(String name, List<String> keys) {
+    //if (settings?.logEnable) log.debug "adding $name, $keys.length"
+
+    String retResult = '<tr><td align="left">'
+    retResult += name + '</td><td align="left">'
+    
+    String keyResult = ""
+    for (i = 0;i < keys.size(); i++) {
+        keyResult += device.currentValue(keys[i],true)
+        String attrUnit = getUnitFromState(keys[i])
+        if (attrUnit != null) keyResult += " " + attrUnit
+        if (i < keys.size() - 1) keyResult += " / "
+    }
+            
+    retResult += keyResult + '</td></tr>'
+    return retResult
+}
+
+String addToAttr(String name, String key, String convert = "none") {
+    //if (settings?.logEnable) log.debug "adding $name, $key"
+    String retResult = '<tr><td>'
+    retResult += name + '</td><td>'
+
+    String attrUnit = getUnitFromState(key)
+    if (attrUnit == null) attrUnit = ""
+
+    def curVal = device.currentValue(key,true)
+    if (curVal != null) {
+        if (convert == "int") {
+              retResult += safeToInt(curVal).toString() + " " + attrUnit
+        } 
+        else if (convert == "double") {
+            retResult += safeToDouble(curVal).toString() + " " + attrUnit
+        } 
+        else 
+            retResult += curVal.toString() + " " + attrUnit
+    }
+    retResult += '</td></tr>'
+    return retResult
+}
+
+String getUnitFromState(String attrName){
+   	return device.currentState(attrName)?.unit
+}
+
+void updateAttr(String aKey, aValue, String aUnit = "") {
+    sendEvent(name:aKey, value:aValue, unit:aUnit)
+}
+
+def deviceNotification(text) {
+    if (settings?.logEnable) log.debug "deviceNotification: ${text}"
 }
 
 def test(String description)
