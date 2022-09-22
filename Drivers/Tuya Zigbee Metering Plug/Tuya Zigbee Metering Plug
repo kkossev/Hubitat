@@ -39,17 +39,21 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- * 
+ *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints
+ *
+ *                                  TODO: correction for Samsung plug 
+ *
+ *                                  TODO: send [digital] event on Max Reporting time !
+ *                                  TODO: convert Energy delta from Wh to KWh ? TODO: if plug is not present, remove the W/V/A from the html attributes!
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.1" }
-def timeStamp() {"2022/09/19 11:02 PM"}
+def version() { "1.6.2" }
+def timeStamp() {"2022/09/22 10:46 PM"}
 
 @Field static final Boolean debug = false
-@Field static final Boolean enerygyCostCalculation = true
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -78,7 +82,6 @@ metadata {
         command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
         if (debug == true) {
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
-            command "formatAttrib"
         }
         
         if (debug == true) {
@@ -91,7 +94,7 @@ metadata {
                 [name: "Maximum Reporting Interval (seconds)", type: "STRING", defaultValue : "900", description: "Select Maximim reporting time (in seconds)"],
                 [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
             ]
-            //command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
         }
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
@@ -117,6 +120,24 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"  // 
+        // NON-Tuya metering plugs
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"outletv4", manufacturer:"SmartThings", deviceJoinName: "SmartThings outletv4 STS-OUT-US-2"      // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"3200-Sgb", manufacturer:"SmartThings", deviceJoinName: "SmartThings 3200-Sgb F-APP-UK-V2"      //  Check !!! // 'Zigbee Outlet UK with power meter'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"ZB-ONOFFPlug-D0005", manufacturer:"LDS", deviceJoinName: "SmartThings ZB-ONOFFPlug-D0005 GP-WOU019BBDWG"   //  Check !!! // 'Outlet with power meter'  // This plug only actively reports power. The voltage and current values are always 0
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"ZB-ONOFFPlug-D0000", manufacturer:"LDS", deviceJoinName: "SmartThings ZB-ONOFFPlug-D0005 GP-WOU019BBDWG"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0003", model:"HY0105", manufacturer:"REXENSE", deviceJoinName: "HONYAR Smart Outlet (USB)"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0003", model:"HY0104", manufacturer:"REXENSE", deviceJoinName: "HONYAR Smart Outlet"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,0702,0B04", outClusters:"0003,0019", model:"E_Socket", manufacturer:"HEIMAN", deviceJoinName: "HEIMAN Outlet"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"E1C-NB7", manufacturer:"sengled", deviceJoinName: "Sengled Outlet"    //Sengled Smart Plug with Energy Tracker
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"E1C-NB7", manufacturer:"Jasco Products", deviceJoinName: "Jasco Outlet"       // Check - cluster 0x0B05 ???
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43132", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43132
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43078", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43078
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-134", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-134"   // frient smart plug mini
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-137", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-137"   // frient smart plug mini
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SMRZB-143", manufacturer:"frient A/S", deviceJoinName: "frient smart cable"   // // frient smart cable
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"   // SIHAS Smart Plug with on/off button
     }
     
     
@@ -176,8 +197,79 @@ metadata {
 @Field static final String VOLTAGE = "Voltage"
 @Field static final String AMPERAGE = "Amperage"
 
-def isTS0121() {state.model == "TS0121"}
-def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"]}
+def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
+def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
+
+def isTuya() {device.getDataValue("model") in ["TS0121", "TS011F", "TS0601"] }
+def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
+private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
+private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
+private boolean isFrientOutlet() { device.getDataValue("manufacturer") == "frient A/S" }
+private Boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
+
+private int getPowerDiv() {
+    (isSengledOutlet() || isJascoProductsOutlet()) ? 10 : 1
+}
+
+private int getEnergyDiv() {
+    (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientOutlet() || isCCM300()) ? 1000 : 100
+}
+
+/*
+https://github.com/DzRou/zigbee-herdsman-converters/blob/fca7b40b54255e6a3836281b42faf9fd68b8f293/devices/tuya.js
+
+ model: 'TS011F_plug_1', Smart plug (with power monitoring)
+        vendor: 'TuYa',
+        whiteLabel: [{vendor: 'LELLKI', model: 'TS011F_plug'}, {vendor: 'NEO', model: 'NAS-WR01B'},
+            {vendor: 'BlitzWolf', model: 'BW-SHP15'}],
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_dpo1ysak'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g'}, 
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_typdpbpg'},
+
+
+
+
+
+        model: 'TS011F_plug_3',
+        description: 'Smart plug (with power monitoring by polling)',
+        vendor: 'TuYa',
+        whiteLabel: [{vendor: 'VIKEFON', model: 'TS011F'}],
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato', applicationVersion: 69},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 64},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 68},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 69},
+
+
+
+
+TS011F_plug_2 - no power monitoring !
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_hyfvrar3'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_cymsnfvf'},
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_bfn1w0mm'}],
+            {modelID: 'TS011F', manufacturerName: '_TZ3000_v1pdxuqq'},
+
+
+*/
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -215,7 +307,6 @@ def parse(String description) {
         return null //event
     }
     else {
-        //List result = []
         def descMap = [:]
         try {
             descMap = zigbee.parseDescriptionAsMap(description)
@@ -255,14 +346,6 @@ def parse(String description) {
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
                     energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
                 }
-                /*
-                else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
-                    if (logEnable) {log.debug "${device.displayName} Tuya specific attribute ${it.attrId}  cluster ${it.cluster } reported: value=${it.value}" }    // not tested
-                }
-                else if ( it.cluster == "0006" && it.attrId in ["8000", "8001", "8002"]) {
-                    parseOnOffAttributes(it)
-                }
-                */
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
@@ -278,7 +361,7 @@ def parse(String description) {
         else {
             if (logEnable==true)  log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
-        return null //result
+        return null
     } // descMap
 }
 
@@ -462,31 +545,9 @@ def energyEvent( energy_total, isDigital=false ) {
 }
 
 def scheduleHourlyAndDailyEnergy() {
-// http://www.quartz-scheduler.org/documentation/     
-// https://freeformatter.com/cron-expression-generator-quartz.html 
-/*    
-Seconds	Minutes	Hours	Day Of Month	Month	Day Of Week	Year
-0    	0	    *	    ?	            *	    *	        *            // 0 0 * ? * * *  -> every hour
-0	    0	    0	    ?	            *	    *	        *            // 0 0 0 ? * * *  -> every day
-// 0 * 0 ? * * * -> every minute
-*/
-
-    /*
-    try
-    {
-        unschedule()
-    }
-    catch (e)
-    {
-        if (txtEnable==true) log.erroro "${device.displayName} exception caught on unschedule()..."
-    }
-    */
-   // "${Math.round(Math.random() * 60)} ${Calendar.instance.get(Calendar.MINUTE)} * ? * * *"
-    //schedule("* * * ? * *", hourlyEnergyEvent)     // test every second
-    //schedule("0 * * ? * *", hourlyEnergyEvent)    // test every 1 minute
+    // http://www.quartz-scheduler.org/documentation/     
+    // https://freeformatter.com/cron-expression-generator-quartz.html 
     schedule("0 0 * ? * * * ", hourlyEnergyEvent)
-
-
 }
 
 def calculateHourlyEnergy() {
@@ -510,7 +571,6 @@ def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
     else {    // CRON
         energy = calculateHourlyEnergy().round(3)
         map.value = energy
-        //log.trace "energy=${energy}"
         state.lastHourlyEnergy = device.currentValue("energy", true)
     }
     map.unit = "kWh"
@@ -959,14 +1019,6 @@ def refresh() {
 def autoPoll() {
     if (logEnable) {log.debug "${device.displayName} autoPoll()"}
     checkIfNotPresent()
-    /* commented out 09/19/2022
-    if (autoPollingEnabled?.value == true) {
-        if ( pollingInterval != null ) 
-            runIn( pollingInterval, autoPoll, [overwrite: true])
-        else
-            runIn( defaultPollingInterval, autoPoll, [overwrite: true])
-    }
-    */
     if (optimizations == true) 
         poll( refreshAll = false )
     else 
@@ -994,11 +1046,11 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()
 
-    // reportEnergy reportPower reportVoltage reportAmperage     energyMinReportingTime   energyMaxReportingTime    energyTreshold
-    // energyTreshold powerTreshold amperageTreshold voltageTreshold
-    
     if (reportEnergy == false) {
         device.deleteCurrentState("energy")
+        device.deleteCurrentState("energyCost")
+        device.deleteCurrentState("energyDuration")
+        device.deleteCurrentState("hourlyEnergy")
     }
     if (reportPower == false) {
         device.deleteCurrentState("power")
@@ -1032,8 +1084,6 @@ def configure() {
 
 def autoCron( timeInSeconds ) {
     if (timeInSeconds < 60) {
-        // */12 * * * * ? *
-        //schedule("*/$timeInSeconds * * ? * * *", autoPoll)
         schedule("*/$timeInSeconds * * * * ? *", autoPoll)
         return timeInSeconds.toString() + " seconds"
     }
@@ -1093,7 +1143,7 @@ def updated(){
 
 
 void initializeVars( boolean fullInit = true ) {
-    
+    //
     def preservedResetEnergy = state.lastResetEnergy?:0            // preserve state.lastResetEnergy even on full reset!
     def preservedlastHourlyEnergy = state.lastHourlyEnergy?:0  
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
@@ -1255,7 +1305,6 @@ void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    // TODO - multiple commands ???
 }
 
 def logsOff(){
@@ -1272,8 +1321,6 @@ boolean isTuyaE00xCluster( String description )
     else
         return false
 }
-
-
 
 // return true if further processing in the main parse method should be cancelled !
 boolean otherTuyaOddities( String description ) {
@@ -1562,13 +1609,11 @@ def roundTwoPlaces(val) {
 
 def unixFromFormattedDateTime( formattedDateTime ) {
     def unixDateTime = Date.parse(dateFormat, formattedDateTime).time
-    //log.trace "unixDateTime=${unixDateTime}"
     return unixDateTime
 }
 
 def FormattedDateTimeFromUnix( unixDateTime ) {
     def formattedDateTime = new Date(unixDateTime).format(dateFormat, location.timeZone) 
-    //log.trace "formattedDateTime=${formattedDateTime}"
     return formattedDateTime
 }
 
@@ -1596,17 +1641,12 @@ void formatAttrib() {
         attrStr += addToAttr("Cost","energyCost")
         attrStr += addToAttr("Duration","energyDuration")
     }
-
     attrStr += "</table>"
-
-    //if (settings?.logEnable) log.debug "after calls attr string = $attrStr"
     updateAttr("html", attrStr)
     if (attrStr.length() > 1024) { updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
 }
 
 String combineAttr(String name, List<String> keys) {
-    //if (settings?.logEnable) log.debug "adding $name, $keys.length"
-
     String retResult = '<tr><td align="left">'
     retResult += name + '</td><td align="left">'
     
@@ -1623,7 +1663,6 @@ String combineAttr(String name, List<String> keys) {
 }
 
 String addToAttr(String name, String key, String convert = "none") {
-    //if (settings?.logEnable) log.debug "adding $name, $key"
     String retResult = '<tr><td>'
     retResult += name + '</td><td>'
 
@@ -1659,12 +1698,5 @@ def deviceNotification(text) {
 
 def test(String description)
 {
-    List<String> cmds = []
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}"
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0702 {${device.zigbeeId}} {}"
-    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0B04 {${device.zigbeeId}} {}"
-    cmds += "he cmd 0x${device.deviceNetworkId} 0x01 6 2 {}, delay 200"
-    log.trace "sending test: ${cmds}"
-    sendZigbeeCommands(cmds)
 }
 
