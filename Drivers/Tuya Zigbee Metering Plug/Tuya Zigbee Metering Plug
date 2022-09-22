@@ -39,7 +39,7 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints
+ *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; 
  *
  *                                  TODO: correction for Samsung plug 
  *
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/22 10:46 PM"}
+def timeStamp() {"2022/09/22 11:45 PM"}
 
 @Field static final Boolean debug = false
 
@@ -182,9 +182,9 @@ metadata {
 }
 
 // Constants
-@Field static final Integer powerDiv = 1
-@Field static final Integer energyDiv = 100
-@Field static final Integer currentDiv = 1000
+//@Field static final Integer powerDiv = 1
+//@Field static final Integer energyDiv = 100
+//@Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 60
 @Field static final Integer debouncingTimer = 300
@@ -200,20 +200,25 @@ metadata {
 def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
 def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
-def isTuya() {device.getDataValue("model") in ["TS0121", "TS011F", "TS0601"] }
+def isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
 def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
+private boolean isSmartThingsOutlet() { device.getDataValue("manufacturer") in ["SmartThings"] }
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") == "frient A/S" }
 private Boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
 
 private int getPowerDiv() {
-    (isSengledOutlet() || isJascoProductsOutlet()) ? 10 : 1
-}
+    (isSengledOutlet() || isJascoProductsOutlet()) || isTuyaSpecificCluster() ? 10 : 1
+}    // Tuya : default powerDiv = 1
 
 private int getEnergyDiv() {
     (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientOutlet() || isCCM300()) ? 1000 : 100
-}
+}    // Tuya :  energyDiv = 100
+
+private int getCurrentDiv() { return 1000 }  // Tuya :  currentDiv = 1000
+private int getVoltageDiv() { isTuyaSpecificCluster() || isSmartThingsOutlet() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
+
 
 /*
 https://github.com/DzRou/zigbee-herdsman-converters/blob/fca7b40b54255e6a3836281b42faf9fd68b8f293/devices/tuya.js
@@ -295,10 +300,10 @@ def parse(String description) {
                 break
             // for smart plugs that can be configured to fire atimaticallty power and energy events ..
             case "power" :    
-                powerEvent(event.value/powerDiv)
+                powerEvent(event.value/getPowerDiv())
                 break
             case "energy" :
-                energyEvent(event.value/energyDiv)
+                energyEvent(event.value/getEnergyDiv())
                 break
             default :
                 if (txtEnable) {log.warn "${device.displayName} received <b>unhandled event</b> ${event.name} = $event.value"} 
@@ -328,23 +333,23 @@ def parse(String description) {
                     disableUnsupportedAttribute(descMap.cluster, it.attrId)
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
-                        powerEvent(zigbee.convertHexToInt(it.value)/powerDiv)
-                        if (state.lastPower != zigbee.convertHexToInt(it.value)/powerDiv ) {
-                            if (logEnable) {log.trace "${device.displayName} power changed from <b>${state.lastPower}</b> to <b>${zigbee.convertHexToInt(it.value)/powerDiv}</b>"}
-                            state.lastPower = zigbee.convertHexToInt(it.value)/powerDiv
+                        powerEvent(zigbee.convertHexToInt(it.value)/getPowerDiv())
+                        if (state.lastPower != zigbee.convertHexToInt(it.value)/getPowerDiv() ) {
+                            if (logEnable) {log.trace "${device.displayName} power changed from <b>${state.lastPower}</b> to <b>${zigbee.convertHexToInt(it.value)/getPowerDiv()}</b>"}
+                            state.lastPower = zigbee.convertHexToInt(it.value)/getPowerDiv()
                         }
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
-                    voltageEvent(zigbee.convertHexToInt(it.value)/powerDiv)
+                    voltageEvent(zigbee.convertHexToInt(it.value)/getVoltageDiv())    // voltage divider is normally 1
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
-                    amperageEvent(zigbee.convertHexToInt(it.value)/currentDiv)
+                    amperageEvent(zigbee.convertHexToInt(it.value)/getCurrentDiv())
                 }
                 else if (it.value && it.cluster == "0B04" && it.attrId == "0510") {    //Power Factor Attribute ID: 0x0510
                     if (txtEnable) {log.info "${device.displayName} power Factor reported: ${it.value}" }    // not tested
                 }
                 else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
-                    energyEvent(zigbee.convertHexToInt(it.value)/energyDiv)
+                    energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
                 }
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
@@ -496,7 +501,7 @@ def amperageEvent( amperage, isDigital=false ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
-        if (Math.abs((amperage*1000 as int) - (state.lastAmperage*1000 as int)) >= (amperageTreshold as int)) {
+        if (Math.abs((amperage*getCurrentDiv() as int) - (state.lastAmperage*getCurrentDiv() as int)) >= (amperageTreshold as int)) {
             state.lastAmperage = amperage    
             if (settings?.reportAmperage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
@@ -754,28 +759,28 @@ def parseZHAcommand( Map descMap) {
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "11" : // Energy
-                                energyEvent(value/100)
+                                energyEvent(value/getEnergyDiv())
                                 break
                             case "12" : // Amperage
-                                amperageEvent(value/1000)
+                                amperageEvent(value/getCurrentDiv())
                                 break
                             case "13" : // Power
-                                powerEvent(value/10)
+                                powerEvent(value/getPowerDiv())
                                 break
                             case "14" : // Voltage
-                                voltageEvent(value/10)
+                                voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
                                 break
                             case "1D" : // hochChildLock: 29
                                 if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
                                 break
                             case "65" : // Voltage HOCH
-                                voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / 10)
+                                voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / getVoltageDiv())
                                 break
                             case "66" : // Amperage HOCH
-                                amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 1000)
+                                amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getCurrentDiv())
                                 break
                             case "67" : // hochActivePower: 103
-                                powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / 10)
+                                powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getPowerDiv())
                                 break
                             case "69" : // hochTemperature: 105
                                 log.info "${device.displayName} temperature is ${(zigbee.convertHexToInt(descMap.data[9]))}"
@@ -932,7 +937,10 @@ def off() {
         state.isDigital = true
         if (logEnable) {log.debug "${device.displayName} Switching ${device.displayName} Off"}
         def cmds = zigbee.off()
-        if (state.model == "TS0601") {
+        if (device.getDataValue("model") == "HY0105") {
+            cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
+        }
+        else if (state.model == "TS0601") {
             cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
         }
         runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
@@ -946,7 +954,10 @@ def on() {
     state.isDigital = true
     if (logEnable) {log.debug "${device.displayName} Switching ${device.displayName} On"}
     def cmds = zigbee.on()
-    if (state.model == "TS0601") {
+    if (device.getDataValue("model") == "HY0105") {
+        cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02])
+    }    
+    else if (state.model == "TS0601") {
         cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
     }
     runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
