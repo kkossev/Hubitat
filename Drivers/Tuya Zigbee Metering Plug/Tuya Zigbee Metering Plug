@@ -39,7 +39,7 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; 
+ *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction
  *
  *                                  TODO: correction for Samsung plug 
  *
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/22 11:45 PM"}
+def timeStamp() {"2022/09/22 12:17 PM"}
 
 @Field static final Boolean debug = false
 
@@ -122,8 +122,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"  // 
         // NON-Tuya metering plugs
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"outletv4", manufacturer:"SmartThings", deviceJoinName: "SmartThings outletv4 STS-OUT-US-2"      // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"outlet", manufacturer:"SmartThings", deviceJoinName: "SmartThings outlet IM6001-OTP05"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"3200-Sgb", manufacturer:"SmartThings", deviceJoinName: "SmartThings 3200-Sgb F-APP-UK-V2"      //  Check !!! // 'Zigbee Outlet UK with power meter'
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"ZB-ONOFFPlug-D0005", manufacturer:"LDS", deviceJoinName: "SmartThings ZB-ONOFFPlug-D0005 GP-WOU019BBDWG"   //  Check !!! // 'Outlet with power meter'  // This plug only actively reports power. The voltage and current values are always 0
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"ZB-ONOFFPlug-D0005", manufacturer:"LDS", deviceJoinName: "SmartThings ZB-ONOFFPlug-D0005 GP-WOU019BBDWG"   // 'Outlet with power meter'  // This plug only actively reports power. The voltage and current values are always 0
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702,FC82", outClusters:"0003,000A,0019", model:"ZB-ONOFFPlug-D0000", manufacturer:"LDS", deviceJoinName: "SmartThings ZB-ONOFFPlug-D0005 GP-WOU019BBDWG"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0003", model:"HY0105", manufacturer:"REXENSE", deviceJoinName: "HONYAR Smart Outlet (USB)"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0003", model:"HY0104", manufacturer:"REXENSE", deviceJoinName: "HONYAR Smart Outlet"
@@ -208,73 +209,13 @@ private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") ==
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") == "frient A/S" }
 private Boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
 
-private int getPowerDiv() {
-    (isSengledOutlet() || isJascoProductsOutlet()) || isTuyaSpecificCluster() ? 10 : 1
-}    // Tuya : default powerDiv = 1
+private int getPowerDiv() { ( isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || isTuyaSpecificCluster() ) ? 10 : 1 }    // Tuya : default powerDiv = 1
 
-private int getEnergyDiv() {
-    (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientOutlet() || isCCM300()) ? 1000 : 100
-}    // Tuya :  energyDiv = 100
+private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientOutlet() || isCCM300()) ? 1000 : 100 }    // Tuya :  energyDiv = 100
 
 private int getCurrentDiv() { return 1000 }  // Tuya :  currentDiv = 1000
-private int getVoltageDiv() { isTuyaSpecificCluster() || isSmartThingsOutlet() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
+private int getVoltageDiv() { ( isTuyaSpecificCluster() || isSmartThingsOutlet() ) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 
-
-/*
-https://github.com/DzRou/zigbee-herdsman-converters/blob/fca7b40b54255e6a3836281b42faf9fd68b8f293/devices/tuya.js
-
- model: 'TS011F_plug_1', Smart plug (with power monitoring)
-        vendor: 'TuYa',
-        whiteLabel: [{vendor: 'LELLKI', model: 'TS011F_plug'}, {vendor: 'NEO', model: 'NAS-WR01B'},
-            {vendor: 'BlitzWolf', model: 'BW-SHP15'}],
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_dpo1ysak'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g'}, 
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_typdpbpg'},
-
-
-
-
-
-        model: 'TS011F_plug_3',
-        description: 'Smart plug (with power monitoring by polling)',
-        vendor: 'TuYa',
-        whiteLabel: [{vendor: 'VIKEFON', model: 'TS011F'}],
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_5f43h46b', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_cphmq0q7', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ew3ldmgx', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_jvzvulen', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_mraovvmm', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_nfnmi125', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_ps3dmato', applicationVersion: 69},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 64},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 68},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_w0qqde0g', applicationVersion: 69},
-
-
-
-
-TS011F_plug_2 - no power monitoring !
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_hyfvrar3'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_cymsnfvf'},
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_bfn1w0mm'}],
-            {modelID: 'TS011F', manufacturerName: '_TZ3000_v1pdxuqq'},
-
-
-*/
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -1014,7 +955,7 @@ def poll( refreshAll = false ) {
             cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     }    
     if (state.energyPollingSupported == true && refreshAll == true )
-        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh
+        cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
