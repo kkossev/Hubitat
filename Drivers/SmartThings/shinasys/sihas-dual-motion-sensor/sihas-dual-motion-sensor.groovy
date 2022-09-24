@@ -1,6 +1,8 @@
 /*
  *  Copyright 2022 SmartThings
  *
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:29 AM ver. 2.0
+ *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
  *  of the License at:
@@ -13,8 +15,8 @@
  *  License for the specific language governing permissions and limitations
  *  under the License.
  */
-import physicalgraph.zigbee.clusters.iaszone.ZoneStatus
-import physicalgraph.zigbee.zcl.DataType
+import hubitat.zigbee.clusters.iaszone.ZoneStatus
+import hubitat.zigbee.zcl.DataType
 
 metadata {
 	definition (name: "SiHAS Dual Motion Sensor", namespace: "shinasys", author: "SHINA SYSTEM", mnmn: "SmartThingsCommunity", vid: "868a0fcc-ae46-3a1b-9315-e342007bb3a9", ocfDeviceType: "x.com.st.d.sensor.motion") {
@@ -23,10 +25,12 @@ metadata {
 		capability "Battery"
 		capability "Refresh"
 		capability "Health Check"
-		capability "afterguide46998.dualMotionInSensor"
-		capability "afterguide46998.dualMotionOutSensor"
+		//capability "afterguide46998.dualMotionInSensor"
+		//capability "afterguide46998.dualMotionOutSensor"
 		
 		attribute "motionInterval","number"
+        attribute "motionIn",  "enum", [ "active", "inactive"]
+        attribute "motionOut", "enum", [ "active", "inactive"]
 		
 		fingerprint inClusters: "0000,0001,0003,0020,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "DMS-300Z", deviceJoinName: "SiHAS Dual Motion Sensor"
 	}
@@ -86,7 +90,7 @@ def parse(String description) {
 
 	if (description?.startsWith('enroll request')) {
 		List cmds = zigbee.enrollResponse()
-		result = cmds?.collect { new physicalgraph.device.HubAction(it) }
+		result = cmds?.collect { new hubitat.device.HubAction(it) }
 	}
 	log.debug "result: $result"
 	return result
