@@ -1,6 +1,8 @@
 /*
  *  Copyright 2021 SmartThings
  *
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:12 AM ver. 2.0
+ *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
  *  of the License at:
@@ -13,8 +15,8 @@
  *  License for the specific language governing permissions and limitations
  *  under the License.
  */
-import physicalgraph.zigbee.clusters.iaszone.ZoneStatus
-import physicalgraph.zigbee.zcl.DataType
+import hubitat.zigbee.clusters.iaszone.ZoneStatus
+import hubitat.zigbee.zcl.DataType
 
 metadata {
     definition (name: "SiHAS Multipurpose Sensor", namespace: "shinasys", author: "SHINA SYSTEM") {
@@ -28,9 +30,10 @@ metadata {
         capability "Health Check"
         capability "Sensor"
         capability "Contact Sensor"
-        capability "afterguide46998.peopleCounterV2"
-        capability "afterguide46998.inOutDirectionV2"
         capability "Momentary"
+        
+        attribute "peopleCounterV2", "NUMBER"
+        attribute "inOutDirectionV2", "NUMBER"
         
         fingerprint inClusters: "0000,0001,0003,0020,0400,0402,0405,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "USM-300Z", deviceJoinName: "SiHAS MultiPurpose Sensor", mnmn: "SmartThings", vid: "generic-motion-6"
         fingerprint inClusters: "0000,0001,0003,0020,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "OSM-300Z", deviceJoinName: "SiHAS Motion Sensor", mnmn: "SmartThings", vid: "generic-motion-2", ocfDeviceType: "x.com.st.d.sensor.motion"
@@ -110,7 +113,7 @@ def parse(String description) {
 
     if (description?.startsWith('enroll request')) {
         List cmds = zigbee.enrollResponse()
-        result = cmds?.collect { new physicalgraph.device.HubAction(it) }
+        result = cmds?.collect { new hubitat.device.HubAction(it) }
     }
     log.debug "result: $result"
     return result
