@@ -1,7 +1,7 @@
 /*
  *  Copyright 2021 SmartThings
  *
- *  Ported for Hubitat Elevation platform by kkossev 2022/09/24 4:11 PM ver. 2.0
+ *  Ported for Hubitat Elevation platform by kkossev 2022/09/24 4:26 PM ver. 2.0
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
@@ -36,11 +36,12 @@ metadata {
         attribute "inOutDir", "enum", [ "in", "out", "ready" ]    // "inOutDirectionV2"
         
         //fingerprint inClusters: "0000,0001,0003,0020,0400,0402,0405,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "USM-300Z", deviceJoinName: "SiHAS MultiPurpose Sensor", mnmn: "SmartThings", vid: "generic-motion-6"
-        fingerprint inClusters: "0000,0400,0003,0406,0402,0001,0405,0500", outClusters: "0004,0003,0019", manufacturer: "ShinaSystem", model: "USM-300Z", deviceJoinName: "SiHAS MultiPurpose Sensor" // Hubitat inClusters correction
+        fingerprint inClusters: "0000,0400,0003,0406,0402,0001,0405,0500", outClusters: "0004,0003,0019", manufacturer: "ShinaSystem", model: "USM-300Z", deviceJoinName: "SiHAS MultiPurpose Sensor"     // Hubitat inClusters correction
         fingerprint inClusters: "0000,0001,0003,0020,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "OSM-300Z", deviceJoinName: "SiHAS Motion Sensor", mnmn: "SmartThings", vid: "generic-motion-2", ocfDeviceType: "x.com.st.d.sensor.motion"
         fingerprint inClusters: "0000,0003,0402,0001,0405", outClusters: "0004,0003,0019", manufacturer: "ShinaSystem", model: "TSM-300Z", deviceJoinName: "SiHAS Temperature/Humidity Sensor", mnmn: "SmartThings", vid: "SmartThings-smartthings-SmartSense_Temp/Humidity_Sensor", ocfDeviceType: "oic.d.thermostat"
         fingerprint inClusters: "0000,0001,0003,0020,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "DSM-300Z", deviceJoinName: "SiHAS Contact Sensor", mnmn: "SmartThings", vid: "generic-contact-3", ocfDeviceType: "x.com.st.d.sensor.contact"
-        fingerprint inClusters: "0000,0001,0003,000C,0020,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "CSM-300Z", deviceJoinName: "SiHAS People Counter", mnmn: "SmartThingsCommunity", vid: "c924b630-4647-39d6-897e-7597acededd7", ocfDeviceType: "x.com.st.d.sensor.motion"
+        //fingerprint inClusters: "0000,0001,0003,000C,0020,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "CSM-300Z", deviceJoinName: "SiHAS People Counter", mnmn: "SmartThingsCommunity", vid: "c924b630-4647-39d6-897e-7597acededd7", ocfDeviceType: "x.com.st.d.sensor.motion"
+        fingerprint inClusters: "0000,0004,0003,0001,000C", outClusters: "0000,0004,0003,0019,0006", manufacturer: "ShinaSystem", model: "CSM-300Z", deviceJoinName: "SiHAS People Counter"                   // Hubitat inClusters correction
     }
     preferences {
         section {
