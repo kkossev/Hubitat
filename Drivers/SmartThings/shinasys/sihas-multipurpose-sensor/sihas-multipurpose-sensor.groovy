@@ -1,7 +1,7 @@
 /*
  *  Copyright 2021 SmartThings
  *
- *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 12:28 PM ver. 2.0
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:23 PM ver. 2.0
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
@@ -17,7 +17,6 @@
  */
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import hubitat.zigbee.zcl.DataType
-import com.hubitat.zigbee.DataType
 
 metadata {
     definition (name: "SiHAS Multipurpose Sensor", namespace: "shinasys", author: "SHINA SYSTEM") {
@@ -84,7 +83,7 @@ def parse(String description) {
                 if (battMap) {
                     map = getBatteryResult(Integer.parseInt(battMap.value, 16))
                 }
-            } else if (descMap?.clusterInt == zigbee.IAS_ZONE_CLUSTER && descMap.attrInt == zigbee.ATTRIBUTE_IAS_ZONE_STATUS && descMap.commandInt != 0x07) {
+            } else if (descMap?.clusterInt == zigbee.IAS_ZONE_CLUSTER && descMap.attrInt == 0x02/*zigbee.ATTRIBUTE_IAS_ZONE_STATUS*/ && descMap.commandInt != 0x07) {
                 def zs = new ZoneStatus(zigbee.convertToInt(descMap.value, 10))
                 map = translateZoneStatus(zs)
             } else if (descMap?.clusterInt == OCCUPANCY_SENSING_CLUSTER && descMap.attrInt == OCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE && descMap?.value) {
@@ -248,7 +247,7 @@ def refresh() {
     }
 
     if (isDSM300()) {
-        refreshCmds += zigbee.readAttribute(zigbee.IAS_ZONE_CLUSTER, zigbee.ATTRIBUTE_IAS_ZONE_STATUS)        
+        refreshCmds += zigbee.readAttribute(zigbee.IAS_ZONE_CLUSTER, 0x02/*zigbee.ATTRIBUTE_IAS_ZONE_STATUS*/)        
         refreshCmds += zigbee.enrollResponse()
     }
     
@@ -290,7 +289,7 @@ def configure() {
     }
 
     if (isDSM300() || isUSM300() || isOSM300()) {
-        configCmds += zigbee.configureReporting(zigbee.IAS_ZONE_CLUSTER, zigbee.ATTRIBUTE_IAS_ZONE_STATUS, DataType.BITMAP16, 0, 0xffff, null)
+        configCmds += zigbee.configureReporting(zigbee.IAS_ZONE_CLUSTER, 0x02 /*zigbee.ATTRIBUTE_IAS_ZONE_STATUS*/, DataType.BITMAP16, 0, 0xffff, null)
     }
     
     if (isCSM300()) {
