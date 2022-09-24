@@ -1,6 +1,8 @@
 /**
  *	Copyright 2022 SmartThings
  *
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 11:54 AM ver. 2.0
+ *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
  *
@@ -11,7 +13,7 @@
  *	for the specific language governing permissions and limitations under the License.
  *
  */
-import physicalgraph.zigbee.zcl.DataType
+import hubitat.zigbee.zcl.DataType
 
 metadata {
 	definition (name: "SiHAS Zigbee Metering Plug", namespace: "shinasys", author: "SHINA SYSTEM", mnmn: "SmartThingsCommunity", ocfDeviceType: "oic.d.smartplug", vid: "12d61425-2258-376a-beee-7a69fbc0d9fe") {
@@ -22,12 +24,14 @@ metadata {
 		capability "Sensor"
 		capability "Configuration"
 		capability "Voltage Measurement"
-		capability "afterguide46998.currentMeasurement"
-		capability "afterguide46998.frequencyMeasurement"
-		capability "afterguide46998.powerfactorMeasurement"
+		capability "Current Meter"
+		//capability "frequencyMeasurement"
+		//capability "powerfactorMeasurement"
 		capability "Temperature Measurement"
 		capability "Switch"
 
+        attribute "powerFactor", "number"
+        
 		fingerprint profileId: "0104", manufacturer: "ShinaSystem", model: "CCM-300Z2", deviceJoinName: "SiHAS Outlet" // SIHAS Zigbee Metering Plug 01 0104 0000 01 06 0000 0004 0003 0006 0B04 0702 02 0004 0019		
 	}
 }
