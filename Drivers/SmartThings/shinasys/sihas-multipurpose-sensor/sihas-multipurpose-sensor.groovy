@@ -1,7 +1,7 @@
 /*
  *  Copyright 2021 SmartThings
  *
- *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:29 AM ver. 2.0
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 12:28 PM ver. 2.0
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
@@ -17,6 +17,7 @@
  */
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import hubitat.zigbee.zcl.DataType
+import com.hubitat.zigbee.DataType
 
 metadata {
     definition (name: "SiHAS Multipurpose Sensor", namespace: "shinasys", author: "SHINA SYSTEM") {
@@ -54,7 +55,7 @@ private getOCCUPANCY_SENSING_CLUSTER() { 0x0406 }
 private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C }
 private getPOWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE() { 0x0020 }
 private getTEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
-private getRALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
+private getRELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
 private getILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
 private getOCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE() { 0x0000 }
 private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
@@ -233,7 +234,7 @@ def refresh() {
     refreshCmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, POWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE)
 
     if (isUSM300() || isTSM300()) {
-        refreshCmds += zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_CLUSTER, RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE)
+        refreshCmds += zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_CLUSTER, RELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE)
         refreshCmds += zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE)
     }
 
@@ -277,7 +278,7 @@ def configure() {
 
     if (isUSM300() || isTSM300()) {
         configCmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.INT16, 15, 300, 10/*10/100=0.1도*/)
-        configCmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_CLUSTER, RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.UINT16, 15, 300, 40/*10/100=0.4%*/)
+        configCmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.UINT16, 15, 300, 40/*10/100=0.4%*/)
     }
 
     if (isUSM300()) {
