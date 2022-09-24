@@ -1,7 +1,7 @@
 /*
  *  Copyright 2021 SmartThings
  *
- *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 2:10 PM ver. 2.0
+ *  Ported for Hubitat Elevation platform by kkossev 2022/09/24 4:11 PM ver. 2.0
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
@@ -44,8 +44,10 @@ metadata {
     }
     preferences {
         section {
-            input "tempOffset"    , "number", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", range: "-100..100", displayDuringSetup: false
-            input "humidityOffset", "number", title: "Humidity offset"   , description: "Enter a percentage to adjust the humidity.", range: "*..*", displayDuringSetup: false
+            input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+            input "tempOffset"    , "decimal", title: "Temperature offset", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100.0..100.0", displayDuringSetup: false, defaultValue: 0.0
+            input "humidityOffset", "number", title: "Humidity offset"   , description: "<i>Enter a percentage to adjust the humidity.</i>", range: "*..*", displayDuringSetup: false, defaultValue: 0
         }
     }
 }
@@ -70,7 +72,7 @@ private List<Map> collectAttributes(Map descMap) {
 }
 
 def parse(String description) {
-    log.debug "Parsing message from device: $description"
+    if (settings?.logEnable) {log.debug "${device.displayName} Parsing message from device: $description"}
 
     Map map = zigbee.getEvent(description)
     if (!map) {
@@ -94,6 +96,7 @@ def parse(String description) {
             }
         } else if (description?.startsWith('illuminance:')) { //parse illuminance
             map = parseCustomMessage(description)
+            if (settings?.logEnable) {log.debug "${device.displayName} illuminance custom message: ${map}"}
         }
     } else if (map.name == "temperature") {
         if (tempOffset) {
@@ -101,6 +104,7 @@ def parse(String description) {
         }
         map.descriptionText = temperatureScale == 'C' ? "${device.displayName} temperature was ${map.value}°C" : "${device.displayName} temperature was ${map.value}°F"
         map.translatable = true
+        if (settings?.txtEnable) {log.info "${map.descriptionText}"}
     } else if (map.name == "humidity") {
         if (humidityOffset) {
             map.value = map.value + (int) humidityOffset
@@ -108,6 +112,14 @@ def parse(String description) {
         map.descriptionText = "${device.displayName} humidity was ${map.value}%"
         map.unit = "%"
         map.translatable = true
+        if (settings?.txtEnable) {log.info "${map.descriptionText}"}
+    } else if (map.name == "battery") {   // [name:battery, value:87.0]
+        map.descriptionText = "${device.displayName} battery was ${map.value}%"
+        map.unit = "%"
+        map.translatable = true    
+        if (settings?.txtEnable) {log.info "${map.descriptionText}"}
+    } else {
+        if (settings?.logEnable) {log.warn "${device.displayName} unprocessed event from device: ${map}"}
     }
 
     def result = map ? createEvent(map) : [:]
@@ -116,7 +128,7 @@ def parse(String description) {
         List cmds = zigbee.enrollResponse()
         result = cmds?.collect { new hubitat.device.HubAction(it) }
     }
-    log.debug "result: $result"
+    if (settings?.logEnable) {log.debug "${device.displayName} result: $result"}
     return result
 }
 
@@ -135,12 +147,22 @@ private Map parseIasMessage(String description) {
 
 private Map translateZoneStatus(ZoneStatus zs) {
     // Some sensor models that use this DTH use alarm1 and some use alarm2 to signify motion
-    if (isDSM300()) {
-    	return (zs.isAlarm1Set() || zs.isAlarm2Set()) ? getContactResult('open') : getContactResult('closed')
+    boolean isActive = zs.isAlarm1Set() || zs.isAlarm2Set()
+    if (isUSM300()) {
+        return getMotionResult(isActive ? "active" : "inactive")
+    }
+    else {
+        if (! isTSM300()) {    // was isDSM300()
+        	return (zs.isAlarm1Set() || zs.isAlarm2Set()) ? getContactResult('open') : getContactResult('closed')
+        }
+        else {
+            if (settings?.logEnable) {log.warn "${device.displayName} translateZoneStatus skipped for device ${device.getDataValue("model")}"}
+        }
     }
 }
 
 private Map getBatteryResult(rawValue) {
+    log.trace "getBatteryResult rawValue=${rawValue}"
     def linkText = getLinkText(device)
     def result = [:]
     def volts = rawValue / 10
@@ -160,12 +182,14 @@ private Map getBatteryResult(rawValue) {
             roundedPct = 1
         result.value = Math.min(100, roundedPct)
         result.descriptionText = "${device.displayName} battery was ${result.value}%"        
+        if (settings?.txtEnable) {log.info "${result.descriptionText}"}
     }
     return result
 }
 
 private Map getMotionResult(value) {
     String descriptionText = value == 'active' ? "${device.displayName} detected motion" : "${device.displayName} motion has stopped"
+    if (settings?.txtEnable) {log.info "${descriptionText}"}
     return [
         name           : 'motion',
         value          : value,
@@ -177,6 +201,7 @@ private Map getMotionResult(value) {
 private Map getContactResult(value) {
 	def linkText = getLinkText(device)
 	def descriptionText = "${linkText} was ${value == 'open' ? 'opened' : 'closed'}"
+    if (settings?.txtEnable) {log.info "${descriptionText}"}
 	return [
 		name: 'contact',
 		value: value,
@@ -193,7 +218,7 @@ private Map getAnalogInputResult(value) {
     String inoutString = ( (inout==1) ? "in" : (inout==2) ? "out":"ready")
     String descriptionText1 = "${device.displayName} : $pc"
     String descriptionText2 = "${device.displayName} : $inoutString"
-    log.debug "[$fpc] = people: $pc, dir: $inout, $inoutString"
+    if (settings?.logEnable) {log.debug "${device.displayName} [$fpc] = people: $pc, dir: $inout, $inoutString"}
     
     String motionActive = pc ? "active" : "inactive"
     sendEvent(name: "motion", value: motionActive, displayed: true, isStateChange: false)
@@ -203,6 +228,8 @@ private Map getAnalogInputResult(value) {
     }
 
     sendEvent(name: "inOutDir", value: inoutString, displayed: true, descriptionText: descriptionText2)
+    if (settings?.txtEnable) {log.info "${descriptionText2}"}
+    if (settings?.txtEnable) {log.info "${descriptionText1}"}
     return [
         name           : 'peopleCounter',
         value          : pc,
@@ -214,7 +241,7 @@ private Map getAnalogInputResult(value) {
 
 def setPeopleCounter(peoplecounter) {
     int pc =  Float.floatToIntBits(peoplecounter);
-    log.debug "SetPeopleCounter = $peoplecounter"
+    if (settings?.logEnable) {log.debug "${device.displayName} SetPeopleCounter = $peoplecounter"}
     zigbee.writeAttribute(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, pc)
 }
 
@@ -260,6 +287,7 @@ def refresh() {
 }
 
 def configure() {
+    if (settings?.logEnable) {log.debug "${device.displayName} configure()"}
     def configCmds = []
 
     // Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
@@ -301,7 +329,8 @@ def configure() {
 }
 
 private Boolean isUSM300() {
-    device.getDataValue("model") == "USM-300Z"
+    //device.getDataValue("model") == "USM-300Z"
+    device.getDataValue("model") == "USM-300Z" || device.getDataValue("model") == "TS0202"    // tests
 }
 
 private Boolean isTSM300() {
