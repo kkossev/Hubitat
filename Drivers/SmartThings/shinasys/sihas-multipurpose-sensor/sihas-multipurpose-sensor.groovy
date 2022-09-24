@@ -1,7 +1,7 @@
 /*
  *  Copyright 2021 SmartThings
  *
- *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:12 AM ver. 2.0
+ *  Imported for Hubitat Elevation platform by kkossev 2022/09/24 1:29 AM ver. 2.0
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not
  *  use this file except in compliance with the License. You may obtain a copy
@@ -32,8 +32,8 @@ metadata {
         capability "Contact Sensor"
         capability "Momentary"
         
-        attribute "peopleCounterV2", "NUMBER"
-        attribute "inOutDirectionV2", "NUMBER"
+        attribute "peopleCounter", "NUMBER"                       // "peopleCounterV2"
+        attribute "inOutDir", "enum", [ "in", "out", "ready" ]    // "inOutDirectionV2"
         
         fingerprint inClusters: "0000,0001,0003,0020,0400,0402,0405,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "USM-300Z", deviceJoinName: "SiHAS MultiPurpose Sensor", mnmn: "SmartThings", vid: "generic-motion-6"
         fingerprint inClusters: "0000,0001,0003,0020,0406,0500", outClusters: "0003,0004,0019", manufacturer: "ShinaSystem", model: "OSM-300Z", deviceJoinName: "SiHAS Motion Sensor", mnmn: "SmartThings", vid: "generic-motion-2", ocfDeviceType: "x.com.st.d.sensor.motion"
