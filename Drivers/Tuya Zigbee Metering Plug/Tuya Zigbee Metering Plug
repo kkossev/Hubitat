@@ -40,6 +40,7 @@
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-25 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
+ *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !
  *
  *                                  TODO: send [digital] event on Max Reporting time !
  *                                  TODO: convert Energy delta from Wh to KWh ? TODO: if plug is not present, remove the W/V/A from the html attributes!
@@ -49,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/25 1:24 PM"}
+def timeStamp() {"2022/09/25 11:55 PM"}
 
 @Field static final Boolean debug = false
 
@@ -296,23 +297,46 @@ def parse(String description) {
                 if (it.status == "86") {
                     disableUnsupportedAttribute(descMap.cluster, it.attrId)
                 }
-                else if (it.value && it.cluster == "0B04" && it.attrId == "050B") {
+                if (it.value == null ) {
+                    if (logEnable==true) log.warn "${device.displayName} null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
+                    return null
+                }
+                else if (it.cluster == "0B04" && it.attrId == "050B") {
+                    //log.trace "power"
+                    if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("power", true)) != 0  && device.currentValue("switch", true)=="on") {
+                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero power automatic report!"
+                        runInMillis( 3500, pollOnce, [overwrite: true])
+                    }
+                    else {
                         powerEvent(zigbee.convertHexToInt(it.value)/getPowerDiv())
-                        if (state.lastPower != zigbee.convertHexToInt(it.value)/getPowerDiv() ) {
-                            if (logEnable) {log.trace "${device.displayName} power changed from <b>${state.lastPower}</b> to <b>${zigbee.convertHexToInt(it.value)/getPowerDiv()}</b>"}
-                            state.lastPower = zigbee.convertHexToInt(it.value)/getPowerDiv()
-                        }
+                    }
                 }
-                else if (it.value && it.cluster == "0B04" && it.attrId == "0505") {
-                    voltageEvent(zigbee.convertHexToInt(it.value)/getVoltageDiv())    // voltage divider is normally 1
+                else if (it.cluster == "0B04" && it.attrId == "0505") {
+                    //log.trace "voltage ${it.value}"
+                    if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("voltage", true)) != 0 && device.currentValue("switch", true)=="on") {
+                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero voltage automatic report!"
+                        runInMillis( 3500, pollOnce, [overwrite: true])
+                    }
+                    else {
+                        voltageEvent(zigbee.convertHexToInt(it.value)/getVoltageDiv())    // voltage divider is normally 1
+                    }
                 }
-                else if (it.value && it.cluster == "0B04" && it.attrId == "0508") {
-                    amperageEvent(zigbee.convertHexToInt(it.value)/getCurrentDiv())
+                else if (it.cluster == "0B04" && it.attrId == "0508") {
+                    //log.trace "current"
+                    if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && (safeToDouble(device.currentValue("amperage", true))*getCurrentDiv() as int) != 0  && device.currentValue("switch", true)=="on") {
+                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero current automatic report!"
+                        runInMillis( 3500, pollOnce, [overwrite: true])
+                    }
+                    else {
+                        amperageEvent(zigbee.convertHexToInt(it.value)/getCurrentDiv())
+                    }
                 }
-                else if (it.value && it.cluster == "0B04" && it.attrId == "0510") {    //Power Factor Attribute ID: 0x0510
+                else if (it.cluster == "0B04" && it.attrId == "0510") {    //Power Factor Attribute ID: 0x0510
+                    //log.trace "PF"
                     if (txtEnable) {log.info "${device.displayName} power Factor reported: ${it.value}" }    // not tested
                 }
-                else if (it.value && it.cluster == "0702" && it.attrId == "0000") {
+                else if (it.cluster == "0702" && it.attrId == "0000") {
+                    //log.trace "energy"
                     energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
                 }
                 else {
@@ -432,6 +456,9 @@ def voltageEvent( voltage, isDigital=false ) {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"}
         }
     }
+    else {
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
+    }
 }
 
 def powerEvent( power, isDigital=false ) {
@@ -455,6 +482,9 @@ def powerEvent( power, isDigital=false ) {
         }
         
     }
+    else {
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
+    }
 }
 
 def amperageEvent( amperage, isDigital=false ) {
@@ -476,6 +506,9 @@ def amperageEvent( amperage, isDigital=false ) {
         else {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"}
         }
+    }
+    else {
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
     }
 }
 
@@ -954,6 +987,11 @@ def pollPower() {
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])       // 3 seconds
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
+}
+
+def pollOnce()
+{
+    poll()
 }
 
 
