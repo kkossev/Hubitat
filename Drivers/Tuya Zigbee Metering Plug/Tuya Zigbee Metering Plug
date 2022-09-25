@@ -39,7 +39,7 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- *  ver. 1.6.2 2022-09-22 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
+ *  ver. 1.6.2 2022-09-25 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *
  *                                  TODO: send [digital] event on Max Reporting time !
  *                                  TODO: convert Energy delta from Wh to KWh ? TODO: if plug is not present, remove the W/V/A from the html attributes!
@@ -49,7 +49,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/22 11:45 PM"}
+def timeStamp() {"2022/09/25 1:24 PM"}
 
 @Field static final Boolean debug = false
 
@@ -58,7 +58,7 @@ metadata {
         capability "EnergyMeter"
         capability "PowerMeter"
         capability "CurrentMeter"
-        capability "VoltageMeasurement"
+        capability "VoltageMeasurement"    // add: frequency - NUMBER, unit:Hz
         capability "Actuator"    
         capability "Switch"
         capability "Outlet"
@@ -168,11 +168,17 @@ metadata {
                 range: "10..86399", defaultValue: 30)
             input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
-            input (name: "reportEnergy", type:    "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
-            if (reportEnergy?.value == true) {
+            // 09/23/2022
+            input (name: "energyMode", type: "enum", title: "<b>Energy Reporting Mode</b>", description:"<i>Select Energy Reporting Mode</i>", defaultValue: "1", options: energyModeOptions)
+            if (isEnergyEnabled()) {    // if (reportEnergy?.value == true)
                 input (name: "energyPrice", type: "decimal", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", /*range: "0.01..99.99",*/ defaultValue: 0.12)
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
+                if (energyMode == "4") {     // "4":"Fixed Power Load"
+                    input (name: "fixedPower", type: "number", title: "<b>Fixed Power</b>, W", description: "<i>The fixed power consumption when the plug is switched on</i>", range: "1..9000", defaultValue: 1)
+                }
             }
+            //input (name: "reportEnergy", type: "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
+            
             input (name: "reportPower", type:    "bool", title: "<b>Power Reporting Off or On</b>",  description:   "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportPower?.value == true) {
                 input (name: "powerTreshold", type: "number", title: "<b>Power minimum change to be reported</b>, W", description: "<i>The minimum Power change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
@@ -185,7 +191,7 @@ metadata {
             if (reportVoltage?.value == true) {
                 input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
-            // energyTreshold powerTreshold amperageTreshold voltageTreshold        reportEnergy reportPower reportAmperage reportVoltage
+            // energyTreshold powerTreshold amperageTreshold voltageTreshold        reportPower reportAmperage reportVoltage
         } 
         input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
     }
@@ -206,6 +212,10 @@ metadata {
 @Field static final String ENERGY = "Energy"
 @Field static final String VOLTAGE = "Voltage"
 @Field static final String AMPERAGE = "Amperage"
+
+@Field static final Map energyModeOptions =   [ "0":"Disabled", "1":"Auto Reporting", "2":"Polled Reporting"/*, "3":"Calculated from Power", "4":"Fixed Power Load"*/]
+
+private boolean isEnergyEnabled() {energyMode != "0"}
 
 def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
 def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
@@ -409,9 +419,9 @@ def voltageEvent( voltage, isDigital=false ) {
     map.unit = "V"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.lastVoltage != voltage || optimizations == false || state.isRefreshRequest == true ) {
-        if (Math.abs((voltage as int) - (state.lastVoltage as int)) >= (voltageTreshold as int)) {
-            state.lastVoltage = voltage
+    def lastVoltage = device.currentValue("voltage", true) ?: 0
+    if (lastVoltage != voltage || optimizations == false || state.isRefreshRequest == true ) {
+        if (Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageTreshold as int)) {
             if (settings?.reportVoltage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
@@ -419,7 +429,7 @@ def voltageEvent( voltage, isDigital=false ) {
             }
         }
         else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastVoltage} is less than ${voltageTreshold} V)"}
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"}
         }
     }
 }
@@ -454,9 +464,9 @@ def amperageEvent( amperage, isDigital=false ) {
     map.unit = "A"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
-        if (Math.abs((amperage*getCurrentDiv() as int) - (state.lastAmperage*getCurrentDiv() as int)) >= (amperageTreshold as int)) {
-            state.lastAmperage = amperage    
+    def lastAmperage = device.currentValue("amperage", true) ?: 0.0
+    if (lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
+        if (Math.abs((amperage*getCurrentDiv() as int) - (lastAmperage*getCurrentDiv() as int)) >= (amperageTreshold as int)) {
             if (settings?.reportAmperage == true) {
                 if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
                 sendEvent(map)
@@ -464,17 +474,24 @@ def amperageEvent( amperage, isDigital=false ) {
             }
         }
         else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastAmperage} is less than ${amperageTreshold} mA)"}
+            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"}
         }
     }
 }
 
 def energyEvent( energy_total, isDigital=false ) {
     def map = [:] 
+    if (isDigital == false) {
+        state.lastEnergyRaw = energy_total
+    }
     def energy = energy_total
     energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
     if (energy < 0.0) {
-        log.warn "negative energy ${energy}, correcting it to 0!"
+        if (logEnable) {log.warn "energyEvent: negative energy ${energy} (total=${energy_total} lastReset=${safeToDouble(state.lastResetEnergy).round(3)}), correcting it to 0!"}
+        /*
+        if (txtEnable) {log.info "${device.displayName} lastResetEnergy is set to ${energy_total}"}
+        state.lastResetEnergy = energy_total
+    */
         energy = 0.0
     }
     if (logEnable) {log.trace "energy_total=${energy_total}, state.lastResetEnergy=${safeToDouble(state.lastResetEnergy)}"}
@@ -483,11 +500,12 @@ def energyEvent( energy_total, isDigital=false ) {
     map.unit = "kWh"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.lastEnergy != energy || optimizations==false || state.isRefreshRequest == true ) {
-        if (reportEnergy == true) {        // energy is reported once per hour without being polled!
-            def newTotalCost = updateEnergyCost(state.lastEnergy, energy )
+    lastEnergy = safeToDouble(device.currentValue("energy", true))
+    if (/*state.lastEnergy*/ lastEnergy  != energy || optimizations==false || state.isRefreshRequest == true ) {
+        if (isEnergyEnabled()) {
+            def newTotalCost = updateEnergyCost(/*state.*/lastEnergy, energy )
             energyCostEvent(newTotalCost, isDigital)
-            state.lastEnergy = energy
+            //state.lastEnergy = energy
             sendEvent(map)
             def duration = calculateEnergyDuration()
             energyDurationtEvent( duration )
@@ -563,19 +581,14 @@ def energyCostEvent( cost, isDigital=false ) {
     map.unit = "\$"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.unit}${map.value} "
-    if (true) {
-        if (true) {
-            if (settings?.reportEnergy == true) {
-                //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
-                sendEvent(map)
-                runIn( 1, formatAttrib, [overwrite: true])    
-            }
-        }
-        else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit}"}
-        }
+    if (isEnergyEnabled()) {
+        //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
+        sendEvent(map)
+        runIn( 1, formatAttrib, [overwrite: true])    
     }
-    
+    else {
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit}"}
+    }
 }
 
 def energyDurationtEvent( duration, isDigital=false ) {
@@ -1011,7 +1024,7 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()
 
-    if (reportEnergy == false) {
+    if (! isEnergyEnabled()) {
         device.deleteCurrentState("energy")
         device.deleteCurrentState("energyCost")
         device.deleteCurrentState("energyDuration")
@@ -1028,7 +1041,7 @@ def configure() {
     }
 
     if (autoReportingEnabled == true ) {
-        if (reportEnergy == true) {
+        if (isEnergyEnabled()) {    // TODO - only when automatic reporting option is selected! // TODO: research on how to disable automatic reporting
             cmds += configureReporting("Write", ENERGY,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyTreshold.toString(), sendNow=false)
         }
         if (reportPower == true) {
@@ -1125,9 +1138,8 @@ void initializeVars( boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
     if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
-    if (fullInit == true || state.lastVoltage == null) state.lastVoltage = 0.0
-    if (fullInit == true || state.lastAmperage == null) state.lastAmperage = 0.0
-    if (state.lastEnergy == null) state.lastEnergy = 0.0
+    //if (state.lastEnergy == null) state.lastEnergy = 0.0
+    if (state.lastEnergyRaw == null) state.lastEnergyRaw = 0.0
     if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
     if (state.lastSwitchState == null) state.lastSwitchState = "unknown"
     if (state.lastPresenceState == null) state.lastPresenceState = "unknown"
@@ -1154,7 +1166,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
     if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
     if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
-    if (fullInit == true || settings?.reportEnergy == null) device.updateSetting("reportEnergy", true)
+    //if (fullInit == true || settings?.reportEnergy == null) device.updateSetting("reportEnergy", true)
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
@@ -1199,6 +1211,10 @@ def checkDriverVersion() {
     else {
         if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
+        state.remove("lastAmperage")
+        state.remove("lastVoltage")
+        state.remove("lastEnergy")
+        //
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -1491,6 +1507,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
         case POWER :        // Active power default delta = 1
             if (operation == "Write") {
                 if (isHeiman()) {intDelta = intDelta * 10}    // Heiman "SmartPlug"
+                // TODO - check if DataType 0x29 is used for power configuration for Samsung and CentraLite plugs ... 
                 cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver  1.6.0 - thanks @guyee
             }
             cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [:], 250)
@@ -1539,6 +1556,7 @@ def setEnergyPrice( price )
 }
 
 def resetEnergy() {
+/*    
     def totalEnergy = safeToDouble(device.latestValue("energy"))    // last corrected energy value
     def now = FormattedDateTimeFromUnix( now() )
     def lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
@@ -1551,7 +1569,24 @@ def resetEnergy() {
     hourlyEnergyEvent( 0, isDigital=true )
     energyCostEvent( 0, isDigital=true ) 
     energyDurationtEvent( 0, isDigital=true  )
-    if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${totalEnergy} kWh) was reset on ${now}"
+*/
+    log.trace "resetEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
+    def now = FormattedDateTimeFromUnix( now() )
+    state.lastResetDate = now
+    state.lastEnergyCost = 0.0
+    state.lastResetEnergy = state.lastEnergyRaw
+    state.lastHourlyEnergy = state.lastEnergyRaw
+    //
+    runInMillis( 100, afterResetEvents, [overwrite: true])
+
+}
+
+def afterResetEvents() {
+    energyEvent( 0, isDigital=true )
+    hourlyEnergyEvent( 0, isDigital=true )
+    energyCostEvent( 0, isDigital=true ) 
+    energyDurationtEvent( 0, isDigital=true  )    
+    if (settings?.txtEnable) log.info "${device.displayName} Energy (total:${state.lastEnergyRaw} kWh) was reset on ${state.lastResetDate}"
 }
 
 def calculateEnergyDuration() {
@@ -1615,7 +1650,7 @@ void formatAttrib() {
     if (reportAmperage == true) {
         attrStr += addToAttr("Amperage","amperage", convert = "double")
     }
-    if (reportEnergy == true) {
+    if (isEnergyEnabled()) {
         attrStr += addToAttr("Energy","energy")
         attrStr += addToAttr("Cost","energyCost")
         attrStr += addToAttr("Duration","energyDuration")
@@ -1659,6 +1694,9 @@ String addToAttr(String name, String key, String convert = "none") {
         else 
             retResult += curVal.toString() + " " + attrUnit
     }
+    else {
+        retResult += "n/a"
+    }
     retResult += '</td></tr>'
     return retResult
 }
@@ -1677,5 +1715,6 @@ def deviceNotification(text) {
 
 def test(String description)
 {
+    log.trace "zigbee.ONOFF_CLUSTER = ${zigbee.ONOFF_CLUSTER}"
 }
 
