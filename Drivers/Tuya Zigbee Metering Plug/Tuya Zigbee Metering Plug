@@ -39,7 +39,7 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- *  ver. 1.6.2 2022-09-25 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
+ *  ver. 1.6.2 2022-09-26 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !
  *
  *                                  TODO: send [digital] event on Max Reporting time !
@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/25 11:55 PM"}
+def timeStamp() {"2022/09/26 4:05 PM"}
 
 @Field static final Boolean debug = false
 
@@ -228,7 +228,7 @@ private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") == "frient A/S" }
 private boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
-private boolean isSercomm() { device.getDataValue("manufacturer") == "Sercomm Corp." }
+private boolean isSercomm() { device.getDataValue("manufacturer") in ["Sercomm Corp.", " Sercomm Corp."] || device.getDataValue("model") == "SZ-ESW01-AU" }
 private boolean isHeiman() { device.getDataValue("manufacturer") == "HEIMAN" }
 private boolean isDevelco() { device.getDataValue("model") == "EMIZB-132" }
 
