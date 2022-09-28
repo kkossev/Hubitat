@@ -39,8 +39,8 @@
  *  ver. 1.6.0 2022-09-12 kkossev - removed 'Health Check' and 'Polling' capabilities (ping and poll buttons); automatic reporting configuration bug fixes; added individual thresholds for W,A,V;
  *                                  added autoReportingEnabled switch(default:false); added resetEnergy command; disabled attributes states are now deleted; added energyPrice (decimal) preference; added setEnergyPrice command; added energyCost calculation and event;
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
- *  ver. 1.6.2 2022-09-26 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
- *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !
+ *  ver. 1.6.2 2022-09-28 kkossev - (dev. branch) added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
+ *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
  *
  *                                  TODO: send [digital] event on Max Reporting time !
  *                                  TODO: convert Energy delta from Wh to KWh ? TODO: if plug is not present, remove the W/V/A from the html attributes!
@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/26 4:05 PM"}
+def timeStamp() {"2022/09/28 12:28 PM"}
 
 @Field static final Boolean debug = false
 
@@ -134,7 +134,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"E1C-NB7", manufacturer:"Jasco Products", deviceJoinName: "Jasco Outlet"       // Check - cluster 0x0B05 ???
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43132", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43132
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43078", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43078
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-134", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-134"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-137", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-137"   // frient smart plug mini
@@ -238,7 +238,7 @@ private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 
 
 private int getCurrentDiv() { (isHeiman() || isDevelco() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 
-private int getVoltageDiv() { isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() ) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
+private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() ) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 
 
 def parse(String description) {
@@ -338,6 +338,10 @@ def parse(String description) {
                 else if (it.cluster == "0702" && it.attrId == "0000") {
                     //log.trace "energy"
                     energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
+                }
+                else if (it.cluster == "0702" && it.attrId == "0400") {
+                    //log.trace "power Instantaneous Demand"
+                    powerEvent(zigbee.convertHexToInt(it.value)/getPowerDiv())
                 }
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
