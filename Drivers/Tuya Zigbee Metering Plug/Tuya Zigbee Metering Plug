@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.2" }
-def timeStamp() {"2022/09/28 12:28 PM"}
+def timeStamp() {"2022/09/28 8:57 PM"}
 
 @Field static final Boolean debug = false
 
@@ -141,9 +141,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SMRZB-143", manufacturer:"frient A/S", deviceJoinName: "frient smart cable"   // // frient smart cable
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"   // SIHAS Smart Plug with on/off button
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0005,0006,0B04,0B05,0702", outClusters:"0003,000A,0B05,0019", model:"SZ-ESW01-AU", manufacturer:"Sercomm Corp.", deviceJoinName: "Telstra Outlet"      // 
-
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0005,0006,0B04,0B05,0702", outClusters:"0003,000A,0B05,0019", model:"SZ-ESW01", manufacturer:"Sercomm Corp.", deviceJoinName: "Sercomm SZ-ESW01"      // 
-
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0002,0003,0004,0005,0006,0009,0B04,0702", outClusters:"0019,000A,0003,0406", model:"SmartPlug51AU", manufacturer:"Aurora", deviceJoinName: "Aurora SmartPlug"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0702,0B05", outClusters:"0019", model:"SP 120", manufacturer:"innr", deviceJoinName: "Innr Smart Plug"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0B05,FC03", outClusters:"0019", model:"3210-L", manufacturer:"CentraLite", deviceJoinName: "Iris Smart Plug"
@@ -199,9 +197,6 @@ metadata {
 }
 
 // Constants
-//@Field static final Integer powerDiv = 1
-//@Field static final Integer energyDiv = 100
-//@Field static final Integer currentDiv = 1000
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 60
 @Field static final Integer debouncingTimer = 300
@@ -302,7 +297,6 @@ def parse(String description) {
                     return null
                 }
                 else if (it.cluster == "0B04" && it.attrId == "050B") {
-                    //log.trace "power"
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("power", true)) != 0  && device.currentValue("switch", true)=="on") {
                         if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero power automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
@@ -312,7 +306,6 @@ def parse(String description) {
                     }
                 }
                 else if (it.cluster == "0B04" && it.attrId == "0505") {
-                    //log.trace "voltage ${it.value}"
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("voltage", true)) != 0 && device.currentValue("switch", true)=="on") {
                         if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero voltage automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
@@ -322,7 +315,6 @@ def parse(String description) {
                     }
                 }
                 else if (it.cluster == "0B04" && it.attrId == "0508") {
-                    //log.trace "current"
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && (safeToDouble(device.currentValue("amperage", true))*getCurrentDiv() as int) != 0  && device.currentValue("switch", true)=="on") {
                         if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero current automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
@@ -332,11 +324,9 @@ def parse(String description) {
                     }
                 }
                 else if (it.cluster == "0B04" && it.attrId == "0510") {    //Power Factor Attribute ID: 0x0510
-                    //log.trace "PF"
                     if (txtEnable) {log.info "${device.displayName} power Factor reported: ${it.value}" }    // not tested
                 }
                 else if (it.cluster == "0702" && it.attrId == "0000") {
-                    //log.trace "energy"
                     energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
                 }
                 else if (it.cluster == "0702" && it.attrId == "0400") {
@@ -346,7 +336,6 @@ def parse(String description) {
                 else {
                     if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
-                //if (logEnable) {log.debug "${device.displayName} Parse returned $map"}
             } // for each attribute
         } // if attribute report
         else if (descMap.profileId == "0000") { //zdo
@@ -414,11 +403,6 @@ def switchEvent( value ) {
         bWasChange = true
         if (logEnable) {log.debug "${device.displayName} Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
         runInMillis(6000, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
-        /*  commented out 9/19/2022
-        if (autoPollingEnabled == true) {
-            runIn( pollingInterval, autoPoll, [overwrite: true]) // restart polling interval timer
-        }
-        */
         state.switchDebouncing = true
         state.lastSwitchState = value
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
@@ -443,25 +427,20 @@ def switchEvent( value ) {
 def voltageEvent( voltage, isDigital=false ) {
     def map = [:] 
     map.name = "voltage"
-    map.value = voltage
+    map.value = (voltage + 0.05) as int
     map.unit = "V"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     def lastVoltage = device.currentValue("voltage", true) ?: 0
-    if (lastVoltage != voltage || optimizations == false || state.isRefreshRequest == true ) {
-        if (Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageTreshold as int)) {
-            if (settings?.reportVoltage == true) {
-                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-                sendEvent(map)
-                runIn( 1, formatAttrib, [overwrite: true])    
-            }
-        }
-        else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"}
+    if ((Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageTreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
+        if (settings?.reportVoltage == true) {
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            sendEvent(map)
+            runIn( 1, formatAttrib, [overwrite: true])    
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"}
     }
 }
 
@@ -472,22 +451,16 @@ def powerEvent( power, isDigital=false ) {
     map.unit = "W"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.lastPower != power || optimizations == false || state.isRefreshRequest == true ) {
-        if (Math.abs((power as int) - (state.lastPower as int)) >= (powerTreshold as int)) {
-            state.lastPower = power    
-            if (settings?.reportPower == true) {
-                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-                sendEvent(map)
-                runIn( 1, formatAttrib, [overwrite: true])    
-            }
+    def lastPower = device.currentValue("power", true) ?: 0.0
+    if ((Math.abs((power as int) - (lastPower as int)) >= (powerTreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
+        if (settings?.reportPower == true) {
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            sendEvent(map)
+            runIn( 1, formatAttrib, [overwrite: true])    
         }
-        else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${state.lastPower} is less than ${powerTreshold} W)"}
-        }
-        
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerTreshold} W)"}
     }
 }
 
@@ -499,20 +472,15 @@ def amperageEvent( amperage, isDigital=false ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     def lastAmperage = device.currentValue("amperage", true) ?: 0.0
-    if (lastAmperage != amperage || optimizations == false || state.isRefreshRequest == true  ) {
-        if (Math.abs((amperage*getCurrentDiv() as int) - (lastAmperage*getCurrentDiv() as int)) >= (amperageTreshold as int)) {
-            if (settings?.reportAmperage == true) {
-                if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-                sendEvent(map)
-                runIn( 1, formatAttrib, [overwrite: true])    
-            }
-        }
-        else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"}
+    if ((Math.abs((amperage*1000 as int) - (lastAmperage*1000 as int)) >= (amperageTreshold as int)) || optimizations == false || state.isRefreshRequest == true  ) {
+        if (settings?.reportAmperage == true) {
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            sendEvent(map)
+            runIn( 1, formatAttrib, [overwrite: true])    
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (no change)"}
+        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"}
     }
 }
 
@@ -525,10 +493,6 @@ def energyEvent( energy_total, isDigital=false ) {
     energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
     if (energy < 0.0) {
         if (logEnable) {log.warn "energyEvent: negative energy ${energy} (total=${energy_total} lastReset=${safeToDouble(state.lastResetEnergy).round(3)}), correcting it to 0!"}
-        /*
-        if (txtEnable) {log.info "${device.displayName} lastResetEnergy is set to ${energy_total}"}
-        state.lastResetEnergy = energy_total
-    */
         energy = 0.0
     }
     if (logEnable) {log.trace "energy_total=${energy_total}, state.lastResetEnergy=${safeToDouble(state.lastResetEnergy)}"}
@@ -538,11 +502,10 @@ def energyEvent( energy_total, isDigital=false ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     lastEnergy = safeToDouble(device.currentValue("energy", true))
-    if (/*state.lastEnergy*/ lastEnergy  != energy || optimizations==false || state.isRefreshRequest == true ) {
+    if ( lastEnergy  != energy || optimizations==false || state.isRefreshRequest == true ) {
         if (isEnergyEnabled()) {
-            def newTotalCost = updateEnergyCost(/*state.*/lastEnergy, energy )
+            def newTotalCost = updateEnergyCost(lastEnergy, energy )
             energyCostEvent(newTotalCost, isDigital)
-            //state.lastEnergy = energy
             sendEvent(map)
             def duration = calculateEnergyDuration()
             energyDurationtEvent( duration )
@@ -619,8 +582,7 @@ def energyCostEvent( cost, isDigital=false ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.unit}${map.value} "
     if (isEnergyEnabled()) {
-        //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"} // already logged in Energy event
-        sendEvent(map)
+        sendEvent(map)    // Info log is in the Energy event
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     else {
@@ -635,8 +597,7 @@ def energyDurationtEvent( duration, isDigital=false ) {
     map.unit = ""
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.unit}${map.value} "
-    //if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
-    sendEvent(map)
+    sendEvent(map)     // Info log is in the Energy event
 }
 
 
@@ -671,7 +632,7 @@ def activeEndpoints() {
     List<String> cmds = []
     
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
-    String endpointIdTemp = endpointId == null ? "01" : endpointId
+    String endpointIdTemp = device.endpointId ?: '01'
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
     
     sendZigbeeCommands(cmds) 
@@ -694,10 +655,13 @@ def parseSimpleDescriptorResponse(Map descMap) {
     
     def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12+inputClusterCount*2])
     def outputClusterList = ""
-    for (int i in 1..outputClusterCount) {
-        outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+    if ( outputClusterCount >= 1 ) {
+        for (int i in 1..outputClusterCount) {
+            outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+        }
+        outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
     }
-    outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
+    
     if (logEnable==true) log.info "${device.displayName} Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
     if (getDataValue("outClusters") != outputClusterList)  {
         if (logEnable==true) log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
@@ -1179,7 +1143,7 @@ void initializeVars( boolean fullInit = true ) {
     }
     state.rxCounter = 0
     state.txCounter = 0
-    if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
+    //if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
     //if (state.lastEnergy == null) state.lastEnergy = 0.0
     if (state.lastEnergyRaw == null) state.lastEnergyRaw = 0.0
     if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
@@ -1256,6 +1220,7 @@ def checkDriverVersion() {
         state.remove("lastAmperage")
         state.remove("lastVoltage")
         state.remove("lastEnergy")
+        state.remove("lastPower")
         //
         state.driverVersion = driverVersionAndTimeStamp()
     }
