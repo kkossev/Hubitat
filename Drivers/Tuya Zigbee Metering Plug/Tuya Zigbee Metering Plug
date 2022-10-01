@@ -42,6 +42,7 @@
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
  *  ver. 1.6.3 2022-10-01 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
+ *                                  'not present' bug fix when polling is disabled!!
  *
  */
 import groovy.json.*
@@ -49,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.3" }
-def timeStamp() {"2022/10/01 6:41 PM"}
+def timeStamp() {"2022/10/01 9:18 PM"}
 
 @Field static final Boolean debug = false
 
@@ -579,6 +580,7 @@ def calculateHourlyEnergy() {
 
 def hourlyEnergyEvent( hourlyEnergy=null, isDigital=true ) {
     //log.trace "hourlyEnergyEvent hourlyEnergy=${hourlyEnergy}"
+    checkIfNotPresent()
     def map = [:] 
     double energy
     map.name = "hourlyEnergy"
@@ -1032,8 +1034,12 @@ def poll( refreshAll = false ) {
         if (state.currentPollingSupported == true  && settings?.reportAmperage == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0508)        // current
     }    
-    if (state.energyPollingSupported == true && refreshAll == true )
+    if (state.energyPollingSupported == true && refreshAll == true ) {
         cmds += zigbee.readAttribute(0x0702, 0x0000)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
+    }
+    if ((state.switchPollingSupported == true && refreshAll == true) || cmds == [] ) {
+        cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
+    }
     state.isRefreshRequest = true
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
