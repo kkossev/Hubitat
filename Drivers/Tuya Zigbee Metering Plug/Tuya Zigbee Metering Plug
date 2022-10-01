@@ -41,7 +41,7 @@
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
- *  ver. 1.6.3 2022-10-01 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; 
+ *  ver. 1.6.3 2022-10-01 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *
  */
 import groovy.json.*
@@ -49,7 +49,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.3" }
-def timeStamp() {"2022/10/01 1:20 PM"}
+def timeStamp() {"2022/10/01 6:41 PM"}
 
 @Field static final Boolean debug = false
 
@@ -117,6 +117,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zloso4jk", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         // NOT WORKING WITH HE! // fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"   // NOT WORKING WITH HE!
         
         // NON-Tuya metering plugs
@@ -187,7 +188,7 @@ metadata {
                 if (energyMode == "FIXED") {     // "4":"Fixed Power Load"
                     input (name: "fixedPower", type: "number", title: "<b>Fixed Power</b>, W", description: "<i>The fixed power consumption when the plug is switched on</i>", range: "1..9000", defaultValue: 100)
                 }
-                input (name: "energyPrice", type: "decimal", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", /*range: "0.01..99.99",*/ defaultValue: 0.12)
+                input (name: "energyPrice", type: "text", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", defaultValue: "0.21326")
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
            
@@ -549,7 +550,7 @@ def energyEvent( energy_total, isDigital=false ) {
             def duration = calculateEnergyDuration()
             energyDurationtEvent( duration )
             runIn( 1, formatAttrib, [overwrite: true])    
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice.round(5)}), duration=${duration}"}
+            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice}), duration=${duration}"}
         }
         else {
             if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
@@ -576,7 +577,7 @@ def calculateHourlyEnergy() {
     return energy as double
 }
 
-def hourlyEnergyEvent( hourlyEnergy=null, isDigital=false ) {
+def hourlyEnergyEvent( hourlyEnergy=null, isDigital=true ) {
     //log.trace "hourlyEnergyEvent hourlyEnergy=${hourlyEnergy}"
     def map = [:] 
     double energy
@@ -1220,7 +1221,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
     if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", [value:900, type:"number"])
     if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", [value:1, type:"number"])
-    if (fullInit == true || settings?.energyPrice == null) device.updateSetting("energyPrice", [value:0.12, type:"decimal"])
+    if (fullInit == true || settings?.energyPrice == null) device.updateSetting("energyPrice", [value:0.21326, type:"decimal"])
     if (fullInit == true || settings?.powerTreshold == null) device.updateSetting("powerTreshold", [value:1, type:"number"])
     if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
@@ -1623,20 +1624,6 @@ def setEnergyPrice( price )
 }
 
 def resetEnergy() {
-/*    
-    def totalEnergy = safeToDouble(device.latestValue("energy"))    // last corrected energy value
-    def now = FormattedDateTimeFromUnix( now() )
-    def lastResetEnergy = state.lastResetEnergy + totalEnergy    // add the last corrected value to the previos lastResetEnergy
-    state.lastResetEnergy = lastResetEnergy
-    state.lastHourlyEnergy = lastResetEnergy
-    state.lastResetDate = now
-    state.lastEnergyCost = 0.0
-    updateEnergyCost( state.lastEnergyCost , 0 )
-    energyEvent( 0, isDigital=true )
-    hourlyEnergyEvent( 0, isDigital=true )
-    energyCostEvent( 0, isDigital=true ) 
-    energyDurationtEvent( 0, isDigital=true  )
-*/
     log.trace "resetEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
     def now = FormattedDateTimeFromUnix( now() )
     state.lastResetDate = now
@@ -1719,6 +1706,7 @@ void formatAttrib() {
     }
     if (isEnergyEnabled()) {
         attrStr += addToAttr("Energy","energy")
+        attrStr += addToAttr("Last hour","hourlyEnergy")
         attrStr += addToAttr("Cost","energyCost")
         attrStr += addToAttr("Duration","energyDuration")
     }
