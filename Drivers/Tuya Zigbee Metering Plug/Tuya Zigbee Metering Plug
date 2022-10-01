@@ -41,17 +41,15 @@
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
- *  ver. 1.6.3 2022-10-01 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; 
+ *  ver. 1.6.3 2022-10-01 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; 
  *
- *                                  TODO: send [digital] event on Max Reporting time !
- *                                  TODO: convert Energy delta from Wh to KWh ? TODO: if plug is not present, remove the W/V/A from the html attributes!
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.3" }
-def timeStamp() {"2022/10/01 12:19 PM"}
+def timeStamp() {"2022/10/01 1:20 PM"}
 
 @Field static final Boolean debug = false
 
@@ -184,16 +182,15 @@ metadata {
             input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>", 
                 range: "120..86400", defaultValue: 900)
             // 09/23/2022
-            input (name: "energyMode", type: "enum", title: "<b>Energy Reporting</b>", description:"<i>Select Energy Reporting Mode</i>", defaultValue: "1", options: energyModeOptions)
-            if (isEnergyEnabled()) {    // if (reportEnergy?.value == true)
-                if (energyMode == "4") {     // "4":"Fixed Power Load"
-                    input (name: "fixedPower", type: "number", title: "<b>Fixed Power</b>, W", description: "<i>The fixed power consumption when the plug is switched on</i>", range: "1..9000", defaultValue: 1)
+            input (name: "energyMode", type: "enum", title: "<b>Energy Reporting</b>", description:"<i>Select Energy Reporting Mode</i>", defaultValue: "POLLED", options: energyModeOptions)
+            if (isEnergyEnabled()) {    // if (energyMode?.value == true)
+                if (energyMode == "FIXED") {     // "4":"Fixed Power Load"
+                    input (name: "fixedPower", type: "number", title: "<b>Fixed Power</b>, W", description: "<i>The fixed power consumption when the plug is switched on</i>", range: "1..9000", defaultValue: 100)
                 }
                 input (name: "energyPrice", type: "decimal", title: "<b>Energy price for 1 KWh</b>, \$", description: "<i>Energy price for KWh used in the Energy Cost calculations.</i>", /*range: "0.01..99.99",*/ defaultValue: 0.12)
                 input (name: "energyTreshold", type: "number", title: "<b>Energy minimum change to be reported</b>, Wh", description: "<i>The minimum Energy change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
-            //input (name: "reportEnergy", type: "bool", title: "<b>Energy Reporting Off or On</b>",  description:  "<i>(Disable reporting when not desired)</i>", defaultValue: true)
-            
+           
             input (name: "reportPower", type:    "bool", title: "<b>Power Reporting Off or On</b>",  description:   "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
             if (reportPower?.value == true) {
                 input (name: "powerTreshold", type: "number", title: "<b>Power minimum change to be reported</b>, W", description: "<i>The minimum Power change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
@@ -226,15 +223,16 @@ metadata {
 @Field static final String VOLTAGE = "Voltage"
 @Field static final String AMPERAGE = "Amperage"
 
-@Field static final Map energyModeOptions = [ 
-    "0":"Disabled (Energy and costs will not be reported)", 
-    "1":"Enabled  (Energy is reported automatically by smart plugs  that do not require polling)",
-    "2":"Enabled  (Energy is reported by polling the plug [most of Tuya's models])",
-    "3":"Enabled  (Energy is calculated from the Power reading multiplied by the time)",
-    "4":"Enabled  (Energy is calculated from the fixed Power consumption multiplied by the time)"
+// "energyMode"
+@Field static final Map energyModeOptions = [     
+    "DISABLED":    "Disabled (Energy and costs will not be reported)", 
+    "POLLED":      "Enabled  (Energy is reported by polling the plug [most of Tuya's models])",
+    "REPORTED":    "Enabled  (Energy is reported automatically by smart plugs  that do not require polling)",
+/*    "3":"Enabled  (Energy is calculated from the Power reading multiplied by the time)", */
+    "FIXED":"Enabled  (Energy is calculated from the fixed Power consumption multiplied by the time)"
 ]
 
-private boolean isEnergyEnabled() {energyMode != "0"}
+private boolean isEnergyEnabled() {energyMode != "DISABLED"}
 
 def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
 def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
@@ -448,6 +446,15 @@ def switchEvent( value ) {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
         sendEvent(map)
         runIn( 1, formatAttrib, [overwrite: true])    
+        // version 1.6.3 10/01/2022
+        if (energyMode == "FIXED") {
+            if (map.value == "on") {
+                powerEvent(settings?.fixedPower, isDigital=true)
+            }
+            else {
+                powerEvent(0, isDigital=true)
+            }
+        }
     }
     clearIsDigital()
 }
@@ -1205,10 +1212,11 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
     if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
     if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
-    //if (fullInit == true || settings?.reportEnergy == null) device.updateSetting("reportEnergy", true)
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
+    if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"POLLED", type:"enum"])
+    if (fullInit == true || settings?.fixedPower == null) device.updateSetting("fixedPower", [value:100, type:"number"])
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
     if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", [value:900, type:"number"])
     if (fullInit == true || settings?.energyTreshold == null) device.updateSetting("energyTreshold", [value:1, type:"number"])
@@ -1231,6 +1239,7 @@ void initializeVars( boolean fullInit = true ) {
             device.deleteCurrentState("power")
             device.updateSetting("reportVoltage",  [value: "false", type: "bool"])
             device.updateSetting("reportAmperage", [value: "false", type: "bool"])
+            device.updateSetting("energyMode", [value:"FIXED", type:"enum"])
         }
         else  {
             state.powerPollingSupported = true
