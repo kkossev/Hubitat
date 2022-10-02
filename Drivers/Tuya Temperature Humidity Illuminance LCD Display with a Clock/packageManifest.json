@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Temperature Humidity Illuminance LCD Display with a Clock",
   "author": "Krassimir Kossev",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-03-26",
-  "releaseNotes": "1.0.8 2022-08-13 - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes; added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;\n1.0.7 2022-06-09 - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx';  Bug fix - all settings were reset back in to the defaults on hub reboot\n1.0.6 2022-05-09 - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)\n1.0.4 2022-03-26 - first release version\n",
+  "dateReleased": "2022-10-02",
+  "releaseNotes": "1.0.9 2022-10-02 - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup\n1.0.8 2022-08-13 - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes; added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;\n1.0.7 2022-06-09 - new model 'TS0601_Contact'(_TZE200_pay2byax); illuminance unit changed to 'lx';  Bug fix - all settings were reset back in to the defaults on hub reboot\n1.0.6 2022-05-09 - new model 'TS0201_LCZ030' (_TZ3000_qaaysllp)\n1.0.4 2022-03-26 - first release version\n",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/readme.md",
   "communityLink": "https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093",
 
