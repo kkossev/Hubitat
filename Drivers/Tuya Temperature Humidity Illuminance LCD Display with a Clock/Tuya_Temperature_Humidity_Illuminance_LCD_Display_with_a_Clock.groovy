@@ -21,12 +21,12 @@
  * ver. 1.0.8 2022-08-13 kkossev  - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes;
  *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
  * ver. 1.0.9 2022-10-02 kkossev  - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup
- * ver. 1.0.10 2022-10-04 kkossev  - (dev.branch)'_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log;
+ * ver. 1.0.10 2022-10-11 kkossev  - (dev.branch)'_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
  *
 */
 
 def version() { "1.0.10" }
-def timeStamp() {"2022/10/04 9:36 PM"}
+def timeStamp() {"2022/10/11 10:22 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -75,6 +75,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display" // not tested
+        //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
         
     }
     preferences {
@@ -165,6 +167,7 @@ metadata {
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor
+    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -557,7 +560,7 @@ def getModelGroup() {
     def manufacturer = device.getDataValue("manufacturer")
     def modelGroup = 'UNKNOWN'
     if (modelGroupPreference == null) {
-        device.updateSetting("modelGroupPreference", "Auto detect")
+        device.updateSetting("modelGroupPreference",  [value:"Auto detect", type:"enum"])
     }
     if (modelGroupPreference == "Auto detect") {
         if (manufacturer in Models) {
@@ -664,20 +667,24 @@ def illuminanceEventLux( Integer lux, isDigital=false ) {
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
-//  called from initialize()
+//  called from initialize() and when installed as a new device
 def installed() {
-    if (settings?.txtEnable) log.info "${device.displayName} installed()"
+    if (settings?.txtEnable) log.info "${device.displayName} installed()..."
     unschedule()
+    initializeVars(fullInit = true )
 }
 
 
 def updated() {
     ArrayList<String> cmds = []
 
+    /*
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
+    */
     state.modelGroup = getModelGroup()
+
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -751,9 +758,11 @@ def updated() {
     }
     // 
     if (getModelGroup() in ["Zigbee NON-Tuya"]) {    // //temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
-    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity *100) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
-    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, humiditySensitivity as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
-
+        log.info "${device.displayName} configure reporting ..."
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity * 100) as int, [:], 200)
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, (humiditySensitivity *100) as int, [:], 200)
+        cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
+        cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
     } 
     
     /* 2022-05-09 - do not configre reporting for multi-EP devices like TS0201 _TZ3000_qaaysllp !!! (binds to wrong EP ?)
@@ -821,7 +830,7 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
 
-    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", "Auto detect")
+    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", [value:"Auto detect", type:"enum"])
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.temperatureOffset == null) device.updateSetting("temperatureOffset", [value:0.0, type:"decimal"])
@@ -839,17 +848,16 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity",  [value:10, type:"number"])
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"number"])
     //
-    if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
+    if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
     if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
     if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
-    //if (fullInit == true || state.lastIllu == null) state.lastIllu = now() - 10 * 1000
     
 }
 
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
+    //cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // commented out ver 1.0.10  2022/11/10
     return  cmds
 }
 
@@ -858,9 +866,10 @@ def configure() {
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     sendZigbeeCommands(cmds)
-    updated() // send the default or previously configured preference parameters during the Zigbee pairing process..
+    runIn(1, updated) // send the default or previously configured preference parameters during the Zigbee pairing process..
 }
 
+// NOT called when the driver is initialized as a new device, because the Initialize capability is NOT declared!
 def initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
