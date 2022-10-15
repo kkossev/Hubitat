@@ -117,7 +117,17 @@
       "description": "Tuya Wall Thermostat - AVATTO, Moes, BEOK - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
-      ]	  
-    }
+      ]
+    },
+    {
+      "id": "0e9a6b4f-744d-4fa2-b31d-4ec95e58e472",
+      "name": "SiHAS Multipurpose Sensor USM-300-ZB",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_usm300zb.json",
+      "description": "SiHAS Multipurpose Sensor USM-300-ZB - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+	}
   ]
 }
