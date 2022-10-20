@@ -26,13 +26,14 @@
  * ver. 2.4.1 2022-04-23 kkossev     - improved tracing of debouncing logic code; option [overwrite: true] is set explicitely on debouncing timer restart; debounce timer increased to 1000ms  
  * ver. 2.4.2 2022-05-07 kkossev     - added LoraTap 6 button Scene Controller; device.getDataValue bug fix;
  * ver. 2.4.3 2022-09-18 kkossev     - added TS0042 Tuya Zigbee 2 Gang Wireless Smart Switch; removed 'release' event for TS0044 switches (not supported by hardware); 'release' digital event bug fix.
+ * ver. 2.4.4 2022-10-20 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.3" }
-def timeStamp() {"2022/09/18 9:51 AM"}
+def version() { "2.4.4" }
+def timeStamp() {"2022/10/20 6:33 PM"}
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -40,7 +41,7 @@ import hubitat.device.HubMultiAction
 import groovy.json.JsonOutput
 
 metadata {
-    definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20TS004F/TS004F.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Scene Switch TS004F", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/TS004F.groovy", singleThreaded: true ) {
       
     capability "Refresh"
     capability "PushableButton"
@@ -57,8 +58,8 @@ metadata {
     //command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
       
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
-    fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_vp6clf9d", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_tk3s5tyg", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
+    fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_vp6clf9d", model: "TS0044", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)" // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
