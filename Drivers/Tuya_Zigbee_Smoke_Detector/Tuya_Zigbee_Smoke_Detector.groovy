@@ -22,7 +22,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.0" }
-def timeStamp() {"2022/10/29 7:17 PM"}
+def timeStamp() {"2022/10/29 9:26 PM"}
 
 @Field static final Boolean debug = false
 
@@ -38,8 +38,8 @@ metadata {
         capability "PresenceSensor"
 
         
-        command "silenceSiren", [[name:"Silence Siren", type: "ENUM", description: "Silence the Siren", constraints: ["--- Select ---", "true", "false" ]]]        // 'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
-        command "enableAlarm",  [[name:"Enable Alarm",  type: "ENUM", description: "Enable the Alarm",  constraints: ["--- Select ---", "true", "false" ]]]          //'Enable the alarm' ea.STATE_SET, true, false     HE->Tuya  dp=20, ENUM, true: 0, false: 1
+        //command "silenceSiren", [[name:"Silence Siren", type: "ENUM", description: "Silence the Siren", constraints: ["--- Select ---", "true", "false" ]]]        // 'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
+        //command "enableAlarm",  [[name:"Enable Alarm",  type: "ENUM", description: "Enable the Alarm",  constraints: ["--- Select ---", "true", "false" ]]]          //'Enable the alarm' ea.STATE_SET, true, false     HE->Tuya  dp=20, ENUM, true: 0, false: 1
         
         if (debug == true) {        
             command "test", [
@@ -63,8 +63,7 @@ metadata {
 
 // Constants
 @Field static final Integer presenceCountTreshold = 4
-@Field static final Integer defaultPollingInterval = 60
-@Field static final Integer refreshTimer = 3000
+@Field static final Integer defaultPollingInterval = 3600
 @Field static String UNKNOWN = "UNKNOWN"
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -340,7 +339,7 @@ private int getAttributeValue(ArrayList _data) {
 
 def sendSmokeAlarmEvent( value, isDigital=false ) {    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1] 
     def map = [:]
-    map.value = value==0 ? "clear" : value==1 ? "detected" : value==2 ? "tested" : null
+    map.value = value==0 ? "detected" : value==1 ? "clear" : value==2 ? "tested" : null
     map.name = "smoke"
     map.unit = ""
     map.type = isDigital == true ? "digital" : "physical"
