@@ -13,7 +13,8 @@
  *  for the specific language governing permissions and limitations under the License.
  *
  *
- *  ver. 1.0.0 2022-10-29 kkossev - inital version
+ *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
+ *  ver. 1.0.1 2022-10-29 kkossev - added _TZE200_uebojraa
  *
  *
  */
@@ -21,8 +22,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/10/29 9:26 PM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/10/29 10:17 PM"}
 
 @Field static final Boolean debug = false
 
@@ -49,6 +50,9 @@ metadata {
             ]
         }
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ntcy3xu1"    // https:www.aliexpress.com/item/1005003951429372.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_uebojraa"    // https://community.hubitat.com/t/tuya-zigbee-smart-smoke-detector-support/102471
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_t5p1vj8r"    // not tested
+        //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_5d3vhjro"    // 'SA12IZL'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_aycxwiau"    // TuyaIasZone ?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vzekyi4c"    // TuyaIasZone ?
