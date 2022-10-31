@@ -11,6 +11,7 @@ The driver can be also installed manually from this [Github link](https://raw.gi
 |  Device |  Links |
 |---|---|
 |  Tuya Smart Smoke Detector Sensor ![image](https://user-images.githubusercontent.com/6189950/198937966-8e05ec7c-f1ad-49bb-8578-e5cc1acadc00.png) |  [AliExpress](https://www.aliexpress.com/item/1005003951429372.html) | 
+| Zigbee  Smart Smoke Detector ![image](https://user-images.githubusercontent.com/6189950/198967762-5b4bf2e6-4a3b-4469-8dbe-8122d631403d.png)| AliExpress: https://www.aliexpress.com/item/1005004101962864.html|
 
 
 ----------------------------
