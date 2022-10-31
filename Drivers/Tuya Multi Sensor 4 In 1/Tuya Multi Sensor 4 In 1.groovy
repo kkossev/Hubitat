@@ -25,12 +25,12 @@
  * ver. 1.0.10 2022-08-15 kkossev  - added Lux threshold parameter; square black radar LED configuration is resent back when device is powered on; round black PIR sensor powerSource is set to DC; added OWON OCP305 Presence Sensor
  * ver. 1.0.11 2022-08-22 kkossev  - IAS devices initialization improvements; presence threshold increased to 4 hours; 3in1 exceptions bug fixes; 3in1 and 4in1 exceptions bug fixes;
  * ver. 1.0.12 2022-09-05 kkossev  - added _TZE200_wukb7rhc MOES radar
- * ver. 1.0.13 2022-09-14 kkossev  - added _TZE200_jva8ink8 AUBESS radar
+ * ver. 1.0.13 2022-09-25 kkossev  - added _TZE200_jva8ink8 AUBESS radar; 2-in-1 Sensitivity setting bug fix?
  *
 */
 
 def version() { "1.0.13" }
-def timeStamp() {"2022/09/14 1:07 PM"}
+def timeStamp() {"2022/09/25 8:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -89,7 +89,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1" // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Multi Sensor 3 In 1"          // not tested
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux"          // https://www.aliexpress.com/item/1005004095233195.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"          // https://www.aliexpress.com/item/1005004095233195.html
         
         // Human presence sensor AIR (PIR sensor!) - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Human presence sensor AIR"        // Tuya LY-TAD-K616S-ZB
@@ -1072,11 +1072,11 @@ def updated() {
             }
             else if (isTS0601_PIR()) {
                 def val = getSensitivityValue( sensitivity.toString() )
-                cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 8))
+                cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
             }
             else if (isIAS()) {
-                cmds += sendSensitivity( settings?.sensitivity )
+                cmds += sendSensitivityIAS( settings?.sensitivity )
                 if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
             }
         }
@@ -1088,11 +1088,11 @@ def updated() {
             else if (isTS0601_PIR()) {
                 def val = getKeepTimeValue( keepTime.toString() )
                 //log.trace "keepTime=${keepTime} val=${val}"
-                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 8))
+                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
             }
             else if (isIAS()) {
-                cmds += sendKeepTime( settings?.keepTime )
+                cmds += sendKeepTimeIAS( settings?.keepTime )
                 if (settings?.logEnable) log.debug "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
             }
         }
@@ -1207,8 +1207,8 @@ def refresh() {
     cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)     // Power Source, attributeReportingStatus
     if (isIAS()) {
         // TODO - optimize!
-        cmds += readSensitivity()
-        cmds += readKeepTime()
+        cmds += readSensitivityIAS()
+        cmds += readKeepTimeIAS()
     }
     if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
     sendZigbeeCommands( cmds ) 
@@ -1527,33 +1527,33 @@ def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1
 def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
 def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
 
-def readSensitivity()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
-def readKeepTime()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
+def readSensitivityIAS()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
+def readKeepTimeIAS()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
 
-def sendSensitivity( String mode ) {
+def sendSensitivityIAS( String mode ) {
     if (mode == null) {
-        if (settings?.logEnable) log.warn "${device.displayName} sensitivity is not set for ${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity is not set for ${device.getDataValue('manufacturer')}"
         return null
     }
     ArrayList<String> cmds = []
     String value = null
     if (!(is2in1() || isConfigurable()))  {
-        if (settings?.logEnable) log.warn "${device.displayName} sensitivity configuration may not work for ${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity configuration may not work for ${device.getDataValue('manufacturer')}"
         // continue anyway ..
     }
     value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? 02 : null
     if (value != null) {
         cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger(), [:], delay=200)
-        if (settings?.logEnable) log.debug "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"
+        if (settings?.logEnable) log.debug "${device.displayName} sending IAS sensitivity : ${mode} (${value.toInteger()})"
         //sendZigbeeCommands( cmds )         // only prepare the cmds here!
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
     return cmds
 }
 
-def sendKeepTime( String mode ) {
+def sendKeepTimeIAS( String mode ) {
     if (mode == null) {
         if (settings?.logEnable) log.warn "${device.displayName} Keep Time is not set for ${device.getDataValue('manufacturer')}"
         return null
@@ -1561,16 +1561,16 @@ def sendKeepTime( String mode ) {
     ArrayList<String> cmds = []
     String value = null
     if (!(is2in1() || isConfigurable()))  {
-        if (settings?.logEnable) log.warn "${device.displayName} Keep Time configuration may not work for ${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} IAS Keep Time configuration may not work for ${device.getDataValue('manufacturer')}"
         // continue anyway .. //['30':'30', '60':'60', '120':'120']
     }
     value = mode == "30" ? 0: mode == "60" ? 1 : mode == "120" ? 02 : null
     if (value != null) {
         cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger(), [:], delay=200) 
-        if (settings?.logEnable) log.debug "${device.displayName} sending sensitivity : ${mode} (${value.toInteger()})"     // only prepare the cmds here!
+        if (settings?.logEnable) log.debug "${device.displayName} sending IAS sensitivity : ${mode} (${value.toInteger()})"     // only prepare the cmds here!
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
+        if (settings?.logEnable) log.warn "${device.displayName} IAS Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
     }
     return cmds
 }
