@@ -1,0 +1,16 @@
+{
+  "packageName": "Tuya Zigbee Smoke Detector",
+  "author": "Krassimir Kossev",
+  "version": "1.0.1",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2022-10-31",
+  "drivers": [
+    {
+      "id": "95fd080b-c541-4426-a849-247a3678945b",
+      "name": "Tuya Zigbee Smoke Detector",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy",
+      "required": true
+    }
+  ]
+}
