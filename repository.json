@@ -128,6 +128,16 @@
       "tags": [
         "Zigbee"
       ]
-	}
+    },
+    {
+      "id": "c25fb12f-a13d-4d84-8bc5-40a2bba258d3",
+      "name": "Tuya Zigbee Smoke Detector",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/packageManifest.json",
+      "description": "Tuya Zigbee Smoke Detector - driver for Hubitat Elevation hub",
+	  "tags": [
+        "Zigbee"
+      ]
+    }
   ]
 }
