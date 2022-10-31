@@ -21,7 +21,7 @@
  * ver. 1.0.8 2022-08-13 kkossev  - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes;
  *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
  * ver. 1.0.9 2022-10-02 kkossev  - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup
- * ver. 1.0.10 2022-10-11 kkossev  - (dev.branch)'_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
+ * ver. 1.0.10 2022-10-11 kkossev - '_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
  *
 */
 
@@ -166,7 +166,7 @@ metadata {
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
-    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor
+    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
@@ -592,7 +592,8 @@ def temperatureEvent( temperature, isDigital=false ) {
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
     map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
     map.type = isDigital == true ? "digital" : "physical"
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
     if (state.lastTemp == null ) state.lastTemp = now() - (minReportingTimeTemp * 2000)
     def timeElapsed = Math.round((now() - state.lastTemp)/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
@@ -623,6 +624,7 @@ def humidityEvent( humidity, isDigital=false ) {
     map.name = "humidity"
     map.unit = "% RH"
     map.type = isDigital == true ? "digital" : "physical"
+    map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
     if (state.lastHumi == null ) state.lastHumi = now() - (minReportingTimeHumidity * 2000)
     def timeElapsed = Math.round((now() - state.lastHumi)/1000)
@@ -797,8 +799,15 @@ def refresh() {
     if (getModelGroup() == 'TS0222') {
         pollTS0222()
     }
+    else if (getModelGroup() == 'TS0201_TH') {
+        List<String> cmds = []
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200) 
+	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)
+    	cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)
+        sendZigbeeCommands( cmds )     
+    }
     else {
-        zigbee.readAttribute(0, 1)
+     //   zigbee.readAttribute(0, 1)
     }
 }
 
@@ -985,4 +994,7 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
 
 
 def test( value) {
+    // TS0201 _TZ3000_itnrsufe :
+    // Celsius: NOT PARSED : [raw:98B301E002080BE03000, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:00, clusterInt:57346, attrInt:57355]
+    // Fahrenheit: NOT PARSED : [raw:98B301E002080BE03001, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:01, clusterInt:57346, attrInt:57355]
 }
