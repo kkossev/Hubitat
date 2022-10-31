@@ -1,7 +1,7 @@
 This driver adds support in Hubitat for these Tuya smoke detectors, that use the Tuya specific non-standard Zigbee cluster 0xEF00 messages.
 Currently it is being tested with only one manufacturer model "_TZE200_ntcy3xu1".
 
-Please note, that none of these devices are designed (not just manufactured) in China are known to have any UL, CSA, TÜV, AS/NZS  or similar type certificates.
+Please note, that none of these devices which are designed (not just manufactured) in China are known to have any UL, CSA, TÜV, AS/NZS or similar type certificates!
 
 The recommended installation method is to use the community Hubitat Package Manager (HPM) app. Search for "**Tuya Zigbee Smoke Detector**" or by tag 'Zigbee'.
 The driver can be also installed manually from this [Github link](https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy)
