@@ -21,10 +21,12 @@
  * ver. 1.0.8 2022-08-13 kkossev  - _TZE200_pay2byax bug fixes; '_TZE200_locansqn' (TS0601_Haozee) bug fixes; removed degrees symbol from the logs; removed temperatureScaleParameter'preference (use HE scale setting); decimal/number bug fixes;
  *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
  * ver. 1.0.9 2022-10-02 kkossev  - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup
+ * ver. 1.0.10 2022-10-11 kkossev - '_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
+ *
 */
 
-def version() { "1.0.9" }
-def timeStamp() {"2022/10/02 9:35 AM"}
+def version() { "1.0.10" }
+def timeStamp() {"2022/10/11 9:35 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -73,6 +75,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display" // not tested
+        //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
         
     }
     preferences {
@@ -105,7 +109,7 @@ metadata {
         1: [input: [name: "humidityOffset", type: "decimal", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", defaultValue: 0.0, range: "-100.0..100.0",
                    limit:['ALL']]],
 
-        2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..5.0",
+        2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..50.0",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
 
         3: [input: [name: "humiditySensitivity", type: "number", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
@@ -162,7 +166,8 @@ metadata {
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
-    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor
+    '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
+    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -257,6 +262,12 @@ def parse(String description) {
                 if (settings?.logEnable) log.warn "${device.displayName} <b>UNPROCESSED Global Command</b> :  ${descMap}"
             }
         }
+        else if (descMap.profileId == "0000") { //zdo
+            parseZDOcommand(descMap)
+        } 
+        else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
+            parseZHAcommand(descMap)
+        } 
         else {
             if (settings?.logEnable) log.warn "${device.displayName} <b> NOT PARSED </b> :  ${descMap}"
         }
@@ -266,6 +277,93 @@ def parse(String description) {
     }
 }
 
+def parseZHAcommand( Map descMap) {
+    switch (descMap.command) {
+        case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
+            def status = descMap.data[2]
+            def attrId = descMap.data[1] + descMap.data[0] 
+            if (status == "86") {
+                if (logEnable==true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
+            }
+            else {
+                if (logEnable==true) log.debug "${device.displayName} Read attribute response: status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+            } 
+            break
+        case "04" : //write attribute response
+            if (logEnable==true) log.info "${device.displayName} Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "07" : // Configure Reporting Response
+            if (logEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            // Status: Unreportable Attribute (0x8c)
+            break
+        case "09" : // Command: Read Reporting Configuration Response (0x09)
+            def status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
+            def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
+            if (status == 0) {
+                def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
+                def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
+                def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
+                def delta = 0
+                if (descMap.data.size()>=10) { 
+                    delta = zigbee.convertHexToInt(descMap.data[10]+descMap.data[9])
+                }
+                else {
+                    if (logEnable==true) log.debug "${device.displayName} descMap.data.size = ${descMap.data.size()}"
+                }
+                if (logEnable==true) log.debug "${device.displayName} Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
+                if (txtEnable==true) {
+                    String attributeName = descMap.clusterId == "0405" ? "humidity" : descMap.clusterId == "0402" ? "temperature" : descMap.clusterId
+                    log.info "${device.displayName} Reporting Configuration Response for ${attributeName}  (status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) is: min=${min} max=${max} delta=${delta}"
+                }
+            }
+            else {
+                if (logEnable==true) log.info "${device.displayName} <b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            }
+            break
+        case "0B" : // ZCL Default Response
+            def status = descMap.data[1]
+            if (status != "00") {
+                if (logEnable==true) log.info "${device.displayName} Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            }
+            break
+        default :
+            if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break
+    }
+}    
+
+def parseZDOcommand( Map descMap ) {
+    switch (descMap.clusterId) {
+        case "0006" :
+            if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
+            break
+        case "0013" : // device announcement
+            if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            break
+        case "8004" : // simple descriptor response
+            if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+            parseSimpleDescriptorResponse( descMap )
+            break
+        case "8005" : // endpoint response
+            if (logEnable) log.info "${device.displayName} Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}"
+            break
+        case "8021" : // bind response
+            if (logEnable) log.info "${device.displayName} Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "8022" : // unbind response
+            if (logEnable) log.info "${device.displayName} Received unbind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            break
+        case "8034" : // leave response
+            if (logEnable) log.info "${device.displayName} Received leave response, data=${descMap.data}"
+            break
+        case "8038" : // Management Network Update Notify
+            if (logEnable) log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}"
+            break
+        default :
+            if (logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break    // 2022/09/16
+    }
+}
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
@@ -462,7 +560,7 @@ def getModelGroup() {
     def manufacturer = device.getDataValue("manufacturer")
     def modelGroup = 'UNKNOWN'
     if (modelGroupPreference == null) {
-        device.updateSetting("modelGroupPreference", "Auto detect")
+        device.updateSetting("modelGroupPreference",  [value:"Auto detect", type:"enum"])
     }
     if (modelGroupPreference == "Auto detect") {
         if (manufacturer in Models) {
@@ -494,13 +592,14 @@ def temperatureEvent( temperature, isDigital=false ) {
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
     map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
     map.type = isDigital == true ? "digital" : "physical"
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
     if (state.lastTemp == null ) state.lastTemp = now() - (minReportingTimeTemp * 2000)
     def timeElapsed = Math.round((now() - state.lastTemp)/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeTemp) {
 		if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-		unschedule('sendDelayedEventTemp')		//get rid of stale queued reports
+		unschedule(sendDelayedEventTemp)		//get rid of stale queued reports
 		state.lastTemp = now()
         sendEvent(map)
 	}		
@@ -525,13 +624,14 @@ def humidityEvent( humidity, isDigital=false ) {
     map.name = "humidity"
     map.unit = "% RH"
     map.type = isDigital == true ? "digital" : "physical"
+    map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
     if (state.lastHumi == null ) state.lastHumi = now() - (minReportingTimeHumidity * 2000)
     def timeElapsed = Math.round((now() - state.lastHumi)/1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeHumidity) {
         if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-        unschedule('sendDelayedEventHumi')
+        unschedule(sendDelayedEventHumi)
         state.lastHumi = now()
         sendEvent(map)
     }
@@ -569,20 +669,24 @@ def illuminanceEventLux( Integer lux, isDigital=false ) {
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
-//  called from initialize()
+//  called from initialize() and when installed as a new device
 def installed() {
-    if (settings?.txtEnable) log.info "${device.displayName} installed()"
+    if (settings?.txtEnable) log.info "${device.displayName} installed()..."
     unschedule()
+    initializeVars(fullInit = true )
 }
 
 
 def updated() {
     ArrayList<String> cmds = []
 
+    /*
     if (modelGroupPreference == null) {
         device.updateSetting("modelGroupPreference", "Auto detect")
     }
+    */
     state.modelGroup = getModelGroup()
+
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -649,13 +753,18 @@ def updated() {
     }
     
     if (getModelGroup() in ['TS0201_TH']) {    // //temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
-    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity *100) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
-    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, humiditySensitivity as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, 0x29, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity * 100 ) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, (humiditySensitivity * 100) as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
+        cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
+        cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
     }
     // 
     if (getModelGroup() in ["Zigbee NON-Tuya"]) {    // //temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
-    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity *100) as int, [:], 200)  // Configure temperature - Report after 10 seconds if any change, every 10 minutes if no change
-    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.INT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, humiditySensitivity as int, [:], 200)  // Configure Humidity - - Report after 10 seconds if any change, every 10 minutes if no change
+        log.info "${device.displayName} configure reporting ..."
+    	cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, maxReportingTimeTemp as int, (temperatureSensitivity * 100) as int, [:], 200)
+    	cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, maxReportingTimeHumidity as int, (humiditySensitivity *100) as int, [:], 200)
+        cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
+        cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
     } 
     
     /* 2022-05-09 - do not configre reporting for multi-EP devices like TS0201 _TZ3000_qaaysllp !!! (binds to wrong EP ?)
@@ -676,6 +785,7 @@ def updated() {
     sendZigbeeCommands( cmds )
 }
 
+
 def pollTS0222() {
     List<String> cmds = []
 	cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)  // Battery Percent
@@ -689,8 +799,15 @@ def refresh() {
     if (getModelGroup() == 'TS0222') {
         pollTS0222()
     }
+    else if (getModelGroup() == 'TS0201_TH') {
+        List<String> cmds = []
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200) 
+	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)
+    	cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)
+        sendZigbeeCommands( cmds )     
+    }
     else {
-        zigbee.readAttribute(0, 1)
+     //   zigbee.readAttribute(0, 1)
     }
 }
 
@@ -722,7 +839,7 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
 
-    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", "Auto detect")
+    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", [value:"Auto detect", type:"enum"])
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.temperatureOffset == null) device.updateSetting("temperatureOffset", [value:0.0, type:"decimal"])
@@ -740,17 +857,16 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity",  [value:10, type:"number"])
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"number"])
     //
-    if (fullInit == true || state.modelGroup == null)  state.modelGroup = "UNKNOWN"
+    if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
     if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
     if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
-    //if (fullInit == true || state.lastIllu == null) state.lastIllu = now() - 10 * 1000
     
 }
 
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
+    //cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // commented out ver 1.0.10  2022/11/10
     return  cmds
 }
 
@@ -759,9 +875,10 @@ def configure() {
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     sendZigbeeCommands(cmds)
-    updated() // send the default or previously configured preference parameters during the Zigbee pairing process..
+    runIn(1, updated) // send the default or previously configured preference parameters during the Zigbee pairing process..
 }
 
+// NOT called when the driver is initialized as a new device, because the Initialize capability is NOT declared!
 def initialize() {
     log.info "${device.displayName} Initialize()..."
     unschedule()
@@ -875,5 +992,9 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
+
 def test( value) {
+    // TS0201 _TZ3000_itnrsufe :
+    // Celsius: NOT PARSED : [raw:98B301E002080BE03000, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:00, clusterInt:57346, attrInt:57355]
+    // Fahrenheit: NOT PARSED : [raw:98B301E002080BE03001, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:01, clusterInt:57346, attrInt:57355]
 }
