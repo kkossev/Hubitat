@@ -14,7 +14,7 @@
  *
  *
  *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
- *  ver. 1.0.1 2022-10-29 kkossev - added _TZE200_uebojraa
+ *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
  *
  *
  */
@@ -23,12 +23,12 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/10/29 10:17 PM"}
+def timeStamp() {"2022/10/31 7:38 AM"}
 
 @Field static final Boolean debug = false
 
 metadata {
-    definition (name: "Tuya Zigbee Smoke Detector", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Zigbee Smoke Detector", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy", singleThreaded: true ) {
 		capability "Sensor"
 		capability "Configuration"
 		capability "Smoke Detector"    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1] 
