@@ -87,6 +87,7 @@
 |  Button TS0041 ![image](https://user-images.githubusercontent.com/6189950/155110780-3164615a-94e0-498b-aeb7-75c9d99dba08.png) |  https://www.aliexpress.com/item/1005002283147125.html <br> Hubitat inbuilt driver |
 | ZigBee Scene Switch, 3 Buttons ![image](https://user-images.githubusercontent.com/6189950/155200952-c6d8dc64-ffc4-4581-96ed-661d41fbba9f.png)  | Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Buttons-Control-Batteries/dp/B0977KK7ZP  |
 | LoraTap 6 Button Gang Scene Switch ![image](https://user-images.githubusercontent.com/6189950/166911477-960eddc5-b750-4bd1-a93e-25796ac1cb8d.png) | AliExpres: [(link)](https://www.aliexpress.com/item/1005003731082631.html) | 
+| icasa Zigbee 3.0 wireless wall controller ![image](https://user-images.githubusercontent.com/6189950/198963909-f8d10968-166b-446c-86f3-fffb296d1e03.png)| https://www.amazon.co.uk/wireless-controller-Dimming-Compatible-Gateway/dp/B07L2SLY29?ref_=ast_sto_dp |
 
 ------------------------------
 
