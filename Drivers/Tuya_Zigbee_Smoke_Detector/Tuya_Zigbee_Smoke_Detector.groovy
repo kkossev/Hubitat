@@ -53,6 +53,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_uebojraa"    // https://community.hubitat.com/t/tuya-zigbee-smart-smoke-detector-support/102471
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_t5p1vj8r"    // not tested
         //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_yh7aoahi"    // https://github.com/Koenkk/zigbee2mqtt/issues/11119 silence = Code 16; smoke detection state = code 1; Fault Alarm = Code 11; battery level state = code 14; battery level = Code 15;
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_5d3vhjro"    // 'SA12IZL'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_aycxwiau"    // TuyaIasZone ?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vzekyi4c"    // TuyaIasZone ?
@@ -252,16 +253,28 @@ def parseZHAcommand( Map descMap) {
                         //if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
                         def map = [:]
                         switch (cmd) {
-                            case "01" : // smoke alarm
+                            case "01" : // smoke alarm for all models
                                 if (txtEnable==true) log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}"
                                 sendSmokeAlarmEvent( value )
                                 break
-                            case "04" : //"TamperAlert"       // attributes: tamper - ENUM ["clear", "detected"]    [dp=4 ]  values 1/0                     
+                            case "04" : // "TamperAlert" for all models
                                 if (txtEnable==true) log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}"
                                 sendTamperAlertEvent( value )
                                 break
-                            case "0E" : // ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
+                            case "0B" : // (11) "Fault Alarm" for _TZE200_yh7aoahi
+                                if (txtEnable==true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
+                                sendBatteryStateEvent( value )
+                                break
+                            case "0E" : // (14) "battery level state" ['low', 'middle', 'high'] dp14 0=25% 1=50% 2=90% also for _TZE200_yh7aoahi 
                                 if (txtEnable==true) log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}"
+                                sendBatteryStateEvent( value )
+                                break
+                            case "0F" : // (15) "battery level % for _TZE200_yh7aoahi 
+                                if (txtEnable==true) log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%"
+                                // TODO - send batteryLevel event!
+                                break
+                            case "10" : // (16) "silence" for _TZE200_yh7aoahi
+                                if (txtEnable==true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
                                 sendBatteryStateEvent( value )
                                 break
                             default :
