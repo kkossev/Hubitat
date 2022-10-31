@@ -22,11 +22,12 @@
  *                                   added temperature and humidity offesets; configured parameters (including C/F HE scale) are sent to the device when paired again to HE; added Minimum time between temperature and humidity reports;
  * ver. 1.0.9 2022-10-02 kkossev  - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup
  * ver. 1.0.10 2022-10-11 kkossev - '_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
+ * ver. 1.0.11 2022-10-31 kkossev  - (dev.branch) 
  *
 */
 
-def version() { "1.0.10" }
-def timeStamp() {"2022/10/11 10:22 PM"}
+def version() { "1.0.11" }
+def timeStamp() {"2022/10/31 9:59 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
