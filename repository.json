@@ -135,9 +135,19 @@
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/packageManifest.json",
       "description": "Tuya Zigbee Smoke Detector - driver for Hubitat Elevation hub",
-	  "tags": [
+      "tags": [
         "Zigbee"
       ]
-    }
+    },
+    {
+      "id": "9e3aacd4-7f2a-4e11-a918-16cc4a73a66d",
+      "name": "SiHAS Zigbee Power Meter PMM-300-Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_PMM-300z.json",
+      "description": "SiHAS Zigbee Power Meter and Energy Monitor PMM-300-Z(1,2,3) - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+	}
   ]
 }
