@@ -1,7 +1,7 @@
 /**
  *  Tuya Zigbee Smoke Detector driver for Hubitat Elevation
  * 
- *  https://community.hubitat.com/t/heiman-smoke-detector-zigbee/16816
+ *  https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -15,6 +15,7 @@
  *
  *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
+ *  ver. 1.0.2 2022-11-01 kkossev - (dev.branch)notPresentCounter set to 12 hours
  *
  *
  */
@@ -22,8 +23,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/10/31 7:38 AM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/11/01 9:21 PM"}
 
 @Field static final Boolean debug = false
 
@@ -67,7 +68,7 @@ metadata {
 }
 
 // Constants
-@Field static final Integer presenceCountTreshold = 4
+@Field static final Integer presenceCountTreshold = 12
 @Field static final Integer defaultPollingInterval = 3600
 @Field static String UNKNOWN = "UNKNOWN"
 
@@ -551,7 +552,7 @@ def setPresent() {
 def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
-        if (state.notPresentCounter > presenceCountTreshold) {
+        if (state.notPresentCounter >= presenceCountTreshold) {
             if (device.currentValue("presence", true) != "not present") {
     	        sendEvent(name: "presence", value: "not present")
     	        sendEvent(name: "powerSource", value: "unknown")
