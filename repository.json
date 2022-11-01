@@ -148,6 +148,16 @@
       "tags": [
         "Zigbee"
       ]
-	}
+    },
+    {
+      "id": "adff4e60-c83b-43b2-873c-8052eef10e90",
+      "name": "SiHAS People Counter CSM-300-ZB (V2)",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_CSM-300z.json",
+      "description": "SiHAS People Counter CSM-300-ZB (V2) - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    }
   ]
 }
