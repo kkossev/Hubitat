@@ -13,12 +13,14 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
- * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability
+ * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands;
+ * 
+ *    TODO: preferences for the beep() command, restore the default settings after the beep
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/11/03 7:39 PM"}
+def timeStamp() {"2022/11/03 10:37 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,6 +35,7 @@ metadata {
         capability "Battery"
         capability "Configuration"
         capability "Switch"
+        capability "Tone"
         
         attribute "melody", "number"
         attribute "duration", "number"
@@ -161,24 +164,24 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case TUYA_DP_VOLUME :    // 05 volume [ENUM] 0:low 1: mid 2:high
+            case TUYA_DP_VOLUME :    // (05) volume [ENUM] 0:low 1: mid 2:high
                 def value = fncmd == 0 ? "low" : fncmd == 1 ? "mid" : fncmd == 2 ? "high" : fncmd
                 if (settings?.txtEnable) log.info "${device.displayName} volume is ${value}"
                 sendEvent(name: "volume", value: value, descriptionText: descriptionText )            
                 break
-            case TUYA_DP_DURATION :  //07 duration [VALUE] in seconds
+            case TUYA_DP_DURATION :  // (07) duration [VALUE] in seconds
                 if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd}"
                 sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
                 break
-            case TUYA_DP_ALARM :    // 13 alarm [BOOL]
+            case TUYA_DP_ALARM :    // (13) alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
                 if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
                 sendAlarmEvent(value)            
                 break
-            case TUYA_DP_BATTERY :    // 15 battery [VALUE] percentage
+            case TUYA_DP_BATTERY :    // (15) battery [VALUE] percentage
                 getBatteryPercentageResult( fncmd * 2)
                 break
-            case TUYA_DP_MELODY :     // 21 melody [enum] 1..18 
+            case TUYA_DP_MELODY :     // (21) melody [enum] 1..18 
                 if (settings?.txtEnable) log.info "${device.displayName} melody is ${fncmd}"
                 sendEvent(name: "melody", value: fncmd, descriptionText: descriptionText )            
                 break
@@ -235,6 +238,15 @@ def siren() {
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
 }
 
+// capability "Tone"
+def beep() {
+    String cmds = ""
+    state.lastCommand = "beep"    
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, 0 ) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+    cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+    sendZigbeeCommands( combinedTuyaCommands(cmds) )
+}
 
 def sendAlarmEvent( mode, isDigital=false ) {
     def map = [:] 
@@ -373,6 +385,17 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
     state.txCounter = state.txCounter ?:0 + 1
+    return cmds
+}
+
+private combinedTuyaCommands(String cmds) {
+    return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds ) 
+}
+
+private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) {
+    Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2
+    String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen) 
+    if (settings?.logEnable) log.trace "${device.displayName} appendTuyaCommand = ${cmds}"
     return cmds
 }
 
