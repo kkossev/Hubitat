@@ -27,13 +27,17 @@
  * ver. 2.4.2 2022-05-07 kkossev     - added LoraTap 6 button Scene Controller; device.getDataValue bug fix;
  * ver. 2.4.3 2022-09-18 kkossev     - added TS0042 Tuya Zigbee 2 Gang Wireless Smart Switch; removed 'release' event for TS0044 switches (not supported by hardware); 'release' digital event bug fix.
  * ver. 2.4.4 2022-10-22 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch; added _TZ3000_w8jwkczz and other TS0041, TS0042, TS0043, TS004 fingerprints
+ * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
+ * ver. 2.4.6 2022-11-03 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.4" }
-def timeStamp() {"2022/10/22 8:39 PM"}
+def version() { "2.4.6" }
+def timeStamp() {"2022/11/03 4:50 PM"}
+
+@Field static final Boolean debug = false
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -55,8 +59,11 @@ metadata {
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
         
-    //command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
-      
+    if (debug == true) {
+        command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
+        command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+    }
+              
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
@@ -69,6 +76,7 @@ metadata {
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_adkvzooy", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button" // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_peszejy7", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019", manufacturer: "_TYZB02_key8kk7r", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0006,0008,1000", manufacturer: "_TZ3000_ja5osu5g", model: "TS004F", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
         
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_tzvbimpq", deviceJoinName: "Tuya 2 button Scene Switch"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_t8hzpgnd", deviceJoinName: "Tuya 2 button Scene Switch"    // not tested
@@ -104,6 +112,7 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zqtiam4u", deviceJoinName: "Tuya 6 button Scene Switch"    // not tested
         
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0B05,1000", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
 
             
     }
@@ -119,6 +128,8 @@ metadata {
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1000
 
+def isTuya()  {debug == true ? false : device.getDataValue("manufacturer") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
+def isIcasa() {debug == true ? true : device.getDataValue("manufacturer") == "icasa"}
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -166,7 +177,7 @@ def parse(String description) {
                 if (logEnable) {log.warn "${device.displayName} unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}"}
                 return null 
             }
-        }
+        } // command == "FD"
         else if (descMap.clusterInt == 0x0006 && descMap.command == "FC") {
             // Smart knob
             if (descMap.data[0] == "00") {            // Rotate one click right
@@ -194,6 +205,9 @@ def parse(String description) {
             else {
                 if (logEnable) {log.debug "${device.displayName} unprocessed Tuya cluster EF00 command descMap: $descMap"}
             }
+        }
+        else if (isIcasa()) {
+            (buttonNumber,buttonState) = processIcasa( descMap )
         }
         else {
             if (logEnable) {log.warn "${device.displayName} unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
@@ -252,6 +266,66 @@ def parse(String description) {
     return result
 }
 
+@Field static final Integer BUTTON_I = 8
+@Field static final Integer BUTTON_O = 7
+
+def processIcasa( descMap ) {
+    buttonNumber = 0
+    buttonState = "unknown"
+    //log.trace "descMap=${descMap}"
+    if (descMap?.clusterId == "0006") {
+        switch (descMap?.command) {
+            case "00" :    // button "O" -> 7
+                buttonNumber = BUTTON_O
+                buttonState = "pushed"
+                break
+            case "01" :    // pushed button "I" -> 8
+                buttonNumber = BUTTON_I
+                buttonState = "pushed"
+                break
+            default :
+                if (logEnable) log.warn "${device.displayName} unprocessed ICASA cluster 0006 command ${descMap?.command}"
+        }
+    }
+    else if (descMap?.clusterId == "0008") {
+        switch (descMap?.command) {
+            case "05" :    // HELD for both buttons I and O
+                if (descMap?.data[0] == '00') buttonNumber = BUTTON_I
+                else if (descMap?.data[0] == '01') buttonNumber = BUTTON_O
+                else {if (logEnable) log.warn "${device.displayName} unprocessed ICASA cluster 0008 HOLD command data=${descMap?.data}" }
+                buttonState = "held"
+                break
+            case "07" :    // RELEASE after HOLD for both buttons I and O
+                buttonNumber = state.lastButtonNumber
+                buttonState = "released"
+                if (logEnable) log.debug "${device.displayName} generating release for state.lastButtonNumber ${state.lastButtonNumber}"
+                break
+            default :
+                if (logEnable) log.warn "${device.displayName} unprocessed ICASA cluster 0008 command ${descMap?.command}"
+        }
+    }
+    else if (descMap?.clusterId == "0005") {
+        switch (descMap?.command) {
+            case "05" :    // CLICK for buttons S1..S6
+                buttonNumber = zigbee.convertHexToInt(descMap?.data[2])
+                buttonState = "pushed"
+                break
+            case "04" :    //  HELD for buttons S1..S6
+                buttonNumber = zigbee.convertHexToInt(descMap?.data[2])
+                buttonState = "held"
+                break
+            default :
+                if (logEnable) log.warn "${device.displayName} unprocessed ICASA cluster 0005 command ${descMap?.command}"
+        }
+    }
+    else {
+        if (logEnable) log.warn "${device.displayName} unprocessed ICASA cluster ${decMap?.clusterId} message ${descMap}"
+    }
+       
+    return [buttonNumber, buttonState]
+}
+
+
 def refresh() {
 }
 
@@ -291,10 +365,15 @@ def installed()
 }
 
 def initialize() {
-    tuyaMagic()
+    if (isTuya()) {
+        tuyaMagic()
+    }
+    else {
+    	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
+    }
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
-    if (device.getDataValue("model") == "TS0041") {
+    if (device.getDataValue("model") == "TS0041" || device.getDataValue("manufacturer") =="_TZ3000_ja5osu5g") {
     	numberOfButtons = 1
     }
     else if (device.getDataValue("model") == "TS0042") {
@@ -315,6 +394,10 @@ def initialize() {
     }
     else if (device.getDataValue("model") == "TS0601") {
         numberOfButtons = 6
+    }
+    else if (isIcasa()) {
+        numberOfButtons = 8
+        supportedValues = ["pushed", "held", "release"]
     }
     else {
     	numberOfButtons = 4	// unknown
@@ -403,4 +486,10 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
     sendHubCommand(allActions)
+}
+
+def test(String description) {
+    log.warn "test: ${description}"
+    parse(description)
+    
 }
