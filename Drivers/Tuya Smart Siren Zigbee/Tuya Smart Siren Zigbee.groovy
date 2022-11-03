@@ -12,12 +12,13 @@
  *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *	for the specific language governing permissions and limitations under the License.
  * 
- * ver. 1.0.0 2022-04-02 kkossev  - Inital test version
+ * ver. 1.0.0 2022-04-02 kkossev  - First published version
+ * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; 
  *
 */
 
-def version() { "1.0.0" }
-def timeStamp() {"2022/04/02 11:06 AM"}
+def version() { "1.0.1" }
+def timeStamp() {"2022/11/03 5:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -27,7 +28,7 @@ import hubitat.device.Protocol
  
 metadata {
     definition (name: "Tuya Smart Siren Zigbee", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Smart%20Siren%20Zigbee/Tuya%20Smart%20Siren%20Zigbee.groovy", singleThreaded: true ) {
-        capability "Alarm"            //Attributes alarm - ENUM ["strobe", "off", "both", "siren"]; Commands: both() off() siren() strobe() 
+        capability "Alarm"
         capability "Actuator"
         capability "Battery"
         capability "Configuration"
@@ -169,10 +170,9 @@ def processTuyaCluster( descMap ) {
                 sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
                 break
             case TUYA_DP_ALARM :    // 13 alarm [BOOL]
-                def value = fncmd == 0 ? "off" : fncmd == 1 ? "both" : fncmd
-                def descriptionText = "alarm state received is ${value}"
-                if (settings?.txtEnable) log.info "${device.displayName} ${descriptionText}"
-                sendEvent(name: "alarm", value: value, descriptionText: descriptionText, isStateChange: true)            
+                def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
+                if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
+                sendAlarmEvent(value)            
                 break
             case TUYA_DP_BATTERY :    // 15 battery [VALUE] percentage
                 getBatteryPercentageResult( fncmd * 2)
@@ -205,34 +205,47 @@ private int getTuyaAttributeValue(ArrayList _data) {
 
 
 def off() {
-    sendEvent(name: "alarm", value: "off", descriptionText: "Device alarming off", type: "digital")
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm off()"
+    state.lastCommand = "off"
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))
 }
 
 def on() {
-    sendEvent(name: "alarm", value: "on", descriptionText: "Device alarming on", type: "digital")
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm on()"
+    state.lastCommand = "on"
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
 }
 
 def both() {
-    sendEvent(name: "alarm", value: "both", descriptionText: "Device alarming with siren and strobe", type: "digital")
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm both()"
+    state.lastCommand = "both"
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01" ))
 }
 
 def strobe() {
-    sendEvent(name: "alarm", value: "strobe", descriptionText: "Device alarming with strobe", type: "digital")
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm strobe()"
+    state.lastCommand = "strobe"
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
 }
 
 def siren() {
-    sendEvent(name: "alarm", value: "siren", descriptionText: "Device alarming with siren", type: "digital")
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm siren()"
+    state.lastCommand = "siren"
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
 }
+
+
+def sendAlarmEvent( mode, isDigital=false ) {
+    def map = [:] 
+    map.name = "alarm"
+    map.value = mode
+    //map.unit = "Hz"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    sendEvent(map)
+}
+
 
 void setMelody(BigDecimal type) {
   int melody = type > 18 ? 18 : type < 1 ? 1 : type as int
@@ -317,6 +330,7 @@ void initializeVars(boolean fullInit = true ) {
     state.packetID = 0
     state.rxCounter = 0
     state.txCounter = 0
+    state.lastCommand = "unknown"
 
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
@@ -356,7 +370,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
-    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    state.txCounter = state.txCounter ?:0 + 1
     return cmds
 }
 
