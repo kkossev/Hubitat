@@ -13,12 +13,12 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
- * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; 
+ * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/11/03 5:59 PM"}
+def timeStamp() {"2022/11/03 7:39 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -32,6 +32,7 @@ metadata {
         capability "Actuator"
         capability "Battery"
         capability "Configuration"
+        capability "Switch"
         
         attribute "melody", "number"
         attribute "duration", "number"
@@ -244,6 +245,7 @@ def sendAlarmEvent( mode, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value}"
     if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
     sendEvent(map)
+    sendEvent(name: "switch", value: mode=="off"?"off":"on", descriptionText: map.descriptionText, type:"digital")       
 }
 
 
@@ -410,6 +412,7 @@ def getBatteryPercentageResult(rawValue) {
         result.value = Math.round(rawValue / 2)
         result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
+        result.type  == "physical"
         result.unit  = '%'
         sendEvent(result)
         if (settings?.txtEnable) log.info "${result.descriptionText}"
@@ -435,6 +438,7 @@ private Map getBatteryResult(rawValue) {
         result.name = 'battery'
         result.unit  = '%'
         result.isStateChange = true
+        result.type  == "physical"
         if (settings?.txtEnable) log.info "${result.descriptionText}"
         sendEvent(result)
     }
