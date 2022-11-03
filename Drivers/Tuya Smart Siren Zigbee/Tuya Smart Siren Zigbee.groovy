@@ -13,14 +13,14 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
- * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands;
+ * ver. 1.0.1 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
  * 
- *    TODO: preferences for the beep() command, restore the default settings after the beep
+ *    TODO: preferences for the beep() command
  *
 */
 
 def version() { "1.0.1" }
-def timeStamp() {"2022/11/03 10:37 PM"}
+def timeStamp() {"2022/11/03 23:55 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -43,7 +43,7 @@ metadata {
         
         command "setMelody", [[name:"Set alarm melody type", type: "NUMBER", description: "1..18 = set alarm type, can be any number between 1 and 18"]]
         command "setDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
-        command "setVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: ["low", "medium", "high"]]]
+        command "setVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: volumeOptions /*["low", "medium", "high"]*/]]
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2'
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
@@ -53,6 +53,13 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
     }
 }
+
+@Field static final Map volumeOptions = [
+    '0' : 'low',
+    '1' : 'medium',
+    '2' : 'high'
+]
+
 
 // Constants
 @Field static final Integer TUYA_DP_VOLUME     = 5
@@ -143,7 +150,6 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
         }
         def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-        //if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
         if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
         cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
@@ -165,18 +171,23 @@ def processTuyaCluster( descMap ) {
         //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case TUYA_DP_VOLUME :    // (05) volume [ENUM] 0:low 1: mid 2:high
-                def value = fncmd == 0 ? "low" : fncmd == 1 ? "mid" : fncmd == 2 ? "high" : fncmd
-                if (settings?.txtEnable) log.info "${device.displayName} volume is ${value}"
-                sendEvent(name: "volume", value: value, descriptionText: descriptionText )            
+                def value = volumeOptions.find{it.key==fncmd.toString()}
+                String volume = value != null ? value.value : "unknown"
+                if (settings?.txtEnable) log.info "${device.displayName} volume is ${volume} (${fncmd})"
+                sendEvent(name: "volume", value: volume, descriptionText: descriptionText )            
                 break
             case TUYA_DP_DURATION :  // (07) duration [VALUE] in seconds
-                if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd}"
+                if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd} s"
                 sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
                 break
             case TUYA_DP_ALARM :    // (13) alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
                 if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
-                sendAlarmEvent(value)            
+                if (value == "off" && device.currentValue("alarm", true) == "beep") {
+                    //runIn( 1, restoreDefaultSettings, [overwrite: true])
+                    restoreDefaultSettings()
+                }
+                sendAlarmEvent(value)
                 break
             case TUYA_DP_BATTERY :    // (15) battery [VALUE] percentage
                 getBatteryPercentageResult( fncmd * 2)
@@ -242,12 +253,23 @@ def siren() {
 def beep() {
     String cmds = ""
     state.lastCommand = "beep"    
-    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, 0 ) 
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
     cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
     cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
 
+def restoreDefaultSettings() {
+    String cmds = ""
+    def value = volumeOptions.find{it.value==state.setVolume}
+    def volume = value != null ? safeToInt(value.key) : "unknown"
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volume) ) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration)  ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, safeToInt(state.setMelody) ) 
+    if (settings?.logEnable) log.debug "${device.displayName} restoring default settings volume=${value.value} duration=${state.setDuration} melody=${state.setMelody}"
+    sendZigbeeCommands( combinedTuyaCommands(cmds) )    
+}
 def sendAlarmEvent( mode, isDigital=false ) {
     def map = [:] 
     map.name = "alarm"
@@ -264,28 +286,34 @@ def sendAlarmEvent( mode, isDigital=false ) {
 void setMelody(BigDecimal type) {
   int melody = type > 18 ? 18 : type < 1 ? 1 : type as int
   if (settings?.logEnable) log.debug "${device.displayName} setMelody(type=$type)"
+  state.setMelody = melody
   sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melody, 2)))
 }
 
 void setVolume(String volume) {
-  switch (volume) {
+    switch (volume) {
         case "low" :
-          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "00"))
-          break
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "00"))
+            break
         case "medium" :
-          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "01"))
-          break
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "01"))
+            break
         case "high" :
-          sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "02"))
-          break
-  }
-  if (settings?.logEnable) log.debug "${device.displayName} setVolume ${volume}"
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "02"))
+            break
+        default :
+            if (settings?.txtEnable) log.warn "${device.displayName} setVolume not supported parameter ${volume}"
+            return
+    }
+    if (settings?.logEnable) log.debug "${device.displayName} setVolume ${volume}"
+    state.setVolume = volume
 }
 
 void setDuration(BigDecimal length) {
-  int duration = length > 255 ? 255 : length < 0 ? 0 : length
-  if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
-  sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+    int duration = length > 255 ? 255 : length < 0 ? 0 : length
+    if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
+    state.setDuration = duration
+    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
 }
 
 
@@ -345,6 +373,9 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
     state.lastCommand = "unknown"
+    state.setMelody = 1
+    state.setDuration = 10
+    state.setVolume = "medium"
 
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
@@ -382,13 +413,14 @@ def initialize() {
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
     state.txCounter = state.txCounter ?:0 + 1
     return cmds
 }
 
 private combinedTuyaCommands(String cmds) {
+    state.txCounter = state.txCounter ?:0 + 1
     return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds ) 
 }
 
@@ -470,3 +502,10 @@ private Map getBatteryResult(rawValue) {
     }    
 }
 
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
