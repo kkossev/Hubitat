@@ -14,13 +14,13 @@
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
  * ver. 1.1.0 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
- *                                 added capability 'Chime'
+ *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound
  *    TODO: preferences for the beep() command
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/11/04 4:12 PM"}
+def timeStamp() {"2022/11/04 9:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -41,13 +41,13 @@ metadata {
         capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
         capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp()
         
-        attribute "melody", "string"
+        //attribute "melody", "string"
         attribute "duration", "number"
         //attribute "volume", "string"   7      volume - NUMBER, unit:%;
         
-        command "setMelody", [[name:"Set alarm melody type", type: "ENUM", description: "set alarm type", constraints: melodiesOptions]]
-        command "setDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
-        command "setVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: volumeOptions ]]
+        command "setAlarmMelody", [[name:"Set alarm melody type", type: "ENUM", description: "set alarm type", constraints: melodiesOptions]]
+        command "setAlarmDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
+        command "setAlarmVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: volumeOptions ]]
         if (debug==true) {
             command "test"
         }
@@ -85,24 +85,24 @@ metadata {
 
 
 @Field static final List<String> melodiesOptions = [
-    'Doorbell',
-    'Classical song 1',
-    'Classical song 2',
-    'Classical song 3',
-    'Classical song 4',
-    'Classical song 5',
-    'Alarm 1',
-    'Alarm 2',
-    'Alarm 3',
-    'Alarm 4',
-    'Barking dog',
-    'Alarm',
-    'Chime',
-    'Telephone',
-    'Siren',
-    'Evacuation bell',
-    'Clock alarm',
-    'Fire alarm'
+    '1=Doorbell',
+    '2=Classical song 1',
+    '3=Classical song 2',
+    '4=Classical song 3',
+    '5=Classical song 4',
+    '6=Classical song 5',
+    '7=Alarm 1',
+    '8=Alarm 2',
+    '9=Alarm 3',
+    '10=Alarm 4',
+    '11=Barking dog',
+    '12=Alarm',
+    '13=Chime',
+    '14=Telephone',
+    '15=Siren',
+    '16=Evacuation bell',
+    '17=Clock alarm',
+    '18=Fire alarm'
 ] //as String[]
 
 private findVolumeByTuyaValue( fncmd ) {
@@ -249,8 +249,8 @@ def processTuyaCluster( descMap ) {
                 def volumePct = -1
                 (volumeName, volumePct) = findVolumeByTuyaValue( fncmd )
                 if (volumeName != 'unknown') {
-                    if (settings?.txtEnable) log.info "${device.displayName} volume is ${volumeName} ${volumePct}% (${fncmd})"
-                    sendEvent(name: "volume", value: volumePct, descriptionText: descriptionText )
+                    if (settings?.txtEnable) log.debug "${device.displayName} volume received is ${volumeName} ${volumePct}% (${fncmd})"
+                    sendVolumeEvent( volumePct )
                 }
                 break
             case TUYA_DP_DURATION :  // (07) duration [VALUE] in seconds
@@ -262,7 +262,7 @@ def processTuyaCluster( descMap ) {
                 if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
                 if (value == "off") {
                     sendEvent(name: "status", value: "stopped")      
-                     if ( device.currentValue("alarm", true) == "beep") {
+                     if (true /* device.currentValue("alarm", true) == "beep"*/) {
                         //runIn( 1, restoreDefaultSettings, [overwrite: true])
                         restoreDefaultSettings()
                      }
@@ -277,7 +277,7 @@ def processTuyaCluster( descMap ) {
                 break
             case TUYA_DP_MELODY :     // (21) melody [enum] 0..17
                 if (settings?.txtEnable) log.info "${device.displayName} melody is ${melodiesOptions[fncmd]} (${fncmd})"
-                sendEvent(name: "melody", value: melodiesOptions[fncmd], descriptionText: descriptionText )            
+                sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText )            
                 break
             default :
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -303,33 +303,30 @@ private int getTuyaAttributeValue(ArrayList _data) {
 
 
 def off() {
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm off()"
-    state.lastCommand = "off"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))
+    sendTuyaAlarm("off")
 }
 
 def on() {
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm on()"
-    state.lastCommand = "on"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
+    sendTuyaAlarm("on")
 }
 
 def both() {
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm both()"
-    state.lastCommand = "both"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01" ))
+    sendTuyaAlarm("both")
 }
 
 def strobe() {
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm strobe()"
-    state.lastCommand = "strobe"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
+    sendTuyaAlarm("strobe")
 }
 
 def siren() {
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm siren()"
-    state.lastCommand = "siren"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "01"))
+    sendTuyaAlarm( "siren")
+}
+
+def sendTuyaAlarm( commandName ) {
+    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm ${commandName}()"
+    state.lastCommand = commandName
+    def cmd = commandName == "off" ? "00" : "01"
+    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, cmd))    
 }
 
 // capability "Tone"
@@ -367,24 +364,49 @@ def unmute() {
 }
 
 def setVolume(volumelevel) {
-}
-
-def volumelevel( number ) {
     // - Volume level (0 to 100)
-    log.trace "volumelevel( ${number} )"
+    //log.trace "volumelevel( ${volumelevel} )"
+    def level = 0
+    if (volumelevel <= 0 ) level = 0
+    else if (volumelevel <= 33) level = 33
+    else if (volumelevel <= 66) level = 66
+    else level = 100
+    if      (level == 0 && device.currentValue("mute", true) == "unmuted")  mute()
+    else if (level != 0 && device.currentValue("mute", true) == "muted") unmute() 
+    state.volume = level
+    String cmds = ""
+    def volumeName
+    def volumeTuya
+    (volumeName, volumeTuya) =  findVolumeByPct( level ) 
+    if (volumeTuya >= 0) {
+        cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+    }
+    if (settings?.logEnable) log.debug "${device.displayName} setting volume=${volumeName}"
+    sendZigbeeCommands( combinedTuyaCommands(cmds) )      
 }
 
 def volumeDown() {
+    setVolume( state.volume - 34)
 }
 
 def volumeUp() {
+    setVolume( state.volume + 34)
 }
 
 
 // capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
 
 def playSound(soundnumber) {
-    sendEvent(name: "status", value: "playing")      
+    String cmds = ""
+    int index = soundnumber < 1 ? 1 : soundnumber > 18 ? 18 : soundnumber
+    index -= 1
+    log.debug "index=${index}"
+    log.debug "playSound ${soundnumber} (${melodiesOptions.get(index)})"
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
+    //cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, index) 
+    cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+    sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
 
 def stop() {
@@ -396,6 +418,17 @@ def pause() {
 }
 
 def play() {
+}
+
+def sendVolumeEvent( volume,  isDigital=false ) {
+    def map = [:] 
+    map.name = "volume"
+    map.value = volume
+    map.unit = "%"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${map.value}"
+    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    sendEvent(map)
 }
 
 def sendAlarmEvent( mode, isDigital=false ) {
@@ -411,28 +444,27 @@ def sendAlarmEvent( mode, isDigital=false ) {
 }
 
 
-void setMelody( melodyName ) {
+void setAlarmMelody( melodyName ) {
     def melodyIndex = melodiesOptions.indexOf(melodyName)
     log.warn "melodyIndex=${melodyIndex}"
     if (melodyIndex <0) {
         if (settings?.logEnable) log.warn "${device.displayName} setMelody invalid ${melodyName}"
         return
     }
-    //melodyIndex += 1
     if (settings?.logEnable) log.debug "${device.displayName} setMelody $melodyName ($melodyIndex)"
     state.setMelody = melodyName
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
 }
 
 
-void setDuration(BigDecimal length) {
+void setAlarmDuration(BigDecimal length) {
     int duration = length > 255 ? 255 : length < 0 ? 0 : length
     if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
     state.setDuration = duration
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
 }
 
-void setVolume(String volumeOption) {
+void setAlarmVolume(String volumeOption) {
     def index = volumeMapping.findIndexOf{it.key==volumeOption}
     //log.warn "index=${index}"
     if (index < 0) {
@@ -512,13 +544,14 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
+        sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
     }
     //
     state.packetID = 0
     state.rxCounter = 0
     state.txCounter = 0
     state.lastCommand = "unknown"
-    state.setMelody = "Doorbell"
+    state.setMelody = "1=Doorbell"
     state.setDuration = 10
     state.setVolume = 66
 
@@ -572,7 +605,7 @@ private combinedTuyaCommands(String cmds) {
 private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) {
     Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2
     String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen) 
-    if (settings?.logEnable) log.trace "${device.displayName} appendTuyaCommand = ${cmds}"
+    //if (settings?.logEnable) log.trace "${device.displayName} appendTuyaCommand = ${cmds}"
     return cmds
 }
 
@@ -656,8 +689,7 @@ Double safeToDouble(val, Double defaultVal=0.0) {
 }
 
 def test( str ) {
-    state.volume = 66
-    sendEvent(name: "volume", value: 66, descriptionText: descriptionText )            
+    sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
 }
 
 
