@@ -20,7 +20,7 @@
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/11/05 3:35 PM"}
+def timeStamp() {"2022/11/05 5:17 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -589,6 +589,7 @@ def installed() {
 def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
+    unschedule()
     if (logEnable==true) {
         runIn(86400, logsOff)    // turn off debug logging after 24 hours
         if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
