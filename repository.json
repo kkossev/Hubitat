@@ -158,6 +158,26 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "deb4b85c-54b8-4cba-8518-76a26886f158",
+      "name": "SiHAS ZigBee Lock Without Codes DLM-300-Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_DLM-300z.json",
+      "description": "SiHAS ZigBee Lock Without Codes- driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "30925b17-5276-403f-993d-2b35298756bb",
+      "name": "SiHAS Dual Motion Sensor DMS-300Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_DMS-300z.json",
+      "description": "SiHAS Dual Motion Sensor DMS-300Z - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
