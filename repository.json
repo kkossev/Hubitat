@@ -117,7 +117,14 @@
       "description": "Tuya Wall Thermostat - AVATTO, Moes, BEOK - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
-      ]	  
+      ]
+    },
+    {
+      "id": "a0f9472f-7fef-4c9b-afee-c71240bba07c",
+      "name": "SiHAS ZigBee Lock Without Codes DLM-300-Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_DLM-300z.json",
+      "description": "SiHAS ZigBee Lock Without Codes- driver for Hubitat Elevation hub"
     }
   ]
 }
