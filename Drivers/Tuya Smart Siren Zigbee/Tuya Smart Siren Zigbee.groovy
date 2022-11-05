@@ -20,7 +20,7 @@
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/11/04 9:48 PM"}
+def timeStamp() {"2022/11/04 10:00 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -48,6 +48,11 @@ metadata {
         command "setAlarmMelody", [[name:"Set alarm melody type", type: "ENUM", description: "set alarm type", constraints: melodiesOptions]]
         command "setAlarmDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
         command "setAlarmVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: volumeOptions ]]
+        command "playSound", [
+            [name:"soundNumber", type: "NUMBER", description: "Melody number, 1..18", isRequired: true],
+            [name:"volume", type: "NUMBER", description: "sound volume, %"],
+            [name:"duration", type: "NUMBER", description: "duration is seconds"]
+        ]
         if (debug==true) {
             command "test"
         }
@@ -331,13 +336,25 @@ def sendTuyaAlarm( commandName ) {
 
 // capability "Tone"
 def beep() {
+    if ( false ) {
     String cmds = ""
     state.lastCommand = "beep"    
-    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
+    cmds += sendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
     cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
     cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
     cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
+    }
+    else {
+    ArrayList<String> cmds = []
+    state.lastCommand = "beep"    
+        //sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_VOLUME,2), DP_TYPE_ENUM, "01", delay=50)
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_DURATION,2), DP_TYPE_VALUE, "00000001", delay=50 ) 
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_MELODY,2), DP_TYPE_ENUM, "02", delay=100 ) 
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_ALARM,2), DP_TYPE_BOOL, "01" , delay=200) 
+    sendZigbeeCommands( cmds )
+    }
 }
 
 def restoreDefaultSettings() {
@@ -395,18 +412,32 @@ def volumeUp() {
 
 
 // capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
-
-def playSound(soundnumber) {
+//      command "playSound", [
+//          [name:"soundNumber", type: "NUMBER", description: "Melody number, 1..18", isRequired: true],
+//          [name:"duration", type: "NUMBER", description: "duration is seconds"],
+//          [name:"volume", type: "NUMBER", description: "sound volume, %"]
+//      ]
+def playSound(soundnumber, volume=null, duration=null) {
     String cmds = ""
-    int index = soundnumber < 1 ? 1 : soundnumber > 18 ? 18 : soundnumber
-    index -= 1
-    log.debug "index=${index}"
-    log.debug "playSound ${soundnumber} (${melodiesOptions.get(index)})"
-    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
-    //cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+    def volumeName; def volumeTuya;
+    int index = safeToInt(soundnumber)
+    index = index < 1 ? 1 : index > 18 ? 18 : index; index -= 1
+    if (volume != null) {
+        (volumeName, volumeTuya) =  findVolumeByPct( state.setVolume ) 
+    }
+    else {
+        volumeTuya =  safeToInt(volumeOptions.find{it.value=="low"})
+    }
+    if (duration == null) {
+        duration = state.setDuration 
+    }
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya)) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(duration) ) 
     cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, index) 
-    cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+    log.warn "playSound ${soundnumber} (${melodiesOptions.get(index)}) index=${index}, duration=${duration}, volume=${volume}(${volumeTuya})"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
+    on() 
+
 }
 
 def stop() {
@@ -589,9 +620,9 @@ def initialize() {
     runIn( 3, logInitializeRezults)
 }
 
-private sendTuyaCommand(dp, dp_type, fncmd) {
+private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
     state.txCounter = state.txCounter ?:0 + 1
     return cmds
@@ -691,7 +722,4 @@ Double safeToDouble(val, Double defaultVal=0.0) {
 def test( str ) {
     sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
 }
-
-
-
 
