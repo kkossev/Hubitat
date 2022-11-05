@@ -20,7 +20,7 @@
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/11/05 2:47 PM"}
+def timeStamp() {"2022/11/05 3:35 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -41,9 +41,7 @@ metadata {
         capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
         capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp()
         
-        //attribute "melody", "string"
         attribute "duration", "number"
-        //attribute "volume", "string"   7      volume - NUMBER, unit:%;
         
         command "setAlarmMelody", [[name:"Set alarm melody type", type: "ENUM", description: "set alarm type", constraints: melodiesOptions]]
         command "setAlarmDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
@@ -68,24 +66,17 @@ metadata {
         input (name: "playSoundDuration", type: "number", title: "<b>Play Sound Duration</b>, seconds", description: "<i>The duration of the PlaySound command in seconds</i>", range: "1..180", defaultValue: 10)
     }
 }
-/*
-@Field static final Map volumeOptions = [
-    '-' : '---select---',
-    '0' : 'low',
-    '1' : 'medium',
-    '2' : 'high'
-]
-*/
+
 @Field static final List<String> volumeOptions = [
    // '---select---',
-    'muted',
+//    'muted',
     'low',
     'medium',
     'high'
 ]
 
 @Field static final LinkedHashMap volumeMapping = [
-    'muted'    : [ volume: '0',   tuya: '-'],
+//    'muted'    : [ volume: '0',   tuya: '-'],
     'low'      : [ volume: '33',  tuya: '0'],
     'medium'   : [ volume: '66',  tuya: '1'],
     'high'     : [ volume: '100', tuya: '2']
@@ -232,7 +223,6 @@ def parse(String description) {
     }
 }
 
-
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
         if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
@@ -283,8 +273,8 @@ def processTuyaCluster( descMap ) {
                 if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
                 if (value == "off") {
                     sendEvent(name: "status", value: "stopped")      
-                     if (true /* device.currentValue("alarm", true) == "beep"*/) {
-                        runIn( 5, restoreDefaultSettings, [overwrite: true])
+                     if (device.currentValue("alarm", true) in ["beep", "playSound"]) {
+                        runIn( 7, restoreDefaultSettings, [overwrite: true])
                         //restoreDefaultSettings()
                      }
                 }
@@ -345,6 +335,7 @@ def siren() {
 }
 
 def sendTuyaAlarm( commandName ) {
+    wakeUpTuya()
     String cmds = ""
     if (settings?.logEnable) log.debug "${device.displayName} swithing alarm ${commandName}()"
     state.lastCommand = commandName
@@ -376,6 +367,7 @@ def sendTuyaAlarm( commandName ) {
 // capability "Tone"
 def beep() {
 if ( true ) {
+    wakeUpTuya()
     String cmds = ""
     state.lastCommand = "beep"    
     log.warn "settings?.beepVolume = ${settings?.beepVolume}"
@@ -426,25 +418,26 @@ def unmute() {
 }
 
 def getNearestTuyaVolumeLevel( volumelevel ) {
-    def level = 0
-    if (volumelevel <= 0 ) level = 0
-    else if (volumelevel <= 33) level = 33
-    else if (volumelevel <= 66) level = 66
-    else level = 100
-    return level
+    def nearestlevel = 0
+    //if (volumelevel <= 0 ) level = 0
+    /*else*/ if (volumelevel <= 33) nearestlevel = 33
+    else if (volumelevel <= 66) nearestlevel = 66
+    else nearestlevel = 100
+    return nearestlevel
 }
 
 def setVolume(volumelevel) {
     // - Volume level (0 to 100)
     //log.trace "volumelevel( ${volumelevel} )"
-    def level =  getNearestTuyaVolumeLevel( volumelevel )
-    if      (level == 0 && device.currentValue("mute", true) == "unmuted")  mute()
-    else if (level != 0 && device.currentValue("mute", true) == "muted") unmute() 
-    state.volume = level
     String cmds = ""
+    def nearestlevel =  getNearestTuyaVolumeLevel( volumelevel )
+    if      (nearestlevel == 0 && device.currentValue("mute", true) == "unmuted")  mute()
+    else if (nearestlevel != 0 && device.currentValue("mute", true) == "muted") unmute() 
+    state.volume = nearestlevel
     def volumeName
     def volumeTuya
-    (volumeName, volumeTuya) =  findVolumeByPct( level ) 
+    (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel ) 
+    log.warn "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
     if (volumeTuya >= 0) {
         cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
@@ -457,7 +450,7 @@ def volumeDown() {
 }
 
 def volumeUp() {
-    setVolume( state.volume + 34)
+    setVolume( state.volume + 33)
 }
 
 
@@ -468,6 +461,7 @@ def volumeUp() {
 //          [name:"volume", type: "NUMBER", description: "sound volume, %"]
 //      ]
 def playSound(soundnumber, volumeLevel=null, duration=null) {
+    wakeUpTuya()
     String cmds = ""
     def volumeName; def volumeTuya; def volumePct
     int soundNumberIndex = safeToInt(soundnumber)
@@ -690,6 +684,10 @@ private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
     return cmds
 }
 
+private wakeUpTuya() {
+    sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0004, [:], delay=50) )
+}
+
 private combinedTuyaCommands(String cmds) {
     state.txCounter = state.txCounter ?:0 + 1
     return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds ) 
@@ -707,7 +705,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.txCounter != null) state.txCounter = state.txCounter + 1
+            state.txCounter = state.txCounter ?:0 + 1
     }
     sendHubCommand(allActions)
 }
