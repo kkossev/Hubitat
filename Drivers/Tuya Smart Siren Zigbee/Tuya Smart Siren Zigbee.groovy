@@ -13,14 +13,14 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
- * ver. 1.1.0 2022-11-03 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
- *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound
+ * ver. 1.1.0 2022-11-05 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
+ *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume;
  *    TODO: preferences for the beep() command
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/11/04 10:00 PM"}
+def timeStamp() {"2022/11/05 1:08 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -63,6 +63,8 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input (name: "beepVolume", type: "enum", title: "<b>Beep Volume</b>", description:"<i>Select Beep Volume</i>", defaultValue: "low", options: volumeOptions)
+        //input (name: "fixedPower", type: "number", title: "<b>Fixed Power</b>, W", description: "<i>The fixed power consumption when the plug is switched on</i>", range: "1..9000", defaultValue: 100)
     }
 }
 /*
@@ -74,7 +76,7 @@ metadata {
 ]
 */
 @Field static final List<String> volumeOptions = [
-    '---select---',
+   // '---select---',
     'muted',
     'low',
     'medium',
@@ -138,6 +140,19 @@ private findVolumeByPct( pct ) {
     return [volumeName, volumeTuya]
 }
 
+private findVolumeByName( name ) {
+    def volumeTuya = -1
+    def volumePct = -1
+    volumeMapping.each{ k, v -> 
+        //log.warn "${k}:${v}    v.tuya.value=${v.tuya.value} name=${name}" 
+        if (k as String == name as String) {
+            //log.warn "found volumeName = ${k}, tuya=${v.tuya} percent = ${v.volume}"
+            volumeTuya = v.tuya
+            volumePct = v.volume
+        }
+    }
+    return [volumeTuya, volumePct]
+}
 
 
 // Constants
@@ -268,8 +283,8 @@ def processTuyaCluster( descMap ) {
                 if (value == "off") {
                     sendEvent(name: "status", value: "stopped")      
                      if (true /* device.currentValue("alarm", true) == "beep"*/) {
-                        //runIn( 1, restoreDefaultSettings, [overwrite: true])
-                        restoreDefaultSettings()
+                        runIn( 5, restoreDefaultSettings, [overwrite: true])
+                        //restoreDefaultSettings()
                      }
                 }
                 else {
@@ -336,25 +351,29 @@ def sendTuyaAlarm( commandName ) {
 
 // capability "Tone"
 def beep() {
-    if ( false ) {
+if ( true ) {
     String cmds = ""
     state.lastCommand = "beep"    
-    cmds += sendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeOptions.find{it.value=="low"}) ) 
+    log.warn "settings?.beepVolume = ${settings?.beepVolume}"
+    def volumeTuya; def volumePct
+    (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
+    if (volumeTuya >= 0 ) {
+        cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+    }
     cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
     cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
     cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
-    }
-    else {
+}
+else {
     ArrayList<String> cmds = []
     state.lastCommand = "beep"    
-        //sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
     cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_VOLUME,2), DP_TYPE_ENUM, "01", delay=50)
     cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_DURATION,2), DP_TYPE_VALUE, "00000001", delay=50 ) 
     cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_MELODY,2), DP_TYPE_ENUM, "02", delay=100 ) 
     cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_ALARM,2), DP_TYPE_BOOL, "01" , delay=200) 
     sendZigbeeCommands( cmds )
-    }
+}
 }
 
 def restoreDefaultSettings() {
@@ -588,6 +607,7 @@ void initializeVars(boolean fullInit = true ) {
 
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.beepVolume == null) device.updateSetting("beepVolume", [value:"low", type:"enum"])
 }
 
 def tuyaBlackMagic() {
