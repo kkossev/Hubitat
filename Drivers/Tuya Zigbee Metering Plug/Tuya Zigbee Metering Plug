@@ -41,7 +41,7 @@
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
- *  ver. 1.6.3 2022-11-06 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
+ *  ver. 1.6.3 2022-11-07 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs
  *
  */
@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.3" }
-def timeStamp() {"2022/11/06 6:49 PM"}
+def timeStamp() {"2022/11/07 7:45 AM"}
 
 @Field static final Boolean debug = false
 
@@ -1301,7 +1301,7 @@ void initializeVars( boolean fullInit = true ) {
         state.lastHourlyEnergy = preservedlastHourlyEnergy
     }
     if (state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )    // do not reset on Initialize!
-    if (debug == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false) }
+    if (debug == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     else                { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
@@ -1358,7 +1358,7 @@ void initializeVars( boolean fullInit = true ) {
         if (logEnable==true) log.trace "${device.displayName} destinationEP = ${state.destinationEP}"
     }
     else {
-        if (txtEnable==true) log.warn "${device.displayName} Destination End Point not foundor invalid(${ep}), please re-pair the device!"
+        if (txtEnable==true) log.warn "${device.displayName} Destination End Point not found or invalid(${ep}), please re-pair the device!"
         state.destinationEP = "01"    // fallback EP
     }    
 }
@@ -1735,7 +1735,7 @@ def setEnergyPriceDelayed( priceDouble )
 }
 
 def resetEnergy() {
-    log.trace "resetEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
+    if (settings?.logEnable) log.debug "resetEnergy() : state.lastEnergyRaw = ${state.lastEnergyRaw}"
     def now = FormattedDateTimeFromUnix( now() )
     state.lastResetDate = now
     state.lastEnergyCost = 0.0
