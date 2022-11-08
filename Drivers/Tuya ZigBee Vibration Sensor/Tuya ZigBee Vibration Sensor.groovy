@@ -19,10 +19,12 @@
  * ver 1.0.4 2022-03-02 kkossev - 'acceleration' misspelled bug fix
  * ver 1.0.5 2022-03-03 kkossev - Battery reporting
  * ver 1.0.6 2022-03-03 kkossev - Vibration Sensitivity
+ * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
+ * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  */
 
-def version() { "1.0.6" }
-def timeStamp() {"2022/03/03 11:50 AM"}
+def version() { "1.0.8" }
+def timeStamp() {"2022/11/08 9:45 PM"}
 
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
@@ -37,7 +39,10 @@ metadata {
         
         attribute "batteryVoltage", "number"
         
-		fingerprint endpointId: "01", profileId: "0104", inClusters: "0000,000A,0001,0500", outClusters: "0019", manufacturer: "_TYZB01_3zv6oleo", model: "TS0210"      
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0500,0B05", outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_pbgpvhgx"     // Smart Vibration Sensor HS1VS
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_bmfw9ykl" // https://community.hubitat.com/t/vibration-sensor/85203/14?u=kkossev       
 	}
 
 	preferences {
