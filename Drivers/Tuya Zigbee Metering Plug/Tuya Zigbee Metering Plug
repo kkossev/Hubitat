@@ -41,8 +41,8 @@
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
- *  ver. 1.6.3 2022-11-07 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
- *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs
+ *  ver. 1.6.3 2022-11-08 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
+ *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *
  */
 import groovy.json.*
@@ -50,7 +50,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.3" }
-def timeStamp() {"2022/11/07 7:45 AM"}
+def timeStamp() {"2022/11/08 9:21 PM"}
 
 @Field static final Boolean debug = false
 
@@ -185,9 +185,9 @@ metadata {
         input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>", defaultValue: true)
         if (optimizations?.value == true || autoReportingEnabled?.value == true) {
             input (name: "energyMinReportingTime", type: "number", title: "<b>Shortest reporting interval</b>, seconds", description: "<i>The minimum allowed time between two automatic reports. Recommended setting is <b>30 seconds</b></i>", 
-                range: "10..86399", defaultValue: 30)
+                range: "1..86399", defaultValue: 30)
             input (name: "energyMaxReportingTime", type: "number", title: "<b>Longest reporting interval</b>, seconds", description: "<i>The maximum time without automatic reports. Recommended setting is <b>900 seconds</b></i>", 
-                range: "120..86400", defaultValue: 900)
+                range: "10..86400", defaultValue: 900)
             // 09/23/2022
             input (name: "energyMode", type: "enum", title: "<b>Energy Reporting</b>", description:"<i>Select Energy Reporting Mode</i>", defaultValue: "POLLED", options: energyModeOptions)
             if (isEnergyEnabled()) {    // if (energyMode?.value == true)
@@ -1129,8 +1129,18 @@ def autoPoll() {
 }
 
 def tuyaBlackMagic() {
+    List<String> cmds = []
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :0x01], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :0xFF], delay=200) // destEndpoint: 255 ??? seq 2   // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 3
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 4
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 5
+    cmds += zigbee.readAttribute(0x0006, [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003], [destEndpoint :0xFF], delay=100)    // seq 6
+    cmds += zigbee.readAttribute(0x0b04, [0x0508, 0x050b, 0x0505], [destEndpoint :0xFF], delay=100)    // seq 7
+    cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :0xFF], delay=100)    // seq 8
+    cmds += zigbee.readAttribute(0x0006, [0x4001, 0x4002], [destEndpoint :0x01], delay=100)    // seq 9
+    cmds += zigbee.readAttribute(0x0b04, [0x0505, 0x0508, 0x050b], [destEndpoint :0x01], delay=100)    // seq 10
+    return cmds          
 }
 
 def fixOtherTuyaOddities() {
