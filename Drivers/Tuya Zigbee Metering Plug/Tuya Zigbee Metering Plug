@@ -1108,7 +1108,7 @@ def poll( refreshAll = false ) {
     if ((state.switchPollingSupported == true && refreshAll == true) || cmds == [] ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
     }
-    state.isRefreshRequest = true
+    state.isRefreshRequest = false
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
@@ -1117,7 +1117,9 @@ def poll( refreshAll = false ) {
 
 def refresh() {
     if (txtEnable) {log.info "${device.displayName} refresh()..."}
+    state.isRefreshRequest = true
     poll( true )
+    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
 }
 
 def autoPoll() {
