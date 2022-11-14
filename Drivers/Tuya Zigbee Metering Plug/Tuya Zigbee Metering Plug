@@ -41,16 +41,17 @@
  *  ver. 1.6.1 2022-09-19 kkossev - added html attribute; added energyDuration; added hourlyEnergy; energy and energyCosts are reset on Initialize button; energyCost and hourlyEnergy types changed to NUMBER; fixed autoPoll bug;
  *  ver. 1.6.2 2022-09-28 kkossev - added NON-Tuya plugs fingerprints; removed hardcoded EPVA dividers; SmartThings outlet power and voltage correction; added warning for '_TZ3000_okaz9tjs'; 
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
- *  ver. 1.6.3 2022-11-08 kkossev - (dev. branch) added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
+ *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
+ *  ver. 1.6.4 2022-11-14 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); 
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.3" }
-def timeStamp() {"2022/11/08 9:21 PM"}
+def version() { "1.6.4" }
+def timeStamp() {"2022/11/14 11:27 PM"}
 
 @Field static final Boolean debug = false
 
@@ -80,9 +81,11 @@ metadata {
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
         command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
-        if (debug == true) {
-            command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
-        }
+        
+        //log.warn "isFrientEnergyMonitor = ${isFrientEnergyMonitor()}"
+       // if (isFrientEnergyMonitor() == true) {
+            command "pulseConfiguration", [[name: "PulseConfiguration", type: "NUMBER", description: "test", defaultValue : 1000]]
+       // }
         
         if (debug == true) {
             command "activeEndpoints"
@@ -126,6 +129,7 @@ metadata {
         // NON-Tuya metering plugs
         // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
         // Manually switching to this driver for the plugs below will still work.
+        /*        
         fingerprint profileId:"C05E", endpointId:"03", inClusters:"1000,0000,0003,0004,0005,0006,0B04,FC0F", outClusters:"0019", model:"Plug 01", manufacturer:"OSRAM", deviceJoinName: "OSRAM Plug 01"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,FC01,FC08", outClusters:"0003,0019", model:"PLUG", manufacturer:"LEDVANCE", deviceJoinName: "Sylvania Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
@@ -135,8 +139,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z1", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Power Meter PMM-300Z1"        // SIHAS Power Meter 01 0104 0000 01 05 0000 0004 0003 0B04 0702 02 0004 0019
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z2", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Energy Monitor PMM-300Z2"     // Single Phase, SIHAS Power Meter 01 0104 0000 01 06 0000 0004 0003 0B04 0702 0402 02 0004 0019
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z3", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Energy Monitor PMM-300Z3"     // Three Phase,  SIHAS Power Meter 01 0104 0000 01 06 0000 0004 0003 0B04 0702 0402 02 0004 0019
-        
-        /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"outletv4", manufacturer:"SmartThings", deviceJoinName: "SmartThings outletv4 STS-OUT-US-2"      // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,000F,0B04", outClusters:"0019", model:"outletv4", manufacturer:"SmartThings", deviceJoinName: "SmartThings outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,000F,0B04", outClusters:"0019", model:"outlet", manufacturer:"SmartThings", deviceJoinName: "SmartThings outlet IM6001-OTP05"
@@ -169,6 +171,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0B05", outClusters:"0019", model:"3200-Sgb", manufacturer:"CentraLite", deviceJoinName: "CentraLite Smart Plug"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0B05", outClusters:"0019", model:"3200", manufacturer:"CentraLite", deviceJoinName: "CentraLite Smart Plug"
         */
+        // experimental
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"
     }
     
     
@@ -249,6 +253,7 @@ private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in 
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") in ["frient A/S","Develco Products A/S"]}
+private boolean isFrientEnergyMonitor() { state.model in ["ZHEMI101", "SPLZB-131"] }
 private boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
 private boolean isSercomm() { device.getDataValue("manufacturer") in ["Sercomm Corp.", " Sercomm Corp."] || device.getDataValue("model") == "SZ-ESW01-AU" }
 private boolean isHeiman() { device.getDataValue("manufacturer") == "HEIMAN" }
@@ -366,11 +371,23 @@ def parse(String description) {
                 else if (it.cluster == "0B04" && it.attrId == "0300") {
                     frequencyEvent(zigbee.convertHexToInt(it.value)/getFrequencyDiv())
                 }
-                else if (it.cluster == "0702" && it.attrId == "0000") {
+                else if (it.cluster == "0702" && it.attrId == "0000") {    // CurrentSummationDelivered 
                     energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
                 }
+                else if (it.cluster == "0702" && it.attrId == "0001") {    // CurrentSummationReceived 
+                    if (txtEnable==true) log.info "Current Summation Received (0x0702:0001) raw value = ${zigbee.convertHexToInt(it.value)}"
+                }
+                else if (it.cluster == "0702" && it.attrId == "0300") {    // PulseConfiguration Frient Energy Meter
+                    if (txtEnable==true) log.info "PulseConfiguration (0x0702:0300) raw value = ${zigbee.convertHexToInt(it.value)}"
+                }
+                else if (it.cluster == "0702" && it.attrId == "0301") {    // CurrentSummation Frient Energy Meter
+                    if (txtEnable==true) log.info "Current Summation (0x0702:0301) raw value = ${zigbee.convertHexToInt(it.value)}"
+                }
+                else if (it.cluster == "0702" && it.attrId == "0302") {    // InterFaceMode Frient Energy Meter
+                    if (txtEnable==true) log.info "Interface Mode (0x0702:0302) raw value = ${zigbee.convertHexToInt(it.value)}"
+                }
                 else if (it.cluster == "0702" && it.attrId == "0400") {
-                    //log.trace "power Instantaneous Demand"
+                    if (logEnable==true) log.trace "power Instantaneous Demand (0x0702:0400) raw value = ${zigbee.convertHexToInt(it.value)}"
                     powerEvent(zigbee.convertHexToInt(it.value)/getPowerDiv())
                 }
                 else {
@@ -1107,7 +1124,7 @@ def poll( refreshAll = false ) {
     if ((state.switchPollingSupported == true && refreshAll == true) || cmds == [] ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
     }
-    state.isRefreshRequest = true
+    state.isRefreshRequest = false
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
@@ -1116,7 +1133,9 @@ def poll( refreshAll = false ) {
 
 def refresh() {
     if (txtEnable) {log.info "${device.displayName} refresh()..."}
+    state.isRefreshRequest = false
     poll( true )
+    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
 }
 
 def autoPoll() {
@@ -1887,5 +1906,21 @@ void updateAttr(String aKey, aValue, String aUnit = "") {
 
 def deviceNotification(text) {
     if (settings?.logEnable) log.debug "deviceNotification: ${text}"
+}
+
+def pulseConfiguration( pulses ) {
+    List<String> cmds = []
+    if (pulses != null) {
+        def pulsesInt = safeToInt( pulses )
+        if (pulsesInt >= 100 && pulsesInt <= 10000) {
+            if (state.txCounter != null) state.txCounter = state.txCounter + 1
+            cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [mfgCode: 0x1015], delay=50)
+            sendZigbeeCommands(cmds)
+            if (settings?.txtEnable) log.info "${device.displayName} setting pulse configuration to: ${pulsesInt}"
+        }
+        else {
+            if (settings?.txtEnable) log.warn "${device.displayName} please enter a valid pulse configuration value between 100 and 10000 (default is 1000)"
+        }
+    }    
 }
 
