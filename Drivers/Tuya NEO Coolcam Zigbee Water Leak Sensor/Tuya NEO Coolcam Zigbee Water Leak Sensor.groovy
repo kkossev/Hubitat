@@ -16,14 +16,14 @@
  * ver. 1.0.3 2022-04-16 kkossev  - 'Last Updated' workaround for NEO sensors
  * ver. 1.0.4 2022-05-14 kkossev  - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
- * ver. 1.0.6 2022-11-14 kkossev  - (dev. branch) fixed _TZ3000_qdmnmddg fingerprint; 
+ * ver. 1.0.6 2022-11-15 kkossev  - (dev. branch) fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; 
  *
  *                                 
  *
 */
 
 def version() { "1.0.6" }
-def timeStamp() {"2022/11/14 9:16 PM"}
+def timeStamp() {"2022/11/15 2:03 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -52,6 +52,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_upgcbody", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // rerctangular cabinet, external sensor; +BatteryLowAlarm!?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_t6jriawg", deviceJoinName: "Moes Leak Sensor TS0207"          // Moes
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0500,0001",      outClusters:"0019",      model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/3?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_rurvxhcx", deviceJoinName: "Tuya Leak Sensor TS0207 Type III" // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/13?u=kkossev
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
