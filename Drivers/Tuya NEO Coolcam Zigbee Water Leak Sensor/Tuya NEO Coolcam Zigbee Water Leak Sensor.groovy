@@ -15,12 +15,15 @@
  * ver. 1.0.2 2022-04-14 kkossev  - Check-in info logs; model 'q9mpfhw' inClusters correction
  * ver. 1.0.3 2022-04-16 kkossev  - 'Last Updated' workaround for NEO sensors
  * ver. 1.0.4 2022-05-14 kkossev  - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button
+ * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
+ * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
+ *
  *                                 
  *
 */
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/04/14"}
+def version() { "1.0.6" }
+def timeStamp() {"2022/11/15 2:22 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -34,10 +37,13 @@ metadata {
         capability "Sensor"
         capability "Battery"
         capability "WaterSensor"        
+        capability "PowerSource"
 
+        
         command "configure", [[name: "Manually initialize the sensor after switching drivers.  \n\r   ***** Will load the device default values! *****" ]]
         command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
+        //command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003",                outClusters:"0003,0019", model:"q9mpfhw",manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
@@ -46,13 +52,18 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,EF01", outClusters:"0003,0019", model:"TS0207", manufacturer:"_TYZB01_o63ssaah", deviceJoinName: "Blitzwolf Leak Sensor BW-IS5" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_upgcbody", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // rerctangular cabinet, external sensor; +BatteryLowAlarm!?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_t6jriawg", deviceJoinName: "Moes Leak Sensor TS0207"          // Moes
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0500,0001",      outClusters:"0019",      model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/3?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_rurvxhcx", deviceJoinName: "Tuya Leak Sensor TS0207 Type III" // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/13?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_kyb656no", deviceJoinName: "MEIAN Water Leak Sensor"          // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/22?u=kkossev
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
     }
 }
+
+@Field static final Integer presenceCountTreshold = 3
+@Field static final Integer defaultPollingInterval = 3600
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -77,6 +88,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
+    setPresent()
     //if (settings?.logEnable == true) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
@@ -267,6 +279,69 @@ def refresh() {
     zigbee.readAttribute(0, 1)
 }
 
+
+def powerSourceEvent( state = null) {
+    if (state != null && state == 'unknown' ) {
+        sendEvent(name : "powerSource",	value : "unknown", descriptionText: "device is OFFLINE", type: "digital")
+    }
+    else {
+        sendEvent(name : "powerSource",	value : "battery", descriptionText: "device is back online", type: "digital")
+    }
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+def setPresent() {
+    /*
+    if ((state.rxCounter != null) && state.rxCounter <= 2)
+        return                    // do not count the first device announcement or binding ack packet as an online presence!
+    */
+    powerSourceEvent()
+    if (device.currentValue('powerSource', true) in ['unknown', '?']) {
+        if (settings?.txtEnable) log.info "${device.displayName} is present"
+        if (device.currentValue('battery', true) == 0 ) {
+            if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
+                sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+            }
+        }
+    }    
+    state.notPresentCounter = 0    
+}
+
+// called every 60 minutes from pollPresence()
+def checkIfNotPresent() {
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter >= presenceCountTreshold) {
+            if (!(device.currentValue('powerSource', true) in ['unknown'])) {
+    	        powerSourceEvent("unknown")
+                if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
+            }
+            if (safeToInt(device.currentValue('battery', true)) != 0) {
+                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
+                sendBatteryEvent( 0, isDigital=true )
+            }
+        }
+    }
+    else {
+        state.notPresentCounter = 0  
+    }
+}
+
+// check for device offline every 60 minutes
+def pollPresence() {
+    if (logEnable) log.debug "${device.displayName} pollPresence()"
+    checkIfNotPresent()
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+}
+
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
@@ -294,6 +369,9 @@ void initializeVars(boolean fullInit = true ) {
         state.txCounter = 0
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    if (state.lastBattery == null) state.lastBattery = "0"
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
 }
@@ -313,6 +391,7 @@ def configure() {
     if (settings?.txtEnable == true) log.info "${device.displayName} configure().."
     unschedule()
     initializeVars(fullInit = true)
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
     cmds += tuyaBlackMagic()    
     sendZigbeeCommands(cmds)    
 }
@@ -374,6 +453,7 @@ def getBatteryPercentageResult(rawValue, isDigital=false) {
         result.unit  = '%'
         result.type = isDigital == true ? "digital" : "physical"
         result.descriptionText = "${device.displayName} battery is ${result.value}% ($result.type)"
+        state.lastBattery = (result.value).toString()
         sendEvent(result)
         if (settings?.txtEnable) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
     }
@@ -399,6 +479,7 @@ private Map getBatteryResult(rawValue) {
         result.unit  = '%'
         result.isStateChange = true
         if (settings?.txtEnable == true) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
+        state.lastBattery = roundedPct.toString()
         sendEvent(result)
     }
     else {
@@ -406,3 +487,6 @@ private Map getBatteryResult(rawValue) {
     }    
 }
 
+def sendBatteryEvent( roundedPct, isDigital=false ) {
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
+}
