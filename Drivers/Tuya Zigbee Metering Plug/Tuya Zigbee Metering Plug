@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.4" }
-def timeStamp() {"2022/11/16 8:15 AM"}
+def timeStamp() {"2022/11/16 9:59 AM"}
 
 @Field static final Boolean debug = false
 
@@ -82,7 +82,6 @@ metadata {
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
         command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
         
-        //log.warn "isFrientEnergyMonitor = ${isFrientEnergyMonitor()}"
        // if (isFrientEnergyMonitor() == true) {
             command "pulseConfiguration", [[name: "PulseConfiguration", type: "NUMBER", description: "test", defaultValue : 1000]]
             command "setEnergyMeterMode", [[name: "SetEnergyMeterMode*",   type: "ENUM", constraints: develcoInterfaceMode]]
@@ -283,7 +282,7 @@ private int getPowerFactorDiv() { 100 }
 
 
 def parse(String description) {
-    if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
+    logDebug "parse: description is $description"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
@@ -295,11 +294,11 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        log.warn "${device.displayName} parse: exception caught while parsing description:  ${description}"
+        logWarn "parse: exception caught while parsing description:  ${description}"
         //return null
     }
     if (event) {
-        if (logEnable==true) log.debug "${device.displayName} Event enter: $event"
+        logDebug "Event enter: $event"
         event.type = "physical"
         switch (event.name) {
             case "switch" :
@@ -316,10 +315,10 @@ def parse(String description) {
                 break
             case "temperature" : // SiHAS
                 sendEvent(event)
-                if (txtEnable==true) log.info "${event.descriptionText}"
+                logInfo "${event.descriptionText}"
                 break
             default :
-                if (txtEnable) {log.warn "${device.displayName} received <b>unhandled event</b> ${event.name} = $event.value"} 
+                logDebug "received <b>unhandled event</b> ${event.name} = $event.value"
                 break
         }
         return null //event
@@ -330,10 +329,10 @@ def parse(String description) {
             descMap = zigbee.parseDescriptionAsMap(description)
         }
         catch ( e ) {
-            log.warn "${device.displayName} parse: exception caught while parsing descMap:  ${descMap}"
+            logWarn "parse: exception caught while parsing descMap:  ${descMap}"
             return null
         }
-        if (logEnable) {log.debug "${device.displayName} parse: Desc Map: $descMap"}
+        logDebug "parse: Desc Map: $descMap"
         if (descMap.attrId != null ) {
             // attribute report received
             List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
@@ -346,12 +345,12 @@ def parse(String description) {
                     disableUnsupportedAttribute(descMap.cluster, it.attrId)
                 }
                 if (it.value == null ) {
-                    if (logEnable==true) log.warn "${device.displayName} null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
+                    logWarn "null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
                     return null
                 }
                 else if (it.cluster == "0B04" && it.attrId == "050B") {
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("power", true)) != 0  && device.currentValue("switch", true)=="on") {
-                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero power automatic report!"
+                        logWarn "${device.displayName} ignoring potentially false zero power automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
                     }
                     else {
@@ -362,7 +361,7 @@ def parse(String description) {
                 }
                 else if (it.cluster == "0B04" && it.attrId == "0505") {
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("voltage", true)) != 0 && device.currentValue("switch", true)=="on") {
-                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero voltage automatic report!"
+                        logWarn "ignoring potentially false zero voltage automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
                     }
                     else {
@@ -371,7 +370,7 @@ def parse(String description) {
                 }
                 else if (it.cluster == "0B04" && it.attrId == "0508") {
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && (safeToDouble(device.currentValue("amperage", true))*getCurrentDiv() as int) != 0  && device.currentValue("switch", true)=="on") {
-                        if (logEnable==true) log.warn "${device.displayName} ignoring potentially false zero current automatic report!"
+                        logWarn "ignoring potentially false zero current automatic report!"
                         runInMillis( 3500, pollOnce, [overwrite: true])
                     }
                     else {
@@ -388,32 +387,38 @@ def parse(String description) {
                     energyEvent(zigbee.convertHexToInt(it.value)/getEnergyDiv())
                 }
                 else if (it.cluster == "0702" && it.attrId == "0001") {    // CurrentSummationReceived 
-                    if (txtEnable==true) log.info "Current Summation Received (0x0702:0001) raw value = ${zigbee.convertHexToInt(it.value)}"
+                    logDebug "Current Summation Received (0x0702:0001) raw value = ${zigbee.convertHexToInt(it.value)}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0100") {    // CurrentTier1SummationDelivered   
-                    if (txtEnable==true) log.info "CurrentTier1SummationDelivered Received (0x0702:0100) hex value = ${it.value}"
+                    logDebug "CurrentTier1SummationDelivered Received (0x0702:0100) hex value = ${it.value}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0102") {    // CurrentTier2SummationDelivered  
-                    if (txtEnable==true) log.info "CurrentTier2SummationDelivered Received (0x0702:0102) hex value = ${it.value}"
+                    logDebug "CurrentTier2SummationDelivered Received (0x0702:0102) hex value = ${it.value}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0200") {    // Status  Frient Energy Meter
-                    if (txtEnable==true) log.info "Status  (0x0702:0200) hex value = ${it.value}"
+                    logDebug "Status  (0x0702:0200) hex value = ${it.value}"
+                    if (zigbee.convertHexToInt(it.value) & 0x01) {
+                        logWarn "Check Meter!"
+                    }
+                    if (zigbee.convertHexToInt(it.value) & 0x02) {
+                        logWarn "Low Battery!"
+                    }
                 }
                 else if (it.cluster == "0702" && it.attrId == "0300") {    // PulseConfiguration Frient Energy Meter
-                    if (txtEnable==true) log.info "PulseConfiguration (0x0702:0300) raw value = ${zigbee.convertHexToInt(it.value)}"
+                    logInfo "PulseConfiguration (0x0702:0300) raw value = ${zigbee.convertHexToInt(it.value)}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0301") {    // CurrentSummation Frient Energy Meter
-                    if (txtEnable==true) log.info "Current Summation (0x0702:0301) raw value = ${zigbee.convertHexToInt(it.value)}"
+                    logDebug "Current Summation (0x0702:0301) raw value = ${zigbee.convertHexToInt(it.value)}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0302") {    // InterFaceMode Frient Energy Meter
-                    if (txtEnable==true) log.info "Interface Mode (0x0702:0302) raw value = ${zigbee.convertHexToInt(it.value)}"
+                    logInfo "Interface Mode (0x0702:0302) raw value = ${zigbee.convertHexToInt(it.value)}"
                 }
                 else if (it.cluster == "0702" && it.attrId == "0400") {
-                    if (logEnable==true) log.trace "power Instantaneous Demand (0x0702:0400) raw value = ${zigbee.convertHexToInt(it.value)}"
+                    logDebug "power Instantaneous Demand (0x0702:0400) raw value = ${zigbee.convertHexToInt(it.value)}"
                     powerEvent(zigbee.convertHexToInt(it.value)/getPowerDiv())
                 }
                 else {
-                    if (logEnable==true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                    logWarn "Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
             } // for each attribute
         } // if attribute report
@@ -424,7 +429,7 @@ def parse(String description) {
             parseZHAcommand(descMap)
         } 
         else {
-            if (logEnable==true)  log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            logWarn "Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
         }
         return null
     } // descMap
@@ -432,7 +437,7 @@ def parse(String description) {
 
 
 def parseOnOffAttributes( it ) {
-    if (logEnable) {log.debug "${device.displayName} OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" }
+    logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
     def mode
     def attrName
     if (it.value == null) {
@@ -463,24 +468,24 @@ def parseOnOffAttributes( it ) {
             mode = value == 0 ? "Over Current OK" : value == 1 ? "Over Current Alarm" : null
             break
         default :
-            if (logEnable) log.warn "${device.displayName} Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
+            logWarn "Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
             return
     }
-    if (txtEnable) log.info "${device.displayName} ${attrName} is ${mode}"
+    logDebug "${attrName} is ${mode}"
 }
 
 def switchEvent( value ) {
     def map = [:] 
     boolean bWasChange = false
     if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some plugs send only catchall events, some only readattr reports, but some will fire both...
-        if (logEnable) {log.debug "${device.displayName} Ignored duplicated switch event for model ${state.model}"} 
+        logDebug "Ignored duplicated switch event for model ${state.model}"
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
         return null
     }
     map.type = state.isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
-        if (logEnable) {log.debug "${device.displayName} Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
+        logDebug "Switch state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"
         runInMillis(6000, pollPower, [overwrite: true])    // version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
         state.switchDebouncing = true
         state.lastSwitchState = value
@@ -496,7 +501,7 @@ def switchEvent( value ) {
     }
     if (optimizations==false || bWasChange==true ) 
     {
-        if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+        logInfo "${device.displayName} ${map.descriptionText}"
         sendEvent(map)
         runIn( 1, formatAttrib, [overwrite: true])    
         // version 1.6.3 10/01/2022
@@ -522,13 +527,13 @@ def voltageEvent( voltage, isDigital=false ) {
     def lastVoltage = device.currentValue("voltage", true) ?: 0
     if ((Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageTreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
         if (settings?.reportVoltage == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            logInfo "${map.descriptionText}"
             sendEvent(map)
             runIn( 1, formatAttrib, [overwrite: true])    
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"}
+        logDebug "${device.displayName} ignored ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageTreshold} V)"
     }
 }
 
@@ -541,14 +546,12 @@ def frequencyEvent( frequency, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     def lastFrequency = device.currentValue("frequency", true) ?: 0
     if ((Math.abs((frequency*10 as int) - (lastFrequency*10 as int)) >= 1) || optimizations == false || state.isRefreshRequest == true  ) {
-        if (true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-            sendEvent(map)
-            runIn( 1, formatAttrib, [overwrite: true])    
-        }
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        runIn( 1, formatAttrib, [overwrite: true])    
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than 0.1 Hz)"}
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than 0.1 Hz)"
     }
 }
 
@@ -561,14 +564,12 @@ def powerFactorEvent( pf, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     def lastPF = device.currentValue("powerFactor", true) ?: 0
     if ((Math.abs((pf*100 as int) - (lastPF*100 as int)) >= 1) || optimizations == false || state.isRefreshRequest == true  ) {
-        if (true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-            sendEvent(map)
-            runIn( 1, formatAttrib, [overwrite: true])    
-        }
+        loginfo "${map.descriptionText}"
+        sendEvent(map)
+        runIn( 1, formatAttrib, [overwrite: true])    
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than 0.1 %)"}
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than 0.1 %)"
     }
 }
 
@@ -581,18 +582,18 @@ def powerEvent( power, isDigital=false ) {
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     def lastPower = device.currentValue("power", true) ?: 0.0
     if ( (power as int) > MAX_POWER) {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap {MAX_POWER} W)"}
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap {MAX_POWER} W)"
         return
     }
     if ((Math.abs((power as int) - (lastPower as int)) >= (powerTreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
         if (settings?.reportPower == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            logInfo "${map.descriptionText}"
             sendEvent(map)
             runIn( 1, formatAttrib, [overwrite: true])    
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerTreshold} W)"}
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerTreshold} W)"
     }
 }
 
@@ -606,13 +607,13 @@ def amperageEvent( amperage, isDigital=false ) {
     def lastAmperage = device.currentValue("amperage", true) ?: 0.0
     if ((Math.abs((amperage*1000 as int) - (lastAmperage*1000 as int)) >= (amperageTreshold as int)) || optimizations == false || state.isRefreshRequest == true  ) {
         if (settings?.reportAmperage == true) {
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+            logInfo "${map.descriptionText}"
             sendEvent(map)
             runIn( 1, formatAttrib, [overwrite: true])    
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"}
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageTreshold} mA)"
     }
 }
 
@@ -624,10 +625,10 @@ def energyEvent( energy_total, isDigital=false ) {
     def energy = energy_total
     energy = (energy_total - safeToDouble(state.lastResetEnergy)).round(3)
     if (energy < 0.0) {
-        if (logEnable) {log.warn "energyEvent: negative energy ${energy} (total=${energy_total} lastReset=${safeToDouble(state.lastResetEnergy).round(3)}), correcting it to 0!"}
+        logWarn "energyEvent: negative energy ${energy} (total=${energy_total} lastReset=${safeToDouble(state.lastResetEnergy).round(3)}), correcting it to 0!"
         energy = 0.0
     }
-    if (logEnable) {log.trace "energy_total=${energy_total}, state.lastResetEnergy=${safeToDouble(state.lastResetEnergy)}"}
+    logDebug "energy_total=${energy_total}, state.lastResetEnergy=${safeToDouble(state.lastResetEnergy)}"
     map.name = "energy"
     map.value = energy
     map.unit = "kWh"
@@ -645,14 +646,14 @@ def energyEvent( energy_total, isDigital=false ) {
             def duration = calculateEnergyDuration()
             energyDurationtEvent( duration )
             runIn( 1, formatAttrib, [overwrite: true])    
-            if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice}), duration=${duration}"}
+            logInfo "${map.descriptionText}, energyCost=\$${newTotalCost.round(2)} (rate=\$${energyPrice}), duration=${duration}"
         }
         else {
-            if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!"}
+            logDebug "ignored ${map.name} ${map.value} ${map.unit} (energy reporting is disabled!)"
         }
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} ${map.name} is ${map.value} ${map.unit} (no change)"}
+        logDebug "${device.displayName} ${map.name} is ${map.value} ${map.unit} (no change)"
     }
 }
 
@@ -665,8 +666,8 @@ def scheduleHourlyAndDailyEnergy() {
 def calculateHourlyEnergy() {
     def energy = safeToDouble(device.currentValue("energy", true)) - safeToDouble(state.lastHourlyEnergy)
     if (energy < 0.0) {
-        log.warn "calculateHourlyEnergy: negative energy ${energy}, correcting it to 0!"
-        if (logEnable) {log.trace "device.currentValue=${safeToDouble(device.currentValue("energy", true))}, state.lastHourlyEnergy=${safeToDouble(state.lastHourlyEnergy)}"}
+        logWarn "calculateHourlyEnergy: negative energy ${energy}, correcting it to 0!"
+        logDebug "device.currentValue=${safeToDouble(device.currentValue("energy", true))}, state.lastHourlyEnergy=${safeToDouble(state.lastHourlyEnergy)}"
         energy = 0.0
     }
     return energy as double
@@ -690,7 +691,7 @@ def hourlyEnergyEvent( hourlyEnergy=null, isDigital=true ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}     // sent in the energy event
+    logInfo "${map.descriptionText}"     // sent in the energy event
     sendEvent(map)
 }
 
@@ -722,7 +723,7 @@ def energyCostEvent( cost, isDigital=false ) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     else {
-        if (logEnable) {log.debug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit}"}
+        logDebug "${device.displayName} IGNORED ${map.name} ${map.value} ${map.unit}"
     }
 }
 
@@ -1502,7 +1503,7 @@ def checkIfNotPresent() {
 }
 
 void sendZigbeeCommands(List<String> cmds) {
-    if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
+    if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands : ${cmds}"}
 	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
@@ -1978,8 +1979,8 @@ def setEnergyMeterMode( mode ) {
         logDebug "setEnergyMeterMode ${mode} key=${key}"
         if (key != null) {
             cmds += zigbee.writeAttribute(0x0702, 0x0302, DataType.UINT8, safeToInt(key), [mfgCode: 0x1015], delay=251)
-            cmds += zigbee.readAttribute(0x0702, 0x0302, [:], delay=101)
-            sendZigbeeCommands(cmds)
+            cmds += zigbee.readAttribute(0x0702, 0x0302, [mfgCode: 0x1015], delay=101)        //  [:] returns 0 value? changed to [mfgCode: 0x1015] 11/16/2022
+            sendZigbeeCommands(cmds)    
         }
         else {
             logWarn "invalid energy mode ${mode}"
