@@ -43,7 +43,7 @@
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
- *  ver. 1.6.4 2022-11-16 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode
+ *  ver. 1.6.4 2022-11-16 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode; removed fixed destEndpoint; isRefreshRequest fix
  *
  */
 import groovy.json.*
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.4" }
-def timeStamp() {"2022/11/16 9:59 AM"}
+def timeStamp() {"2022/11/16 11:49 AM"}
 
 @Field static final Boolean debug = false
 
@@ -499,6 +499,7 @@ def switchEvent( value ) {
     else {
         map.descriptionText = "${device.displayName} was turned ${value} [${map.type}]"
     }
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     if (optimizations==false || bWasChange==true ) 
     {
         logInfo "${device.displayName} ${map.descriptionText}"
@@ -524,6 +525,7 @@ def voltageEvent( voltage, isDigital=false ) {
     map.unit = "V"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastVoltage = device.currentValue("voltage", true) ?: 0
     if ((Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageTreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
         if (settings?.reportVoltage == true) {
@@ -544,6 +546,7 @@ def frequencyEvent( frequency, isDigital=false ) {
     map.unit = "Hz"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastFrequency = device.currentValue("frequency", true) ?: 0
     if ((Math.abs((frequency*10 as int) - (lastFrequency*10 as int)) >= 1) || optimizations == false || state.isRefreshRequest == true  ) {
         logInfo "${map.descriptionText}"
@@ -562,6 +565,7 @@ def powerFactorEvent( pf, isDigital=false ) {
     map.unit = "%"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastPF = device.currentValue("powerFactor", true) ?: 0
     if ((Math.abs((pf*100 as int) - (lastPF*100 as int)) >= 1) || optimizations == false || state.isRefreshRequest == true  ) {
         loginfo "${map.descriptionText}"
@@ -580,6 +584,7 @@ def powerEvent( power, isDigital=false ) {
     map.unit = "W"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastPower = device.currentValue("power", true) ?: 0.0
     if ( (power as int) > MAX_POWER) {
         logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap {MAX_POWER} W)"
@@ -604,6 +609,7 @@ def amperageEvent( amperage, isDigital=false ) {
     map.unit = "A"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastAmperage = device.currentValue("amperage", true) ?: 0.0
     if ((Math.abs((amperage*1000 as int) - (lastAmperage*1000 as int)) >= (amperageTreshold as int)) || optimizations == false || state.isRefreshRequest == true  ) {
         if (settings?.reportAmperage == true) {
@@ -637,6 +643,7 @@ def energyEvent( energy_total, isDigital=false ) {
         map.isStateChange = true
     }
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     lastEnergy = safeToDouble(device.currentValue("energy", true))
     if ( lastEnergy  != energy || optimizations==false || state.isRefreshRequest == true || isDigital == true ) {
         if (isEnergyEnabled()) {
@@ -838,8 +845,13 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
             }
             break
         case "0702" : // Simple Metering Cluster
-            if (logEnable==true) log.warn "${device.displayName} Energy measurement is not supported! -> Energy polling will be disabled."
-            state.energyPollingSupported = false
+            if (isFrientOutlet() || isFrientEnergyMonitor()) {
+                logDebug "ignoring energy reporting error response for Frient products..."
+            }
+            else {
+                logWarn "Energy measurement is not supported! -> Energy polling will be disabled."
+                state.energyPollingSupported = false
+            }
             break
         default :
             if (logEnable==true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
@@ -1095,12 +1107,13 @@ def isRefreshRequestClear() { state.isRefreshRequest = false }
 
 def switchDebouncingClear() { state.switchDebouncing = false }
 
+// version 1.6.0 - poll the power attributes after switching on/off even if polling is disabled!
 def pollPower() {
     if (logEnable) {log.debug "${device.displayName} pollPower().."}
     List<String> cmds = []
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
-            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :0x01], delay=200)    // Power, Voltage and Amperage at once!
+            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :safeToInt(state.destinationEP)], delay=200)    // Power, Voltage and Amperage at once!
         }
     }
     else {
@@ -1121,43 +1134,45 @@ def pollOnce()
 // Sends refresh / readAttribute commands to the plug
 //
 def poll( refreshAll = false ) {
-    if (logEnable) {log.trace "${device.displayName} polling.. refreshAll is ${refreshAll}"}
+    logDebug "polling.. refreshAll is ${refreshAll}"
     checkDriverVersion()
     List<String> cmds = []
+    def ep = safeToInt(state.destinationEP)
+    /*
     if (state.switchPollingSupported == true && refreshAll == true ) {
         cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh
     }
+*/
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
-            if (logEnable) {log.trace "${device.displayName} polling all"}
-            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :0x01], delay=200)    // Power, Voltage and Amperage at once!
+            logDebug "polling all 0x0B04 attributes"
+            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :ep], delay=200)    // Power, Voltage and Amperage at once.
         }
     }
     else {
         if (state.powerPollingSupported == true && settings?.reportPower == true) 
             cmds += zigbee.electricMeasurementPowerRefresh()    // Power ( cluster 0B04, attr. 050B )
         if (state.voltagePollingSupported == true && settings?.reportVoltage == true)
-            cmds += zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint :0x01], delay=200)        // voltage
+            cmds += zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint :ep], delay=200)        // voltage
         if (state.currentPollingSupported == true  && settings?.reportAmperage == true)
-            cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :0x01], delay=200)        // current
+            cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :ep], delay=200)        // current
     }    
     if (state.energyPollingSupported == true && refreshAll == true ) {
-        cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :0x01], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
+        cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :ep], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
     }
     if ((state.switchPollingSupported == true && refreshAll == true) || cmds == [] ) {
-        cmds = zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
+        cmds += zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
     }
-    state.isRefreshRequest = false
+    state.isRefreshRequest = refreshAll
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
-    if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    return cmds
+    sendZigbeeCommands(cmds)    // 11/16/2022
 }
 
 
 def refresh() {
-    if (txtEnable) {log.info "${device.displayName} refresh()..."}
-    state.isRefreshRequest = false
-    poll( true )
+    logInfo "refresh()..."
+    state.isRefreshRequest = true
+    poll( refreshAll = true )
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
 }
 
@@ -1172,16 +1187,19 @@ def autoPoll() {
 
 def tuyaBlackMagic() {
     List<String> cmds = []
+    def ep = safeToInt(state.destinationEP)
+    if (ep==null || ep==0) ep = 1
+
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :0xFF], delay=200) // destEndpoint: 255 ??? seq 2   // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 3
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 4
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :0x01], delay=50)    // seq 5
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :ep], delay=50)    // seq 3
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :ep], delay=50)    // seq 4
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :ep], delay=50)    // seq 5
     cmds += zigbee.readAttribute(0x0006, [0x0000, 0x4001, 0x4002, 0x5000, 0x8000, 0x8001, 0x8002, 0x8003], [destEndpoint :0xFF], delay=100)    // seq 6
     cmds += zigbee.readAttribute(0x0b04, [0x0508, 0x050b, 0x0505], [destEndpoint :0xFF], delay=100)    // seq 7
     cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :0xFF], delay=100)    // seq 8
-    cmds += zigbee.readAttribute(0x0006, [0x4001, 0x4002], [destEndpoint :0x01], delay=100)    // seq 9
-    cmds += zigbee.readAttribute(0x0b04, [0x0505, 0x0508, 0x050b], [destEndpoint :0x01], delay=100)    // seq 10
+    cmds += zigbee.readAttribute(0x0006, [0x4001, 0x4002], [destEndpoint :ep], delay=100)    // seq 9
+    cmds += zigbee.readAttribute(0x0b04, [0x0505, 0x0508, 0x050b], [destEndpoint :ep], delay=100)    // seq 10
     return cmds          
 }
 
@@ -1697,6 +1715,8 @@ def configureReporting(String operation, String measurement,  String minTime, St
     int intMinTime = safeToInt(minTime)
     int intMaxTime = safeToInt(maxTime)
     int intDelta = safeToInt(delta)
+    def ep = safeToInt(state.destinationEP)
+    if (ep==null || ep==0) ep = 1
     
     if (settings?.logEnable) log.trace "${device.displayName} configureReporting operation=${operation}, measurement=${measurement}  minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
 
@@ -1707,7 +1727,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
             if (operation == "Write") {
                 cmds += zigbee.onOffConfig(intMinTime, intMaxTime)  // Configure On/Off 
             }
-            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [destEndpoint :0x01], 250)    // read it back
+            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [destEndpoint :ep], 250)    // read it back
             break
         case ENERGY :    // default delta = 1 Wh (0.001 kWh)
             if (operation == "Write") {
@@ -1718,7 +1738,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
                 // if (isHeiman()) {intDelta = intDelta * 10}    // also Bitron => "902010/25"
                 // TODO !!!!!!!
             }
-            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :0x01], 250)
+            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :ep], 250)
             break
         case POWER :        // Active power default delta = 1
             if (operation == "Write") {
@@ -1726,7 +1746,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
                 // TODO - check if DataType 0x29 is used for power configuration for Samsung and CentraLite plugs ... 
                 cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver  1.6.0 - thanks @guyee
             }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :0x01], 250)
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :ep], 250)
             break
         case VOLTAGE :    // RMS Voltage default delta = 1
             if (operation == "Write") {
@@ -1734,7 +1754,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
                 else if (isSercomm()) {intDelta = intDelta * 125}    // Telstra smart plug 1v = 125
                 cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
             }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :0x01], 250)
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :ep], 250)
             break
         case AMPERAGE :    // RMS Current default delta = 100 mA = 0.1 A
             if (operation == "Write") {
@@ -1742,7 +1762,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
                 if (intDelta < 1) {intDelta = 1}
                 cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
             }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :0x01], 250)
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :ep], 250)
             break
         default :
             break
@@ -1771,7 +1791,7 @@ def setEnergyPrice( price )
 */
             //energyCostEvent( 0, isDigital=true ) 
             //energyDurationtEvent( 0, isDigital=true  )               //
-            refresh()        // poll(true)
+            refresh()        //  poll(true)
             runIn(3, 'setEnergyPriceDelayed',  [overwrite: true, data: priceDouble])
         }
         else {
@@ -1957,10 +1977,6 @@ def pulseConfiguration( pulses ) {
             if (state.txCounter != null) state.txCounter = state.txCounter + 1
             cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [mfgCode: 0x1015], delay=250)
             cmds += zigbee.readAttribute(0x0702, 0x0300, [mfgCode: 0x1015], delay=100)
-            cmds += zigbee.readAttribute(0x0702, 0x0300, [:], delay=100)
-            // test
-            cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [:], delay=251)
-            cmds += zigbee.readAttribute(0x0702, 0x0300, [:], delay=101)
             sendZigbeeCommands(cmds)
             if (settings?.txtEnable) log.info "${device.displayName} setting pulse configuration to: ${pulsesInt}"
         }
