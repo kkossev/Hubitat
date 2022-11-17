@@ -1,7 +1,7 @@
 /**
  *  Tuya Zigbee Smoke Detector driver for Hubitat Elevation
  * 
- *  https://community.hubitat.com/t/heiman-smoke-detector-zigbee/16816
+ *  https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -15,6 +15,7 @@
  *
  *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
+ *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation'; added Clear Detected Tested buttons; removed Configure button
  *
  *
  */
@@ -22,15 +23,15 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.1" }
-def timeStamp() {"2022/10/31 7:38 AM"}
+def version() { "1.0.2" }
+def timeStamp() {"2022/11/17 1:13 PM"}
 
 @Field static final Boolean debug = false
 
 metadata {
     definition (name: "Tuya Zigbee Smoke Detector", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy", singleThreaded: true ) {
 		capability "Sensor"
-		capability "Configuration"
+		//capability "Configuration"
 		capability "Smoke Detector"    // attributes: smoke ("detected","clear","tested")    ea.STATE, true, false).withDescription('Smoke alarm status'),  [dp=1] 
         capability "TamperAlert"       // attributes: tamper - ENUM ["clear", "detected"]    [dp=4 ]  values 1/0
 		capability "TestCapability"
@@ -38,6 +39,9 @@ metadata {
         capability "PowerSource"        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "PresenceSensor"
 
+        command "clear"
+        command "detected"
+        command "tested"
         
         //command "silenceSiren", [[name:"Silence Siren", type: "ENUM", description: "Silence the Siren", constraints: ["--- Select ---", "true", "false" ]]]        // 'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
         //command "enableAlarm",  [[name:"Enable Alarm",  type: "ENUM", description: "Enable the Alarm",  constraints: ["--- Select ---", "true", "false" ]]]          //'Enable the alarm' ea.STATE_SET, true, false     HE->Tuya  dp=20, ENUM, true: 0, false: 1
@@ -67,7 +71,7 @@ metadata {
 }
 
 // Constants
-@Field static final Integer presenceCountTreshold = 4
+@Field static final Integer presenceCountTreshold = 12
 @Field static final Integer defaultPollingInterval = 3600
 @Field static String UNKNOWN = "UNKNOWN"
 
@@ -423,6 +427,18 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
 }
 
+def clear() {
+    sendSmokeAlarmEvent( 1, isDigital=true )
+}
+
+def detected() {
+    sendSmokeAlarmEvent( 0, isDigital=true )
+}
+
+def tested() {
+    sendSmokeAlarmEvent( 2, isDigital=true )
+}
+
 
 def tuyaBlackMagic() {
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
@@ -527,6 +543,10 @@ def initialize() {
 def installed() {
     if (txtEnable==true) log.info "${device.displayName} Installed()..."
     initializeVars()
+    def descText = 'driver just installed'
+    sendEvent(name: 'smoke', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )    
+    sendEvent(name: "presence", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )
+    sendEvent(name: "powerSource", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )    
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
     // HE will autoomaticall call configure() method here
@@ -551,13 +571,16 @@ def setPresent() {
 def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
-        if (state.notPresentCounter > presenceCountTreshold) {
+        if (state.notPresentCounter >= presenceCountTreshold) {
             if (device.currentValue("presence", true) != "not present") {
     	        sendEvent(name: "presence", value: "not present")
     	        sendEvent(name: "powerSource", value: "unknown")
                 if (logEnable==true) log.warn "${device.displayName} not present!"
             }
         }
+    }
+    else {
+        state.notPresentCounter = 1
     }
 }
 
@@ -624,13 +647,7 @@ boolean isTuyaE00xCluster( String description )
 
 boolean otherTuyaOddities( String description )
 {
-    return false    // !!!!!!!!!!!
-    if(description.indexOf('cluster: 0000') >= 0 || description.indexOf('attrId: 0004') >= 0) {
-        if (logEnable) log.debug " other Tuya oddities - don't know how to handle it, skipping it for now..."
-        return true
-    }
-    else
-        return false
+    return false
 }
 
 def test( dpCommand, dpValue, dpTypeString ) {
