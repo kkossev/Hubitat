@@ -16,14 +16,15 @@
  * ver. 1.0.3 2022-04-16 kkossev  - 'Last Updated' workaround for NEO sensors
  * ver. 1.0.4 2022-05-14 kkossev  - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
- * ver. 1.0.6 2022-11-15 kkossev  - (dev. branch) fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; 
+ * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
+ * ver. 1.0.7 2022-11-18 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version
  *
- *                                 
+ *                                  TODO: add Presence; set water to 'unknown' when offline; state : last water wet event time in human readable format; Configure should not reset power source to '?'; Save Preferences to update the driver version
  *
 */
 
-def version() { "1.0.6" }
-def timeStamp() {"2022/11/15 2:03 PM"}
+def version() { "1.0.7" }
+def timeStamp() {"2022/11/18 2:36 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -33,7 +34,7 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
  
 metadata {
-    definition (name: "Tuya NEO Coolcam Zigbee Water Leak Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/Tuya%20%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor.groovy", singleThreaded: true ) {
+    definition (name: "Tuya NEO Coolcam Zigbee Water Leak Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "Battery"
         capability "WaterSensor"        
@@ -43,6 +44,7 @@ metadata {
         command "configure", [[name: "Manually initialize the sensor after switching drivers.  \n\r   ***** Will load the device default values! *****" ]]
         command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
+        //command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003",                outClusters:"0003,0019", model:"q9mpfhw",manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
@@ -53,6 +55,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_t6jriawg", deviceJoinName: "Moes Leak Sensor TS0207"          // Moes
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0500,0001",      outClusters:"0019",      model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_rurvxhcx", deviceJoinName: "Tuya Leak Sensor TS0207 Type III" // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/13?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_kyb656no", deviceJoinName: "MEIAN Water Leak Sensor"          // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/22?u=kkossev
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
@@ -60,7 +63,7 @@ metadata {
     }
 }
 
-@Field static final Integer presenceCountTreshold = 3
+@Field static final Integer presenceCountTreshold = 12
 @Field static final Integer defaultPollingInterval = 3600
 
 private getCLUSTER_TUYA()       { 0xEF00 }
