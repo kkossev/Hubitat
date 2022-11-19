@@ -18,14 +18,15 @@
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
  * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
  * ver. 1.0.7 2022-11-19 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
- *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; 
+ *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; add feibit FNB56-WTS05FB2.0; added 'tested' water state
  *
- *                                  TODO: add Presence; add batteryLastReplaced event
+ *                                  TODO: refactor the scheduled pollPresence !! - lost, if hub is switched off during the next runIn interval !!!
+ *                                  TODO: add Presence; add batteryLastReplaced event; add 
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/19 3:30 AM"}
+def timeStamp() {"2022/11/19 5:18 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -43,11 +44,14 @@ metadata {
         capability "Battery"
         capability "WaterSensor"        
         capability "PowerSource"
+        capability "TestCapability"
+        //capability "TamperAlert"    // tamper - ENUM ["clear", "detected"]
 
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers.  \n\r   ***** Will load the device default values! *****" ]]
         command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
+        command "tested", [[name: "Manually switch the Water Leak Sensor to TESTED state" ]]
         //command "test"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
@@ -60,6 +64,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0500,0001",      outClusters:"0019",      model:"TS0207", manufacturer:"_TZ3000_qdmnmddg", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_rurvxhcx", deviceJoinName: "Tuya Leak Sensor TS0207 Type III" // https://community.hubitat.com/t/aliexpress-has-flash-sale-on-tuya-zigbee-leak-sensor-9-28/93727/13?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_kyb656no", deviceJoinName: "MEIAN Water Leak Sensor"          // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/22?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.0", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/41?u=kkossev 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.4", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // not tested
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
@@ -167,20 +173,26 @@ def parseIasMessage(String description) {
 def sendWaterEvent( String value, boolean isDigital=false ) {
     def type = isDigital == true ? "digital" : "physical"
     def descriptionText = "${device.displayName} is ${value}"
-    logInfo "$descriptionText"
+    if (isDigital == true) descriptionText += " (digital)"
     if (value == 'wet' && isDigital==false ) {
         state.lastWaterWet = FormattedDateTimeFromUnix( now() )
+        descriptionText = "<b>" + descriptionText + "</b>"
     }
+    logInfo "$descriptionText"
     sendEvent(name: "water", value: value, descriptionText: descriptionText, type: type , isStateChange: true)    
 }
 
 
 def wet() {
-    sendWaterEvent( "wet" )
+    sendWaterEvent( "wet", isDigital=true  )
 }
 
 def dry() {
-    sendWaterEvent( "dry" )
+    sendWaterEvent( "dry", isDigital=true  )
+}
+
+def tested() {
+    sendWaterEvent( "tested", isDigital=true )
 }
 
 def processTuyaCluster( descMap ) {
@@ -219,10 +231,10 @@ def processTuyaCluster( descMap ) {
         switch (dp) {
             case 0x65 : // dry/wet
                 if (fncmd == 0) {
-                    dry()
+                    sendWaterEvent( "dry" )
                 }
                 else {
-                    wet()
+                    sendWaterEvent( "wet" )
                 }
                 break
             case 0x66 : // battery
@@ -329,11 +341,15 @@ def checkIfNotPresent() {
     }
 }
 
+def configurePollPresence() {
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true, misfire: ignore])
+}
+
 // check for device offline every 60 minutes
 def pollPresence() {
     logDebug "pollPresence()"
     checkIfNotPresent()
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    configurePollPresence()
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
@@ -351,7 +367,7 @@ def logDebug(msg) {
 }
 
 def logInfo(msg) {
-    if (settings?.txtEnable == null || settings?.logEnable == true) {
+    if (settings?.txtEnable == null || settings?.txtEnable == true) {
         log.info "${device.displayName} " + msg
     }
 }
@@ -424,7 +440,7 @@ def configure() {
     logInfo "configure().."
     unschedule()
     initializeVars(fullInit = true)
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    configurePollPresence()
     cmds += tuyaBlackMagic()    
     sendZigbeeCommands(cmds)    
 }
@@ -488,7 +504,7 @@ def getBatteryPercentageResult(rawValue, isDigital=false) {
         result.descriptionText = "${device.displayName} battery is ${result.value}% ($result.type)"
         state.lastBattery = (result.value).toString()
         sendEvent(result)
-        logInfo ", water:${device.currentState('water').value}"
+        logInfo "${result.descriptionText}, water:${device.currentState('water').value}"
     }
     else {
         logWarn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
