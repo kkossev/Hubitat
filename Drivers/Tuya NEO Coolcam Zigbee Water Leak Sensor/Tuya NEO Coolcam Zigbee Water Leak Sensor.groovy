@@ -17,14 +17,18 @@
  * ver. 1.0.4 2022-05-14 kkossev  - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
  * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
- * ver. 1.0.7 2022-11-18 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version
+ * ver. 1.0.7 2022-11-19 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
+ *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; 
  *
- *                                  TODO: add Presence; set water to 'unknown' when offline; state : last water wet event time in human readable format; Configure should not reset power source to '?'; Save Preferences to update the driver version
+ *                                  TODO: add Presence; add batteryLastReplaced event
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/18 2:36 PM"}
+def timeStamp() {"2022/11/19 3:30 AM"}
+
+@Field static final Boolean debug = false
+@Field static final Boolean debugLogsDefault = true
 
 import groovy.json.*
 import groovy.transform.Field
@@ -58,7 +62,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_kyb656no", deviceJoinName: "MEIAN Water Leak Sensor"          // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/22?u=kkossev
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: false)
+        input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
     }
 }
@@ -100,53 +104,45 @@ def parse(String description) {
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
             }
             else {
-                log.warn "unparesed attrint $descMap.attrInt"
+                logWarn "unparsed power cluster attrint ${descMap.attrInt}"
             }
         }     
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         } 
         else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
-            if (settings?.logEnable == true) log.info "${device.displayName} device announcement"
+            state.rejoinCounter = (state.rejoinCounter ?: 0) + 1
+            logDebug "device announcement"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
-            if (settings?.logEnable == true) log.info "${device.displayName} Tuya check-in (0001) app version ${descMap?.value}"
+            logDebug "Tuya check-in (0001) app version ${descMap?.value}"
         } 
-        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
-            if (settings?.txtEnable == true) log.info "${device.displayName} Tuya check-in (FFDF)"
-        } 
-        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE2") {
-            if (settings?.txtEnable == true) log.info "${device.displayName} Tuya check-in (FFE2) app version ${descMap?.value}"
-        } 
-        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE4") {
-            if (settings?.txtEnable == true) log.info "${device.displayName} Tuya check-in (FFE4) value is ${descMap?.value}"
-        } 
-        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
-            if (settings?.txtEnable == true) log.info "${device.displayName} Tuya check-in (FFFE) value is ${descMap?.value}"
+        else if (descMap?.cluster == "0000" && descMap?.attrId in ["FFDF", "FFE2", "FFE4","FFFE"]) {
+            logDebug "Tuya check-in (${descMap?.attrId}) value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0500" && descMap?.command == "01") {    //read attribute response
-            if (settings?.logEnable == true) log.info "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
+            logDebug "IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
         } 
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response
-            if (settings?.logEnable == true) log.info "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
+            logDebug "IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "failure"}"
         } 
         else {
-            if (settings?.logEnable == true) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
+            logDebug "<b> NOT PARSED </b> : descMap = ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
     else if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
-        if (settings?.logEnable == true) log.debug "Zone status: $description"
+        logDebug "Zone status: $description"
         parseIasMessage(description)
     }
     else if (description?.startsWith('enroll request')) {
          /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
-        if (settings?.logEnable == true) log.info "Sending IAS enroll response..."
+        logDebug "Sending IAS enroll response..."
         ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        if (settings?.logEnable == true) log.debug "enroll response: ${cmds}"
+        logDebug "enroll response: ${cmds}"
         sendZigbeeCommands( cmds )  
     }    
     else {
-        if (settings?.logEnable == true) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
+        logDebug "<b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
 }
 
@@ -154,7 +150,7 @@ def parseIasMessage(String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn 
     try {
         Map zs = zigbee.parseZoneStatusChange(description)
-        if (settings?.logEnable == true) log.trace "zs = $zs"
+        //if (settings?.logEnable == true) log.trace "zs = $zs"
         if (zs.alarm1Set == true) {
             wet()
         }
@@ -168,23 +164,29 @@ def parseIasMessage(String description) {
     }
 }
 
+def sendWaterEvent( String value, boolean isDigital=false ) {
+    def type = isDigital == true ? "digital" : "physical"
+    def descriptionText = "${device.displayName} is ${value}"
+    logInfo "$descriptionText"
+    if (value == 'wet' && isDigital==false ) {
+        state.lastWaterWet = FormattedDateTimeFromUnix( now() )
+    }
+    sendEvent(name: "water", value: value, descriptionText: descriptionText, type: type , isStateChange: true)    
+}
+
 
 def wet() {
-    def descriptionText = "${device.displayName} is wet"
-    if (settings?.txtEnable == true) log.info "$descriptionText"
-    sendEvent(name: "water", value: "wet", descriptionText: descriptionText, isStateChange: true)
+    sendWaterEvent( "wet" )
 }
 
 def dry() {
-    def descriptionText = "${device.displayName} is dry"
-    if (settings?.txtEnable == true) log.info "$descriptionText"
-    sendEvent(name: "water", value: "dry",descriptionText: descriptionText, isStateChange: true)
+    sendWaterEvent( "dry" )
 }
 
 def processTuyaCluster( descMap ) {
     if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME
         // Tuya time sync request is sent by NEO Coolcam sensors every 1 hour
-        if (settings?.logEnable == true) log.info "${device.displayName} Tuya time synchronization request"
+        logDebug "${device.displayName} Tuya time synchronization request"
         def offset = 0
         try {
             offset = location.getTimeZone().getOffset(new Date().getTime())
@@ -193,8 +195,8 @@ def processTuyaCluster( descMap ) {
             if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
         }
         def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8))
-        if (settings?.logEnable == true) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!        
-        if (settings?.logEnable == true) log.debug "${device.displayName} sending time data : ${cmds}"
+        logDebug "time now is: ${FormattedDateTimeFromUnix( now() )}"
+        logDebug "sending time data : ${cmds}"
         cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         if (state.txCounter != null) state.txCounter = state.txCounter + 1
         getBatteryPercentageResult((device.currentState('battery').value as int)* 2, isDigital=true)         // added 04/06/2022 : send latest known battery level event to update the 'Last Activity At' timestamp
@@ -202,9 +204,9 @@ def processTuyaCluster( descMap ) {
     else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
         def status = descMap?.data[1]            
-        if (settings?.logEnable == true) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
+        logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
         if (status != "00") {
-            if (settings?.logEnable == true) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
     else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"))
@@ -213,7 +215,7 @@ def processTuyaCluster( descMap ) {
         def dp = zigbee.convertHexToInt(descMap?.data[2])
         def dp_id = zigbee.convertHexToInt(descMap?.data[3])
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
-        if (settings?.logEnable == true) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+        logDebug "Tuya Cluster command: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x65 : // dry/wet
                 if (fncmd == 0) {
@@ -224,7 +226,7 @@ def processTuyaCluster( descMap ) {
                 }
                 break
             case 0x66 : // battery
-                if (settings?.logEnable == true) log.trace "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 def rawValue = 0
                 if (fncmd == 0) rawValue = 100           // Battery Full
                 else if (fncmd == 1) rawValue = 75       // Battery High
@@ -233,7 +235,7 @@ def processTuyaCluster( descMap ) {
                 getBatteryPercentageResult(rawValue*2)
                 break 
             default :
-                if (settings?.logEnable == true) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                logWarn "<b>NOT PROCESSED TUYA COMMAND</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
     }
@@ -257,12 +259,13 @@ private int getTuyaAttributeValue(ArrayList _data) {
 // called on initial install of device during discovery
 // also called from initialize() in this driver!
 def installed() {
-    log.info "${device.displayName} installed()"
+    logInfo "${device.displayName} installed()... driver version ${driverVersionAndTimeStamp()}"
 }
 
 // called when preferences are saved
 // runs when save is clicked in the preferences section
 def updated() {
+    checkDriverVersion()
     if (settings?.txtEnable == true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable == true) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (settings?.logEnable == true) {
@@ -276,7 +279,7 @@ def updated() {
 
 
 def refresh() {
-    if (settings?.logEnable == true)  {log.debug "${device.displayName} refresh()..."}
+    logDebug "refresh()..."
     zigbee.readAttribute(0, 1)
 }
 
@@ -298,7 +301,7 @@ def setPresent() {
     */
     powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
-        if (settings?.txtEnable) log.info "${device.displayName} is present"
+        logInfo "is now present"
         if (device.currentValue('battery', true) == 0 ) {
             if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
                 sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
@@ -310,27 +313,25 @@ def setPresent() {
 
 // called every 60 minutes from pollPresence()
 def checkIfNotPresent() {
-    if (state.notPresentCounter != null) {
-        state.notPresentCounter = state.notPresentCounter + 1
-        if (state.notPresentCounter >= presenceCountTreshold) {
-            if (!(device.currentValue('powerSource', true) in ['unknown'])) {
-    	        powerSourceEvent("unknown")
-                if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
-            }
-            if (safeToInt(device.currentValue('battery', true)) != 0) {
-                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
-                sendBatteryEvent( 0, isDigital=true )
-            }
+    state.notPresentCounter = (state.notPresentCounter?: 0) + 1
+    if (state.notPresentCounter >= presenceCountTreshold) {
+        if (!(device.currentValue('powerSource', true) in ['unknown'])) {
+    	    powerSourceEvent("unknown")
+            logWarn "<b>is not present!</b>"
         }
-    }
-    else {
-        state.notPresentCounter = 0  
+        if (safeToInt(device.currentValue('battery', true)) != 0) {
+            logWarn "forced battery to '<b>0 %</b>"
+            sendBatteryEvent( 0, isDigital=true )
+        }
+        if (device.currentValue('water', true) != 'unknown') {
+            sendWaterEvent( 'unknown',  isDigital=true )
+        }
     }
 }
 
 // check for device offline every 60 minutes
 def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
+    logDebug "pollPresence()"
     checkIfNotPresent()
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
 }
@@ -343,38 +344,69 @@ Double safeToDouble(val, Double defaultVal=0.0) {
 	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
+def logDebug(msg) {
+    if (settings?.logEnable == null || settings?.logEnable == true) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable == null || settings?.logEnable == true) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable == null || settings?.logEnable == true) {
+        log.warn "${device.displayName} " + msg
+    }
+}
+
+@Field static final String dateFormat = 'yyyy-MM-dd HH:mm:ss.SSS'
+
+def unixFromFormattedDateTime( formattedDateTime ) {
+    def unixDateTime = Date.parse(dateFormat, formattedDateTime).time
+    return unixDateTime
+}
+
+def FormattedDateTimeFromUnix( unixDateTime ) {
+    def formattedDateTime = new Date(unixDateTime).format(dateFormat, location.timeZone) 
+    return formattedDateTime
+}
+
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-    }
-    else {
-        if (settings?.txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
+        logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
 def logInitializeRezults() {
-    if (settings?.txtEnable == true) log.info "${device.displayName} manufacturer  = ${device.getDataValue("manufacturer")}"
-    if (settings?.txtEnable == true) log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
+    logInfo "manufacturer  = ${device.getDataValue("manufacturer")}"
+    logInfo "Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
 }
 
 // called by configure(fullInit) button 
-void initializeVars(boolean fullInit = true ) {
-    if (settings?.txtEnable == true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+void initializeVars( boolean fullInit = true ) {
+    logDebug "InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true) {
         state.clear()
-        state.packetID = 0
-        state.rxCounter = 0
-        state.txCounter = 0
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    if (fullInit == true || state.packetID == null) state.notPresentCounter = 0
+    if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
+    if (fullInit == true || state.txCounter == null) state.txCounter = 0
+    if (fullInit == true || state.rejoinCounter == null) state.rejoinCounter = 0
     if (state.lastBattery == null) state.lastBattery = "0"
+    if (state.lastWaterWet == null) state.lastWaterWet = "unknown"    //FormattedDateTimeFromUnix( now() )
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
-    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (device.currentValue('powerSource', true) == null) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+    if (device.currentValue('water', true) == null) sendEvent(name : "water",	value : "unknown", isStateChange : true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", [value:debugLogsDefault, type:"bool"])
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", [value: true, type:"bool"])
 }
 
 def tuyaBlackMagic() {
@@ -389,7 +421,7 @@ def tuyaBlackMagic() {
 // It is also called on initial install after discovery.
 def configure() {
     List<String> cmds = []
-    if (settings?.txtEnable == true) log.info "${device.displayName} configure().."
+    logInfo "configure().."
     unschedule()
     initializeVars(fullInit = true)
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
@@ -401,7 +433,7 @@ def configure() {
 // runs first time driver loads, ie system startup 
 // when capability Initialize exists, a Initialize command is added to the ui.
 def initialize() {
-    log.info "${device.displayName} Initialize()..."
+    logInfo "Initialize()..."
     installed()
     updated()
     configure()
@@ -411,17 +443,17 @@ def initialize() {
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
-    if (settings?.logEnable == true) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
-    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    logDebug "sendTuyaCommand = ${cmds}"
+    state.txCounter = (state.txCounter ?: 0) + 1
     return cmds
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
-    if (settings?.logEnable == true) {log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"}
+    logDebug "sendZigbeeCommands (cmd=${cmd})"
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
         allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-        if (state.txCounter != null) state.txCounter = state.txCounter + 1
+        state.txCounter = (state.txCounter ?: 0) + 1
     }
     sendHubCommand(allActions)
 }
@@ -433,17 +465,17 @@ private getPACKET_ID() {
 
 private getDescriptionText(msg) {
 	def descriptionText = "${device.displayName} ${msg}"
-	if (settings?.txtEnable == true) log.info "${descriptionText}"
+	logInfo "${descriptionText}"
 	return descriptionText
 }
 
 def logsOff(){
-    log.warn "${device.displayName} debug logging disabled..."
-    device.updateSetting("logEnable",[value:"false",type:"bool"])
+    log.info "${device.displayName} debug logging disabled..."
+    device.updateSetting("logEnable",[value: false, type:"bool"])
 }
 
 def getBatteryPercentageResult(rawValue, isDigital=false) {
-    if (settings?.logEnable == true) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+    logDebug "Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
 
     if (0 <= rawValue && rawValue <= 200) {
@@ -456,15 +488,15 @@ def getBatteryPercentageResult(rawValue, isDigital=false) {
         result.descriptionText = "${device.displayName} battery is ${result.value}% ($result.type)"
         state.lastBattery = (result.value).toString()
         sendEvent(result)
-        if (settings?.txtEnable) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
+        logInfo ", water:${device.currentState('water').value}"
     }
     else {
-        if (settings?.logEnable == true) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
+        logWarn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
     }
 }
 
 private Map getBatteryResult(rawValue) {
-    if (settings?.logEnable == true) log.debug "${device.displayName} batteryVoltage = ${(double)rawValue / 10.0} V"
+    logDebug "${device.displayName} batteryVoltage = ${(double)rawValue / 10.0} V"
     def result = [:]
     def volts = rawValue / 10
     if (!(rawValue == 0 || rawValue == 255)) {
@@ -479,12 +511,12 @@ private Map getBatteryResult(rawValue) {
         result.name = 'battery'
         result.unit  = '%'
         result.isStateChange = true
-        if (settings?.txtEnable == true) log.info "${result.descriptionText}, water:${device.currentState('water').value}"
+        logInfo "${result.descriptionText}, water:${device.currentState('water').value}"
         state.lastBattery = roundedPct.toString()
         sendEvent(result)
     }
     else {
-        if (settings?.logEnable == true) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
+        logWarn "${device.displayName} ignoring BatteryResult(${rawValue})"
     }    
 }
 
