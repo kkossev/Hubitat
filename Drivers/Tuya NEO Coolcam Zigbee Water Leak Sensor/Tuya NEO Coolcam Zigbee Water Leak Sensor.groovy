@@ -25,7 +25,7 @@
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/19 5:49 AM"}
+def timeStamp() {"2022/11/19 6:12 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -279,13 +279,6 @@ def updated() {
     checkDriverVersion()
     if (settings?.txtEnable == true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable == true) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
-    if (settings?.logEnable == true) {
-        runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
-        if (settings?.txtEnable == true) log.info "${device.displayName} Debug logging will be turned off after 24 hours"
-    }
-    else {
-        unschedule(logsOff)
-    }
 }
 
 
@@ -344,6 +337,16 @@ def configurePollPresence() {
     runIn( defaultPollingInterval, pollPresence, [overwrite: true, misfire: "ignore"])
 }
 
+def configureLogsOff() {
+    if (settings?.logEnable == true) {
+        runIn(86400, logsOff, [overwrite: true, misfire: "ignore"])    // turn off debug logging after 24 hours
+        logInfo "Debug logging will be turned off after 24 hours"
+    }
+    else {
+        unschedule(logsOff)
+    }
+}
+
 // check for device offline every 60 minutes
 def pollPresence() {
     logDebug "pollPresence()"
@@ -396,6 +399,8 @@ def checkDriverVersion() {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
+        configurePollPresence()
+        configureLogsOff()
     }
 }
 
@@ -440,6 +445,7 @@ def configure() {
     unschedule()
     initializeVars(fullInit = true)
     configurePollPresence()
+    configureLogsOff()
     cmds += tuyaBlackMagic()    
     sendZigbeeCommands(cmds)    
 }
