@@ -18,15 +18,14 @@
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
  * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
  * ver. 1.0.7 2022-11-19 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
- *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; add feibit FNB56-WTS05FB2.0; added 'tested' water state
+ *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
  *
- *                                  TODO: refactor the scheduled pollPresence !! - lost, if hub is switched off during the next runIn interval !!!
- *                                  TODO: add Presence; add batteryLastReplaced event; add 
+ *                                  TODO: add Presence; add batteryLastReplaced event;
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/19 5:18 AM"}
+def timeStamp() {"2022/11/19 5:49 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -342,7 +341,7 @@ def checkIfNotPresent() {
 }
 
 def configurePollPresence() {
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true, misfire: ignore])
+    runIn( defaultPollingInterval, pollPresence, [overwrite: true, misfire: "ignore"])
 }
 
 // check for device offline every 60 minutes
