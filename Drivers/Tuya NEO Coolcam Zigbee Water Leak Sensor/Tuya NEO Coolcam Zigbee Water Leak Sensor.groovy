@@ -19,13 +19,14 @@
  * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
  * ver. 1.0.7 2022-11-19 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
  *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
- *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds
+ *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability
+ * 
  *                                  TODO: add Presence; add batteryLastReplaced event;
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/19 10:40 AM"}
+def timeStamp() {"2022/11/19 11:22 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -45,6 +46,7 @@ metadata {
         capability "PowerSource"
         capability "TestCapability"
         capability "Momentary"
+        capability "PresenceSensor"
         //capability "TamperAlert"    // tamper - ENUM ["clear", "detected"]
 
         
@@ -306,13 +308,14 @@ def setPresent() {
         return                    // do not count the first device announcement or binding ack packet as an online presence!
     */
     powerSourceEvent()
-    if (device.currentValue('powerSource', true) in ['unknown', '?']) {
+    if (device.currentValue('powerSource', true) in ['unknown', '?'] || device.currentValue('presence', true) != "present") {
         logInfo "is now present"
         if (device.currentValue('battery', true) == 0 ) {
             if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
                 sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
             }
         }
+        sendEvent(name: "presence", value: "present", descriptionText: "device is now online", type:  'digital' , isStateChange: true )
     }    
     state.notPresentCounter = 0    
 }
@@ -331,6 +334,9 @@ def checkIfNotPresent() {
         }
         if (device.currentValue('water', true) != 'unknown') {
             sendWaterEvent( 'unknown',  isDigital=true )
+        }
+        if (device.currentValue('presence', true) != "not present") {
+            sendEvent(name: "presence", value: "not present", descriptionText: "device is <b>not present</b>", type:  'digital' , isStateChange: true )
         }
     }
 }
@@ -425,8 +431,10 @@ void initializeVars( boolean fullInit = true ) {
     if (state.lastBattery == null) state.lastBattery = "0"
     if (state.lastWaterWet == null) state.lastWaterWet = "unknown"    //FormattedDateTimeFromUnix( now() )
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (device.currentValue('powerSource', true) == null) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
-    if (device.currentValue('water', true) == null) sendEvent(name : "water",	value : "unknown", isStateChange : true)
+    if (device.currentValue('powerSource', true) == null) sendEvent(name : "powerSource", descriptionText: "device just installed",	value : "?", isStateChange : true)
+    if (device.currentValue('water', true) == null) sendEvent(name : "water",	value : "unknown", descriptionText: "device just installed", isStateChange : true)
+    if (device.currentValue('presence', true) == null) sendEvent(name: "presence", value: "unknown", descriptionText: "device just installed", type:  'digital' , isStateChange: true )
+    
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", [value:debugLogsDefault, type:"bool"])
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", [value: true, type:"bool"])
 }
