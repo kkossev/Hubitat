@@ -28,14 +28,14 @@
  * ver. 2.4.3 2022-09-18 kkossev     - added TS0042 Tuya Zigbee 2 Gang Wireless Smart Switch; removed 'release' event for TS0044 switches (not supported by hardware); 'release' digital event bug fix.
  * ver. 2.4.4 2022-10-22 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch; added _TZ3000_w8jwkczz and other TS0041, TS0042, TS0043, TS004 fingerprints
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
- * ver. 2.4.6 2022-11-03 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!
+ * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.4.6" }
-def timeStamp() {"2022/11/03 4:50 PM"}
+def timeStamp() {"2022/11/20 10:53 AM"}
 
 @Field static final Boolean debug = false
 
@@ -128,7 +128,7 @@ metadata {
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1000
 
-def isTuya()  {debug == true ? false : device.getDataValue("manufacturer") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
+def isTuya()  {debug == true ? false : device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
 def isIcasa() {debug == true ? true : device.getDataValue("manufacturer") == "icasa"}
 
 // Parse incoming device messages to generate events
