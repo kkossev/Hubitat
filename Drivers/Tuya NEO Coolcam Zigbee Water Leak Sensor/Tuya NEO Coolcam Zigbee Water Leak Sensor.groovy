@@ -17,16 +17,16 @@
  * ver. 1.0.4 2022-05-14 kkossev  - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button
  * ver. 1.0.5 2022-08-03 kkossev  - added batterySource, added watchDog, set battery 0% if OFFLINE
  * ver. 1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no ;
- * ver. 1.0.7 2022-11-19 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
+ * ver. 1.0.7 2022-11-20 kkossev  - (dev. branch) offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
  *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
- *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability
+ *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability; 
  * 
- *                                  TODO: add Presence; add batteryLastReplaced event;
+ *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state
  *
 */
 
 def version() { "1.0.7" }
-def timeStamp() {"2022/11/19 11:22 AM"}
+def timeStamp() {"2022/11/20 8:35 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -72,6 +72,13 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        /*
+        input (name: "testingDelay", type: "bool", title: "Enable Delayed Testing", description: "<i>If state stays 'wet' for less than NN seconds, assume this was a test</i>", defaultValue: false)
+        if (testingDelay?.value == true) {
+            input (name: "minimumWetTime", type: "number", title: "<b>Minimum 'wet' time</b>", description: "<i>The minimum time the leak sensor must report 'wet' state to be considered as a real alarm. Default = 3 seconds</i>", range: "0..7200", defaultValue: 3)
+        }
+        */
+        
     }
 }
 
@@ -159,12 +166,7 @@ def parseIasMessage(String description) {
     try {
         Map zs = zigbee.parseZoneStatusChange(description)
         //if (settings?.logEnable == true) log.trace "zs = $zs"
-        if (zs.alarm1Set == true) {
-            wet()
-        }
-        else {
-            dry()
-        }
+        processWaterEvent( zs.alarm1Set == true ? 'wet' : 'dry')
     }
     catch (e) {
         log.error "This driver requires HE version 2.2.7 (May 2021) or newer!"
@@ -172,30 +174,130 @@ def parseIasMessage(String description) {
     }
 }
 
-def sendWaterEvent( String value, boolean isDigital=false ) {
-    def type = isDigital == true ? "digital" : "physical"
-    def descriptionText = "${device.displayName} is ${value}"
-    if (isDigital == true) descriptionText += " (digital)"
-    if (value == 'wet' && isDigital==false ) {
-        state.lastWaterWet = FormattedDateTimeFromUnix( now() )
-        descriptionText = "<b>" + descriptionText + "</b>"
+def processWaterEvent( String value, boolean isDigital=false, boolean wasChecked=false ) {
+    def valueToBeSent = value
+    switch (value) {
+        case 'checking' :
+            valueToBeSent = 'checking'
+            state.isTesting = true
+            break
+        case 'tested' :
+            valueToBeSent = 'tested'
+            state.isTesting = true
+            runIn( 2, setDryDelayed, [overwrite: true])
+            break
+        case 'wet' :
+            if (settings?.testingDelay == false ) {
+                // send 'wet' without delays and additional checks
+                valueToBeSent = "wet"
+                state.isTesting = false
+            }
+            else {
+                // check whether this is the initial 'wet' event, or a confirmation after few seconds?
+                if (wasChecked == true) {
+                    // scheduled call, confirmed from "checkIfStillWet()"
+                    valueToBeSent = "wet"
+                }
+                else {
+                    // this is the inital 'wet' event - to be verified!
+                    valueToBeSent = "checking"
+                    state.isTesting = true
+                    runIn( settings?.minimumWetTime ?: 1, "checkIfStillWet")
+                }
+            }
+            if (isDigital==false ) {
+                state.lastWaterWet = FormattedDateTimeFromUnix( now() )
+            }
+            break
+        case 'dry' :
+            // 'dry' may come after a test or after a real alarm
+            valueToBeSent = "dry"
+            descriptionText = "${device.displayName} is ${valueToBeSent}"
+            state.isTesting = false
+            break
+        default :
+            log.warn "unprocessed water event ${value}"
+            return
     }
-    logInfo "$descriptionText"
+    sendWaterEvent( valueToBeSent, isDigital )
+}
+
+def sendWaterEvent( String value, boolean isDigital=false) {
+    def type = isDigital == true ? "digital" : "physical"
+    String descriptionText
+    switch (value) {
+        case 'checking' :
+            descriptionText = "${device.displayName} checking"
+            break
+        case 'tested' :
+            descriptionText = "${device.displayName} is tested"
+            break
+        case 'wet' :
+            if (settings?.testingDelay == false ) {
+                // send 'wet' without delays and additional checks
+                descriptionText = "<b>${device.displayName} is wet</b>"
+            }
+            else {
+                // check whether this is the initial 'wet' event, or a confirmation after few seconds?
+                if (wasChecked == true) {
+                    // scheduled call, confirmed from "checkIfStillWet()"
+                    descriptionText = "<b>${device.displayName} is wet</b> (checked)"
+                }
+                else {
+                    // this is the inital 'wet' event - to be verified!
+                    descriptionText = "${device.displayName} received wet status - checking again in ${settings?.minimumWetTime ?: 1} seconds"
+                }
+            }
+            break
+        case 'dry' :
+            // 'dry' may come after a test or after a real alarm
+            if (state.isTesting  == true) {
+                descriptionText = "${device.displayName} is dry (test finished)"
+            }
+            else {
+                descriptionText = "${device.displayName} is dry"
+            }
+            break
+        default :
+            log.warn "unprocessed water event ${value}"
+            return
+    }
+    if (isDigital == true) descriptionText += " (digital)"
+    if (settings?.txtEnable==true) log.info "$descriptionText"    // includes deviceName
     sendEvent(name: "water", value: value, descriptionText: descriptionText, type: type , isStateChange: true)    
+}
+
+def setDryDelayed() {
+    processWaterEvent( 'dry', isDigital=true, wasChecked=true  )
+}
+
+def checkIfStillWet() {
+    // called when the first 'wet' event is received
+    if (device.currentValue('water', true) == 'checking') {
+        logDebug "sensor still reprots 'checking' after ${settings?.minimumWetTime ?: 1} seconds - this is a real alarm!"
+        state.isTesting = false
+        processWaterEvent( 'wet', isDigital=false, wasChecked=true  )
+    }
+    else {
+        // the leak sensor status is back to 'tested' or 'dry', before the check timer expired - it was a test!
+        logDebug "it was a test (${device.currentValue('water', true)})"
+        state.isTesting = true
+        processWaterEvent( 'tested', isDigital=false, wasChecked=true )
+    }
+    unschedule("checkIfStillWet")
 }
 
 
 def wet() {
-    sendWaterEvent( "wet", isDigital=true  )
+    processWaterEvent( "wet", isDigital=true  )
 }
 
 def dry() {
-    sendWaterEvent( "dry", isDigital=true  )
+    processWaterEvent( "dry", isDigital=true  )
 }
 
 def push() {
-    sendWaterEvent( "tested", isDigital=true )
-    runIn( 2, dry, [overwrite: true, misfire: "ignore"])
+    processWaterEvent( "tested", isDigital=true )
 }
 
 def processTuyaCluster( descMap ) {
@@ -233,12 +335,7 @@ def processTuyaCluster( descMap ) {
         logDebug "Tuya Cluster command: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x65 : // dry/wet
-                if (fncmd == 0) {
-                    sendWaterEvent( "dry" )
-                }
-                else {
-                    sendWaterEvent( "wet" )
-                }
+                processWaterEvent( fncmd == 0 ? "dry" : "wet" )
                 break
             case 0x66 : // battery
                 logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -428,6 +525,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.rejoinCounter == null) state.rejoinCounter = 0
+    if (fullInit == true || state.isTesting == null) state.isTesting = false
     if (state.lastBattery == null) state.lastBattery = "0"
     if (state.lastWaterWet == null) state.lastWaterWet = "unknown"    //FormattedDateTimeFromUnix( now() )
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
@@ -437,6 +535,9 @@ void initializeVars( boolean fullInit = true ) {
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", [value:debugLogsDefault, type:"bool"])
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", [value: true, type:"bool"])
+    if (fullInit == true || settings?.testingDelay == null) device.updateSetting("testingDelay", [value: false, type:"bool"])
+    if (fullInit == true || settings?.minimumWetTime == null) device.updateSetting("minimumWetTime", [value:3, type:"number"])
+    
 }
 
 def tuyaBlackMagic() {
@@ -540,7 +641,8 @@ private Map getBatteryResult(rawValue) {
         result.value = Math.min(100, roundedPct)
         result.descriptionText = "${device.displayName} battery is ${result.value}% (${volts} V)"
         result.name = 'battery'
-        result.unit  = '%'
+        result.unit = '%'
+        result.type = "physical"
         result.isStateChange = true
         logInfo "${result.descriptionText}, water:${device.currentState('water').value}"
         state.lastBattery = roundedPct.toString()
