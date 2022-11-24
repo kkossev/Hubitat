@@ -43,7 +43,7 @@
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
- *  ver. 1.6.4 2022-11-21 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; Frient Energy monitor divisor fix;
+ *  ver. 1.6.4 2022-11-24 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; Frient Energy monitor divisor fix; added rejoinCounter; Frient config. moved to settings
  *
  */
 import groovy.json.*
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.4" }
-def timeStamp() {"2022/11/21 7:00 AM"}
+def timeStamp() {"2022/11/24 2:00 PM"}
 
 @Field static final Boolean debug = false
 
@@ -81,11 +81,6 @@ metadata {
         command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
         command "resetEnergy", [[name: "Reset the acumulated Energy value" ]]
-        
-       // if (isFrientEnergyMonitor() == true) {
-            command "pulseConfiguration", [[name: "PulseConfiguration", type: "NUMBER", description: "test", defaultValue : 1000]]
-            command "setEnergyMeterMode", [[name: "SetEnergyMeterMode*",   type: "ENUM", constraints: develcoInterfaceMode]]
-       // }
         
         if (debug == true) {
             command "activeEndpoints"
@@ -173,7 +168,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0B05", outClusters:"0019", model:"3200", manufacturer:"CentraLite", deviceJoinName: "CentraLite Smart Plug"
         */
         // experimental
-        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"            // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
     }
     
     
@@ -207,15 +202,23 @@ metadata {
             if (reportPower?.value == true) {
                 input (name: "powerTreshold", type: "number", title: "<b>Power minimum change to be reported</b>, W", description: "<i>The minimum Power change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
             }
-            input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting Off or On</b>", description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
-            if (reportAmperage?.value == true) {
-                input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 25)
-            }
-            input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
-            if (reportVoltage?.value == true) {
-                input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
+            if (!isFrientEnergyMonitor()) {
+                input (name: "reportAmperage", type: "bool", title: "<b>Amperage Reporting Off or On</b>", description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
+                if (reportAmperage?.value == true) {
+                    input (name: "amperageTreshold", type: "number", title: "<b>Amperage minimum change to be reported</b>, mA", description: "<i>The minimum Amperage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 25)
+                }
+                input (name: "reportVoltage", type:  "bool", title: "<b>Voltage Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: true)
+                if (reportVoltage?.value == true) {
+                    input (name: "voltageTreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
+                }
             }
         } 
+        if (isFrientEnergyMonitor() == true) {
+            command "pulseConfiguration", [[name: "PulseConfiguration", type: "NUMBER", description: "test", defaultValue : 1000]]
+            input (name: "pulseConfiguration", type: "number", title: "<b>Frient Energy Monitor Pulse Configuration</b>", description: "<i>Frient Energy Monitor Pulse Configuration</i>", range: "10..100000", defaultValue: 1000)
+            input (name: "frientEnergyMeterMode", type: "enum", title: "<b>Energy Reporting Mode</b>", description:"<i>Select Frient Energy Reporting Mode</i>", defaultValue: "0", options: develcoInterfaceMode)
+            //command "setEnergyMeterMode", [[name: "SetEnergyMeterMode*",   type: "ENUM", constraints: develcoInterfaceMode]]
+       }        
         input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
     }
 }
@@ -266,7 +269,7 @@ private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in 
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") in ["frient A/S","Develco Products A/S"]}
-private boolean isFrientEnergyMonitor() { state.model in ["ZHEMI101", "SPLZB-131"] }
+private boolean isFrientEnergyMonitor() { state.model in ["ZHEMI101" /*, "SPLZB-131"*/] }
 private boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
 private boolean isSercomm() { device.getDataValue("manufacturer") in ["Sercomm Corp.", " Sercomm Corp."] || device.getDataValue("model") == "SZ-ESW01-AU" }
 private boolean isHeiman() { device.getDataValue("manufacturer") == "HEIMAN" }
@@ -761,6 +764,7 @@ def parseZDOcommand( Map descMap ) {
             break
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            state.rejoinCounter = (state.rejoinCounter ?: 0) + 1
             //sendZigbeeCommands(tuyaBlackMagic())
             break
         case "8004" : // simple descriptor response
@@ -1207,7 +1211,7 @@ def tuyaBlackMagic() {
 
 def fixOtherTuyaOddities() {
     def ep = device.getEndpointId()
-    log.warn "ep=${ep} isF2=${ep=='F2'}"
+    logDebug "ep=${ep} isF2=${ep=='F2'}"
     if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs' || ep == 'F2') {
         log.warn "fixing other Tuya oddities ..."
         List<String> cmds = []
@@ -1275,6 +1279,17 @@ def configure() {
     else {
         if (logEnable==true) log.info "${device.displayName} Automatic reporting is disabled!"
     }
+    //
+    if (isFrientEnergyMonitor() == true) {
+        def modeName =  develcoInterfaceMode.find{it.key==settings?.frientEnergyMeterMode}
+        if (modeName != null) {
+            logDebug "setting frientEnergyMeterMode to ${modeName.value} (${settings?.frientEnergyMeterMode})"
+            cmds += setEnergyMeterMode( modeName.value )
+        }
+        logDebug "setting FrientEnergyMonitor pulseConfiguration (${settings?.pulseConfiguration} )"
+        cmds += pulseConfiguration( settings?.pulseConfiguration )
+    }
+    
     sendZigbeeCommands(cmds)
     //  
     if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs') {
@@ -1337,6 +1352,7 @@ def updated(){
     else {
         sendEvent(name: "html", value: "<table></table>", isChanged: true)
     }
+    formatAttrib()
     configure()
 }
 
@@ -1353,6 +1369,18 @@ void initializeVars( boolean fullInit = true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    
+    def mm = device.getDataValue("model")
+    if ( mm != null) {
+        state.model = mm
+        if (logEnable==true) log.trace "${device.displayName} model = ${state.model}"
+    }
+    else {
+        if (txtEnable==true) log.warn "${device.displayName} Model not found, please re-pair the device!"
+        state.model = UNKNOWN
+    }
+    
+    
     state.rxCounter = 0
     state.txCounter = 0
     //if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
@@ -1392,6 +1420,9 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.amperageTreshold == null) device.updateSetting("amperageTreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageTreshold == null) device.updateSetting("voltageTreshold", 1)
     if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
+    if (fullInit == true || settings?.pulseConfiguration == null) device.updateSetting("pulseConfiguration", [value:1000, type:"number"])
+    if (fullInit == true || settings?.frientEnergyMeterMode == null) device.updateSetting("frientEnergyMeterMode", [value:"0", type:"enum"])    // electricity
+    
 
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
@@ -1412,18 +1443,19 @@ void initializeVars( boolean fullInit = true ) {
             state.powerPollingSupported = true
         }
     }
-    if (fullInit == true || state.energyPollingSupported == null) state.energyPollingSupported = true
-    
-    
-    def mm = device.getDataValue("model")
-    if ( mm != null) {
-        state.model = mm
-        if (logEnable==true) log.trace "${device.displayName} model = ${state.model}"
+    if (isFrientEnergyMonitor() == true) {
+        log.warn "disabling V/A reporting for Frient Energy monitor"
+        if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"REPORTED", type:"enum"])
+        if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", [value: false, type: "bool"])
+        if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", [value: false, type: "bool"])
     }
     else {
-        if (txtEnable==true) log.warn "${device.displayName} Model not found, please re-pair the device!"
-        state.model = UNKNOWN
+        log.warn "??? NOT Frient Energy monitor"
     }
+    if (fullInit == true || state.energyPollingSupported == null) state.energyPollingSupported = true
+    if (fullInit == true || state.rejoinCounter == null) state.rejoinCounter = 0
+    
+    
     def ep = device.getEndpointId()
     if ( ep  != null && ep != 'F2') {
         state.destinationEP = ep
@@ -1879,7 +1911,9 @@ void formatAttrib() {
     String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
     
     attrStr += addToAttr("Presence", "presence")
-    attrStr += addToAttr("Switch","switch")
+    if (!isFrientEnergyMonitor()) {
+        attrStr += addToAttr("Switch","switch")
+    }
     if (reportPower == true) {
         attrStr += addToAttr("Power", "power", convert ="int")
     }
@@ -1975,34 +2009,34 @@ def pulseConfiguration( pulses ) {
     List<String> cmds = []
     if (pulses != null) {
         def pulsesInt = safeToInt( pulses )
-        if (pulsesInt >= 100 && pulsesInt <= 10000) {
+        if (pulsesInt >= 100 && pulsesInt <= 100000) {
             if (state.txCounter != null) state.txCounter = state.txCounter + 1
             cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [mfgCode: 0x1015], delay=250)
             cmds += zigbee.readAttribute(0x0702, 0x0300, [mfgCode: 0x1015], delay=100)
-            sendZigbeeCommands(cmds)
             if (settings?.txtEnable) log.info "${device.displayName} setting pulse configuration to: ${pulsesInt}"
         }
         else {
             if (settings?.txtEnable) log.warn "${device.displayName} please enter a valid pulse configuration value between 100 and 10000 (default is 1000)"
         }
-    }    
+    }
+    return cmds
 }
 
 
 def setEnergyMeterMode( mode ) {
     ArrayList<String> cmds = []
-    logDebug "setting energy mode to $mode"
+    logDebug "setting energy mode to ${mode}"
     if (mode != null) {
         def key = develcoInterfaceMode.find{it.value==mode}?.key
         logDebug "setEnergyMeterMode ${mode} key=${key}"
         if (key != null) {
             cmds += zigbee.writeAttribute(0x0702, 0x0302, DataType.UINT8, safeToInt(key), [mfgCode: 0x1015], delay=251)
-            cmds += zigbee.readAttribute(0x0702, 0x0302, [mfgCode: 0x1015], delay=101)        //  [:] returns 0 value? changed to [mfgCode: 0x1015] 11/16/2022
-            sendZigbeeCommands(cmds)    
+            cmds += zigbee.readAttribute(0x0702, 0x0302, [mfgCode: 0x1015], delay=101)
         }
         else {
             logWarn "invalid energy mode ${mode}"
         }
     }
+    return cmds
 }
 
