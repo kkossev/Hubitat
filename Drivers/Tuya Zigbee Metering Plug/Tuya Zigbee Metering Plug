@@ -43,7 +43,7 @@
  *                                  removed lastAmperage, lastVoltage; negative energy automatic correction; ignoring false zero automatic reports for W,A,V !;  frient A/S SPLZB-131 voltage correction; added processing for power Instantaneous Demand
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
- *  ver. 1.6.4 2022-11-25 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; Frient Energy monitor divisor fix; added rejoinCounter; Frient config. moved to settings
+ *  ver. 1.6.4 2022-11-26 kkossev - (dev. branch) added Frient Energy Monitor (ZHEMI101); pulseConfiguration; setEnergyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; Frient Energy monitor divisor fix; added rejoinCounter; Frient config. moved to settings; fixed null Zigbee commands bug;
  *
  */
 import groovy.json.*
@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.4" }
-def timeStamp() {"2022/11/25 11:37 AM"}
+def timeStamp() {"2022/11/26 10:06 AM"}
 
 @Field static final Boolean debug = false
 
@@ -269,7 +269,7 @@ private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in 
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
 private boolean isFrientOutlet() { device.getDataValue("manufacturer") in ["frient A/S","Develco Products A/S"]}
-private boolean isFrientEnergyMonitor() { state.model in ["ZHEMI101" /*, "SPLZB-131"*/] }
+private boolean isFrientEnergyMonitor() { state.model in ["ZHEMI101"/* , "SPLZB-131"*/] }
 private boolean isCCM300() { device.getDataValue("model") == "CCM-300Z" }
 private boolean isSercomm() { device.getDataValue("manufacturer") in ["Sercomm Corp.", " Sercomm Corp."] || device.getDataValue("model") == "SZ-ESW01-AU" }
 private boolean isHeiman() { device.getDataValue("manufacturer") == "HEIMAN" }
@@ -765,7 +765,7 @@ def parseZDOcommand( Map descMap ) {
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             state.rejoinCounter = (state.rejoinCounter ?: 0) + 1
-            //tuyaBlackMagic()
+            //sendZigbeeCommands(tuyaBlackMagic())
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -1206,21 +1206,24 @@ def tuyaBlackMagic() {
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :255], delay=150) // destEndpoint: 255 ??? seq 2   // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
     cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :ep], delay=50)
-    sendZigbeeCommands(cmds)
+    return cmds
 }
 
 def fixOtherTuyaOddities() {
+    List<String> cmds = []
     def ep = device.getEndpointId()
     logDebug "ep=${ep} isF2=${ep=='F2'}"
     if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs' || ep == 'F2') {
         log.warn "fixing other Tuya oddities ..."
-        List<String> cmds = []
         def endpoint = '01'
         cmds =  ["zdo bind ${device.deviceNetworkId} ${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}",
                 "delay 250", 
                 "he cr 0x${device.deviceNetworkId} ${endpoint} 6 0 16 0 900 {}",
                 "delay 250"]   
         return cmds
+    }
+    else {
+        return Collections.emptyList()
     }
 }
 
@@ -1236,7 +1239,7 @@ def configure() {
     scheduleHourlyAndDailyEnergy()
         
     List<String> cmds = []
-    /*cmds += */ tuyaBlackMagic()
+    cmds =  tuyaBlackMagic()
     cmds += fixOtherTuyaOddities()
     if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs' || device.getEndpointId() == 'F2') {
         if (logEnable==true) log.debug "${device.displayName} skipping onOff standard configuration for an odd Tuya device..."
@@ -2016,13 +2019,17 @@ def pulseConfiguration( pulses ) {
         def pulsesInt = safeToInt( pulses )
         if (pulsesInt >= 100 && pulsesInt <= 100000) {
             if (state.txCounter != null) state.txCounter = state.txCounter + 1
+            
             cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [mfgCode: 0x1015], delay=250)
-            //cmds += zigbee.readAttribute(0x0702, 0x0300, [mfgCode: 0x1015], delay=100)
+            cmds += zigbee.readAttribute(0x0702, 0x0300, [mfgCode: 0x1015], delay=100)
+            /*
+            cmds += zigbee.writeAttribute(0x0702, 0x0300, DataType.UINT16, pulsesInt, [:], delay=250)
             cmds += zigbee.readAttribute(0x0702, 0x0300, [:], delay=100)
-            if (settings?.txtEnable) log.info "${device.displayName} sending pulse configuration : ${pulsesInt}"
+            */
+            logDebug "sending pulse configuration : ${pulsesInt}"
         }
         else {
-            if (settings?.txtEnable) log.warn "${device.displayName} please enter a valid pulse configuration value between 100 and 10000 (default is 1000)"
+            logWarn "please enter a valid pulse configuration value between 100 and 10000 (default is 1000)"
         }
     }
     return cmds
@@ -2031,14 +2038,17 @@ def pulseConfiguration( pulses ) {
 
 def setEnergyMeterMode( mode ) {
     ArrayList<String> cmds = []
-    //logDebug "setting energy mode to ${mode}"
     if (mode != null) {
         def key = develcoInterfaceMode.find{it.value==mode}?.key
         logDebug "sending setEnergyMeterMode ${mode} key=${key}"
         if (key != null) {
+            
             cmds += zigbee.writeAttribute(0x0702, 0x0302, DataType.UINT8, safeToInt(key), [mfgCode: 0x1015], delay=251)
-            //cmds += zigbee.readAttribute(0x0702, 0x0302, [mfgCode: 0x1015], delay=101)
+            cmds += zigbee.readAttribute(0x0702, 0x0302, [mfgCode: 0x1015], delay=101)
+            /*
+            cmds += zigbee.writeAttribute(0x0702, 0x0302, DataType.UINT8, safeToInt(key), [:], delay=251)
             cmds += zigbee.readAttribute(0x0702, 0x0302, [:], delay=101)
+            */
         }
         else {
             logWarn "invalid energy mode ${mode}"
