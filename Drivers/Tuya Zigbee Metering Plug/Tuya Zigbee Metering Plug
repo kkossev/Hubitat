@@ -51,7 +51,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.4" }
-def timeStamp() {"2022/11/26 10:06 AM"}
+def timeStamp() {"2022/11/26 10:07 AM"}
 
 @Field static final Boolean debug = false
 
@@ -1456,9 +1456,6 @@ void initializeVars( boolean fullInit = true ) {
         if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"REPORTED", type:"enum"])
         if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", [value: false, type: "bool"])
         if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", [value: false, type: "bool"])
-    }
-    else {
-        log.warn "??? NOT Frient Energy monitor"
     }
     if (fullInit == true || state.energyPollingSupported == null) state.energyPollingSupported = true
     if (fullInit == true || state.rejoinCounter == null) state.rejoinCounter = 0
