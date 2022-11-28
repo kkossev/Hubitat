@@ -27,11 +27,12 @@
  * ver. 1.0.12 2022-09-05 kkossev  - added _TZE200_wukb7rhc MOES radar
  * ver. 1.0.13 2022-09-25 kkossev  - added _TZE200_jva8ink8 AUBESS radar; 2-in-1 Sensitivity setting bug fix?
  * ver. 1.0.14 2022-10-31 kkossev  - added Bond motion sensor ZX-BS-J11W fingerprint for tests
+ * ver. 1.0.15 2022-10-31 kkossev  - OWON 0x0406 cluster binding
  *
 */
 
-def version() { "1.0.14" }
-def timeStamp() {"2022/10/31 9:24 AM"}
+def version() { "1.0.15" }
+def timeStamp() {"2022/11/28 7:48 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1318,7 +1319,11 @@ def configure() {
         cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         if (settings?.logEnable) log.debug "${device.displayName} IAS device: ${cmds}"
     }
-    else if (!isRadar()) {    // skip the binding for all the radars!
+    else if (isOWONRadar()) {
+        cmds += "delay 200"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"    // OWON motion/occupancy cluster
+    }
+    else if (!isRadar()) {    // skip the binding for all the radars!                // TODO: check EPs !!!
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
         cmds += "delay 200"
