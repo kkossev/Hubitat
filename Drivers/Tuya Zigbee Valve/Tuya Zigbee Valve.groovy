@@ -17,6 +17,8 @@
  *  ver. 1.0.1 2022-04-23 kkossev - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource
  *  ver. 1.0.2 2022-08-14 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only); fingerprint inClusters correction; battery capability; open/close commands changes
  *  ver. 1.0.3 2022-08-19 kkossev - decreased delay betwen Tuya commands to 200 milliseconds; irrigation valve open/close commands are sent 2 times; digital/physicla timer changed to 3 seconds;
+ *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
+ *
  *            TODO Presence check timer
  *
  *
@@ -25,8 +27,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.3" }
-def timeStamp() {"2022/08/19 8:19 AM"}
+def version() { "1.0.4" }
+def timeStamp() {"2022/11/28 10:43 PM"}
 
 @Field static final Boolean debug = false
 
@@ -64,13 +66,8 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        /*
-        input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable automatic polling for checking the valve presence. Recommended value is <b>true</b></i>", defaultValue: true)
-        if (autoPollingEnabled?.value==true) {
-            input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, minutes", description: "<i>The time period in which the valve will be checked for inactivity. Recommended value is <b>15 minutes</b></i>", 
-                   range: "1..1440", defaultValue: defaultPollingInterval)
-        }
-        */
+        input (name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options: powerOnBehaviourOptions)
+        //input (name: "switchType", type: "enum", title: "<b>Switch Type</b>", description:"<i>Select witch Type</i>", defaultValue: "0", options: switchTypeOptions)
     }
 }
 
@@ -81,6 +78,19 @@ metadata {
 @Field static final Integer digitalTimer = 3000
 @Field static final Integer refreshTimer = 3000
 @Field static String UNKNOWN = "UNKNOWN"
+
+@Field static final Map powerOnBehaviourOptions = [   
+    '0': 'closed',
+    '1': 'open',
+    '2': 'last state'
+]
+
+@Field static final Map switchTypeOptions = [   
+    '0': 'toggle',
+    '1': 'state',
+    '2': 'momentary'
+]
+
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
@@ -374,8 +384,12 @@ def parseZHAcommand( Map descMap) {
                 } // switch (descMap.clusterId)
             }  //command is read attribute response 01 or 02 (Tuya)
             break
+        
+        case "04" : //write attribute response
+            logDebug "parseZHAcommand writeAttributeResponse cluster: ${descMap.clusterId} status:${descMap.data[0]}"
+            break
         case "07" : // Configure Reporting Response
-            if (logEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            logDebug "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             // Status: Unreportable Attribute (0x8c)
             break
         case "0B" : // ZCL Default Response
@@ -536,6 +550,26 @@ def configure() {
     cmds += tuyaBlackMagic()
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
+    
+    if (settings?.powerOnBehaviour != null) {
+        def modeName =  powerOnBehaviourOptions.find{it.key==settings?.powerOnBehaviour}
+        if (modeName != null) {
+            logDebug "setting powerOnBehaviour to ${modeName.value} (${settings?.powerOnBehaviour})"
+            cmds += zigbee.writeAttribute(0xE001, 0xD010, DataType.ENUM8, (byte) safeToInt(settings?.powerOnBehaviour), [:], delay=251)
+            //cmds += zigbee.readAttribute(0xE001, 0xD010, [:], delay=101)
+        }
+    }
+    /*
+    if (settings?.switchType != null) {
+        def modeName =  switchTypeOptions.find{it.key==settings?.switchType}
+        if (modeName != null) {
+            logDebug "setting switchType to ${modeName.value} (${settings?.switchType})"
+            cmds += zigbee.writeAttribute(0xE001, 0xD030, DataType.ENUM8, (byte) safeToInt(settings?.switchType), [:], delay=252)
+            //cmds += zigbee.readAttribute(0xE001, 0xD030, [:], delay=101)
+        }
+    }
+    */
+    
     sendZigbeeCommands(cmds)
 }
 
@@ -577,7 +611,8 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = false
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-
+    if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
+    if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -699,18 +734,28 @@ boolean isTuyaE00xCluster( String description )
         return false 
     }
     // try to parse ...
-    if (logEnable) log.debug "${device.displayName}  Tuya cluster: E000 or E001 - try to parse it..."
+    logDebug "Tuya cluster: E000 or E001 - try to parse it..."
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
     catch ( e ) {
-        log.warn "${device.displayName} <b>exception</b> caught while parsing description:  ${description}"
-        if (logEnable==true) log.debug "${device.displayName} TuyaE00xCluster Desc Map: ${descMap}"
+        logWarn "<b>exception</b> caught while parsing description:  ${description}"
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}"
         // cluster E001 is the one that is generating exceptions...
         return true
     }
-    if (logEnable==true) {log.debug "${device.displayName} TuyaE00xCluster Desc Map: $descMap"}
+    if (descMap.cluster == "E001" && descMap.attrId == "D010") {
+        
+        logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})"
+    }
+    else if (descMap.cluster == "E001" && descMap.attrId == "D030") {
+        logInfo "swith type is <b>${switchTypeOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})"
+    }
+    else {
+        logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap"
+    }
+    
     
     //
     return true
@@ -725,6 +770,32 @@ boolean otherTuyaOddities( String description )
     }
     else
         return false
+}
+
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+}
+
+def logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
 }
 
 def test( dpCommand, dpValue, dpTypeString ) {
