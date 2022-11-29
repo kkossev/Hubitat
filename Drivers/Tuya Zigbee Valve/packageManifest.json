@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Valve",
   "author": "Krassimir Kossev",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-08-15",
-  "releaseNotes": "1.0.2 2022-08-14 - added _TZE200_sh1btabb Water Irrigation Valve (On/Off control only); battery capability; open/close commands changes\n1.0.1 2022-04-23 - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource\n1.0.0 2022-04-21 - inital version",
+  "dateReleased": "2022-11-28",
+  "releaseNotes": "1.0.4 2022-11-28 - added Power-On Behaviour preference setting\n1.0.3 2022-08-19 - decreased delay betwen Tuya commands to 200 milliseconds; irrigation valve open/close commands are sent 2 times; digital/physical timer changed to 3 seconds;\n1.0.2 2022-08-14 - added _TZE200_sh1btabb Water Irrigation Valve (On/Off control only); battery capability; open/close commands changes\n1.0.1 2022-04-23 - added Refresh command; [overwrite: true] explicit option for runIn calls; capability PowerSource\n1.0.0 2022-04-21 - inital version",
   "communityLink": "https://community.hubitat.com/t/beta-tuya-zigbee-valve-driver/92788",
 "drivers": [
     {
