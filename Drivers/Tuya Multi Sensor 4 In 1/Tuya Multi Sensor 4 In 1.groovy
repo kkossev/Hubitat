@@ -27,12 +27,12 @@
  * ver. 1.0.12 2022-09-05 kkossev  - added _TZE200_wukb7rhc MOES radar
  * ver. 1.0.13 2022-09-25 kkossev  - added _TZE200_jva8ink8 AUBESS radar; 2-in-1 Sensitivity setting bug fix?
  * ver. 1.0.14 2022-10-31 kkossev  - added Bond motion sensor ZX-BS-J11W fingerprint for tests
- * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards; OWON 0x0400,402,405 clusters binding
+ * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  *
 */
 
 def version() { "1.0.15" }
-def timeStamp() {"2022/12/03 5:51 PM"}
+def timeStamp() {"2022/12/03 8:47 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1325,12 +1325,6 @@ def configure() {
     else if (isOWONRadar()) {
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"    // OWON motion/occupancy cluster
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}"
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}"
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}"
     }
     else if (!isRadar()) {    // skip the binding for all the radars!                // TODO: check EPs !!!
         cmds += "delay 200"
