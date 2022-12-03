@@ -29,13 +29,13 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-03 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); 
+ * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); Approach distance bug fix;
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/03 10:35 AM"}
+def timeStamp() {"2022/12/04 1:53 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -111,9 +111,9 @@ metadata {
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "2", options: ["1":"far", "2":"medium", "3":"near" ])
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "1", options: approachDistanceOptions)
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
-                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: monitoringModeOptions)
             }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
             if (internalTemperature == true) {
@@ -138,8 +138,8 @@ private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : 
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
 private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
 private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
-private FP1_APPROACH_DISTANCE_NAME(value) { value == 1 ? "far" : value == 2 ? "medium" : value == 3 ? "near" : null }
-private FP1_MONITORING_MODE_NAME(value) { value == 0 ? "undirected" : value == 1 ? "left_right" : null }
+@Field static final Map approachDistanceOptions = [ "0":"far", "1":"medium", "2":"near" ]
+@Field static final Map monitoringModeOptions = [ "0":"undirected", "1":"left_right" ]
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -293,12 +293,12 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             def value = safeToInt(it.value)
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            if (txtEnable) log.info "${device.displayName} <b>received monitoring_mode report: ${FP1_MONITORING_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} <b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
             def value = safeToInt(it.value)
             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} (0x0146) <b>received approach_distance report: ${FP1_APPROACH_DISTANCE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            if (txtEnable) log.info "${device.displayName} (0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0152" : // LED configuration
             def value = safeToInt(it.value)
@@ -367,7 +367,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x67 : // (103) FP1 monitoring_mode
                         if (isFP1()) {
-                            if (txtEnable) log.info "${device.displayName} monitoring_mode is <b> ${rawValue==0?'undirected':'left_right'}</b> (${rawValue} )"
+                            if (txtEnable) log.info "${device.displayName} monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue} )"
                             device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
                         }
                         else {
@@ -377,7 +377,7 @@ def decodeAqaraStruct( description )
                     case 0x69 : // (105) 
                         if (isFP1()) { // FP1
                             device.updateSetting( "approachDistance",  [value:rawValue.toString(), type:"enum"] )    // {0: 'far', 1: 'medium', 2: 'near'}
-                            if (txtEnable) log.info "${device.displayName} approach_distance is <b>${FP1_APPROACH_DISTANCE_NAME(rawValue)}</b> (${rawValue})"
+                            if (txtEnable) log.info "${device.displayName} approach_distance is <b>${approachDistanceOptions[rawValue.toString()]}</b> (${rawValue})"
                         }
                         else if (isRTCGQ13LM()) {
                             // payload.motion_sensitivity = {1: 'low', 2: 'medium', 3: 'high'}[value];
@@ -803,8 +803,9 @@ def powerSourceEvent( state = null) {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if ((state.rxCounter != null) && state.rxCounter <= 2)
+    if ((state.rxCounter != null) && state.rxCounter <= 2) {
         return                    // do not count the first device announcement or binding ack packet as an online presence!
+    }
     powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
@@ -824,14 +825,14 @@ def checkIfNotPresent() {
         if (state.notPresentCounter >= presenceCountTreshold) {
             if (!(device.currentValue('powerSource', true) in ['unknown'])) {
     	        powerSourceEvent("unknown")
-                if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
+                logWarn "is not present!"
             }
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
                 handleMotion(false, isDigital=true)
-                if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
+                logWarn "forced motion to '<b>inactive</b>"
             }
             if (safeToInt(device.currentValue('battery', true)) != 0) {
-                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
+                logWarn "${device.displayName} forced battery to '<b>0 %</b>"
                 sendBatteryEvent( 0, isDigital=true )
             }
         }
@@ -851,13 +852,20 @@ def pollPresence() {
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-    }
-    else {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
-        state.driverVersion = driverVersionAndTimeStamp()
         state.motionStarted = now()
+        // added 12/04/2022
+        if (isFP1()) {
+            if (device.currentValue('battery', true) == null) {
+                sendBatteryEvent( 100, isDigital=true )
+            }
+            if (state.lastBattery == null || safeToInt(state.lastBattery) == 0) {
+                state.lastBattery = 100
+            }
+        }
+        state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
@@ -908,14 +916,14 @@ def updated() {
     }
     //
     if (isFP1()) { // FP1
-        if (settings?.approachDistance != null && settings?.approachDistance != 0) {    // [1:"far", 2:"medium", 3:"near" ]
+        if (settings?.approachDistance != null) {    // [0:"far", 1:"medium", 2:"near" ]
             value = safeToInt( approachDistance )
-            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${FP1_APPROACH_DISTANCE_NAME(value)} (${value})"
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
         if (settings?.monitoringMode != null) {    // [0:"undirected", 1:"left_right" ]
             value = safeToInt( monitoringMode )
-            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${FP1_MONITORING_MODE_NAME(value)} (${value})"
+            if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringModeOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
     }
@@ -941,7 +949,7 @@ void setDeviceName() {
     else if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
         deviceName = "Aqara Sensor"
     else {
-        log.warn "${device.displayName} unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+        logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
         return
     }
     device.setName(deviceName)
@@ -985,7 +993,7 @@ def configure(boolean fullInit = true ) {
     unschedule()
     initializeVars( fullInit )
     runIn( defaultPollingInterval, pollPresence, [overwrite: true])
-    log.warn "${device.displayName} <b>if no more logs, please pair the device again to HE!</b>"
+    logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     runIn( 30, aqaraReadAttributes, [overwrite: true])
 }
 def initialize() {
@@ -1025,7 +1033,7 @@ def setMotion( mode ) {
             }
             break
         default :
-            if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
+            logWarn "select motion action"
             break
     }
 }
@@ -1061,7 +1069,6 @@ def aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C, 0x0152], [mfgCode: 0x115F], delay=200)
     }
     else if (isFP1()) {  // Aqara presence detector FP1 
-        log.warn "aqaraReadAttributes() FP1"
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
     else if (isE1()) {   // E1 contact sensor
@@ -1069,7 +1076,7 @@ def aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0x0002, 0x0500, [mfgCode: 0x115F], delay=200)    //  open/close IAS Zone 2
     }
     else {
-        if (logEnable) log.warn "${device.displayName} unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
+        logWarn "unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
     }    
     
     sendZigbeeCommands( cmds )       
@@ -1083,7 +1090,7 @@ def aqaraBlackMagic() {
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
     }
     else if (isE1()) {
-        log.warn "aqaraBlackMagic() for E1"
+        logWarn "aqaraBlackMagic() for E1"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 89 34 86 38 41 04 19 89 90 79 74 27 27 80 18 45}  {0x0104}", "delay 200",]     // contact sensor write attr 0xFF
     }
@@ -1098,10 +1105,10 @@ def aqaraBlackMagic() {
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 00 9c 03 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:9) write attr 0xfff2 8 bytes
         cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 f2 ff 41 aa 74 02 44 01 9b 01 20}  {0x0104}", "delay 50",]                                 // FP1 (seq:10) write attr 0xfff2 8 bytes
         //cmds += activeEndpoints()         
-        log.warn "aqaraBlackMagic() for FP1"
+        logDebug "aqaraBlackMagic() for FP1"
     }
     else {
-        //log.warn "aqaraBlackMagic() = NOT E1 !!!!!!"
+        //logWarn "aqaraBlackMagic() = NOT E1 !!!!!!"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
@@ -1123,7 +1130,29 @@ def activeEndpoints() {
     return cmds    
 }
 
+def logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
+}
+
 def test( description ) {
+        List<String> cmds = []
+            value = safeToInt( description )
+            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)    
 }
 
 
