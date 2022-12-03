@@ -27,14 +27,15 @@
  * ver. 1.2.0 2022-07-29 kkossev  - FP1 first successful initializaiton :
  *            attr. 0142 presence bug fix; debug logs improvements; monitoring_mode bug fix; LED is null bug fix ;motionRetriggerInterval bugfix for FP1; motion sensitivity bug fix for FP1; temperature exception bug; 
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
- * ver. 1.2.1 2022-08-21 kkossev  - code / traces cleanup; change device name on initialize(); added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
+ * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
+ * ver. 1.2.3 2022-12-03 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); 
  *
  *
 */
 
-def version() { "1.2.2" }
-def timeStamp() {"2022/08/21 9:01 AM"}
+def version() { "1.2.3" }
+def timeStamp() {"2022/12/03 10:35 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -95,6 +96,7 @@ metadata {
         if (logEnable == true || logEnable == false) { // Groovy ... :) 
             input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
             input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
+            input (title: "<b>Information on Pairing and Configuration:</b>", description: "Pair the P1 and FP1 devices at least 2 times, very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences", type: "paragraph", element: "paragraph")        
             if (!isFP1()) {
                 input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
             }    
@@ -113,7 +115,10 @@ metadata {
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
                 input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: [0:"undirected", 1:"left_right" ])
             }
-            input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+            input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
+            if (internalTemperature == true) {
+                input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+            }
         }
     }
 }
@@ -677,6 +682,9 @@ def illuminanceEventLux( Integer lux ) {
 }
 
 def temperatureEvent( temperature ) {
+    if (settings?.internalTemperature == false) {
+        return
+    }
     def map = [:] 
     map.name = "temperature"
     map.unit = "\u00B0"+"C"
@@ -873,6 +881,9 @@ def updated() {
     else {
         unschedule(logsOff)
     }
+    if (settings?.internalTemperature == false) {
+        device.deleteCurrentState("temperature")
+    }
     def value = 0
     if (isP1()) {
         if (settings?.motionLED != null ) {
@@ -952,6 +963,7 @@ void initializeVars( boolean fullInit = false ) {
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
@@ -1093,7 +1105,7 @@ def aqaraBlackMagic() {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
-        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
         cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
     }
     //cmds += activeEndpoints()
@@ -1111,26 +1123,7 @@ def activeEndpoints() {
     return cmds    
 }
 
-
-
 def test( description ) {
-	List<String> cmds = []
-    //
-    //def xx = " read attr - raw: F3CE01FCC068F70041300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001, dni: F3CE, endpoint: 01, cluster: FCC0, size: 68, attrId: 00F7, encoding: 41, command: 0A, value: 300121F50B03281D0421000005210100082105010A214F410C2001132000142000641000652119006920056A20036B2001"
-   //def xx = "read attr - raw: 830901FCC072F70041350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121770C0328190421A813052169000624150000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-   // def xx = "read attr - raw: 830901FCC072F70041350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002, dni: 8309, endpoint: 01, cluster: FCC0, size: 72, attrId: 00F7, encoding: 41, command: 0A, value: 350121760C0328190421A8130521690006241A0000000008211A010A21AE270C2001641000652100006620036720016821A800692002"
-    
-    
-  // def xx = "FP1 debug log (SmartThings): ****************, value: 8309281F05210100082135010A2100000C20141020011220006520016620036720006820006920016A20016B2003" 
-    
-    //decodeAqaraStruct(xx)
-    //aqaraReadAttributes()
-   // aqaraBlackMagic()
-    
-    
-   //sendZigbeeCommands( cmds )
-    // Parent NWK is 3288
-
 }
 
 
