@@ -29,13 +29,13 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added battery 100% for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/04 9:59 AM"}
+def timeStamp() {"2022/12/04 7:32 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -118,6 +118,9 @@ metadata {
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+            }
+            if (isFP1()) {
+                input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Battery 100% workaround", defaultValue: false)
             }
         }
     }
@@ -393,7 +396,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6A :    // sensitivity
                         if (isFP1()) {
-                            if (logEnable) log.debug "${device.displayName} (0x06A) unknown parameter, value: ${rawValue}"
+                            logDebug "(0x6A) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
@@ -402,7 +405,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x6B :    // LED
                         if (isFP1()) {
-                            if (logEnable) log.debug "${device.displayName} (0x06B) unknown parameter, value: ${rawValue}"
+                            logDebug "(0x06B) unknown parameter, value: ${rawValue}"
                         }
                         else {
                             device.updateSetting( "motionLED",  [value:rawValue.toString(), type:"enum"] )
@@ -410,7 +413,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 1) * 2
@@ -436,7 +439,7 @@ def decodeAqaraStruct( description )
                         }
                         break
                     default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                         break
                 }
                 i = i + (1 + 1 + 2) * 2
@@ -446,7 +449,7 @@ def decodeAqaraStruct( description )
             case 0x23 : // Unsigned 32-bit integer
             case 0x2B : // Signed 32-bit integer
                 // TODO: Zcl32BitUint tag == 0x0d  -> firmware version ?
-                if (logEnable) log.debug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                logDebug "unknown 32 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                 i = i + (1 + 1 + 4) * 2    // TODO: check!
                 break
             case 0x24 : // 5 bytes 40 bits Zcl40BitUint tag == 0x06 -> LQI (?)
@@ -455,7 +458,7 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "device LQI is ${valueHex[(i+4)..(i+14)]}"
                         break
                     default :
-                        if (logEnable) log.debug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
+                        logDebug "unknown tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} TODO rawValue"
                         break
                 }
                 i = i + (1 + 1 + 5) * 2
@@ -464,7 +467,7 @@ def decodeAqaraStruct( description )
             case 0x1C : // 40-bit bitmap
             case 0x24 : // Unsigned 40-bit integer
             case 0x2C : // Signed 40-bit integer
-                if (logEnable) log.debug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                logDebug "unknown 40 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                 i = i + (1 + 1 + 5) * 2
                 break
             case 0x0D : // 48-bit data
@@ -473,7 +476,7 @@ def decodeAqaraStruct( description )
             case 0x2D : // Signed 48-bit integer
                 // TODO: Zcl48BitUint tag == 0x9a ?
                 // TODO: Zcl64BitUint tag == 0x07 ?
-                if (logEnable) log.debug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
+                logDebug "unknown 48 bit data tag=${valueHex[(i+0)..(i+1)]} dataType 0x${valueHex[(i+2)..(i+3)]} rawValue=${rawValue}"
                 i = i + (1 + 1 + 6) * 2
                 break
             // TODO: Zcl16BitInt tag == 0x64 -> temperature
@@ -811,7 +814,9 @@ def setPresent() {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
         if (safeToInt(device.currentValue('battery', true)) == 0 ) {
             if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+                if ((!isFP1()) || (isFP1() && settings?.homeKitCompatibility == true)) {
+                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+                }
             }
         }
     }    
@@ -831,9 +836,11 @@ def checkIfNotPresent() {
                 handleMotion(false, isDigital=true)
                 logWarn "forced motion to <b>inactive</b>"
             }
-            if (safeToInt(device.currentValue('battery', true)) != 0) {
-                logWarn "${device.displayName} forced battery to '<b>0 %</b>"
-                sendBatteryEvent( 0, isDigital=true )
+            if ((!isFP1()) || (isFP1() && settings?.homeKitCompatibility == true)) {
+                if (safeToInt(device.currentValue('battery', true)) != 0) {
+                    logWarn "${device.displayName} forced battery to '<b>0 %</b>"
+                    sendBatteryEvent( 0, isDigital=true )
+                }
             }
         }
     }
@@ -858,7 +865,7 @@ def checkDriverVersion() {
         state.motionStarted = now()
         // added 12/04/2022
         if (isFP1()) {
-            if (device.currentValue('battery', true) == null) {
+            if (device.currentValue('battery', true) == null && settings?.homeKitCompatibility == true) {
                 sendBatteryEvent( 100, isDigital=true )
             }
             if (state.lastBattery == null || safeToInt(state.lastBattery) == 0) {
@@ -892,6 +899,7 @@ def updated() {
     if (settings?.internalTemperature == false) {
         device.deleteCurrentState("temperature")
     }
+    
     def value = 0
     if (isP1()) {
         if (settings?.motionLED != null ) {
@@ -925,6 +933,12 @@ def updated() {
             value = safeToInt( monitoringMode )
             if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringModeOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
+        }
+        if (settings?.homeKitCompatibility == false) {
+            device.deleteCurrentState("battery")
+        }
+        else if (device.currentValue('battery', true) == null) {
+            sendBatteryEvent( 100, isDigital=true )
         }
     }
     //
@@ -973,12 +987,14 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
+    if (fullInit == true || settings?.homeKitCompatibility == null) device.updateSetting("homeKitCompatibility", false)
+    
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
     
-     if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+    if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
 
 }
 
