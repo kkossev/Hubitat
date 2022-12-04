@@ -29,7 +29,7 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); Approach distance bug fix;
+ * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added battery 100% for FP1 (HomeKit); Approach distance bug fix;
  *
  *
 */
@@ -136,8 +136,8 @@ private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
 private P1_SENSITIVITY_VALUE(mode) { mode == "Low" ? 1 : mode == "Medium" ? 2 : mode == "High" ? 3 : null }
 private P1_SENSITIVITY_NAME(value) { value == 1 ?"Low" : value == 2 ? "Medium" : value == 3 ? "High" : null }
-private FP1_PRESENCE_EVENT_STATE_NAME(value) { value == 0 ? "not present" : value == 1 ? "present" : null }
-private FP1_PRESENCE_EVENT_TYPE_NAME(value)  { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
+@Field static final Map fp1PresenceEventOptions = [ "0":"not present", "1":"present" ]
+@Field static final Map fp1PresenceEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"left_enter" , "3":"right_leave" , "4":"right_enter" , "5":"left_leave" , "6":"approach", "7":"away" ]
 @Field static final Map approachDistanceOptions = [ "0":"far", "1":"medium", "2":"near" ]
 @Field static final Map monitoringModeOptions = [ "0":"undirected", "1":"left_right" ]
 
@@ -226,9 +226,9 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "0065" :
             def value = safeToInt(it.value)
-            if (isFP1()) { // FP1
-                if (txtEnable) log.info "${device.displayName} (attr 0x065) presence is  ${value==0? 'not present':'present'} (${value})"
-                presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
+            if (isFP1()) { // FP1    'not present':'present'
+                if (txtEnable) log.info "${device.displayName} (attr 0x065) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
+                presenceEvent( fp1PresenceEventOptions[value.toString()] )
             }
             else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
                 illuminanceEventLux( value )
@@ -283,12 +283,12 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
             def value = safeToInt(it.value)
-            if (txtEnable) log.info "${device.displayName} (attr. 0x0142) presence is  ${value==0?'not present':'present'} (${value})"
-            presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(value) )
+            if (txtEnable) log.info "${device.displayName} (attr. 0x0142) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
+            presenceEvent( fp1PresenceEventOptions[value.toString()] )
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
             def value = safeToInt(it.value)
-            presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(value) )
+            presenceTypeEvent( fp1PresenceEventTypeOptions[value.toString()] )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             def value = safeToInt(it.value)
@@ -345,9 +345,9 @@ def decodeAqaraStruct( description )
                         if (logEnable) log.debug "lift % or gas density is ${rawValue}"
                         break
                     case 0x65 :    // (101) FP1 presence
-                        if (isFP1()) { // FP1
-                            if (txtEnable) log.info "${device.displayName} (0x65) presence is  ${rawValue==0?'not present':'present'} (${rawValue})"
-                            presenceEvent( FP1_PRESENCE_EVENT_STATE_NAME(rawValue) )  
+                        if (isFP1()) { // FP1 'not present':'present'
+                            if (txtEnable) log.info "${device.displayName} (0x65) presence is  ${fp1PresenceEventOptions[rawValue.toString()]} (${rawValue})"
+                            presenceEvent( fp1PresenceEventOptions[rawValue.toString()] )  
                         }
                         else {
                             if (logEnable) log.debug "${device.displayName} on/off EP 2 or battery percentage is ${rawValue}"
@@ -357,7 +357,7 @@ def decodeAqaraStruct( description )
                         if (isFP1()) {
                             if (/* FP1 firmware version  < 50) */ false ) {
                                 if (logEnable) log.warn "${device.displayName} RTCZCGQ11LM tag 0x66 (${rawValue} )"
-                                presenceTypeEvent( FP1_PRESENCE_EVENT_TYPE_NAME(rawValue) )
+                                presenceTypeEvent( fp1PresenceEventTypeOptions[rawValue.toString()] )
                             }
                             else {
                                 device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
@@ -712,7 +712,6 @@ def presenceEvent( String status, isDigital=false ) {
     }
 }
                                               
-// private FP1_PRESENCE_EVENT_TYPE_NAME(value) { value == 0 ? "enter" : value == 1 ? "leave" : value == 2 ? "left_enter" : value == 3 ? "right_leave" : value == 4 ? "right_enter" : value == 5 ? "left_leave" :  value == 6 ? "approach" : value == 7 ? "away" : null }
 def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
     if (presenceTypeEvent != null) {
         def type = isDigital == true ? "digital" : "physical"
