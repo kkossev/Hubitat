@@ -29,13 +29,13 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added battery 100% for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; 
+ * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added battery 100% for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/04 9:44 AM"}
+def timeStamp() {"2022/12/04 9:59 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -732,7 +732,7 @@ private handleMotion( Boolean motionActive, isDigital=false ) {
         def timeout = settings?.motionResetTimer == null ? 30 : motionResetTimer
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in the code
         if (timeout != 0) {
-            runIn(timeout, resetToMotionInactive, [overwrite: true])
+            runIn(timeout, "resetToMotionInactive", [overwrite: true])
         }
         if (device.currentState('motion')?.value != "active") {
             state.motionStarted = now()
@@ -846,7 +846,7 @@ def checkIfNotPresent() {
 def pollPresence() {
     if (logEnable) log.debug "${device.displayName} pollPresence()"
     checkIfNotPresent()
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    runIn( defaultPollingInterval, "pollPresence", [overwrite: true, misfire: "ignore"])
 }
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
@@ -883,8 +883,8 @@ def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getName()} model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> (driver version ${driverVersionAndTimeStamp()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(86400, logsOff)    // turn off debug logging after 24 hours
-        if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
+        runIn(86400, "logsOff", [overwrite: true, misfire: "ignore"])    // turn off debug logging after 24 hours
+        logInfo "Debug logging is will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
@@ -984,7 +984,6 @@ void initializeVars( boolean fullInit = false ) {
 
 def installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
-    //runIn( 33, aqaraReadAttributes)
     aqaraBlackMagic()
 }
 
@@ -992,9 +991,9 @@ def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
     unschedule()
     initializeVars( fullInit )
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    runIn( defaultPollingInterval, "pollPresence", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
-    runIn( 30, aqaraReadAttributes, [overwrite: true])
+    runIn( 30, "aqaraReadAttributes", [overwrite: true])
 }
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
