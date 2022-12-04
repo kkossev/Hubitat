@@ -30,12 +30,13 @@
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ *             RTCGQ13LM battery fix; 
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/04 7:32 PM"}
+def timeStamp() {"2022/12/04 9:40 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -104,10 +105,10 @@ metadata {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
             }
             if (isRTCGQ13LM() || isP1() || isFP1()) {
-                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: [1:"Low", 2:"Medium", 3:"High" ])
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: sensitivityOptions)
             }
             if (isP1()) {
-                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: [0:"Disabled", 1:"Enabled" ])
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
@@ -137,7 +138,7 @@ def isT1()        { if (deviceSimulation) return false else return (device.getDa
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
-@Field static final Map sensitivityOptions =          [ "1":"Low", "2":"Low", "3":"High" ]
+@Field static final Map sensitivityOptions =          [ "1":"low", "2":"medium", "3":"high" ]
 @Field static final Map fp1PresenceEventOptions =     [ "0":"not present", "1":"present" ]
 @Field static final Map fp1PresenceEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"left_enter" , "3":"right_leave" , "4":"right_enter" , "5":"left_leave" , "6":"approach", "7":"away" ]
 @Field static final Map approachDistanceOptions =     [ "0":"far", "1":"medium", "2":"near" ]
@@ -185,7 +186,12 @@ def parse(String description) {
                 if (txtEnable) log.info "${device.displayName} (parse attr 5) device ${it.value} button was pressed "
             }
             else if (it.cluster == "0001" && it.attrId == "0020") {    // contact sensor
-                voltageAndBatteryEvents( Integer.parseInt(it.value,16) / 10.0)
+                if (it.value != "00") {
+                    voltageAndBatteryEvents( Integer.parseInt(it.value,16) / 10.0)
+                }
+                else {
+                    logWarn "ignored value ${it.value} cluster ${it.cluster} attr ${it.attrId} for ${device.getDataValue('model')}"
+                }
             }
             else if (descMap.cluster == "FCC0") {    // Aqara P1
                 parseAqaraClusterFCC0( description, descMap, it )
@@ -274,7 +280,7 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
         case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM
             def value = safeToInt(it.value)
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} (${it.attrId}) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logInfo "${device.displayName} (${it.attrId}) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
@@ -911,15 +917,17 @@ def updated() {
     if (isRTCGQ13LM() || isP1() || isFP1()) {
         if (settings?.motionSensitivity != null && settings?.motionSensitivity != 0) {
             value = safeToInt( motionSensitivity )
-            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${motionSensitivity})"
+            if (settings?.logEnable) log.debug "${device.displayName} setting motionSensitivity to ${sensitivityOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x010C, 0x20, value, [mfgCode: 0x115F], delay=200)
+            cmds += zigbee.readAttribute(0xFCC0, 0x010C, [mfgCode: 0x115F], delay=200)    // read it back
         }
     }
     if (isRTCGQ13LM() || isP1() || isT1()) {
         if (settings?.motionRetriggerInterval != null && settings?.motionRetriggerInterval != 0) {
             value = safeToInt( motionRetriggerInterval )
-            if (settings?.logEnable) log.debug "${device.displayName} setting motionRetriggerInterval to ${motionRetriggerInterval}"
+            logDebug "setting motionRetriggerInterval to ${motionRetriggerInterval} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0102, 0x20, value.toInteger(), [mfgCode: 0x115F], delay=200)
+            cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    // read it back
         }
     }
     //
