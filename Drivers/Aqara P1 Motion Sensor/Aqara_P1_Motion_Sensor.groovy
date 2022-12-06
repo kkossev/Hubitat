@@ -30,13 +30,13 @@
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
- *             RTCGQ13LM battery fix; 
+ *             RTCGQ13LM battery fix; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; 
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/04 9:40 PM"}
+def timeStamp() {"2022/12/06 8:15 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -89,7 +89,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"                 // RTCGQ12LM T1 motion sensor
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"     // 
+        // experimental
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                  // tests only
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"                      // tests only
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName: "Aqara T1 light intensity sensor GZCGQ11LM"                // tests only
         
     }
 
@@ -121,7 +124,7 @@ metadata {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
             }
             if (isFP1()) {
-                input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Battery 100% workaround", defaultValue: false)
+                input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Compatibility", defaultValue: false)
             }
         }
     }
@@ -171,7 +174,12 @@ def parse(String description) {
             }
 		    else if (it.cluster == "0400" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 def rawLux = Integer.parseInt(it.value,16)
-                illuminanceEventLux( rawLux )
+                if (device.getDataValue('model') in ['lumi.sen_ill.mgl01', 'lumi.sen_ill.agl01']) {
+                    illuminanceEvent( rawLux )
+                }
+                else {
+                    illuminanceEventLux( rawLux )
+                }
 		    }                 
             else if (it.cluster == "0406" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
@@ -541,8 +549,8 @@ def voltageAndBatteryEvents( rawVolts, isDigital=false  )
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
-    def descText = "Battery level is "
-    descText += isDigital ? safeToInt(roundedPct)==0 ?"forced to ${roundedPct}%" : "restored to ${roundedPct}%" : " " 
+    def descText = "Battery level "
+    descText += isDigital ? safeToInt(roundedPct)==0 ?"forced to ${roundedPct}%" : "restored to ${roundedPct}%" : " "     // TODO !!!
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
 }
 
@@ -970,6 +978,10 @@ void setDeviceName() {
         deviceName = "Aqara T1 Motion Sensor RTCGQ12LM"                       // Aqara T1 Motion Sensor     RTCGQ12LM
     else if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
         deviceName = "Aqara Sensor"
+    else if (device.getDataValue('model') in ['lumi.sen_ill.mgl01']) 
+        deviceName = "Mi Light Detection Sensor GZCGQ01LM"                    // 'lumi.sen_ill.mgl01'       GZCGQ01LM
+    else if (device.getDataValue('model') in ['lumi.sen_ill.agl01']) 
+        deviceName = "Aqara T1 light intensity sensor GZCGQ11LM"              // "lumi.sen_ill.agl01"       GZCGQ11LM
     else {
         logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
         return
