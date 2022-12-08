@@ -29,13 +29,14 @@
  * ver. 2.4.4 2022-10-22 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch; added _TZ3000_w8jwkczz and other TS0041, TS0042, TS0043, TS004 fingerprints
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
+ * ver. 2.4.7 2022-12-08 kkossev     - (dev. branch) added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; 
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.6" }
-def timeStamp() {"2022/11/20 10:53 AM"}
+def version() { "2.4.7" }
+def timeStamp() {"2022/12/08 9:34 PM"}
 
 @Field static final Boolean debug = false
 
@@ -67,6 +68,10 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_uri7ongn", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_ixla93vd", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_qja6nq5z", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_csflgqj2", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
 
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_tk3s5tyg", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -77,6 +82,7 @@ metadata {
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_peszejy7", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019", manufacturer: "_TYZB02_key8kk7r", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0006,0008,1000", manufacturer: "_TZ3000_ja5osu5g", model: "TS004F", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
+ 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_rco1yzb1", model: "TS004F", deviceJoinName: "LIDL Smart Button SSBM A1"
         
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_tzvbimpq", deviceJoinName: "Tuya 2 button Scene Switch"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_t8hzpgnd", deviceJoinName: "Tuya 2 button Scene Switch"    // not tested
@@ -129,7 +135,8 @@ metadata {
 @Field static final Integer DEBOUNCE_TIME = 1000
 
 def isTuya()  {debug == true ? false : device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
-def isIcasa() {debug == true ? true : device.getDataValue("manufacturer") == "icasa"}
+def isIcasa() {debug == true ? false : device.getDataValue("manufacturer") == "icasa"}
+def isSmartKob() {debug == true ? false : device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -383,7 +390,7 @@ def initialize() {
     	numberOfButtons = 3
     }
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
-        if (device.getDataValue("manufacturer") == "_TZ3000_4fjiwweb") {    // Smart Knob 
+        if (isSmartKob()) {    // Smart Knob 
         	numberOfButtons = 3
             supportedValues = ["pushed", "double", "held", "release"]
         }
