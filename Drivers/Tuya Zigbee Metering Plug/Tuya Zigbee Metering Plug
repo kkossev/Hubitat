@@ -44,7 +44,7 @@
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
- *  ver. 1.6.5 2022-12-09 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer 
+ *  ver. 1.6.5 2022-12-09 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute;
  *
  */
 import groovy.json.*
@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/09 6:48 PM"}
+def timeStamp() {"2022/12/09 8:28 PM"}
 
 @Field static final Boolean debug = false
 
@@ -917,7 +917,7 @@ def parseZHAcommand( Map descMap) {
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "11" : // (17) Energy
-                            energyEvent(value/getEnergyDiv())
+                                energyEvent(value/getEnergyDiv())
                                 break
                             case "12" : // (18) Amperage
                                 amperageEvent(value/getCurrentDiv())
@@ -933,7 +933,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101
                                 if (device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) {
-                                    logInfo "DPID_ELECTRIC_ADD 101 = ${value}"
+                                    energyEvent(value/getEnergyDiv())
                                 }
                                 else {
                                     voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / getVoltageDiv())
@@ -1056,9 +1056,9 @@ def parseZHAcommand( Map descMap) {
             }
             break
         case "25" : // CHECK_ZIGBEE_GATEWAY_STATUS_CMD 0x25
-            logWarn "CHECK_ZIGBEE_GATEWAY_STATUS_CMD 0x25 Data=${descMap.data}"
-            //sendZigbeeCommands(sendTuyaCommand("25", DP_TYPE_VALUE, "000001"))
-            test2(descMap.data)
+            //logDebug "CHECK_ZIGBEE_GATEWAY_STATUS_CMD 0x25 Data=${descMap.data}"
+            def  cmds =  ["he raw 0x${device.deviceNetworkId} 1 1 0xEF00 {11 01 25 ${descMap.data[0]+descMap.data[1]+'01'}}","delay 100"]    // Frame Control Fierld 0x11 : Disable Default Response: True; Frame Type: Cluster-specific (0x1)
+            cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
             break
         default :
             if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
@@ -1966,7 +1966,7 @@ void formatAttrib() {
         attrStr += addToAttr("Switch","switch")
     }
     if (reportPower == true) {
-        attrStr += addToAttr("Power", "power", convert ="int")
+        attrStr += addToAttr("Power", "power"/*, convert ="int"*/)
     }
     if (reportVoltage == true) {
         attrStr += addToAttr("Voltage","voltage")
@@ -2089,14 +2089,6 @@ def setEnergyMeterMode( mode ) {
     }
     return cmds
 }
-def test2( data ) {
-    //def cmds = zigbee.command(0xEF00, 0x25, data[0]+data[1]+"01", [:], delay=200)
-    def endpointId = "01"
-    def zzz = data[0]+data[1]+'01'
-    def cmds = ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0xEF00 0x25 {$zzz}","delay 100"]
-    //cmds +=  zigbee.command(0xEF00, 0x03)
-    //logWarn "========================================== sending TEST : ${cmds}"
-    cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
-}
+
 
 
