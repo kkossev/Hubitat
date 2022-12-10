@@ -28,12 +28,12 @@
  * ver. 1.0.13 2022-09-25 kkossev  - added _TZE200_jva8ink8 AUBESS radar; 2-in-1 Sensitivity setting bug fix
  * ver. 1.0.14 2022-10-31 kkossev  - added Bond motion sensor ZX-BS-J11W fingerprint for tests
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
- * ver. 1.0.16 2022-12-10 kkossev  - (test branch) _TZE200_3towulqd (2-in-1) motion detection inverted;
+ * ver. 1.0.16 2022-12-10 kkossev  - (test branch) _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  *
 */
 
 def version() { "1.0.16" }
-def timeStamp() {"2022/12/10 10:15 AM"}
+def timeStamp() {"2022/12/10 11:53 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -247,7 +247,7 @@ metadata {
 def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5'] }
 def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5'] }
 def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }
-def isIAS()  { return ((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) }
+def isIAS()  { return (((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) && (!(device.getDataValue('manufacturer') in ['_TZE200_3towulqd'])))  }
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
 def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
