@@ -29,14 +29,14 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-04 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ * ver. 1.2.3 2022-12-11 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *             RTCGQ13LM battery fix; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; 
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/06 8:15 AM"}
+def timeStamp() {"2022/12/11 11:09 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -84,15 +84,17 @@ metadata {
             command "activeEndpoints"
         }
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                 // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"     // Aqara precision motion sensor
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"                 // RTCGQ12LM T1 motion sensor
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"    // RTCZCGQ11LM ( FP1 )
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"     // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                     // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"         // Aqara precision motion sensor
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"        // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019",     model:"lumi.motion.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara E1 Motion Sensor RTCGQ15LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Aqara Motion Sensor RTCGQ11LM"          // https://zigbee.blakadder.com/Aqara_RTCGQ11LM.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FFFF,0019", outClusters:"0000,0004,0003,0006,0008,0005,0019", model:"lumi.sensor_motion", manufacturer:"LUMI", deviceJoinName: "Xiaomi/Mijia Motion Sensor RTCGQ01LM"   // https://zigbee.blakadder.com/Xiaomi_RTCGQ01LM.html
         // experimental
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"                  // tests only
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"                      // tests only
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName: "Aqara T1 light intensity sensor GZCGQ11LM"                // tests only
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: aqaraModels['MCCGQ14LM'].deviceJoinName               // tests only : "Aqara Contact Sensor MCCGQ14LM"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // tests only : "Mi Light Detection Sensor GZCGQ01LM"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         
     }
 
@@ -132,6 +134,49 @@ metadata {
 
 @Field static final Integer presenceCountTreshold = 3
 @Field static final Integer defaultPollingInterval = 3600
+
+@Field static final Map aqaraModels = [
+    'RTCZCGQ11LM': [
+        model: "lumi.motion.ac01", manufacturer: "LUMI", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
+        isSleepy: true,
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],    // TODO - check!
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+    ],
+    'RTCGQ14LM': [
+        model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
+        isSleepy: true,
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+    ],
+    'RTCGQ13LM': [
+        model: "lumi.motion.agl04", manufacturer: "LUMI", deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM",
+        isSleepy: true, hasLED: false,
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+    ],
+    'RTCGQ12LM': [
+        model: "lumi.motion.agl02", manufacturer: "LUMI", deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"
+    ],
+    'RTCGQ15LM': [
+        model: "lumi.motion.acn001", manufacturer: "LUMI", deviceJoinName: "Aqara E1 Motion Sensor RTCGQ15LM"
+    ],
+    'RTCGQ11LM': [
+        model: "lumi.sensor_motion.aq2", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"
+    ],
+    // experimental
+    'MCCGQ14LM': [
+        model: "lumi.magnet.acn001", manufacturer: "LUMI", deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"
+    ],
+    'GZCGQ01LM': [
+        model: "lumi.sen_ill.mgl01", manufacturer: "LUMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"
+    ],
+    'GZCGQ11LM': [
+        model: "lumi.sen_ill.agl01", manufacturer: "LUMI", deviceJoinName: "Aqara T1 light intensity sensor GZCGQ11LM"
+    ]
+]
+
+
+
 
 def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
@@ -963,31 +1008,32 @@ def updated() {
     }
 }    
 
+// called from  initializeVars( fullInit = true)
 void setDeviceName() {
     String deviceName
-    
-    if (isP1())
-        deviceName = "Aqara P1 Motion Sensor RTCGQ14LM"                       // 'lumi.motion.ac02'         RTCGQ14LM
-    else if (isRTCGQ13LM()) 
-        deviceName = "Aqara Precision Motion Sensor RTCGQ13LM"                // 'lumi.motion.agl04'        RTCGQ13LM
-    else if (isFP1()) 
-        deviceName = "Aqara FP1 Presence Sensor RTCZCGQ11LM"                  // 'lumi.motion.ac01'         RTCZCGQ11LM
-    else if (device.getDataValue('model') in ['lumi.sensor_motion.aq2']) 
-        deviceName = "Xiaomi Motion Sensor RTCGQ11LM"                         // 'lumi.sensor_motion.aq2'   RTCGQ11LM
-    else if (isT1()) 
-        deviceName = "Aqara T1 Motion Sensor RTCGQ12LM"                       // Aqara T1 Motion Sensor     RTCGQ12LM
-    else if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
-        deviceName = "Aqara Sensor"
-    else if (device.getDataValue('model') in ['lumi.sen_ill.mgl01']) 
-        deviceName = "Mi Light Detection Sensor GZCGQ01LM"                    // 'lumi.sen_ill.mgl01'       GZCGQ01LM
-    else if (device.getDataValue('model') in ['lumi.sen_ill.agl01']) 
-        deviceName = "Aqara T1 light intensity sensor GZCGQ11LM"              // "lumi.sen_ill.agl01"       GZCGQ11LM
-    else {
-        logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
-        return
+    def currentModelMap = null
+    aqaraModels.each { k, v -> 
+        //log.trace "${k}:${v}" 
+        if (v.model ==  device.getDataValue('model') && v.manufacturer == device.getDataValue('manufacturer')) {
+            currentModelMap = k
+            //log.trace "found ${k}"
+            state.aqaraModel = currentModelMap
+            deviceName = aqaraModels[currentModelMap].deviceJoinName
+        }
     }
+    if (currentModelMap == null) {
+        log.trace "not found!"
+        if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
+            deviceName = "Aqara Sensor"
+        else {
+            logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+            return
+        }        
+        state.aqaraModel = 'unknown'
+    }
+    //
     device.setName(deviceName)
-    log.info "${device.displayName} device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
+    logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
 }
 
 void initializeVars( boolean fullInit = false ) {
