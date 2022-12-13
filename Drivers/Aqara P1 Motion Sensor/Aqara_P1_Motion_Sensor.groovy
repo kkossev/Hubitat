@@ -30,13 +30,13 @@
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  * ver. 1.2.3 2022-12-11 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
- *             RTCGQ13LM battery fix; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; 
+ *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName()
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/11 11:09 PM"}
+def timeStamp() {"2022/12/12 10:15 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -110,7 +110,7 @@ metadata {
                 input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
             }
             if (isRTCGQ13LM() || isP1() || isFP1()) {
-                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: sensitivityOptions)
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
                 input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
@@ -125,7 +125,8 @@ metadata {
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
             }
-            if (isFP1()) {
+            //if (isFP1()) {
+            if (aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.homeKitCompatibility) {
                 input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Compatibility", defaultValue: false)
             }
         }
@@ -137,22 +138,24 @@ metadata {
 
 @Field static final Map aqaraModels = [
     'RTCZCGQ11LM': [
-        model: "lumi.motion.ac01", manufacturer: "LUMI", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
-        isSleepy: true,
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],    // TODO - check!
-        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+        model: "lumi.motion.ac01", manufacturer: "aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
+        capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
+        attributes: ["presence", "presence_type"],
+        preferences: [
+            "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
+            "approachDistance":true, "monitoringMode":true, "homeKitCompatibility":true
+        ],
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
     'RTCGQ14LM': [
         model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
-        isSleepy: true,
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],
-        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
     ],
     'RTCGQ13LM': [
         model: "lumi.motion.agl04", manufacturer: "LUMI", deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM",
-        isSleepy: true, hasLED: false,
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'Integer' ],
-        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'Integer', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
+        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
     ],
     'RTCGQ12LM': [
         model: "lumi.motion.agl02", manufacturer: "LUMI", deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"
@@ -191,6 +194,8 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 @Field static final Map fp1PresenceEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"left_enter" , "3":"right_leave" , "4":"right_enter" , "5":"left_leave" , "6":"approach", "7":"away" ]
 @Field static final Map approachDistanceOptions =     [ "0":"far", "1":"medium", "2":"near" ]
 @Field static final Map monitoringModeOptions =       [ "0":"undirected", "1":"left_right" ]
+
+def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
 def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
@@ -1016,24 +1021,26 @@ void setDeviceName() {
         //log.trace "${k}:${v}" 
         if (v.model ==  device.getDataValue('model') && v.manufacturer == device.getDataValue('manufacturer')) {
             currentModelMap = k
-            //log.trace "found ${k}"
-            state.aqaraModel = currentModelMap
+            log.trace "found ${k}"
+            updateDataValue("aqaraModel", currentModelMap)
             deviceName = aqaraModels[currentModelMap].deviceJoinName
         }
     }
     if (currentModelMap == null) {
-        log.trace "not found!"
-        if (device.getDataValue('manufacturer') in ['aqara', 'LUMI'])
+        //log.trace "not found!"
+        if (device.getDataValue('manufacturer') in ['aqara', 'LUMI']) {
             deviceName = "Aqara Sensor"
+            updateDataValue("aqaraModel", currentModelMap)
+        }
         else {
             logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
-            return
+            // don't change the device name when unknown
+            updateDataValue("aqaraModel", currentModelMap)
         }        
-        state.aqaraModel = 'unknown'
     }
     //
     device.setName(deviceName)
-    logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
+    logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> deviceName was set to ${deviceName}"
 }
 
 void initializeVars( boolean fullInit = false ) {
@@ -1047,7 +1054,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.motionStarted == null) state.motionStarted = now()
-    if (state.lastBattery == null) state.lastBattery = "0"
+    if (state.lastBattery == null) state.lastBattery = "100"
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
