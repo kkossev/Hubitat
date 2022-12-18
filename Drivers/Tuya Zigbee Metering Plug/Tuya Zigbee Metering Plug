@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/18 10:08 AM"}
+def timeStamp() {"2022/12/18 2:34 PM"}
 
 @Field static final Boolean debug = false
 
@@ -288,7 +288,7 @@ private int getPowerDiv() { ( isSengledOutlet() || isJascoProductsOutlet() || is
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) ? 1000 : 100 }    // Tuya :  energyDiv = 100
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
-private int getFrequencyDiv() { 10 }
+private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : 10 }
 private int getPowerFactorDiv() { 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -605,7 +605,7 @@ def powerFactorEvent( pf, isDigital=false ) {
     if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastPF = device.currentValue("powerFactor", true) ?: 0
     if ((Math.abs((pf*100 as int) - (lastPF*100 as int)) >= 1) || optimizations == false || state.isRefreshRequest == true  ) {
-        loginfo "${map.descriptionText}"
+        logInfo "${map.descriptionText}"
         sendEvent(map)
         runIn( 1, formatAttrib, [overwrite: true])    
     }
@@ -923,7 +923,7 @@ def parseZHAcommand( Map descMap) {
                                     switchEvent(value==0 ? "off" : "on")
                                 }
                                 else {    //  Forward Energy Total _TZE200_eaac7dkw
-                                    logInfo "(01) Forward/Real Energy (or switch??) : ${value}"
+                                    logInfo "(01) Forward/Real Energy : ${value} raw"
                                     energyEvent(value/getEnergyDiv())    // should be 100
                                 }
                                 break
@@ -934,25 +934,35 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "Daily Energy : ${value}"
                                 break
                             case "06" : 
-                                if (!isDinRail()) {    // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event?
+                                if (!isDinRail()) {    
                                     logInfo "(06) Phase A : ${value}"
                                 }
-                                else { // _TZE200_eaac7dkw
-                                    logDebug "(06) voltage : ${value} raw"
-                                    voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
+                                else { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
+                                    //       +0  +1  +2  +3  +4  +5  +6  +6  +8  +9 +10 +11 +12 +13 +14 +15 +16 +17 +18 +19 +20
+                                    // data:[00, 9D, 06, 00, 00, 0F, 00, 00, 00, 9D, 00, 00, 00, 5D, 02, 92, 00, 04, 0E, 08, FB]
+                                    //                               |active power | |react. power|                      Voltage
+                                    logDebug "(06) combined reporting data: ${descMap.data}"
+                                    def voltage = (zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) << 8) / getVoltageDiv()
+                                    logInfo "(06) Voltage : ${voltage/getVoltageDiv()} V"
+                                    voltageEvent(voltage) 
+                                    def reactivePower = (zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) << 8) / getPowerDiv()
+                                    logInfo "(06) React. Power : ${reactivePower} W"
+                                    def activePower = (zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) << 8) / getPowerDiv()
+                                    logInfo "(06) Active. Power : ${activePower} W"
+                                    powerEvent(activePower)
                                 }
                                 break
-                            case "09" :
-                                logInfo "Fault? : ${value}"
+                            case "09" : // (09) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
+                                logInfo "(09) Fault? : ${value}"
                                 break
-                            case "0A" : // (10) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
+                            case "0A" : // (10)
                                 logDebug "(10) Fault : ${value}"
                                 break
                             case "0B" : // (11) Frozen set _TZE200_eaac7dkw
                                 logInfo "Frozen set : ${value}"
                                 break
-                            case "10" : // (16) switch _TZE200_eaac7dkw ?
-                                logDebug "(16) switch? : ${value}"
+                            case "10" : // (16) switch _TZE200_eaac7dkw
+                                logDebug "(16) switch : ${value}"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "11" : // (17) Energy
@@ -968,7 +978,7 @@ def parseZHAcommand( Map descMap) {
                                     amperageEvent(value/getCurrentDiv())
                                 }
                                 else { // (18) Meter ID
-                                    logInfo "(18) Meter ID (or Amperage?) : ${value}"    // or AlarmSet2 ?
+                                    logInfo "(18) Meter ID (or AlarmSet2) or Amperage? : ${value}"    // or AlarmSet2 ?
                                 }
                                 break
                             case "13" : // (19) Power
@@ -987,7 +997,7 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
                                 break
                             case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101 // Total Energy ?
-                                log.info "(101) Total  Energy? : ${value} raw"
+                                logInfo "(101) Total  Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                 if ((device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) || isDinRail()) {
                                     energyEvent(value/getEnergyDiv())
                                 }
@@ -995,26 +1005,25 @@ def parseZHAcommand( Map descMap) {
                                     voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / getVoltageDiv())
                                 }
                                 break
-                            case "66" : // (102) Amperage HOCH or Produced Energy?
-                                log.info "(102) Produced Energy? : ${value} raw"
-                                //amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getCurrentDiv())
+                            case "66" : // (102) Amperage HOCH or Produced Energy
+                                logInfo "(102) Produced Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                 break
                             case "67" : // hochActivePower: 103 Real Active Power [W]
-                                log.info "(103) Real Active Power : ${value} raw"
-                                powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getPowerDiv())
+                                logInfo "(103) Real Active Power : ${value} raw (${value/getEnergyDiv()} W)"
+                                powerEvent(value/getPowerDiv())
                                 break
                             case "69" : // (105)
-                                log.info "(105) frequency : {value} raw"
+                            logInfo "(105) frequency : ${value} raw (${value/getFrequencyDiv()}) Hz"
                                 frequencyEvent(value/getFrequencyDiv())
                                 break
                             case "6D" : // (109) Reactive Power [VArh]
-                                log.info "(109) Reactive Power : ${value} raw"
+                                logInfo "(109) Reactive Power (or Energy?) : ${value} raw (${value/getEnergyDiv()} VArh)"
                                 break
-                            case "6E" : // (110) Total Reactive Power [VArh]
-                                log.info "(111) Total Reactive Power : ${value} raw"
+                            case "6E" : // (110) Total Reactive Power (or Energy?) [VArh]
+                                logInfo "(110) Total Reactive Power (or Energy?) : ${value} raw (${value/getEnergyDiv()} VArh)"
                                 break
                             case "6F" : // (111)
-                                log.info "(111) power factor : {value} raw"
+                                logInfo "(111) power factor : ${value} raw"
                                 powerFactorEvent(value/getPowerFactorDiv())
                                 break
                             
@@ -1287,8 +1296,11 @@ def poll( refreshAll = false ) {
     if (state.energyPollingSupported == true && refreshAll == true ) {
         cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :ep], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
     }
-    if ((state.switchPollingSupported == true && refreshAll == true) || cmds == [] ) {
+    if ((state.switchPollingSupported == true && refreshAll == true) /*|| cmds == [] */) {
         cmds += zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
+    }
+    if (cmds == []) { // if nothing to poll...
+        cmds += zigbee.readAttribute(0x0000, 0x0004, [destEndpoint :ep], delay=200)
     }
     state.isRefreshRequest = refreshAll
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
