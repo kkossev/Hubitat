@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/18 7:34 AM"}
+def timeStamp() {"2022/12/18 10:08 AM"}
 
 @Field static final Boolean debug = false
 
@@ -1181,7 +1181,12 @@ def off() {
             cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
         }
         else if (state.model == "TS0601") {
-            cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
+            if (isDinRail()) {
+                cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "00")
+            }
+            else {
+                cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
+            }
         }
         else if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs') {
             cmds = ["he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 0 {}","delay 200"]
@@ -1204,7 +1209,12 @@ def on() {
         cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02])
     }    
     else if (state.model == "TS0601") {
-        cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
+        if (isDinRail()) {
+            cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "01")
+        }
+        else {
+            cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
+        }
     }
     else if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs') {
         cmds = ["he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 1 {}","delay 200"]
