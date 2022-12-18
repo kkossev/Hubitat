@@ -44,7 +44,7 @@
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
- *  ver. 1.6.5 2022-12-09 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute;
+ *  ver. 1.6.5 2022-12-18 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
  *
  */
 import groovy.json.*
@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/09 8:28 PM"}
+def timeStamp() {"2022/12/18 7:34 AM"}
 
 @Field static final Boolean debug = false
 
@@ -109,10 +109,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cymsnfvf", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bkkmqmyo", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_eaac7dkw", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.youtube.com/watch?v=KwTz35OWmP4
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lsanae15", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.aliexpress.com/item/1005004399475951.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cjbofhxw", deviceJoinName: "SeeMat Smart Meter with CT"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cjbofhxw", deviceJoinName: "MatSee Smart Meter with CT"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_5f43h46b", deviceJoinName: " XUELILI 16A UK Standards Smart Outlet"
@@ -265,8 +268,10 @@ private boolean isEnergyEnabled() {energyMode != "DISABLED"}
 def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
 def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
-def isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
-def isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
+private boolean isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
+private boolean isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
+private boolean isDinRail() {device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"] }
+
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
 private boolean isJascoProductsOutlet() { device.getDataValue("manufacturer") == "Jasco Products" }
@@ -907,20 +912,64 @@ def parseZHAcommand( Map descMap) {
                 switch (descMap.clusterId) {
                     case "EF00" :
                         //if (logEnable==true) log.warn "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
-                        def attribute = getAttribute(descMap.data)
+                        //def attribute = getAttribute(descMap.data)
                         def value = getAttributeValue(descMap.data)
                         //if (logEnable==true) log.trace "${device.displayName} attribute=${attribute} value=${value}"
                         def map = [:]
                         def cmd = descMap.data[2]
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
                             case "01" : // switch
+                                if (!isDinRail())  {
+                                    switchEvent(value==0 ? "off" : "on")
+                                }
+                                else {    //  Forward Energy Total _TZE200_eaac7dkw
+                                    logInfo "(01) Forward/Real Energy (or switch??) : ${value}"
+                                    energyEvent(value/getEnergyDiv())    // should be 100
+                                }
+                                break
+                            case "03" :    //  _TZE200_eaac7dkw
+                                logInfo "Monthly Energy : ${value}"
+                                break
+                            case "04" :    //  _TZE200_eaac7dkw
+                                logInfo "Daily Energy : ${value}"
+                                break
+                            case "06" : 
+                                if (!isDinRail()) {    // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event?
+                                    logInfo "(06) Phase A : ${value}"
+                                }
+                                else { // _TZE200_eaac7dkw
+                                    logDebug "(06) voltage : ${value} raw"
+                                    voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
+                                }
+                                break
+                            case "09" :
+                                logInfo "Fault? : ${value}"
+                                break
+                            case "0A" : // (10) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
+                                logDebug "(10) Fault : ${value}"
+                                break
+                            case "0B" : // (11) Frozen set _TZE200_eaac7dkw
+                                logInfo "Frozen set : ${value}"
+                                break
+                            case "10" : // (16) switch _TZE200_eaac7dkw ?
+                                logDebug "(16) switch? : ${value}"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "11" : // (17) Energy
-                                energyEvent(value/getEnergyDiv())
+                                if (!isDinRail())  {
+                                    energyEvent(value/getEnergyDiv())
+                                }
+                                else { // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
+                                    logInfo "(17) Alarm Set (or Energy??) : ${value}"
+                                }
                                 break
                             case "12" : // (18) Amperage
-                                amperageEvent(value/getCurrentDiv())
+                                if (!isDinRail())  {
+                                    amperageEvent(value/getCurrentDiv())
+                                }
+                                else { // (18) Meter ID
+                                    logInfo "(18) Meter ID (or Amperage?) : ${value}"    // or AlarmSet2 ?
+                                }
                                 break
                             case "13" : // (19) Power
                                 powerEvent(value/getPowerDiv())
@@ -928,26 +977,47 @@ def parseZHAcommand( Map descMap) {
                             case "14" : // (20) Voltage
                                 voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
                                 break
+                            case "15" : // (21) Forward energy
+                            case "16" : // (22) Forward energy
+                            case "17" : // (23) Forward energy
+                            case "18" : // (24) Forward energy
+                                logInfo "(${cmd}) Forward energy : ${value}"
+                                break
                             case "1D" : // hochChildLock: 29
                                 if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
                                 break
-                            case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101
-                                if (device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) {
+                            case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101 // Total Energy ?
+                                log.info "(101) Total  Energy? : ${value} raw"
+                                if ((device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) || isDinRail()) {
                                     energyEvent(value/getEnergyDiv())
                                 }
                                 else {
                                     voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / getVoltageDiv())
                                 }
                                 break
-                            case "66" : // Amperage HOCH
-                                amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getCurrentDiv())
+                            case "66" : // (102) Amperage HOCH or Produced Energy?
+                                log.info "(102) Produced Energy? : ${value} raw"
+                                //amperageEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getCurrentDiv())
                                 break
-                            case "67" : // hochActivePower: 103
+                            case "67" : // hochActivePower: 103 Real Active Power [W]
+                                log.info "(103) Real Active Power : ${value} raw"
                                 powerEvent((zigbee.convertHexToInt(descMap.data[8]) | zigbee.convertHexToInt(descMap.data[7]) << 8) / getPowerDiv())
                                 break
-                            case "69" : // hochTemperature: 105
-                                log.info "${device.displayName} temperature is ${(zigbee.convertHexToInt(descMap.data[9]))}"
+                            case "69" : // (105)
+                                log.info "(105) frequency : {value} raw"
+                                frequencyEvent(value/getFrequencyDiv())
                                 break
+                            case "6D" : // (109) Reactive Power [VArh]
+                                log.info "(109) Reactive Power : ${value} raw"
+                                break
+                            case "6E" : // (110) Total Reactive Power [VArh]
+                                log.info "(111) Total Reactive Power : ${value} raw"
+                                break
+                            case "6F" : // (111)
+                                log.info "(111) power factor : {value} raw"
+                                powerFactorEvent(value/getPowerFactorDiv())
+                                break
+                            
                             case "09" : // hochCountdownTimer: 9
                             case "1A" : // hochFaultCode: 26
                             case "1B" : // hochRelayStatus: 27 (power recovery behaviour)
@@ -956,8 +1026,8 @@ def parseZHAcommand( Map descMap) {
                             case "6B" : // "recharge energy" : 107
                             case "6C" : // hochCostParameters: 108 (non-zero)
                             case "6D" : // hochLeakageParameters: 109 (non-zero)
-                            case "6E" : // hochVoltageThreshold: 110 (non-zero)
-                            case "6F" : // hochCurrentThreshold: 111 (non-zero)
+                            //case "6E" : // hochVoltageThreshold: 110 (non-zero)
+                            //case "6F" : // hochCurrentThreshold: 111 (non-zero)
                             case "70" : // hochTemperatureThreshold: 112 (non-zero)
                             case "71" : // hochTotalActivePower: 113
                             case "72" : // hochEquipmentNumberType: 114
@@ -1066,6 +1136,7 @@ def parseZHAcommand( Map descMap) {
     }
 }
 
+/*
 private String getAttribute(ArrayList _data) {
     String retValue = ""
     if (_data.size() >= 5) {
@@ -1078,6 +1149,7 @@ private String getAttribute(ArrayList _data) {
     }
     return retValue
 }
+*/
 
 private int getAttributeValue(ArrayList _data) {
     int retValue = 0
