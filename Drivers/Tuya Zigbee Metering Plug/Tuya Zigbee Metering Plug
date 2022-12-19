@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/19 8:15 AM"}
+def timeStamp() {"2022/12/19 2:17 PM"}
 
 @Field static final Boolean debug = false
 
@@ -284,12 +284,12 @@ private boolean isDevelco() { device.getDataValue("model") == "EMIZB-132" }
 private boolean isOsramPlug01() {(device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM')}
 private boolean isSiHAS() { device.getDataValue("manufacturer") == "ShinaSystem" }
 
-private int getPowerDiv() { ( isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || isTuyaSpecificCluster() ) ? 10 : 1 }    // Tuya : default powerDiv = 1
+private int getPowerDiv() { ( isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) ? 1000 : 100 }    // Tuya :  energyDiv = 100
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : 10 }
-private int getPowerFactorDiv() { isDinRail() ? 10 : 100 }
+private int getPowerFactorDiv() { isDinRail() ? 1000 : 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -948,7 +948,7 @@ def parseZHAcommand( Map descMap) {
                                     voltageEvent(voltageRaw/getVoltageDiv()) 
                                     def currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
                                     logInfo "(06) Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
-                                    voltageEvent(currentRaw/getCurrentDiv()) 
+                                    currentEvent(currentRaw/getCurrentDiv()) 
                                     def pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
                                     logInfo "(06) PF : ${pfRaw/getPowerFactorDiv()}  (raw ${pfRaw})"
                                     powerFactorEvent(pfRaw/getPowerFactorDiv())
