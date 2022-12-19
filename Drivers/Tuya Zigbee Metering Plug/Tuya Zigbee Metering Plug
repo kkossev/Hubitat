@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/19 2:17 PM"}
+def timeStamp() {"2022/12/19 3:51 PM"}
 
 @Field static final Boolean debug = false
 
@@ -948,7 +948,7 @@ def parseZHAcommand( Map descMap) {
                                     voltageEvent(voltageRaw/getVoltageDiv()) 
                                     def currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
                                     logInfo "(06) Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
-                                    currentEvent(currentRaw/getCurrentDiv()) 
+                                    amperageEvent(currentRaw/getCurrentDiv()) 
                                     def pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
                                     logInfo "(06) PF : ${pfRaw/getPowerFactorDiv()}  (raw ${pfRaw})"
                                     powerFactorEvent(pfRaw/getPowerFactorDiv())
