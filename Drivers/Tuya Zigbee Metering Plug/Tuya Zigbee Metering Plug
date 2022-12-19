@@ -44,7 +44,7 @@
  *  ver. 1.6.3 2022-11-08 kkossev - added OSRAM 'Plug 01'; maximum power cap set to 13KW; added 'Develco Products A/S' as Frient manufacturer; fixed power events when on/off; added lastHour energy in HTML; added _TZ3000_zloso4jk
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
- *  ver. 1.6.5 2022-12-18 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
+ *  ver. 1.6.5 2022-12-19 kkossev - (dev.branch)_TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
  *
  */
 import groovy.json.*
@@ -52,7 +52,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.6.5" }
-def timeStamp() {"2022/12/18 2:34 PM"}
+def timeStamp() {"2022/12/19 8:15 AM"}
 
 @Field static final Boolean debug = false
 
@@ -289,7 +289,7 @@ private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : 10 }
-private int getPowerFactorDiv() { 100 }
+private int getPowerFactorDiv() { isDinRail() ? 10 : 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -939,24 +939,31 @@ def parseZHAcommand( Map descMap) {
                                 }
                                 else { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
                                     //       +0  +1  +2  +3  +4  +5  +6  +6  +8  +9 +10 +11 +12 +13 +14 +15 +16 +17 +18 +19 +20
-                                    // data:[00, 9D, 06, 00, 00, 0F, 00, 00, 00, 9D, 00, 00, 00, 5D, 02, 92, 00, 04, 0E, 08, FB]
-                                    //                               |active power | |react. power|                      Voltage
+                                    //      [00, FC, 06, 00, 00, 0F, 00, 00, 06, 96, 00, 00, 00, 4A, 03, E4, 00, 1D, 13, 08, E2]   (@ 15:17:05)
+                                    //      [00, EF, 06, 00, 00, 0F, 00, 00, 06, A3, 00, 00, 00, 4B, 03, E4, 00, 1D, 4D, 08, E3]   (@ 15:16:05)  227 V; 6.613 A; 1504 W';
+                                    //                               |active power | |react. power |  PF    |00| current|Voltage
                                     logDebug "(06) combined reporting data: ${descMap.data}"
-                                    def voltage = (zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) << 8) / getVoltageDiv()
-                                    logInfo "(06) Voltage : ${voltage/getVoltageDiv()} V"
-                                    voltageEvent(voltage) 
-                                    def reactivePower = (zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) << 8) / getPowerDiv()
-                                    logInfo "(06) React. Power : ${reactivePower} W"
-                                    def activePower = (zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) << 8) / getPowerDiv()
-                                    logInfo "(06) Active. Power : ${activePower} W"
-                                    powerEvent(activePower)
+                                    def voltageRaw = zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) * 256
+                                    logInfo "(06) Voltage : ${voltageRaw/getVoltageDiv()} V (raw ${voltageRaw})"
+                                    voltageEvent(voltageRaw/getVoltageDiv()) 
+                                    def currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
+                                    logInfo "(06) Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
+                                    voltageEvent(currentRaw/getCurrentDiv()) 
+                                    def pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
+                                    logInfo "(06) PF : ${pfRaw/getPowerFactorDiv()}  (raw ${pfRaw})"
+                                    powerFactorEvent(pfRaw/getPowerFactorDiv())
+                                    def reactivePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
+                                    logInfo "(06) React. Power : ${reactivePowerRaw/getPowerDiv()} W"
+                                    def activePowerRaw = zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) * 256
+                                    logInfo "(06) Active. Power : ${activePowerRaw/getPowerDiv()} W"
+                                    powerEvent(activePowerRaw/getPowerDiv())
                                 }
                                 break
                             case "09" : // (09) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
-                                logInfo "(09) Fault? : ${value}"
+                                logInfo "(09) Fault : ${value}"
                                 break
                             case "0A" : // (10)
-                                logDebug "(10) Fault : ${value}"
+                                logDebug "(10) unknown : ${value}"
                                 break
                             case "0B" : // (11) Frozen set _TZE200_eaac7dkw
                                 logInfo "Frozen set : ${value}"
@@ -970,7 +977,7 @@ def parseZHAcommand( Map descMap) {
                                     energyEvent(value/getEnergyDiv())
                                 }
                                 else { // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
-                                    logInfo "(17) Alarm Set (or Energy??) : ${value}"
+                                    logInfo "(17) AlarmSet1 : ${value}"
                                 }
                                 break
                             case "12" : // (18) Amperage
@@ -978,7 +985,7 @@ def parseZHAcommand( Map descMap) {
                                     amperageEvent(value/getCurrentDiv())
                                 }
                                 else { // (18) Meter ID
-                                    logInfo "(18) Meter ID (or AlarmSet2) or Amperage? : ${value}"    // or AlarmSet2 ?
+                                    logInfo "(18) AlarmSet2 : ${value}"    // AlarmSet2 
                                 }
                                 break
                             case "13" : // (19) Power
@@ -1009,18 +1016,18 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "(102) Produced Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                 break
                             case "67" : // hochActivePower: 103 Real Active Power [W]
-                                logInfo "(103) Real Active Power : ${value} raw (${value/getEnergyDiv()} W)"
+                                logInfo "(103) Real Active Power : ${value} raw (${value/getPowerDiv()} W)"
                                 powerEvent(value/getPowerDiv())
                                 break
                             case "69" : // (105)
                             logInfo "(105) frequency : ${value} raw (${value/getFrequencyDiv()}) Hz"
                                 frequencyEvent(value/getFrequencyDiv())
                                 break
-                            case "6D" : // (109) Reactive Power [VArh]
-                                logInfo "(109) Reactive Power (or Energy?) : ${value} raw (${value/getEnergyDiv()} VArh)"
+                            case "6D" : // (109) Reactive Power [VAr]
+                                logInfo "(109) Reactive Power : ${value} raw (${value/getPowerDiv()} VAr)"
                                 break
-                            case "6E" : // (110) Total Reactive Power (or Energy?) [VArh]
-                                logInfo "(110) Total Reactive Power (or Energy?) : ${value} raw (${value/getEnergyDiv()} VArh)"
+                            case "6E" : // (110) Total Reactive Power) [VAr]
+                                logInfo "(110) Total Reactive Power : ${value} raw (${value/getPowerDiv()} VAr)"
                                 break
                             case "6F" : // (111)
                                 logInfo "(111) power factor : ${value} raw"
