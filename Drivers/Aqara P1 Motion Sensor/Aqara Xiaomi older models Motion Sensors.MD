@@ -1,7 +1,13 @@
 ## Aqara/Xiaomi Motion Sensors
 
-This is a new thread for the older models Aqara/Xiaomi motion sensors, that are supported by the "Aqara P1 Motion Sensor" driver.
-There are already several Hubitat custom drivers that support these models. All these existing drivers are working very well, so probably there should be no reason to change them, except if you want to use one and the same driver for all different Aqara models, like I do : )
+This is a new thread for the older models Aqara/Xiaomi motion sensors, that are supported by the **Aqara P1 Motion Sensor driver** initially published [here](https://community.hubitat.com/t/aqara-fp1-and-p1-motion-sensors/92987/63?u=kkossev). As this driver supports both the new models (P1, FP1) and the old motion sensors, mixing the updates and the comments for the different devices is somewhat confusing for most of the forum users. Moreover, the behaviour of the old Aqara sensors in regards to the way they are paired and stay connected to the Zigbee network differ slightly compared to the new sensos.
+
+There are already several custom drivers in Hubitat that support Aqara/Xiaomi motion sensors by @veeceeoh [(link)](https://community.hubitat.com/t/xiaomi-aqara-zigbee-device-drivers-possibly-may-no-longer-be-maintained/631), @markus [(link)](https://community.hubitat.com/t/release-xiaomi-aqara-opple-drivers-with-presence/41537), @chirpy [(link)](https://community.hubitat.com/t/release-xiaomi-aqara-opple-drivers-with-presence/41537) and other Hubitat community developers.All these existing drivers are working great, so there should be no reason to change the driver that works for you, except if you want to use one and the same driver for all the different Aqara models of motion and presence sensors.
+
+The recommended method for installing this custom driver to use the community Hubitat Package Manager [(HPM)](https://community.hubitat.com/t/release-hubitat-package-manager-hubitatcommunity/94471), search for "Aqara P1 Motion Sensor" or by Tag 'Zigbee'.
+
+For manual installation, the last stable version code is here: https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy 
+
 
 |  Device |  Links |
 |---|---|
