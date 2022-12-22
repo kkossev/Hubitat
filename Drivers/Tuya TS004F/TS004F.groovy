@@ -29,14 +29,14 @@
  * ver. 2.4.4 2022-10-22 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch; added _TZ3000_w8jwkczz and other TS0041, TS0042, TS0043, TS004 fingerprints
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
- * ver. 2.4.7 2022-12-08 kkossev     - (dev. branch) added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; 
+ * ver. 2.4.7 2022-12-22 kkossev     - (dev. branch) added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.4.7" }
-def timeStamp() {"2022/12/08 9:34 PM"}
+def timeStamp() {"2022/12/22 8:33 AM"}
 
 @Field static final Boolean debug = false
 
@@ -112,6 +112,8 @@ metadata {
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_ee8nrt2l", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_dku2cfsc", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TYZB01_cnlmkhbk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
+    fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_u3nv1jwk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
+        
 
     fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044"
 
