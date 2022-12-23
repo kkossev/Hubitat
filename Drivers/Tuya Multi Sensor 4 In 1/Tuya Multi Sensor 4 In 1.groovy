@@ -29,13 +29,12 @@
  * ver. 1.0.14 2022-10-31 kkossev  - added Bond motion sensor ZX-BS-J11W fingerprint for tests
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
- *
- * ver. 1.1.0  2022-12-17 kkossev  - (dev. branch) SetPar() command;  added 'Send Event when parameters change' option; code cleanup
+ * ver. 1.1.0  2022-12-23 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/12/16 11:49 AM"}
+def timeStamp() {"2022/12/23 7:01 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -68,7 +67,8 @@ metadata {
         attribute "detectionDelay", "decimal" 
         attribute "fadingTime", "decimal" 
         attribute "minimumDistance", "decimal" 
-        attribute "maximumDistance", "decimal" 
+        attribute "maximumDistance", "decimal"
+        attribute "radarStatus", "enum", ["checking", "check_success", "check_failure", "others", "comm_fault", "radar_fault"] 
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
@@ -121,6 +121,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Human Presence Detector"             // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ar0slwnd", deviceJoinName: "Tuya Human Presence Detector"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sfiy5tfs", deviceJoinName: "Tuya Human Presence Detector"         // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_holel4dk", deviceJoinName: "Tuya Human Presence Detector"         // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"  // KK model: 'ZM-RT201'// 5 seconds (!) reset period for testing
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mmtwjmaq", deviceJoinName: "Tuya TS0202 Motion Sensor"
@@ -252,7 +253,8 @@ def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(is
 def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
-def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs', '_TZE200_mrf6vtua'] }
+def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
+                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk'] }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
 def isBlackPIRsensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
 def isBlackSquareRadar() { return device.getDataValue('manufacturer') in ['_TZE200_0u3bj3rc'] }
@@ -481,9 +483,9 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x02 :
                 if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
-                    logInfo "received Radar sensitivity : ${fncmd}"
+                    if (settings?.logEnable == true || (settings?.parEvents == true && settings?.radarSensitivity != safeToInt(device.currentValue("radarSensitivity")))) {logInfo "received Radar sensitivity : ${fncmd}"} //else {log.warn "skipped ${settings?.radarSensitivity} == ${fncmd as int}"}
                     device.updateSetting("radarSensitivity", [value:fncmd as int , type:"number"])
-                    if (settings?.parEvents == true) sendEvent(name : "radarSensitivity", value : fncmd as int/*, unit : "m"*/)
+                    if (settings?.parEvents == true) sendEvent(name : "radarSensitivity", value : fncmd as int)
                 }
                 else {
                     logWarn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -491,7 +493,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x03 :
                 if (isRadar()) {
-                    logInfo "${device.displayName} (dp=${dp}) received Radar Minimum detection distance : ${fncmd/100} m"    //
+                    if (settings?.logEnable == true || (settings?.parEvents == true && settings?.minimumDistance != safeToDouble(device.currentValue("minimumDistance")))) {logInfo "received Radar Minimum detection distance : ${fncmd/100} m"}
                     device.updateSetting("minimumDistance", [value:fncmd/100, type:"decimal"])
                     if (settings?.parEvents == true) sendEvent(name : "minimumDistance", value : fncmd/100, unit : "m")
                 }
@@ -501,7 +503,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x04 :    // Battery level for _TZE200_3towulqd
                 if (isRadar()) {
-                    logInfo "received Radar Maximum detection distance : ${fncmd/100} m"
+                    if (settings?.logEnable == true || (settings?.parEvents == true && settings?.maximumDistance != safeToDouble(device.currentValue("maximumDistance")))) {logInfo "received Radar Maximum detection distance : ${fncmd/100} m"}
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
                     if (settings?.parEvents == true) sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
@@ -515,7 +517,7 @@ def processTuyaCluster( descMap ) {
             
             case 0x06 :
                 if (isRadar()) {
-                    logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
+                    if (settings?.logEnable == true || (settings?.parEvents == true && radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
                     if (settings?.parEvents == true) sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
                 }
                 else {
