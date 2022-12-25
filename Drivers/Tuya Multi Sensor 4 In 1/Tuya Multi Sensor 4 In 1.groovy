@@ -29,12 +29,12 @@
  * ver. 1.0.14 2022-10-31 kkossev  - added Bond motion sensor ZX-BS-J11W fingerprint for tests
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
- * ver. 1.1.0  2022-12-23 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk
+ * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3000_6ygjfyll, _TZ3210_wuhzzfqg
  *
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2022/12/23 7:01 AM"}
+def timeStamp() {"2022/12/25 8:20 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -89,9 +89,13 @@ metadata {
             command "testX"
         }
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"          //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
+        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1" // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"          // https://www.aliexpress.com/item/1005004095233195.html
@@ -244,7 +248,7 @@ metadata {
 @Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
 
-def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5'] }
+def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5', '_TZ3210_rxqls8v0', '_TZ3000_6ygjfyll', '_TZ3210_wuhzzfqg'] }
 def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5'] }
 def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }
 def isIAS()  { return (((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) && (!(device.getDataValue('manufacturer') in ['_TZE200_3towulqd'])))  }
@@ -589,7 +593,7 @@ def processTuyaCluster( descMap ) {
                 else if (isBlackSquareRadar()) {    // non-presence time in minutes
                     leaveTimeEvent(fncmd)
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // // case 102 //reporting time for 4 in 1 
+                else if (is4in1()) {    // // case 102 //reporting time for 4 in 1 
                     if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
                 }
                 else {     // battery level for 3 in 1;  
@@ -629,7 +633,7 @@ def processTuyaCluster( descMap ) {
                 else if (isHumanPresenceSensorScene()) { // detection data  for TuYa Radar Sensor with scene
                     if (settings?.logEnable) log.info "${device.displayName} radar detection data is ${fncmd}"
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 104: // 0x68 temperature calibration
+                else if (is4in1()) {    // case 104: // 0x68 temperature calibration
                     def val = fncmd;
                     // for negative values produce complimentary hex (equivalent to negative values)
                     if (val > 4294967295) val = val - 4294967295;                    
@@ -652,7 +656,7 @@ def processTuyaCluster( descMap ) {
                     // trsfTumbleSwitch for TuYa Radar Sensor with fall function
                     if (settings?.txtEnable) log.info "${device.displayName} Tumble Switch (dp=69) is ${fncmd}"
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 105:// 0x69 humidity calibration
+                else if (is4in1()) {    // case 105:// 0x69 humidity calibration
                     def val = fncmd;
                     if (val > 4294967295) val = val - 4294967295;                    
                     if (settings?.txtEnable) log.info "${device.displayName} humidity calibration is ${val}"                
@@ -670,7 +674,7 @@ def processTuyaCluster( descMap ) {
                     // trsfTumbleAlarmTime
                     if (settings?.txtEnable) log.info "${device.displayName} Tumble Alarm Time (dp=6A) is ${fncmd}"
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    // case 106: // 0x6a lux calibration
+                else if (is4in1()) {    // case 106: // 0x6a lux calibration
                     def val = fncmd;
                     if (val > 4294967295) val = val - 4294967295;                    
                     if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
@@ -683,7 +687,7 @@ def processTuyaCluster( descMap ) {
                 if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Light On Luminance Preference ${fncmd} Lux"
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {    //  Tuya 4 in 1 (107) -> temperature in °C
+                else if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in °C
                     temperatureEvent( fncmd / 10.0 )
                 }
                 else { // 3in1
@@ -694,7 +698,7 @@ def processTuyaCluster( descMap ) {
                 if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Light Off Luminance Preference ${fncmd} Lux"
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {
+                else if (is4in1()) {
                     humidityEvent (fncmd)
                 }
                 else { // 3in1
@@ -705,7 +709,7 @@ def processTuyaCluster( descMap ) {
                 if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Luminance Level ${fncmd}" // Ligter, Medium, ... ?
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 109: 0x6d PIR enable
+                else if (is4in1()) {   // case 109: 0x6d PIR enable
                     if (settings?.txtEnable) log.info "${device.displayName} PIR enable is ${fncmd}"                
                 }
                 else { // 3in1
@@ -720,7 +724,7 @@ def processTuyaCluster( descMap ) {
                 else if (isRadar()){
                     if (settings?.txtEnable) log.info "${device.displayName} radar LED status is ${fncmd}"                
                 }
-                else if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {
+                else if (is4in1()) {
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )
                 }
@@ -729,7 +733,7 @@ def processTuyaCluster( descMap ) {
                 }
                 break 
             case 0x6F : // (111) Tuya 4 in 1: // 0x6f led enable
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') { 
+                if (is4in1()) { 
                     if (settings?.txtEnable) log.info "${device.displayName} LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
                     device.updateSetting("ledEnable", [value:fncmd as boolean, type:"boolean"])
                 }
@@ -738,7 +742,7 @@ def processTuyaCluster( descMap ) {
                 }
                 break
             case 0x70 : // (112)
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 112: 0x70 reporting enable (Alarm type)
+                if (is4in1()) {   // case 112: 0x70 reporting enable (Alarm type)
                     if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"                
                 }
                 else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) {    // trsfScene
@@ -749,7 +753,7 @@ def processTuyaCluster( descMap ) {
                 }
                 break
             case 0x71 :
-                if ( device.getDataValue('manufacturer') == '_TZ3210_zmy9hjay') {   // case 113: 0x71 unknown  ( ENUM)
+                if (is4in1()) {   // case 113: 0x71 unknown  ( ENUM)
                     if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"  
                 }
                 else {    // 3in1 - Alarm Type
