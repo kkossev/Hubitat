@@ -29,14 +29,14 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-11 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
- *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName()
+ * ver. 1.2.3 2022-12-26 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  *
  *
 */
 
 def version() { "1.2.3" }
-def timeStamp() {"2022/12/12 10:15 PM"}
+def timeStamp() {"2022/12/26 8:32 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -107,7 +107,7 @@ metadata {
                 input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
-                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (1..200)", range: "1..202", defaultValue: 30)
+                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (2..200)", range: "2..202", defaultValue: 30)
             }
             if (isRTCGQ13LM() || isP1() || isFP1()) {
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: getSensitivityOptions())
@@ -125,7 +125,6 @@ metadata {
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
             }
-            //if (isFP1()) {
             if (aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.homeKitCompatibility) {
                 input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Compatibility", defaultValue: false)
             }
@@ -145,16 +144,16 @@ metadata {
             "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
             "approachDistance":true, "monitoringMode":true, "homeKitCompatibility":true
         ],
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
     'RTCGQ14LM': [
         model: "lumi.motion.ac02", manufacturer: "LUMI", deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM",
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
         motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
     ],
     'RTCGQ13LM': [
         model: "lumi.motion.agl04", manufacturer: "LUMI", deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM",
-        motionRetriggerInterval: [ min: 1, scale: 0, max: 200, step: 1, type: 'number' ],
+        motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],
         motionSensitivity: [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ]
     ],
     'RTCGQ12LM': [
@@ -1021,7 +1020,7 @@ void setDeviceName() {
         //log.trace "${k}:${v}" 
         if (v.model ==  device.getDataValue('model') && v.manufacturer == device.getDataValue('manufacturer')) {
             currentModelMap = k
-            log.trace "found ${k}"
+            //log.trace "found ${k}"
             updateDataValue("aqaraModel", currentModelMap)
             deviceName = aqaraModels[currentModelMap].deviceJoinName
         }
