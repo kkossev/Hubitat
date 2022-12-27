@@ -13,14 +13,16 @@
  *	for the specific language governing permissions and limitations under the License.
  * 
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
- * ver. 1.1.0 2022-11-05 kkossev  - (dev branch) alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
- *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration
+ * ver. 1.1.0 2022-11-05 kkossev  - Alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
+ *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
+ * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
+ *
  *    TODO: preferences for the beep() command
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2022/11/05 5:17 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2022/12/27 10:27 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -81,24 +83,24 @@ metadata {
     'medium'   : [ volume: '66',  tuya: '1'],
     'high'     : [ volume: '100', tuya: '2']
 ]// as ConfigObject
-
+@Field static final String defaultVolume = "medium"
 
 @Field static final List<String> melodiesOptions = [
-    '1=Doorbell',
-    '2=Classical song 1',
-    '3=Classical song 2',
-    '4=Classical song 3',
-    '5=Classical song 4',
-    '6=Classical song 5',
-    '7=Alarm 1',
-    '8=Alarm 2',
-    '9=Alarm 3',
-    '10=Alarm 4',
+    '1=Doorbell 1',
+    '2=Fur Elise',
+    '3=Westminster',
+    '4=4 Key Chime',
+    '5=William Tell',
+    '6=Mozart Piano',
+    '7=Space Alarm',
+    '8=Klaxon',
+    '9=meep meep',
+    '10=Wheep',
     '11=Barking dog',
-    '12=Alarm',
-    '13=Chime',
-    '14=Telephone',
-    '15=Siren',
+    '12=Alarm Siren',
+    '13=Doorbell 2',
+    '14=Old Phone',
+    '15=Police Siren',
     '16=Evacuation bell',
     '17=Clock alarm',
     '18=Fire alarm'
@@ -108,9 +110,7 @@ private findVolumeByTuyaValue( fncmd ) {
     def volumeName = 'unknown'
     def volumePct = -1
     volumeMapping.each{ k, v -> 
-        //log.warn "${k}:${v}    v.tuya.value=${v.tuya.value} fncmd=${fncmd.toString()}" 
         if (v.tuya.value as String == fncmd.toString()) {
-            //log.warn "found volumeName = ${k} percent = ${v.volume}"
             volumeName = k
             volumePct = v.volume
         }
@@ -122,9 +122,7 @@ private findVolumeByPct( pct ) {
     def volumeName = 'unknown'
     def volumeTuya = -1
     volumeMapping.each{ k, v -> 
-        //log.warn "${k}:${v}    v.volume.value=${v.volume.value} fncmd=${pct.toString()}" 
         if (v.volume.value as String == pct.toString()) {
-            //log.warn "found volumeName = ${k} percent = ${v.volume}"
             volumeName = k
             volumeTuya = v.tuya
         }
@@ -136,9 +134,7 @@ private findVolumeByName( name ) {
     def volumeTuya = -1
     def volumePct = -1
     volumeMapping.each{ k, v -> 
-        //log.warn "${k}:${v}    v.tuya.value=${v.tuya.value} name=${name}" 
         if (k as String == name as String) {
-            //log.warn "found volumeName = ${k}, tuya=${v.tuya} percent = ${v.volume}"
             volumeTuya = v.tuya
             volumePct = v.volume
         }
@@ -187,7 +183,7 @@ def parse(String description) {
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
             }
             else {
-                if (settings?.logEnable) log.warn "unparesed attrint $descMap.attrInt"
+                logWarn "unparesed attrint ${descMap.attrInt}"
             }
         }     
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
@@ -244,7 +240,7 @@ def processTuyaCluster( descMap ) {
         def status = descMap?.data[1]            
         if (settings?.logEnable) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
         if (status != "00") {
-            if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
     else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"))
@@ -292,7 +288,7 @@ def processTuyaCluster( descMap ) {
                 sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText )            
                 break
             default :
-                if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
     }
@@ -337,10 +333,9 @@ def siren() {
 def sendTuyaAlarm( commandName ) {
     wakeUpTuya()
     String cmds = ""
-    if (settings?.logEnable) log.debug "${device.displayName} swithing alarm ${commandName}()"
+    logDebug "swithing alarm ${commandName}()"
     state.lastCommand = commandName
     if (commandName != "off") {
-        //log.warn "state.setVolume = ${state.setVolume}"
         // volume
         def volumeName; def volumeTuya; 
         (volumeName, volumeTuya) = findVolumeByPct( state.setVolume )
@@ -370,7 +365,7 @@ if ( true ) {
     wakeUpTuya()
     String cmds = ""
     state.lastCommand = "beep"    
-    log.warn "settings?.beepVolume = ${settings?.beepVolume}"
+    logDebug "sending beep() beepVolume = ${settings?.beepVolume}"
     def volumeTuya; def volumePct
     (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
     if (volumeTuya >= 0 ) {
@@ -404,7 +399,7 @@ def restoreDefaultSettings() {
     }
     cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration)  ) 
     cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, safeToInt(melodiesOptions.indexOf(state.setMelody))) 
-    if (settings?.logEnable) log.debug "${device.displayName} restoring default settings volume=${volumeName}, duration=${state.setDuration}, melody=${state.setMelody}"
+    logDebug "restoring default settings volume=${volumeName}, duration=${state.setDuration}, melody=${state.setMelody}"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )    
 }
 
@@ -428,7 +423,6 @@ def getNearestTuyaVolumeLevel( volumelevel ) {
 
 def setVolume(volumelevel) {
     // - Volume level (0 to 100)
-    //log.trace "volumelevel( ${volumelevel} )"
     String cmds = ""
     def nearestlevel =  getNearestTuyaVolumeLevel( volumelevel )
     if      (nearestlevel == 0 && device.currentValue("mute", true) == "unmuted")  mute()
@@ -437,7 +431,7 @@ def setVolume(volumelevel) {
     def volumeName
     def volumeTuya
     (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel ) 
-    log.warn "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
+    logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
     if (volumeTuya >= 0) {
         cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
@@ -468,16 +462,16 @@ def playSound(soundnumber, volumeLevel=null, duration=null) {
     soundNumberIndex = soundNumberIndex < 1 ? 1 : soundNumberIndex > 18 ? 18 : soundNumberIndex; soundNumberIndex -= 1
     if (volumeLevel == null) {    
         // use the default playSoundVolume
-        volumeName = settings?.playSoundVolume
+        volumeName = settings?.playSoundVolume ?: defaultVolume
         (volumeTuya, volumePct) = findVolumeByName( volumeName )        
-        log.warn "settings?.playSoundVolume = ${volumeName}, found volumeTuya = ${volumeTuya}"
+        logDebug "volumeLevel is null, volumeTuya = ${volumeTuya}"
     }
     else {
         def nearestVolume = getNearestTuyaVolumeLevel( volumeLevel )
         (volumeName, volumeTuya) =  findVolumeByPct( nearestVolume ) 
     }
     if (duration == null) {
-        duration = settings?.playSoundDuration ?:10 as int
+        duration = settings?.playSoundDuration ?: 10 as int
     }
     else {
         duration = duration <1 ? 1 : duration > 180 ? 180 : duration as int
@@ -488,7 +482,7 @@ def playSound(soundnumber, volumeLevel=null, duration=null) {
     cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, soundNumberIndex) 
     unschedule(restoreDefaultSettings)
     cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
-    log.warn "playSound ${soundnumber} (${melodiesOptions.get(soundNumberIndex)}) index=${soundNumberIndex}, duration=${duration}, volume=${volumeName}(${volumeTuya})"
+    logDebug "playSound ${soundnumber} (${melodiesOptions.get(soundNumberIndex)}) index=${soundNumberIndex}, duration=${duration}, volume=${volumeName}(${volumeTuya})"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
 
@@ -529,12 +523,11 @@ def sendAlarmEvent( mode, isDigital=false ) {
 
 void setAlarmMelody( melodyName ) {
     def melodyIndex = melodiesOptions.indexOf(melodyName)
-    log.warn "melodyIndex=${melodyIndex}"
     if (melodyIndex <0) {
-        if (settings?.logEnable) log.warn "${device.displayName} setMelody invalid ${melodyName}"
+        logWarn "setMelody invalid ${melodyName}"
         return
     }
-    if (settings?.logEnable) log.debug "${device.displayName} setMelody $melodyName ($melodyIndex)"
+    logDebug "setMelody $melodyName ($melodyIndex)"
     state.setMelody = melodyName
     sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
 }
@@ -549,12 +542,11 @@ void setAlarmDuration(BigDecimal length) {
 
 void setAlarmVolume(String volumeOption) {
     def index = volumeMapping.findIndexOf{it.key==volumeOption}
-    //log.warn "index=${index}"
     if (index < 0) {
-        if (settings?.txtEnable) log.warn "${device.displayName} setVolume not supported parameter ${volume}"
+        logWarn "setVolume not supported parameter ${volume}"
         return
     }
-    log.trace "volumeMapping[${volumeOption}] = ${volumeMapping[volumeOption]}"
+    //log.trace "volumeMapping[${volumeOption}] = ${volumeMapping[volumeOption]}"
     def volumePct = volumeMapping[volumeOption].find{it.key=='volume'}.value
     def tuyaValue = volumeMapping[volumeOption].find{it.key=='tuya'}.value
     //log.trace "volume=${volumePct}, tuya=${tuyaValue} "
@@ -568,7 +560,7 @@ void setAlarmVolume(String volumeOption) {
             sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, zigbee.convertToHexString(tuyaValue as int, 2)))
             break
         default :
-            if (settings?.txtEnable) log.warn "${device.displayName} setVolume not supported parameter ${volume}"
+            logWarn "setVolume not supported parameter ${volume}"
             return
     }
     unmute()
@@ -591,7 +583,7 @@ def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     unschedule()
     if (logEnable==true) {
-        runIn(86400, logsOff)    // turn off debug logging after 24 hours
+        runIn(86400, logsOff, [overwrite: true, misfire: "ignore"])    // turn off debug logging after 24 hours
         if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
     }
     else {
@@ -680,8 +672,8 @@ def initialize() {
 private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
     ArrayList<String> cmds = []
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
-    if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
-    state.txCounter = state.txCounter ?:0 + 1
+    logDebug "sendTuyaCommand = ${cmds}"
+    state.txCounter = state.txCounter ?: 0 + 1
     return cmds
 }
 
@@ -690,23 +682,23 @@ private wakeUpTuya() {
 }
 
 private combinedTuyaCommands(String cmds) {
-    state.txCounter = state.txCounter ?:0 + 1
+    state.txCounter = state.txCounter ?: 0 + 1
     return zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + cmds ) 
 }
 
 private appendTuyaCommand(Integer dp, String dp_type, Integer fncmd) {
     Integer fncmdLen =  dp_type== DP_TYPE_VALUE? 8 : 2
     String cmds = zigbee.convertToHexString(dp, 2) + dp_type + zigbee.convertToHexString((int)(fncmdLen/2), 4) + zigbee.convertToHexString(fncmd, fncmdLen) 
-    //if (settings?.logEnable) log.trace "${device.displayName} appendTuyaCommand = ${cmds}"
+    //logDebug "appendTuyaCommand = ${cmds}"
     return cmds
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
-    if (settings?.logEnable) {log.trace "${device.displayName} sendZigbeeCommands(cmd=$cmd)"}
+    logDebug "sendZigbeeCommands(cmd=$cmd)"
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            state.txCounter = state.txCounter ?:0 + 1
+            state.txCounter = state.txCounter ?: 0 + 1
     }
     sendHubCommand(allActions)
 }
@@ -746,7 +738,7 @@ def getBatteryPercentageResult(rawValue) {
         if (settings?.txtEnable) log.info "${result.descriptionText}"
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
+        logWarn "ignoring BatteryPercentageResult(${rawValue})"
     }
 }
 
@@ -771,7 +763,7 @@ private Map getBatteryResult(rawValue) {
         sendEvent(result)
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
+        logWarn "ignoring BatteryResult(${rawValue})"
     }    
 }
 
@@ -782,6 +774,25 @@ Integer safeToInt(val, Integer defaultVal=0) {
 Double safeToDouble(val, Double defaultVal=0.0) {
 	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
+
+def logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
+}
+
 
 def test( str ) {
     sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
