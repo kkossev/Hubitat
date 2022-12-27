@@ -15,14 +15,14 @@
  * ver. 1.0.0 2022-04-02 kkossev  - First published version
  * ver. 1.1.0 2022-11-05 kkossev  - Alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
- * ver. 1.1.1 2022-12-27 kkossev  - (dev. branch) bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; 
+ * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  *
  *    TODO: preferences for the beep() command
  *
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2022/12/27 10:26 PM"}
+def timeStamp() {"2022/12/27 10:27 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,21 +86,21 @@ metadata {
 @Field static final String defaultVolume = "medium"
 
 @Field static final List<String> melodiesOptions = [
-    '1=Doorbell',
-    '2=Classical song 1',
-    '3=Classical song 2',
-    '4=Classical song 3',
-    '5=Classical song 4',
-    '6=Classical song 5',
-    '7=Alarm 1',
-    '8=Alarm 2',
-    '9=Alarm 3',
-    '10=Alarm 4',
+    '1=Doorbell 1',
+    '2=Fur Elise',
+    '3=Westminster',
+    '4=4 Key Chime',
+    '5=William Tell',
+    '6=Mozart Piano',
+    '7=Space Alarm',
+    '8=Klaxon',
+    '9=meep meep',
+    '10=Wheep',
     '11=Barking dog',
-    '12=Alarm',
-    '13=Chime',
-    '14=Telephone',
-    '15=Siren',
+    '12=Alarm Siren',
+    '13=Doorbell 2',
+    '14=Old Phone',
+    '15=Police Siren',
     '16=Evacuation bell',
     '17=Clock alarm',
     '18=Fire alarm'
