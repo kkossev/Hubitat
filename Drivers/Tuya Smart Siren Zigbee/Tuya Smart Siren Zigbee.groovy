@@ -16,14 +16,13 @@
  * ver. 1.1.0 2022-11-05 kkossev  - Alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
- * ver. 1.1.2 2022-12-31 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support (w/o T/H) 
  *
- *    TODO: preferences for the beep() command; NEO siren send commands;
+ *    TODO: preferences for the beep() command
  *
 */
 
-def version() { "1.1.2" }
-def timeStamp() {"2022/12/31 2:19 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2022/12/27 10:27 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -69,8 +68,6 @@ metadata {
         input (name: "playSoundDuration", type: "number", title: "<b>Play Sound Duration</b>, seconds", description: "<i>The duration of the PlaySound command in seconds</i>", range: "1..180", defaultValue: 10)
     }
 }
-
-def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']}
 
 @Field static final List<String> volumeOptions = [
    // '---select---',
@@ -152,13 +149,6 @@ private findVolumeByName( name ) {
 @Field static final Integer TUYA_DP_ALARM      = 13
 @Field static final Integer TUYA_DP_BATTERY    = 15
 @Field static final Integer TUYA_DP_MELODY     = 21
-
-@Field static final Integer NEO_DP_VOLUME     = 116
-@Field static final Integer NEO_DP_DURATION   = 103
-@Field static final Integer NEO_DP_ALARM      = 104
-@Field static final Integer NEO_DP_BATTERY    = 101    // enum
-@Field static final Integer NEO_DP_MELODY     = 102
-
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -261,8 +251,6 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x74 : // Neo Siren Volume ['low', 'medium', 'high']
-                logDebug "Neo Siren Volume is ${fncmd}"
             case TUYA_DP_VOLUME :    // (05) volume [ENUM] 0:low 1: mid 2:high
                 def volumeName = 'unknown'
                 def volumePct = -1
@@ -272,21 +260,15 @@ def processTuyaCluster( descMap ) {
                     sendVolumeEvent( volumePct )
                 }
                 break
-            
-            case 0x67 : // Neo Alarm Duration 0..1800 seconds
-                logDebug "Neo Alarm Duration is ${fncmd}"
             case TUYA_DP_DURATION :  // (07) duration [VALUE] in seconds
                 if (settings?.txtEnable) log.info "${device.displayName} duration is ${fncmd} s"
                 sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
                 break
-            
-            case 0x68 : // Neo Alarm On 0x01 Off 0x00
-                logDebug "Neo Alarm is ${fncmd}"
             case TUYA_DP_ALARM :    // (13) alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
                 if (settings?.logEnable) log.info "${device.displayName} alarm state received is ${value} (${fncmd})"
                 if (value == "off") {
-                     sendEvent(name: "status", value: "stopped")      
+                    sendEvent(name: "status", value: "stopped")      
                      if (device.currentValue("alarm", true) in ["beep", "playSound"]) {
                         runIn( 7, restoreDefaultSettings, [overwrite: true])
                         //restoreDefaultSettings()
@@ -301,46 +283,9 @@ def processTuyaCluster( descMap ) {
             case TUYA_DP_BATTERY :    // (15) battery [VALUE] percentage
                 getBatteryPercentageResult( fncmd * 2)
                 break
-            
-            case 0x66 : // Neo Alarm Melody 18 Max ? -> fncmd+1 ? TODO
-                logDebug "Neo Alarm Melody is ${fncmd}"
             case TUYA_DP_MELODY :     // (21) melody [enum] 0..17
                 if (settings?.txtEnable) log.info "${device.displayName} melody is ${melodiesOptions[fncmd]} (${fncmd})"
                 sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText )            
-                break
-            
-            case 0x65 : // Neo Power Mode  ['battery_full', 'battery_high', 'battery_medium', 'battery_low', 'usb']
-                logInfo "Neo Power Mode is ${fncmd}"
-                break
-            case 0x69 : // Neo Temperature  ( x10 ?)
-                logInfo "Neo Temperature is ${fncmd}"
-                break
-            case 0x6A : // Neo Humidity Level (x100 ?)
-                logInfo "Neo Humidity Level is ${fncmd}"
-                break
-            case 0x6B : // Neo Min Alarm Temperature -20 .. 80
-                logInfo "Neo Min Alarm Temperature is ${fncmd}"
-                break
-            case 0x6C : // Neo Max Alarm Temperature -20 .. 80
-                logInfo "Neo Max Alarm Temperature is ${fncmd}"
-                break
-            case 0x6D : // Neo Min Alarm Humidity 1..100
-                logInfo "Neo Min Alarm Humidity is ${fncmd}"
-                break
-            case 0x6E : // Neo Max Alarm Humidity 1..100
-                logInfo "Neo Max Alarm Humidity is ${fncmd}"
-                break
-            case 0x70 : // Neo Temperature Unit (F 0x00, C 0x01)
-                logInfo "Neo Temperature Unit is ${fncmd}"
-                break
-            case 0x71 : // Neo Alarm by Temperature status
-                logInfo "Neo Alarm by Temperature status is ${fncmd}"
-                break
-            case 0x72 : // Neo Alarm by Humidity status
-                logInfo "Neo Alarm by Humidity status is ${fncmd}"
-                break
-            case 0x73 : // Neo ???
-                logInfo "Neo ??? is ${fncmd}"
                 break
             default :
                 logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -395,21 +340,21 @@ def sendTuyaAlarm( commandName ) {
         def volumeName; def volumeTuya; 
         (volumeName, volumeTuya) = findVolumeByPct( state.setVolume )
         if (volumeTuya >= 0 ) {
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+            cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
         }
         // duration
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration) ) 
+        cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration) ) 
         // melody
         def melodyNumber = safeToInt(melodiesOptions.indexOf(state.setMelody))
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyNumber ) 
+        cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, melodyNumber ) 
         // play it
         unschedule(restoreDefaultSettings)
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+        cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
         sendZigbeeCommands( combinedTuyaCommands(cmds) )    
     }
     else {
         unschedule(restoreDefaultSettings)
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
     }
     
 }
@@ -424,22 +369,22 @@ if ( true ) {
     def volumeTuya; def volumePct
     (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
     if (volumeTuya >= 0 ) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+        cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
     unschedule(restoreDefaultSettings)
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
+    cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
 else {
     ArrayList<String> cmds = []
     state.lastCommand = "beep"    
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "01", delay=50)
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION ,2), DP_TYPE_VALUE, "00000001", delay=50 ) 
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, "02", delay=100 ) 
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_VOLUME,2), DP_TYPE_ENUM, "01", delay=50)
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_DURATION,2), DP_TYPE_VALUE, "00000001", delay=50 ) 
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_MELODY,2), DP_TYPE_ENUM, "02", delay=100 ) 
     unschedule(restoreDefaultSettings)
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM,2), DP_TYPE_BOOL, "01" , delay=200) 
+    cmds += sendTuyaCommand( zigbee.convertToHexString(TUYA_DP_ALARM,2), DP_TYPE_BOOL, "01" , delay=200) 
     sendZigbeeCommands( cmds )
 }
 }
@@ -450,10 +395,10 @@ def restoreDefaultSettings() {
     def volumeTuya
     (volumeName, volumeTuya) =  findVolumeByPct( state.setVolume ) 
     if (volumeTuya >= 0) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+        cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration)  ) 
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, safeToInt(melodiesOptions.indexOf(state.setMelody))) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration)  ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, safeToInt(melodiesOptions.indexOf(state.setMelody))) 
     logDebug "restoring default settings volume=${volumeName}, duration=${state.setDuration}, melody=${state.setMelody}"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )    
 }
@@ -488,7 +433,7 @@ def setVolume(volumelevel) {
     (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel ) 
     logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
     if (volumeTuya >= 0) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+        cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
     if (settings?.logEnable) log.debug "${device.displayName} setting volume=${volumeName}"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )      
@@ -532,11 +477,11 @@ def playSound(soundnumber, volumeLevel=null, duration=null) {
         duration = duration <1 ? 1 : duration > 180 ? 180 : duration as int
     }
     state.lastCommand = "playSound"
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya)) 
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(duration) ) 
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, soundNumberIndex) 
+    cmds += appendTuyaCommand( TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya)) 
+    cmds += appendTuyaCommand( TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(duration) ) 
+    cmds += appendTuyaCommand( TUYA_DP_MELODY, DP_TYPE_ENUM, soundNumberIndex) 
     unschedule(restoreDefaultSettings)
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
+    cmds += appendTuyaCommand( TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
     logDebug "playSound ${soundnumber} (${melodiesOptions.get(soundNumberIndex)}) index=${soundNumberIndex}, duration=${duration}, volume=${volumeName}(${volumeTuya})"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
@@ -584,7 +529,7 @@ void setAlarmMelody( melodyName ) {
     }
     logDebug "setMelody $melodyName ($melodyIndex)"
     state.setMelody = melodyName
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
+    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
 }
 
 
@@ -592,7 +537,7 @@ void setAlarmDuration(BigDecimal length) {
     int duration = length > 255 ? 255 : length < 0 ? 0 : length
     if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
     state.setDuration = duration
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
 }
 
 void setAlarmVolume(String volumeOption) {
@@ -612,7 +557,7 @@ void setAlarmVolume(String volumeOption) {
         case "low" :
         case "medium" :
         case "high" :
-            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, zigbee.convertToHexString(tuyaValue as int, 2)))
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, zigbee.convertToHexString(tuyaValue as int, 2)))
             break
         default :
             logWarn "setVolume not supported parameter ${volume}"
