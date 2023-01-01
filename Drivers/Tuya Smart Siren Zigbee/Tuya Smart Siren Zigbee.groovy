@@ -17,13 +17,13 @@
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
- * ver. 1.2.0 2023-01-01 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support (w/o T/H); added separate preferences for alarm and Melody, Volume and Duration
+ * ver. 1.2.0 2023-01-02 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support (w/o T/H); added separate preferences for alarm and Melody, Volume and Duration
  *
  *
 */
 
-def version() { "1.1.2" }
-def timeStamp() {"2023/01/01 10:25 PM"}
+def version() { "1.2.0" }
+def timeStamp() {"2023/01/02 12:21 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -157,8 +157,8 @@ private findVolumeByName( name ) {
     def volumePct = -1
     volumeMapping.each{ k, v -> 
         if (k as String == name as String) {
-            volumeTuya = v.tuya
-            volumePct = v.volume
+            volumeTuya = safeToInt(v.tuya)
+            volumePct = safeToInt(v.volume)
         }
     }
     return [volumeTuya, volumePct]
@@ -441,15 +441,19 @@ def sendTuyaAlarm( commandName ) {
 
 // capability "Tone"
 def beep() {
-if ( true ) {
     wakeUpTuya()
     String cmds = ""
     state.lastCommand = "beep"    
     logDebug "sending beep() beepVolume = ${settings?.beepVolume}"
-    def volumeTuya; def volumePct
+    Integer volumeTuya; Integer volumePct
     (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
-    if (volumeTuya >= 0 ) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+    log.trace "volumeTuya=${volumeTuya}"
+    if (volumeTuya >= 0 && volumeTuya <=2) {
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int) 
+        log.warn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} "
+    }
+    else {
+        log.warn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} "
     }
     cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
     cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
@@ -457,19 +461,9 @@ if ( true ) {
     cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
     sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
-else {
-    ArrayList<String> cmds = []
-    state.lastCommand = "beep"    
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, 2), DP_TYPE_ENUM, "01", delay=50)
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION ,2), DP_TYPE_VALUE, "00000001", delay=50 ) 
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, "02", delay=100 ) 
-    unschedule(restoreDefaultSettings)
-    cmds += sendTuyaCommand( zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM,2), DP_TYPE_BOOL, "01" , delay=200) 
-    sendZigbeeCommands( cmds )
-}
-}
 
 def restoreDefaultSettings() {
+    wakeUpTuya()
     String cmds = ""
     // restore alarm volume
     def volumeName = settings?.alarmSoundVolume ?: 'high'
@@ -521,7 +515,7 @@ def setVolumeLevel( volumelevel ) {
     def volumeTuya
     (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel ) 
     logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
-    if (volumeTuya >= 0) {
+    if (safeToInt(volumeTuya) >= 0) {
         cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
     if (settings?.logEnable) log.debug "${device.displayName} setting volume=${volumeName}"
