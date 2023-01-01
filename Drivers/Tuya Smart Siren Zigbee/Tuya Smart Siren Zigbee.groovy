@@ -23,7 +23,7 @@
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/01/02 12:21 AM"}
+def timeStamp() {"2023/01/02 12:44 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -530,13 +530,6 @@ def volumeUp() {
     setVolumeLevel( state.volume + 33)
 }
 
-
-// capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
-//      command "playSound", [
-//          [name:"soundNumber", type: "NUMBER", description: "Melody number, 1..18", isRequired: true],
-//          [name:"duration", type: "NUMBER", description: "duration is seconds"],
-//          [name:"volume", type: "NUMBER", description: "sound volume, %"]
-//      ]
 def playSound(soundnumber=null, volumeLevel=null, duration=null) {
     wakeUpTuya()
     String cmds = ""
@@ -610,15 +603,26 @@ def sendAlarmEvent( mode, isDigital=false ) {
     sendEvent(name: "switch", value: mode=="off"?"off":"on", descriptionText: map.descriptionText, type:"digital")       
 }
 
-
-void setMelody( alarmType, melodyName ) {
-    def melodyIndex = melodiesOptions.indexOf(melodyName)
-    if (melodyIndex <0) {
-        logWarn "setMelody invalid ${melodyName}"
+void setMelody( alarmType, melodyNumber ) {
+    int index = safeToInt( melodyNumber )
+    if (index < 1 || index> TUYA_MAX_MELODIES) {
+        logWarn "melody number must be between 1 and ${TUYA_MAX_MELODIES}"
         return
     }
-    logDebug "setMelody $melodyName ($melodyIndex)"
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(melodyIndex, 2)))
+    index = index - 1
+    if (alarmType == 'alarm') {
+        device.updateSetting("alarmMelody", [value:melodiesOptions[index], type:"enum"])
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+    }
+    else if (alarmType == 'chime') {
+        device.updateSetting("playSoundMelody", [value:melodiesOptions[index], type:"enum"])
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, 2), DP_TYPE_ENUM, zigbee.convertToHexString(index, 2)))
+    }
+    else {
+        logWarn "alarmType must be one of ${soundTypeOptions}"
+        return
+    }    
+    logDebug "setMelody ${alarmType} ${melodiesOptions[index]} (${index})"
 }
 
 void setDuration( alarmType, alarmLength) {
