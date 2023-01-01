@@ -24,7 +24,7 @@
 */
 
 def version() { "1.1.2" }
-def timeStamp() {"2023/01/01 6:24 PM"}
+def timeStamp() {"2023/01/01 6:57 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -48,7 +48,10 @@ metadata {
         attribute "duration", "number"
         
         command "setAlarmMelody", [[name:"Set alarm melody type", type: "ENUM", description: "set alarm type", constraints: melodiesOptions]]
-        command "setAlarmDuration", [[name:"Length", type: "NUMBER", description: "0..180 = set alarm length in seconds. 0 = no audible alarm"]]
+        command "setDuration", [
+            [name:"alarmType", type: "ENUM", description: "sound type", constraints: soundTypeOptions],
+            [name:"alarmLength", type: "NUMBER", description: "0..$TUYA_MAX_DURATION = set alarm duration in seconds"]
+        ]
         command "setAlarmVolume", [[name:"Volume", type: "ENUM", description: "set alarm volume", constraints: volumeOptions ]]
         command "playSound", [
             [name:"soundNumber", type: "NUMBER", description: "Melody number, 1..18", isRequired: true],
@@ -86,6 +89,10 @@ def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE20
     'low',
     'medium',
     'high'
+]
+@Field static final List<String> soundTypeOptions = [
+    'alarm',
+    'chime'
 ]
 
 @Field static final LinkedHashMap volumeMapping = [
@@ -415,12 +422,9 @@ def sendTuyaAlarm( commandName ) {
             state.setVolume = 66 
         }
         // duration
-        def durationTuya = safeToInt(state.setDuration)
+        def durationTuya = safeToInt( settings?.alarmSoundDuration )
         if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
             cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
-        }
-        else {
-            state.setDuration = TUYA_DEFAULT_DURATION
         }
         // melody
         
@@ -484,12 +488,9 @@ def restoreDefaultSettings() {
     else {
         state.setVolume = 66    // default volume is 'medium'
     }
-    def durationTuya = safeToInt(state.setDuration)
+    def durationTuya = safeToInt(settings?.alarmSoundDuration, TUYA_DEFAULT_DURATION)
     if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
         cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
-    }
-    else {
-        state.setDuration = TUYA_DEFAULT_DURATION    // 10
     }
     def melodyTuya = safeToInt(melodiesOptions.indexOf(state.setMelody))
     if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
@@ -498,7 +499,7 @@ def restoreDefaultSettings() {
     else {
         state.setMelody = melodiesOptions[0]
     }
-    logDebug "restoring default settings volume=${volumeName}, duration=${state.setDuration}, melody=${state.setMelody}"
+    logDebug "restoring default settings volume=${volumeName}, duration=${durationTuya}, melody=${state.setMelody}"
     sendZigbeeCommands( combinedTuyaCommands(cmds) )    
 }
 
@@ -639,11 +640,22 @@ void setAlarmMelody( melodyName ) {
 }
 
 
-void setAlarmDuration(BigDecimal length) {
-    int duration = length > 255 ? 255 : length < 0 ? 0 : length
-    if (settings?.logEnable) log.debug "${device.displayName} setDuration ${duration}"
-    state.setDuration = duration
-    sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+void setDuration( alarmType, alarmLength) {
+    int duration = safeToInt( alarmLength )
+    if (duration > TUYA_MAX_DURATION) duration = TUYA_MAX_DURATION
+    if (duration < 1 ) duration = 1
+    logDebug "setAlarmDuration ${duration}"
+    if (alarmType == 'alarm') {
+        device.updateSetting("alarmSoundDuration", [value:duration, type:"number"])
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+    }
+    else if (alarmType == 'chime') {
+        device.updateSetting("playSoundDuration", [value:duration, type:"number"])
+        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, 2), DP_TYPE_VALUE, zigbee.convertToHexString(duration, 8)))
+    }
+    else {
+        logWarn "alarmType must be one of ${soundTypeOptions}"
+    }
 }
 
 void setAlarmVolume(String volumeOption) {
@@ -706,10 +718,11 @@ def refresh() {
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-    }
-    else {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        state.remove('state.setMelody')
+        state.remove('state.setDuration')
+        state.remove('state.setVolume')
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -733,15 +746,14 @@ void initializeVars(boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
     state.lastCommand = "unknown"
-    state.setMelody = "1=Doorbell"
-    state.setDuration = TUYA_DEFAULT_DURATION    // 10
-    state.setVolume = 66
 
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.beepVolume == null) device.updateSetting("beepVolume", [value:"low", type:"enum"])
     if (fullInit == true || settings?.playSoundVolume == null) device.updateSetting("playSoundVolume", [value: TUYA_DEFAULT_VOLUME, type:"enum"])
+    if (fullInit == true || settings?.alarmSoundDuration == null) device.updateSetting("alarmSoundDuration", [value:TUYA_DEFAULT_DURATION, type:"number"])
     if (fullInit == true || settings?.playSoundDuration == null) device.updateSetting("playSoundDuration", [value:TUYA_DEFAULT_DURATION, type:"number"])
+
     
 }
 
