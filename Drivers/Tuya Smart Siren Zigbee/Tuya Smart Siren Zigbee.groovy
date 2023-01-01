@@ -17,13 +17,14 @@
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
+ * ver. 1.2.0 2023-01-01 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support (w/o T/H); added separate preferences for alarm and melody number. volume and duration
  *
  *
  *
 */
 
 def version() { "1.1.2" }
-def timeStamp() {"2022/12/31 12:26 PM"}
+def timeStamp() {"2023/01/01 6:24 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -64,9 +65,16 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        input (name: "beepVolume", type: "enum", title: "<b>Beep Volume</b>", description:"<i>Select Beep Volume</i>", defaultValue: "low", options: volumeOptions)
-        input (name: "playSoundVolume", type: "enum", title: "<b>Play Sound (Chime) command default volume</b>", description:"<i>Select playSound default Volume</i>", defaultValue: TUYA_DEFAULT_VOLUME, options: volumeOptions)
-        input (name: "playSoundDuration", type: "number", title: "<b>Play Sound Duration</b>, seconds", description: "<i>The duration of the PlaySound command in seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION)
+        //
+        input (name: "beepVolume", type: "enum", title: "<b>Beep Volume</b>", description:"<i>Select the volume used in the Beep command</i>", defaultValue: "low", options: volumeOptions)
+        //
+        input (name: "alarmMelody", type: "enum", title: "<b>Alarm default melody</b>", description:"<i>Select the melody used in the Alarm commands</i>", defaultValue: TUYA_DEFAULT_MELODY, options: melodiesOptions)
+        input (name: "alarmSoundVolume", type: "enum", title: "<b>Alarm default volume</b>", description:"<i>Select the volume used in the Alarm commands</i>", defaultValue: 'high', options: volumeOptions)
+        input (name: "alarmSoundDuration", type: "number", title: "<b>Alarm default duration</b>, seconds", description: "<i>Select the duration used in the Alarm commands, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_MAX_DURATION)
+        //
+        input (name: "playSoundMelody", type: "enum", title: "<b>Play Sound (Chime) default melody</b>", description:"<i>Select the default melody used in the playSound (Chime) command</i>", defaultValue: '12=Alarm Siren', options: melodiesOptions)
+        input (name: "playSoundVolume", type: "enum", title: "<b>Play Sound (Chime) default volume</b>", description:"<i>Select the default volume used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_VOLUME, options: volumeOptions)
+        input (name: "playSoundDuration", type: "number", title: "<b>Play Sound (Chime) default duration</b>, seconds", description: "<i>Select the default duration used in the playSound (Chime) command, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION)
     }
 }
 
@@ -87,9 +95,10 @@ def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE20
     'high'     : [ volume: '100', tuya: '2']
 ]// as ConfigObject
 
-@Field static final String  TUYA_DEFAULT_VOLUME    = "medium"
+@Field static final String  TUYA_DEFAULT_VOLUME    = 'medium'
 @Field static final Integer TUYA_DEFAULT_DURATION  = 10
 @Field static final Integer TUYA_MAX_DURATION      = 180
+@Field static final String  TUYA_DEFAULT_MELODY    = '2=Fur Elise'
 @Field static final Integer TUYA_MAX_MELODIES      = 18
 
 @Field static final List<String> melodiesOptions = [
@@ -398,14 +407,30 @@ def sendTuyaAlarm( commandName ) {
         // volume
         def volumeName; def volumeTuya; 
         (volumeName, volumeTuya) = findVolumeByPct( state.setVolume )
-        if (volumeTuya >= 0 ) {
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+        log.warn "state.setVolume=${state.setVolume} volumeName=${volumeName} volumeTuya=${volumeTuya}"
+        if (volumeTuya >= 0 && volumeTuya <=2) {
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int ) 
+        }
+        else {
+            state.setVolume = 66 
         }
         // duration
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, safeToInt(state.setDuration) ) 
+        def durationTuya = safeToInt(state.setDuration)
+        if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
+        }
+        else {
+            state.setDuration = TUYA_DEFAULT_DURATION
+        }
         // melody
-        def melodyNumber = safeToInt(melodiesOptions.indexOf(state.setMelody))
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyNumber ) 
+        
+        def melodyTuya = safeToInt(melodiesOptions.indexOf(state.setMelody))
+        if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int) 
+        }
+        else {
+            state.setMelody = melodiesOptions[0]
+        }        
         // play it
         unschedule(restoreDefaultSettings)
         cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
@@ -453,7 +478,7 @@ def restoreDefaultSettings() {
     def volumeName
     def volumeTuya
     (volumeName, volumeTuya) =  findVolumeByPct( state.setVolume ) 
-    if (volumeTuya >= 0 && volumeTuya <=3) {
+    if (volumeTuya >= 0 && volumeTuya <=2) {
         cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
     }
     else {
@@ -528,13 +553,18 @@ def volumeUp() {
 //          [name:"duration", type: "NUMBER", description: "duration is seconds"],
 //          [name:"volume", type: "NUMBER", description: "sound volume, %"]
 //      ]
-def playSound(soundnumber, volumeLevel=null, duration=null) {
+def playSound(soundnumber=null, volumeLevel=null, duration=null) {
     wakeUpTuya()
     String cmds = ""
     def volumeName; def volumeTuya; def volumePct
+    if (soundnumber == null) {
+        // use the default melody
+        soundnumber = melodiesOptions.indexOf(settings?.playSoundMelody ?: TUYA_DEFAULT_MELODY ) + 1
+    }
     int soundNumberIndex = safeToInt(soundnumber)
     soundNumberIndex = soundNumberIndex < 1 ? 1 : soundNumberIndex > TUYA_MAX_MELODIES ? TUYA_MAX_MELODIES : soundNumberIndex; 
     soundNumberIndex -= 1    // Tuya parameter is zero based !
+    //
     if (volumeLevel == null) {    
         // use the default playSoundVolume
         volumeName = settings?.playSoundVolume ?: TUYA_DEFAULT_VOLUME
@@ -545,6 +575,7 @@ def playSound(soundnumber, volumeLevel=null, duration=null) {
         def nearestVolume = getNearestTuyaVolumeLevel( volumeLevel )
         (volumeName, volumeTuya) =  findVolumeByPct( nearestVolume ) 
     }
+    //
     if (duration == null) {
         duration = settings?.playSoundDuration ?: TUYA_DEFAULT_DURATION as int
     }
@@ -870,6 +901,6 @@ def logWarn(msg) {
 
 
 def test( str ) {
-    sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
+    log.trace "${melodiesOptions[0]}"
 }
 
