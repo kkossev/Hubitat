@@ -117,8 +117,8 @@
 |  Device |  Links |
 |---|---|
 | Tuya Zigbee Siren Alarm![image](https://user-images.githubusercontent.com/6189950/161398473-03ef138a-5152-41dd-9dc8-4db4cd10a8b4.png)  | AliExpress: https://www.aliexpress.com/item/1005004048262165.html <br> Hubitat: https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work <br> |
-| Siren ![image](https://user-images.githubusercontent.com/6189950/155108281-fe16bc0f-35b5-4e83-a482-7f6cee6bca93.png)  | AliExpress: https://www.aliexpress.com/item/1005001776376752.html <br> Hubitat: https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work <br> <br> **ATTENTION: there are different variations of Tuya Sirens, some do not work with Hubitat (yet)!** <br> Possible working driver: https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work/73624/13|
-
+| Tuya Zigbee Siren with Temperature & Humidity Sensor <br> ![image](https://user-images.githubusercontent.com/6189950/210218070-ded69834-7ebc-42b6-8f69-af918db37baa.png)| AliXpress: [link1](https://www.aliexpress.com/item/4000687509921.html) <br> Walmart: [link](https://www.walmart.com/ip/Neo-Coolcam-ZigBee-Smart-Sensor-Alarm-Indoor-Temperature-Humidity-Sensor-Siren-Home-Smart-Alarm/161237851)  |
+| Siren ![image](https://user-images.githubusercontent.com/6189950/155108281-fe16bc0f-35b5-4e83-a482-7f6cee6bca93.png)  | AliExpress: https://www.aliexpress.com/item/1005001776376752.html <br> Hubitat: https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work <br> <br> **ATTENTION: there are different variations of Tuya Sirens, some do not work with Hubitat (yet)!** <br> Possible working driver: https://community.hubitat.com/t/tuya-smart-siren-zigbee-driver-doesnt-work/73624/13 |
 -----------------------------
 
 ### Tuya Roller Shade 
