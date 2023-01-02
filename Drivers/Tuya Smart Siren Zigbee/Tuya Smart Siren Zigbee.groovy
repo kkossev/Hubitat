@@ -17,14 +17,14 @@
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
- * ver. 1.2.0 2023-01-02 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support (w/o T/H); added separate preferences for alarm and Melody, Volume and Duration
+ * ver. 1.2.0 2023-01-02 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
  *
  *    TODO: NEO siren temperature and humidity events
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/01/02 12:59 AM"}
+def timeStamp() {"2023/01/02 11:42 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -44,6 +44,8 @@ metadata {
         capability "Tone"     // Commands: beep()
         capability "Chime"    // soundEffects - JSON_OBJECT; soundName - STRING; status - ENUM ["playing", "stopped"]; Commands: playSound(soundnumber); soundnumber required (NUMBER) - Sound number to play; stop()
         capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp()
+        capability "TemperatureMeasurement"
+        capability "RelativeHumidityMeasurement"
         
         attribute "duration", "number"
         
@@ -337,9 +339,11 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x69 : // Neo Temperature  ( x10 ?)
                 if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd}"
+                sendTemperatureEvent( fncmd/10.0 )
                 break
             case 0x6A : // Neo Humidity Level (x100 ?)
                 if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd}"
+                sendHumidityEvent( fncmd/100.0 )
                 break
             case 0x6B : // Neo Min Alarm Temperature -20 .. 80
                 if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd}"
@@ -603,6 +607,41 @@ def sendAlarmEvent( mode, isDigital=false ) {
     sendEvent(map)
     sendEvent(name: "switch", value: mode=="off"?"off":"on", descriptionText: map.descriptionText, type:"digital")       
 }
+
+def sendTemperatureEvent( temperature, isDigital=false ) {
+    def map = [:]
+    map.name = "temperature"
+    def Scale = location.temperatureScale
+    if (Scale == "F") {
+        temperature = (temperature * 1.8) + 32
+        map.unit = "\u00B0"+"F"
+    }
+    else {
+        map.unit = "\u00B0"+"C"
+    }
+    def tempCorrected = temperature
+    map.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
+    map.type = isDigital == true ? "digital" : "physical"
+    map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    sendEvent(map)
+}
+
+def sendHumidityEvent( humidity, isDigital=false ) {
+    def map = [:]
+    def humidityAsDouble = safeToDouble(humidity) +safeToDouble(settings?.humidityOffset)
+    humidityAsDouble = humidityAsDouble < 0.0 ? 0.0 : humidityAsDouble > 100.0 ? 100.0 : humidityAsDouble
+    map.value = Math.round(humidityAsDouble)
+    map.name = "humidity"
+    map.unit = "% RH"
+    map.type = isDigital == true ? "digital" : "physical"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
+    if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    sendEvent(map)
+}
+
+
 
 void setMelody( alarmType, melodyNumber ) {
     int index = safeToInt( melodyNumber )
