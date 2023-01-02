@@ -87,6 +87,8 @@ metadata {
     }
 }
 
+@Field static final Boolean restoreAlarmSettings = false
+
 def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']}
 
 @Field static final List<String> volumeNameOptions = [
@@ -297,23 +299,25 @@ def processTuyaCluster( descMap ) {
                 logDebug "received Neo Alarm duration ${fncmd}"
             case TUYA_DP_DURATION :  // (07) duration [VALUE] in seconds
                 logDebug "confirmed duration ${fncmd} s"
-                sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText )            
+                sendEvent(name: "duration", value: fncmd, descriptionText: descriptionText, type: "physical")            
                 break
             
             case 0x68 : // Neo Alarm On 0x01 Off 0x00
                 logDebug "Neo Alarm is ${fncmd}"
             case TUYA_DP_ALARM :    // (13) alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
-                logInfo "confirmed alarm state ${value} (${fncmd})"
+                if (settings?.logEnable) logInfo "confirmed alarm state ${value} (${fncmd})"
                 if (value == "off") {
-                     sendEvent(name: "status", value: "stopped")      
-                     if (device.currentValue("alarm", true) in ["beep", "playSound"]) {
-                        runIn( 7, restoreDefaultSettings, [overwrite: true])
-                     }
+                    sendEvent(name: "status", value: "stopped", type: "physical")      
+                    if (restoreAlarmSettings == true) {
+                        if (device.currentValue("alarm", true) in ["beep", "playSound"]) {
+                            runIn( 7, restoreDefaultSettings, [overwrite: true])
+                        }
+                    }
                 }
                 else {
                    unschedule(restoreDefaultSettings)
-                   sendEvent(name: "status", value: "playing")
+                   sendEvent(name: "status", value: "playing", type: "physical")
                 }
                 sendAlarmEvent(value)
                 break
@@ -324,42 +328,42 @@ def processTuyaCluster( descMap ) {
             case 0x66 : // Neo Alarm Melody 18 Max ? -> fncmd+1 ? TODO
                 logDebug "received Neo Alarm melody ${fncmd}"
             case TUYA_DP_MELODY :     // (21) melody [enum] 0..17
-                logInfo "confirmed melody ${melodiesOptions[fncmd]} (${fncmd})"
-                sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText )            
+                if (settings?.logEnable) logInfo "confirmed melody ${melodiesOptions[fncmd]} (${fncmd})"
+                sendEvent(name: "soundName", value: melodiesOptions[fncmd], descriptionText: descriptionText, type: "physical" )            
                 break
             
             case 0x65 : // Neo Power Mode  ['battery_full', 'battery_high', 'battery_medium', 'battery_low', 'usb']
-                logInfo "Neo Power Mode is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Power Mode is ${fncmd}"
                 break
             case 0x69 : // Neo Temperature  ( x10 ?)
-                logInfo "Neo Temperature is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd}"
                 break
             case 0x6A : // Neo Humidity Level (x100 ?)
-                logInfo "Neo Humidity Level is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd}"
                 break
             case 0x6B : // Neo Min Alarm Temperature -20 .. 80
-                logInfo "Neo Min Alarm Temperature is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd}"
                 break
             case 0x6C : // Neo Max Alarm Temperature -20 .. 80
-                logInfo "Neo Max Alarm Temperature is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Max Alarm Temperature is ${fncmd}"
                 break
             case 0x6D : // Neo Min Alarm Humidity 1..100
-                logInfo "Neo Min Alarm Humidity is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Min Alarm Humidity is ${fncmd}"
                 break
             case 0x6E : // Neo Max Alarm Humidity 1..100
-                logInfo "Neo Max Alarm Humidity is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Max Alarm Humidity is ${fncmd}"
                 break
             case 0x70 : // Neo Temperature Unit (F 0x00, C 0x01)
-                logInfo "Neo Temperature Unit is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Temperature Unit is ${fncmd}"
                 break
             case 0x71 : // Neo Alarm by Temperature status
-                logInfo "Neo Alarm by Temperature status is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Alarm by Temperature status is ${fncmd}"
                 break
             case 0x72 : // Neo Alarm by Humidity status
-                logInfo "Neo Alarm by Humidity status is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Alarm by Humidity status is ${fncmd}"
                 break
             case 0x73 : // Neo ???
-                logInfo "Neo ??? is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo ??? is ${fncmd}"
                 break
             default :
                 logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -486,11 +490,11 @@ def restoreDefaultSettings() {
 
 //capability "AudioVolume" //Attributes: mute - ENUM ["unmuted", "muted"] volume - NUMBER, unit:%; Commands: mute() setVolume(volumelevel) volumelevel required (NUMBER) - Volume level (0 to 100) unmute() volumeDown() volumeUp()
 def mute() {
-    sendEvent(name: "mute", value: "muted")       
+    sendEvent(name: "mute", value: "muted", type: "digital")       
 }
 
 def unmute() {
-    sendEvent(name: "mute", value: "unmuted")       
+    sendEvent(name: "mute", value: "unmuted", type: "digital")       
 }
 
 def getNearestTuyaVolumeLevel( volumelevel ) {
@@ -582,7 +586,9 @@ def sendVolumeEvent( volume,  isDigital=false ) {
     map.unit = "%"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value}"
-    if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    if ((device.currentValue("volume") as int) != (volume as int)) {
+        if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+    }
     sendEvent(map)
 }
 
@@ -720,7 +726,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
-        sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true)
+        sendEvent(name: "soundEffects", value: JsonOutput.toJson(melodiesOptions), isStateChange: true, type: "digital")
     }
     //
     state.packetID = 0
