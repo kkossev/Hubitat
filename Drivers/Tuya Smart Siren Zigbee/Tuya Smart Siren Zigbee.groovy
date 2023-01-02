@@ -19,18 +19,19 @@
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
  * ver. 1.2.0 2023-01-02 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
  *
- *    TODO: NEO siren temperature and humidity events
+ *                                  TODO: mute/unmute
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/01/02 11:42 AM"}
+def timeStamp() {"2023/01/02 10:37 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
+import hubitat.helper.HexUtils
 
 @Field static final Boolean debug = false
  
@@ -71,6 +72,12 @@ metadata {
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE200_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // Neo NAS-AB02B0
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TYST11_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:        "d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested
+
+
+
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
     }
     preferences {
@@ -86,10 +93,14 @@ metadata {
         input (name: "playSoundMelody", type: "enum", title: "<b>Play Sound (Chime) default Melody</b>", description:"<i>Select the default melody used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_MELODY, options: melodiesOptions)
         input (name: "playSoundVolume", type: "enum", title: "<b>Play Sound (Chime) default Volume</b>", description:"<i>Select the default volume used in the playSound (Chime) command</i>", defaultValue: TUYA_DEFAULT_VOLUME, options: volumeNameOptions)
         input (name: "playSoundDuration", type: "number", title: "<b>Play Sound (Chime) default Duration</b>, seconds", description: "<i>Select the default duration used in the playSound (Chime) command, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION)
+        input (name: "advancedOptions", type: "bool", title: "<b>Advanced options</b>", description: "<i>These are automatically set up in an optimal way</i>", defaultValue: false)
+        if (advancedOptions == true) {
+            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>Restore the default Alarm settings 7 seconds after playing Beep or Chime</i>", defaultValue: false)
+            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Preset Beep and Chime Settings every time before playing Beep or Chime</i>", defaultValue: "fast", options:["fast", "slow", "none"])
+        } 
     }
 }
 
-@Field static final Boolean restoreAlarmSettings = false
 
 def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']}
 
@@ -311,7 +322,7 @@ def processTuyaCluster( descMap ) {
                 if (settings?.logEnable) logInfo "confirmed alarm state ${value} (${fncmd})"
                 if (value == "off") {
                     sendEvent(name: "status", value: "stopped", type: "physical")      
-                    if (restoreAlarmSettings == true) {
+                    if (settings?.restoreAlarmSettings == true) {
                         if (device.currentValue("alarm", true) in ["beep", "playSound"]) {
                             runIn( 7, restoreDefaultSettings, [overwrite: true])
                         }
@@ -391,6 +402,58 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
+void sendSimpleTuyaCommand(Integer command, String payload) {
+  Random rnd = new Random()
+  String fullPayload = "00${HexUtils.integerToHexString(rnd.nextInt(255),1)}" + payload
+  sendSimpleZigbeeCommands(zigbeeCommand(0x01, 0xEF00, command, 101, fullPayload))
+  logDebug "Payload sent: ${fullPayload}"
+}
+
+void sendSimpleZigbeeCommands(ArrayList<String> cmd) {
+    logDebug "sendZigbeeCommands(cmd=${cmd})"
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
+    cmd.each {
+            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
+    }
+    sendHubCommand(allActions)
+}
+
+ArrayList<String> zigbeeCommand(Integer cluster, Integer command, Map additionalParams, int delay = 201, String... payload) {
+    ArrayList<String> cmd = zigbee.command(cluster, command, additionalParams, delay, payload)
+    cmd[0] = cmd[0].replace('0xnull', '0x01')
+     
+    return cmd
+}
+
+String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) {
+    return integerToHexString(value.intValue(), minBytes, reverse=reverse)
+}
+
+ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, int delay = 203, String... payload) {
+    zigbeeCommand(endpoint, cluster, command, [:], delay, payload)
+}
+
+ArrayList<String> zigbeeCommand(Integer endpoint, Integer cluster, Integer command, Map additionalParams, int delay = 204, String... payload) {
+    String mfgCode = ""
+    if(additionalParams.containsKey("mfgCode")) {
+        mfgCode = " {${HexUtils.integerToHexString(HexUtils.hexStringToInt(additionalParams.get("mfgCode")), 2)}}"
+    }
+    String finalPayload = payload != null && payload != [] ? payload[0] : ""
+    String cmdArgs = "0x${device.deviceNetworkId} 0x${HexUtils.integerToHexString(endpoint, 1)} 0x${HexUtils.integerToHexString(cluster, 2)} " + 
+                       "0x${HexUtils.integerToHexString(command, 1)} " + 
+                       "{$finalPayload}" + 
+                       "$mfgCode"
+    ArrayList<String> cmd = ["he cmd $cmdArgs", "delay $delay"]
+    return cmd
+}
+String integerToHexString(Integer value, Integer minBytes, boolean reverse=false) {
+    if(reverse == true) {
+        return HexUtils.integerToHexString(value, minBytes).split("(?<=\\G..)").reverse().join()
+    } else {
+        return HexUtils.integerToHexString(value, minBytes)
+    }
+    
+}
 
 def off() {
     sendTuyaAlarm("off")
@@ -414,58 +477,74 @@ def siren() {
 
 
 def sendTuyaAlarm( commandName ) {
-    wakeUpTuya()
+    logDebug "swithing alarm ${commandName} settings?.presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings}"
     String cmds = ""
-    logDebug "swithing alarm ${commandName}"
     state.lastCommand = commandName
-    if (commandName != "off") {
-        // volume
-        def volumeName = settings?.alarmSoundVolume ?: 'high'
-        def volumeTuya = volumeNameOptions.indexOf(volumeName)
-        if (volumeTuya >= 0 && volumeTuya <=2) {
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int ) 
-        } 
-        // duration
-        def durationTuya = safeToInt( settings?.alarmSoundDuration )
-        if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
+    if (settings?.presetBeepAndChimeSettings == "none") {
+        if (commandName != "off") {
+            sendSimpleTuyaCommand(0x00, "0D01000101")
         }
-        // melody
-        def melodyName = settings?.alarmMelody ?: '12=Alarm Siren'
-        def melodyTuya = melodiesOptions.indexOf(melodyName)
-        if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int) 
+        else {
+            sendSimpleTuyaCommand(0x00, "0D01000100")
         }
-        // play it
-        unschedule(restoreDefaultSettings)
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
-        sendZigbeeCommands( combinedTuyaCommands(cmds) )    
     }
     else {
-        unschedule(restoreDefaultSettings)
-        sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
+        wakeUpTuya()
+        if (commandName != "off") {
+            // volume
+            def volumeName = settings?.alarmSoundVolume ?: 'high'
+            def volumeTuya = volumeNameOptions.indexOf(volumeName)
+            if (volumeTuya >= 0 && volumeTuya <=2) {
+                cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int ) 
+            } 
+            // duration
+            def durationTuya = safeToInt( settings?.alarmSoundDuration )
+            if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
+                cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
+            }
+            // melody
+            def melodyName = settings?.alarmMelody ?: '12=Alarm Siren'
+            def melodyTuya = melodiesOptions.indexOf(melodyName)
+            if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
+                cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int) 
+            }
+            // play it
+            unschedule(restoreDefaultSettings)
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+            sendZigbeeCommands( combinedTuyaCommands(cmds) )    
+        }
+        else {
+            unschedule(restoreDefaultSettings)
+            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
+        }
     }
 }
 
 // capability "Tone"
 def beep() {
-    wakeUpTuya()
     String cmds = ""
     state.lastCommand = "beep"    
     logDebug "sending beep() beepVolume = ${settings?.beepVolume}"
-    Integer volumeTuya; Integer volumePct
-    (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
-    if (volumeTuya >= 0 && volumeTuya <=2) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int) 
+    
+    if (settings?.presetBeepAndChimeSettings == "none") {
+        sendSimpleTuyaCommand(0x00, "0D01000101")    // just turn the siren on!  // TODO!
     }
     else {
-        logWarn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} "
+        wakeUpTuya()
+        Integer volumeTuya; Integer volumePct
+        (volumeTuya, volumePct) = findVolumeByName(settings?.beepVolume )
+        if (volumeTuya >= 0 && volumeTuya <=2) {
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int) 
+        }
+        else {
+            logWarn "volumeTuya <=2 is ${volumeTuya}, added cmds=${cmds} "
+        }
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
+        unschedule(restoreDefaultSettings)
+        cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
+        sendZigbeeCommands( combinedTuyaCommands(cmds) )
     }
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, 1 ) 
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, 2 ) 
-    unschedule(restoreDefaultSettings)
-    cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 )
-    sendZigbeeCommands( combinedTuyaCommands(cmds) )
 }
 
 def restoreDefaultSettings() {
@@ -515,24 +594,40 @@ def setVolumeLevel( volumelevel ) {
     def nearestlevel =  getNearestTuyaVolumeLevel( volumelevel )
     if      (nearestlevel == 0 && device.currentValue("mute", true) == "unmuted")  mute()
     else if (nearestlevel != 0 && device.currentValue("mute", true) == "muted") unmute() 
-    state.volume = nearestlevel
     def volumeName
     def volumeTuya
     (volumeName, volumeTuya) =  findVolumeByPct( nearestlevel ) 
     logDebug "matched volumelevel=${volumelevel} to nearestLlevel=${nearestlevel} (volumeTuya=${volumeTuya})"
-    if (safeToInt(volumeTuya) >= 0) {
-        cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+
+    if (settings?.presetBeepAndChimeSettings == "none") {
+        switch(volumeName) {
+            case "high":
+                sendSimpleTuyaCommand(0x00, "0504000102")
+                break
+            case "medium":
+                sendSimpleTuyaCommand(0x00, "0504000101")
+                break
+            default:
+                sendSimpleTuyaCommand(0x00, "0504000100")
+                break
+          }
     }
-    logDebug "setting volume=${volumeName}"
-    sendZigbeeCommands( combinedTuyaCommands(cmds) )      
+    else {
+    //state.volume = nearestlevel
+        if (safeToInt(volumeTuya) >= 0) {
+            cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, safeToInt(volumeTuya) ) 
+        }
+        logDebug "setting volume=${volumeName}"
+        sendZigbeeCommands( combinedTuyaCommands(cmds) )
+    }
 }
 
 def volumeDown() {
-    setVolumeLevel( state.volume - 34)
+    setVolumeLevel( (device.currentValue("volume") ?: 0 ) - 34)
 }
 
 def volumeUp() {
-    setVolumeLevel( state.volume + 33)
+    setVolumeLevel( (device.currentValue("volume") ?: 0 ) + 33)
 }
 
 def playSound(soundnumber=null, volumeLevel=null, duration=null) {
@@ -590,7 +685,7 @@ def sendVolumeEvent( volume,  isDigital=false ) {
     map.unit = "%"
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.value}"
-    if ((device.currentValue("volume") as int) != (volume as int)) {
+    if (((device.currentValue("volume") ?: 0 ) as int) != (volume as int)) {
         if (txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
     }
     sendEvent(map)
@@ -692,10 +787,10 @@ void setVolume( volumeType, volumeName) {
         logWarn "setVolume not supported type ${volumeType}, must be one of ${volumeNameOptions}"
         return
     }
-    def volumePct = volumeMapping[volumeOption].find{it.key=='volume'}.value
-    def tuyaValue = volumeMapping[volumeOption].find{it.key=='tuya'}.value
+    def volumePct = volumeMapping[volumeName].find{it.key=='volume'}.value
+    def tuyaValue = volumeMapping[volumeName].find{it.key=='tuya'}.value
     //log.trace "volumeType=${volumeType} volumeName=${volumeName} volumePct=${volumePct}, tuyaValue=${tuyaValue} "
-    switch (volumeOption) {
+    switch (volumeName) {
         case "muted" :
             mute()
             return
@@ -773,15 +868,19 @@ void initializeVars(boolean fullInit = true ) {
     state.txCounter = 0
     state.lastCommand = "unknown"
 
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.beepVolume == null) device.updateSetting("beepVolume", [value:"low", type:"enum"])
+    if (fullInit == true || settings?.logEnable == null)          device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.txtEnable == null)          device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.beepVolume == null)         device.updateSetting("beepVolume", [value:"low", type:"enum"])
     if (fullInit == true || settings?.alarmMelody == null)        device.updateSetting("alarmMelody",        [value:'12=Alarm Siren', type:"enum"])
     if (fullInit == true || settings?.alarmSoundVolume == null)   device.updateSetting("alarmSoundVolume",   [value:'high', type:"enum"])
     if (fullInit == true || settings?.alarmSoundDuration == null) device.updateSetting("alarmSoundDuration", [value:TUYA_MAX_DURATION, type:"number"])
     if (fullInit == true || settings?.playSoundMelody == null)    device.updateSetting("playSoundMelody",    [value:TUYA_DEFAULT_MELODY, type:"enum"]) 
     if (fullInit == true || settings?.playSoundVolume == null)    device.updateSetting("playSoundVolume",    [value: TUYA_DEFAULT_VOLUME, type:"enum"])
     if (fullInit == true || settings?.playSoundDuration == null)  device.updateSetting("playSoundDuration",  [value:TUYA_DEFAULT_DURATION, type:"number"])
+    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    if (fullInit == true || settings?.restoreAlarmSettings == null) device.updateSetting("restoreAlarmSettings", false)
+    if (fullInit == true || settings?.presetBeepAndChimeSettings == null) device.updateSetting("presetBeepAndChimeSettings", [value: "fast", type:"enum"])
+    
    
 }
 
@@ -825,7 +924,7 @@ private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
 
 private wakeUpTuya() {
     logDebug "wakeUpTuya()"
-    sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0004, [:], delay=50) )
+    sendZigbeeCommands(zigbee.readAttribute(0x0000, 0x0005, [:], delay=50) )
 }
 
 private combinedTuyaCommands(String cmds) {
