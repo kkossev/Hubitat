@@ -30,11 +30,13 @@
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3000_6ygjfyll, _TZ3210_wuhzzfqg
+ * ver. 1.1.1  2023-01-07 kkossev  - illuminance event bug fix; 
  *
+ *                                   TODO: runEvery1Hour, logsOff mod!
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2022/12/25 8:20 AM"}
+def version() { "1.1.1" }
+def timeStamp() {"2023/01/07 11:21 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -181,7 +183,7 @@ metadata {
                 input ("luxOffset", "decimal", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
             }
             if (isLuxMeter()) {
-		        input ("luxThreshold", "number", title: "Lux threshold", description: "Minimum change in the illuminocity which will trigger an event", range: "0..100", defaultValue: 1)   
+		        input ("luxThreshold", "number", title: "Lux threshold", description: "Minimum change in the illuminocity which will trigger an event", range: "0..999", defaultValue: 1)   
             }
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
@@ -1014,10 +1016,10 @@ def illuminanceEvent( rawLux ) {
     illuminanceEventLux( lux as Integer) 
 }
 
-def illuminanceEventLux( Integer lux ) {
-    if (device.currentValue("illuminance", true) == null ||  Math.abs(device.currentValue("illuminance") - lux) > settings?.luxThreshold) {
-        sendEvent("name": "illuminance", "value": lux, "unit": "lx")
-        if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+def illuminanceEventLux( lux ) {
+    if (device.currentValue("illuminance", true) == null ||  Math.abs(safeToInt(device.currentValue("illuminance")) - (lux as int)) >= settings?.luxThreshold) {
+        sendEvent("name": "illuminance", "value": lux, "unit": "lx", "type": "physical", "descriptionText": "Illuminance is ${lux} Lux")
+        if (settings?.txtEnable) log.info "$device.displayName Illuminance is ${lux} Lux"
     }
 }
 
