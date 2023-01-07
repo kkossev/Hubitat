@@ -30,13 +30,13 @@
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3000_6ygjfyll, _TZ3210_wuhzzfqg
- * ver. 1.1.1  2023-01-07 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; 
+ * ver. 1.1.1  2023-01-07 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters;
  *
  *                                   TODO: runEvery1Hour, logsOff mod!
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2023/01/07 11:57 AM"}
+def timeStamp() {"2023/01/07 12:07 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -77,7 +77,7 @@ metadata {
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["No selection", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         command "setPar", [
-                [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]],
+                [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List/* ["STRING"]*/],
                 [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
         ]
         if (debug == true) {
@@ -1716,7 +1716,7 @@ def setPar( par=null, val=null )
 }
 
 def testX() {
-}
+} 
 
 
 def test( dpCommand, dpValue, dpTypeString ) {
