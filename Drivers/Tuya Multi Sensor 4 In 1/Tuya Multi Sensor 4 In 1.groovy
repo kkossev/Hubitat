@@ -30,13 +30,13 @@
  * ver. 1.0.15 2022-12-03 kkossev  - OWON 0x0406 cluster binding; added _TZE204_ztc6ggyl _TZE200_ar0slwnd _TZE200_sfiy5tfs _TZE200_mrf6vtua (was wrongly 3in1) mmWave radards;
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3000_6ygjfyll, _TZ3210_wuhzzfqg
- * ver. 1.1.1  2023-01-07 kkossev  - illuminance event bug fix; 
+ * ver. 1.1.1  2023-01-07 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; 
  *
  *                                   TODO: runEvery1Hour, logsOff mod!
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2023/01/07 11:21 AM"}
+def timeStamp() {"2023/01/07 11:57 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -204,7 +204,7 @@ metadata {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 		        input ("radarSensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
 		        input ("detectionDelay", "decimal", title: "Detection delay, seconds", description: "", range: "0.0..120.0", defaultValue: 0.2)   
-		        input ("fadingTime", "decimal", title: "Fading time, seconds", description: "", range: "1.0..500.0", defaultValue: 60.0)   
+		        input ("fadingTime", "decimal", title: "Fading time, seconds", description: "", range: "0.5..500.0", defaultValue: 60.0)   
 		        input ("minimumDistance", "decimal", title: "Minimum detection distance, meters", description: "", range: "0.0..9.5", defaultValue: 0.25)   
 		        input ("maximumDistance", "decimal", title: "Maximum detection distance, meters", description: "", range: "0.0..9.5", defaultValue: 8.0)   
             }
@@ -232,7 +232,7 @@ metadata {
 @Field static final Map settableParsMap = [
     "radarSensitivity": [ min: 1,   scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
     "detectionDelay"  : [ min: 0.0, scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
-    "fadingTime"      : [ min: 1.0, scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
+    "fadingTime"      : [ min: 0.5, scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
     "minimumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
     "maximumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance']
 ]
