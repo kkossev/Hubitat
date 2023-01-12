@@ -23,14 +23,16 @@
  * ver. 1.0.9 2022-10-02 kkossev  - configure _TZ2000_a476raq2 reporting time; added TS0601 _TZE200_bjawzodf; code cleanup
  * ver. 1.0.10 2022-10-11 kkossev - '_TZ3000_itnrsufe' reporting configuration bug fix?; reporting configuration result Info log; added Sonoff SNZB-02 fingerprint; reportingConfguration is sent on pairing to HE;
  * ver. 1.0.11 2022-10-31 kkossev - added _TZE200_whkgqxse; fingerprint correction; _TZ3000_bguser20 _TZ3000_fllyghyj _TZ3000_yd2e749y _TZ3000_6uzkisv2
- * ver. 1.1.0  2022-12-18 kkossev - (test branch) - added _info_ attribute; delayed reporting configuration when the sleepy device wakes up; excluded TS0201 model devices in the delayed configuration; _TZE200_locansqn fingerprint correction and max reporting periods formula correction
- *                                  added TS0601_Soil _TZE200_myd45weu ; 
- *                                  TODO: add motion
+ * ver. 1.1.0  2022-12-18 kkossev - (dev branch) - added _info_ attribute; delayed reporting configuration when the sleepy device wakes up; excluded TS0201 model devices in the delayed configuration; _TZE200_locansqn fingerprint correction and max reporting periods formula correction
+ *                                  added TS0601_Soil _TZE200_myd45weu ; added _TZE200_znbl8dj5 _TZE200_a8sdabtg _TZE200_qoy0ekbd
+ * ver. 1.1.1  2023-01-12 kkossev - (dev branch) - added _TZ3000_ywagc4rj TS0201_TH
+ * 
+ *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2022/12/30 4:27 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2023/01/12 7:03 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -81,10 +83,15 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TYST11_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,E002,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_itnrsufe", deviceJoinName: "Tuya temperature and humidity sensor RCTW1Z"         
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,E002,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_ywagc4rj", deviceJoinName: "Tuya temperature and humidity sensor"       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/211?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display"                // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_myd45weu", deviceJoinName: "Tuya Temperature Humidity Soil Monitoring Sensor"          // https://www.aliexpress.com/item/1005004979025740.html
+        // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"                  // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                  // not tested
+        //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
@@ -186,6 +193,7 @@ metadata {
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
+    '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02
     ''                  : 'UNKNOWN',
