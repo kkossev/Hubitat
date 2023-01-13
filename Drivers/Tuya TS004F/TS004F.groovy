@@ -29,7 +29,7 @@
  * ver. 2.4.4 2022-10-22 kkossev     - _TZ3000_vp6clf9d fingerprint correction; importURL changed to dev. branch; added _TZ3000_w8jwkczz and other TS0041, TS0042, TS0043, TS004 fingerprints
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
- * ver. 2.4.7 2022-12-22 kkossev     - (dev. branch) added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
+ * ver. 2.4.7 2022-12-22 kkossev     - added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
@@ -128,6 +128,7 @@ metadata {
         input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
+        // input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
     }
 }
 
