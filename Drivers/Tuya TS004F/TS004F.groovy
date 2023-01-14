@@ -30,14 +30,14 @@
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
  * ver. 2.4.7 2022-12-22 kkossev     - added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
- * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured; bug fix: 'released'event; debug info improvements; 
+ * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured, now hardcoded to 8 hours; bug fix: 'released'event; debug info improvements; declared supportedButtonValues attribute
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.5.0" }
-def timeStamp() {"2023/01/14 12:56 PM"}
+def timeStamp() {"2023/01/14 5:16 PM"}
 
 @Field static final Boolean debug = false
 
@@ -57,7 +57,8 @@ metadata {
     capability "Battery"
     capability "Initialize"
     capability "Configuration"
-        
+
+    attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
         
