@@ -30,13 +30,14 @@
  * ver. 2.4.5 2022-10-27 kkossev     - added icasa ICZB-KPD18S 8 button controller.
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
  * ver. 2.4.7 2022-12-22 kkossev     - added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
+ * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured; bug fix: 'released'event; debug info improvements; 
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.4.7" }
-def timeStamp() {"2022/12/22 8:33 AM"}
+def version() { "2.5.0" }
+def timeStamp() {"2023/01/14 12:56 PM"}
 
 @Field static final Boolean debug = false
 
@@ -125,9 +126,9 @@ metadata {
             
     }
     preferences {
-        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
         input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
+        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
         // input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
     }
 }
@@ -140,11 +141,12 @@ metadata {
 def isTuya()  {debug == true ? false : device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
 def isIcasa() {debug == true ? false : device.getDataValue("manufacturer") == "icasa"}
 def isSmartKob() {debug == true ? false : device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
+def needsDebouncing() {device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu"}
 
 // Parse incoming device messages to generate events
 def parse(String description) {
     checkDriverVersion()
-    //if (logEnable) log.debug "${device.displayName} description is $description"
+    if (logEnable) log.debug "${device.displayName} description is $description"
 	def event = null
     try {
         event = zigbee.getEvent(description)
@@ -156,8 +158,18 @@ def parse(String description) {
     def buttonNumber = 0
     
 	if (event) {
+        if (logEnable) log.debug "${device.displayName} Event enter: $event"
+        if (event.name in ['battery', 'batteryVoltage']) {
+            event.isStateChange = true
+            event.type = 'physical'
+            event.unit = event.name == 'battery' ? '%' : event.name == 'batteryVoltage' ? 'V' : ''
+            event.descriptionText = "${event.name} is ${event.value} ${event.unit}"
+            if (txtEnable) log.info "${device.displayName} ${event.descriptionText}"
+        }
+        else {
+            if (logEnable) log.debug "${device.displayName} Unexpected event: $event"
+        }
         result = event
-        if (logEnable) log.debug "${device.displayName} sendEvent $event"
     }
     else if (description?.startsWith("catchall")) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
@@ -198,10 +210,29 @@ def parse(String description) {
             }
             buttonState = "pushed"
         }
+        else if (descMap.clusterId in ['0000', '0006', 'E001'] && descMap.command == "01") { // read attribute response
+            if (descMap.data[2] == '86') {
+                if (logEnable) log.debug "${device.displayName} readAttributeResponse cluster: ${descMap.clusterId} unsupported attribute ${descMap.data[1]+descMap.data[0]} status:${descMap.data[2]}"
+            }
+            else {
+                if (logEnable) log.debug "${device.displayName} readAttributeResponse cluster: ${descMap.clusterId} ${descMap.data[1]+descMap.data[0]} status:${descMap.data[2]} value:${descMap?.value}"
+            }
+            return null
+        }
+        else if (descMap.clusterInt == 0x0006 && descMap.command == "04") { // write attribute response
+            if (logEnable) log.debug "${device.displayName} writeAttributeResponse cluster: ${descMap.clusterId} status:${descMap.data[0]}"
+            return null
+        }
+        else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
+            if (logEnable) log.debug "${device.displayName} received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
+            return null
+        }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
             if (descMap.data.size() == 10 && descMap.data[2] == "0A" ) {
-                //log.debug "${device.displayName} Battery is ${zigbee.convertHexToInt(descMap?.data[9])} %"
-                return createEvent(name: "battery", value: zigbee.convertHexToInt(descMap?.data[9]))
+                def value = zigbee.convertHexToInt(descMap?.data[9])
+                def descText = "battery is ${value} %"
+                if (txtEnable) log.info "${device.displayName} ${descText}"
+                return createEvent(name: "battery", value: value, unit: '%', descriptionText: descText, type: 'physical')
             }
             else if (descMap.data.size() == 7 && descMap.data[2] >= "01" && descMap.data[2] <= "06") {
                 buttonNumber = zigbee.convertHexToInt(descMap.data[2])
@@ -225,7 +256,7 @@ def parse(String description) {
         }
         //
         if (buttonNumber != 0 ) {
-            if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
+            if (needsDebouncing()) {
                 if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
                     if (logEnable) {log.warn "${device.displayName} ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
                     runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
@@ -240,7 +271,7 @@ def parse(String description) {
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
 	        def descriptionText = "button $buttonNumber was $buttonState"
-	        event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true]
+	        event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
             if (txtEnable) {log.info "${device.displayName} $descriptionText"}
         }
         
@@ -268,6 +299,10 @@ def parse(String description) {
             else {
                 if (logEnable) log.warn "${device.displayName} unknown attrId ${descMap.attrId} value ${descMap.value}"
             }
+        }
+        else if (descMap?.cluster == '0000' && descMap?.command in ['01'] ) { // Basic Cluster responses
+            if (logEnable) log.debug "${device.displayName} skipping Basic cluster ${descMap?.cluster} response"
+            return null
         }
         else {
             if (logEnable) {log.warn "${device.displayName} DID NOT PARSE MESSAGE for description : $description"}
@@ -375,7 +410,7 @@ def installed()
 }
 
 def initialize() {
-    if (isTuya()) {
+    if (true /*isTuya()*/) {
         tuyaMagic()
     }
     else {
@@ -395,11 +430,11 @@ def initialize() {
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
         if (isSmartKob()) {    // Smart Knob 
         	numberOfButtons = 3
-            supportedValues = ["pushed", "double", "held", "release"]
+            supportedValues = ["pushed", "double", "held", "released"]
         }
         else {
         	numberOfButtons = 4
-            supportedValues = ["pushed", "double", "held"]    // no release events are generated in scene switch mode
+            supportedValues = ["pushed", "double", "held"]    // no released events are generated in scene switch mode
         }
     }
     else if (device.getDataValue("model") == "TS0601") {
@@ -407,11 +442,11 @@ def initialize() {
     }
     else if (isIcasa()) {
         numberOfButtons = 8
-        supportedValues = ["pushed", "held", "release"]
+        supportedValues = ["pushed", "held", "released"]
     }
     else {
     	numberOfButtons = 4	// unknown
-        supportedValues = ["pushed", "double", "held", "release"]
+        supportedValues = ["pushed", "double", "held", "released"]
     }
     sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
     sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
@@ -440,31 +475,29 @@ def switchToDimmerMode()
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
 }
 
-def buttonEvent(buttonNumber, buttonState) {
+def buttonEvent(buttonNumber, buttonState, isDigital=false) {
 
-    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true]
+    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital==true ? 'digital' : 'physical']
     if (txtEnable) {log.info "${device.displayName} $event.descriptionText"}
     sendEvent(event)
 }
 
 def push(buttonNumber) {
-    buttonEvent(buttonNumber, "pushed")
+    buttonEvent(buttonNumber, "pushed", isDigital=true)
 }
 
 def doubleTap(buttonNumber) {
-    buttonEvent(buttonNumber, "doubleTapped")
+    buttonEvent(buttonNumber, "doubleTapped", isDigital=true)
 }
 
 def hold(buttonNumber) {
-    buttonEvent(buttonNumber, "held")
+    buttonEvent(buttonNumber, "held", isDigital=true)
 }
 
 def release(buttonNumber) {
-    buttonEvent(buttonNumber, "release")
+    buttonEvent(buttonNumber, "released", isDigital=true)
 }
 
-
-//    command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
 def switchMode( mode ) {
     if (mode == "dimmer") {
         switchToDimmerMode()
@@ -485,7 +518,9 @@ def tuyaMagic() {
     cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [:], delay=50)            // Battery voltage + Battery Percentage Remaining
     cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
     cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
-    // binding is not neccessery
+    // binding for battery reporting IS neccessery!         // changed 2023/01/04
+    cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)
+    cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)        // 0x21 is NOT supported by all devices?
     sendZigbeeCommands(cmd)
 }
 
