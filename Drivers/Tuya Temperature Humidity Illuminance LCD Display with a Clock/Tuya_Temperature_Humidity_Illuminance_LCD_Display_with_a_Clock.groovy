@@ -25,14 +25,15 @@
  * ver. 1.0.11 2022-10-31 kkossev - added _TZE200_whkgqxse; fingerprint correction; _TZ3000_bguser20 _TZ3000_fllyghyj _TZ3000_yd2e749y _TZ3000_6uzkisv2
  * ver. 1.1.0  2022-12-18 kkossev - (dev branch) - added _info_ attribute; delayed reporting configuration when the sleepy device wakes up; excluded TS0201 model devices in the delayed configuration; _TZE200_locansqn fingerprint correction and max reporting periods formula correction
  *                                  added TS0601_Soil _TZE200_myd45weu ; added _TZE200_znbl8dj5 _TZE200_a8sdabtg _TZE200_qoy0ekbd
- * ver. 1.1.1  2023-01-12 kkossev - (dev branch) - added _TZ3000_ywagc4rj TS0201_TH
+ * ver. 1.1.1  2023-01-14 kkossev - (dev branch) - added _TZ3000_ywagc4rj TS0201_TH; bug fix: negative temperatures not calculated correctly;
  * 
+ *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2023/01/12 7:03 AM"}
+def timeStamp() {"2023/01/14 9:45 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -40,6 +41,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
+@Field static final Boolean debug = false
 @Field static final Integer defaultMinReportingTime = 10
 
 
@@ -51,18 +53,17 @@ metadata {
         capability "TemperatureMeasurement"
         capability "RelativeHumidityMeasurement"
         capability "IlluminanceMeasurement"
-        //capability "ContactSensor"    // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
+        //capability "ContactSensor"   // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
         //capability "MotionSensor"    // uncomment for SiHAS multi sensor
 
-        
-        /*
-        command "zTest", [
-            [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
-            [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
-            [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
-        ]
-        command "test"
-        */
+        if (debug == true) {        
+            command "zTest", [
+                [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
+                [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
+                [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
+            ]
+            command "test"
+        }
         
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
@@ -265,6 +266,10 @@ def parse(String description) {
 		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             if (getModelGroup() != 'TS0222_2') {
                 def raw = Integer.parseInt(descMap.value,16)
+                if (raw > 32767) {
+            	    //Here we deal with negative values
+            	    raw = raw - 65536
+                }   
                 temperatureEvent( raw / 100.0 )
             }
             else {
@@ -650,8 +655,6 @@ private int getTuyaAttributeValue(ArrayList _data) {
     return retValue
 }
 
-// options: [0:"Auto detect", 1:"TS0601_Tuya", 2:"TS0601_Haozee", 3:"TS0201", 4:"TS0222", 5:"TS0222_2", 6:"Zigbee NON-Tuya"]
-
 def getModelGroup() {
     def manufacturer = device.getDataValue("manufacturer")
     def modelGroup = 'UNKNOWN'
@@ -691,13 +694,11 @@ def temperatureEvent( temperature, isDigital=false ) {
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
     Map lastRxMap = stringToJsonMap(state.lastRx)
-    //if (state.lastTemp == null ) state.lastTemp = now() - (minReportingTimeTemp * 2000)
-    def timeElapsed = Math.round((now() - lastRxMap['tempTime']/*state.lastTemp*/)/1000)
+    def timeElapsed = Math.round((now() - lastRxMap['tempTime'])/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeTemp) {
 		if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
 		unschedule("sendDelayedEventTemp")		//get rid of stale queued reports
-		//state.lastTemp = now()
         lastRxMap['tempTime'] = now()
         sendEvent(map)
 	}		
@@ -711,7 +712,6 @@ def temperatureEvent( temperature, isDigital=false ) {
 
 private void sendDelayedEventTemp(Map map) {
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
-	//state.lastTemp = now()
     Map lastRxMap = stringToJsonMap(state.lastRx); try {lastRxMap['tempTime'] = now()} catch (e) {lastRxMap['tempTime']=now()-(minReportingTimeHumidity * 2000)}; state.lastRx = mapToJsonString(lastRxMap)
     sendEvent(map)
 }
@@ -932,7 +932,7 @@ def updated() {
     if (isConfigurable()) {
         logInfo "pending ${pendingConfig} reporting configurations"
         if (pendingConfig != 0 ) {
-            updateInfo("Pending ${pendingConfig} configurations . Wake up the device!")
+            updateInfo("Pending ${pendingConfig} configuration(s). Wake up the device!")
         }
     }
     
@@ -1212,6 +1212,7 @@ def getBatteryPercentageResult(rawValue) {
         result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
         result.unit = "%"
+        result.type = 'physical'
         sendEvent(result)
     }
     else {
@@ -1237,6 +1238,7 @@ private Map getBatteryResult(rawValue) {
         result.descriptionText = "${linkText} battery is ${result.value}%"
         result.name = 'battery'
         result.isStateChange = true
+        result.type = 'physical'
         result.unit = "%"
         sendEvent(result)
     }
@@ -1309,4 +1311,11 @@ def test( value) {
     // TS0201 _TZ3000_itnrsufe :
     // Celsius: NOT PARSED : [raw:98B301E002080BE03000, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:00, clusterInt:57346, attrInt:57355]
     // Fahrenheit: NOT PARSED : [raw:98B301E002080BE03001, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:01, clusterInt:57346, attrInt:57355]
+    def str = "FF89"
+    def raw = Integer.parseInt(str,16)
+            if (raw > 32767) {
+            	//Here we deal with negative values
+            	raw = raw - 65536
+            }    
+    log.trace "value ($str) = $raw"
 }
