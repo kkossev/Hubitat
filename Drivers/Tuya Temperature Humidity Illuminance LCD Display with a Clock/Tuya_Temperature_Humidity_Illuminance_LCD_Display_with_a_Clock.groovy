@@ -33,7 +33,7 @@
 */
 
 def version() { "1.1.1" }
-def timeStamp() {"2023/01/14 9:45 AM"}
+def timeStamp() {"2023/01/14 9:56 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -490,6 +490,10 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} Contact is ${value}"
                 }
                 else if (getModelGroup() != "TS0601_AUBESS") { // temperature in C
+                    if (fncmd > 32767) {
+                	    //Here we deal with negative values
+                	    fncmd = fncmd - 65536
+                    }
                     temperatureEvent( fncmd / 10.0 )
                 }
                 else {
@@ -527,6 +531,10 @@ def processTuyaCluster( descMap ) {
                 if (settings?.txtEnable) log.info "${device.displayName} battery is $fncmd %"
                 break
             case 0x05 : // Soil Monitor
+                if (fncmd > 32767) {
+                    // not good for the plants ...
+                	fncmd = fncmd - 65536
+                }
                 temperatureEvent( fncmd )
                 break
             case 0x09: // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
