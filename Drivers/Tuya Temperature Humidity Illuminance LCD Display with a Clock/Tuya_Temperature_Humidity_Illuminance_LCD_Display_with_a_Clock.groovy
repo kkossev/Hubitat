@@ -26,14 +26,15 @@
  * ver. 1.1.0  2022-12-18 kkossev - added _info_ attribute; delayed reporting configuration when the sleepy device wakes up; excluded TS0201 model devices in the delayed configuration; _TZE200_locansqn fingerprint correction and max reporting periods formula correction
  *                                  added TS0601_Soil _TZE200_myd45weu ; added _TZE200_znbl8dj5 _TZE200_a8sdabtg _TZE200_qoy0ekbd
  * ver. 1.1.1  2023-01-14 kkossev - added _TZ3000_ywagc4rj TS0201_TH; bug fix: negative temperatures not calculated correctly;
+ * ver. 1.2.0  2023-01-15 kkossev - parsing multiple DP received in one command;
  * 
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.1.1" }
-def timeStamp() {"2023/01/14 9:56 AM"}
+def version() { "1.2.0" }
+def timeStamp() {"2023/01/15 12:42 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -62,7 +63,7 @@ metadata {
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
             ]
-            command "test"
+            command "test", [[name:"test", type: "STRING", description: "test", constraints: ["STRING"]]]
         }
         
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
@@ -90,7 +91,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_myd45weu", deviceJoinName: "Tuya Temperature Humidity Soil Monitoring Sensor"          // https://www.aliexpress.com/item/1005004979025740.html
         // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"                  // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                  // not tested
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
@@ -178,7 +179,10 @@ metadata {
 @Field static final Map<String, String> Models = [
     '_TZE200_lve3dvpy'  : 'TS0601_Tuya',         // Tuya Temperature Humidity LCD Display with a Clock
     '_TZE200_c7emyjom'  : 'TS0601_Tuya',         // Tuya Temperature Humidity LCD Display with a Clock
-    '_TZE200_whkgqxse'  : 'TS0601_Tuya',         // Tuya Zigbee Temperature Humidity Sensor With Backlight
+    '_TZE200_whkgqxse'  : 'TS0601_Tuya',         // Tuya Zigbee Temperature Humidity Sensor With Backlight    https://www.aliexpress.com/item/1005003980647546.html
+    '_TZE200_a8sdabtg'  : 'TS0601_Tuya',         // Tuya Zigbee Temperature Humidity Sensor - no display!     https://www.amazon.de/gp/product/B09NKCDXT9 - TODO !
+    '_TZE200_qoy0ekbd'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004896603070.html - TODO !
+    '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
@@ -208,7 +212,6 @@ def isConfigurable()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
 
-// KK TODO !
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
 private getSETTIME()            { 0x24 }
@@ -474,13 +477,25 @@ def processTuyaCluster( descMap ) {
     }
     else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"))
     {
+        def dataLen = descMap?.data.size()
+        //log.warn "dataLen=${dataLen}"
         def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
-        def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
-        def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
-        def fncmd = getTuyaAttributeValue(descMap?.data)                 //
-        if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-        // the switch cases below default to dp_id = "01"
+        for (int i = 0; i < (dataLen-4); ) {
+            def dp = zigbee.convertHexToInt(descMap?.data[2+i])                // "dp" field describes the action/message of a command frame
+            def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])               // "dp_identifier" is device dependant
+            def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i]) 
+            def fncmd = getTuyaAttributeValue(descMap?.data, i)                //
+            if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            processTuyaDP( descMap, dp, dp_id, fncmd)
+            i = i + fncmd_len + 4;
+            //log.warn "next index is : ${i}"
+        }
+        //log.warn "##### end of parsing ####"
+    } // if (descMap?.command == "01" || descMap?.command == "02")
+}
 
+
+def processTuyaDP( descMap, dp, dp_id, fncmd) {
         switch (dp) {
             case 0x01 : // temperature in ?C for most models
                 //
@@ -538,7 +553,7 @@ def processTuyaCluster( descMap ) {
                 temperatureEvent( fncmd )
                 break
             case 0x09: // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !
-                if (settings?.txtEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' :'Celsius' }"
+                if (settings?.logEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' :'Celsius' }"
                 break
             case 0x0A: // (10) Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
                 if (((safeToDouble(settings?.maxTempAlarmPar)*10.0 as int) == (fncmd as int)) || (getModelGroup() in ['TS0601_Haozee']))  {
@@ -645,18 +660,17 @@ def processTuyaCluster( descMap ) {
                 if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
                 break
         }
-    } // if (descMap?.command == "01" || descMap?.command == "02")
 }
 
 
-private int getTuyaAttributeValue(ArrayList _data) {
+private int getTuyaAttributeValue(ArrayList _data, index) {
     int retValue = 0
 
     if (_data.size() >= 6) {
-        int dataLength = _data[5] as Integer
+        int dataLength = _data[5+index] as Integer
         int power = 1;
         for (i in dataLength..1) {
-            retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
+            retValue = retValue + power * zigbee.convertHexToInt(_data[index+i+5])
             power = power * 256
         }
     }
@@ -1315,15 +1329,7 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
-def test( value) {
-    // TS0201 _TZ3000_itnrsufe :
-    // Celsius: NOT PARSED : [raw:98B301E002080BE03000, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:00, clusterInt:57346, attrInt:57355]
-    // Fahrenheit: NOT PARSED : [raw:98B301E002080BE03001, dni:98B3, endpoint:01, cluster:E002, size:08, attrId:E00B, encoding:30, command:0A, value:01, clusterInt:57346, attrInt:57355]
-    def str = "FF89"
-    def raw = Integer.parseInt(str,16)
-            if (raw > 32767) {
-            	//Here we deal with negative values
-            	raw = raw - 65536
-            }    
-    log.trace "value ($str) = $raw"
+def test( String description) {
+    log.warn "parising : ${description}"
+    parse( description)
 }
