@@ -69,7 +69,7 @@
 |Temperature and Humidity Sensor with LCD Display<br> ![image](https://user-images.githubusercontent.com/6189950/204976868-33c5c548-12b7-4b6b-9815-e428f5a0bea1.png) | Model:TS0601 <br> Manufactturer: TZE200_qoy0ekbd TZE200_znbl8dj5 <br>Supports: battery, temperature, humidity (not configurable)<br><br> AliExpress: [link](https://www.aliexpress.us/item/3256803873142843.html) <br>AliExpress: [link](https://www.aliexpress.us/item/3256803878221149.html) <br>  |
 | Tuya Zigbee Temperature Humidity Soil Monitor<br> ![image](https://user-images.githubusercontent.com/6189950/210093610-e92bea4d-aac0-4c7f-8fdc-1e5789531b27.png) | AliExpress: [link1](https://www.aliexpress.com/item/1005004705106578.html)<br> AliExpress: [link2](https://www.aliexpress.com/item/1005004979025740.html) | 
 | Tuya ZigbeeTemperature Humidity Sensor With Backlight ![image](https://user-images.githubusercontent.com/6189950/212531204-0cd25609-6914-44c0-8d41-9a14a2b8cca1.png) | Model: TS0601<br>Manufacturer: TZE200_whkgqxse <br><br>AliExpress: [link1](https://www.aliexpress.com/item/1005003980647546.html)| 
-
+| Tuya Temperature and Humidity Sensor <br> ![image](https://user-images.githubusercontent.com/6189950/212731475-321bdb9b-69d4-4f53-ac6c-2d6588b6a67a.png) | Model: TS0202 <br> Manufacturer: TZ3000_bguser20 TZ3000_xr3htd96 <br> Supports: battery; humidity; temperature <br><br> AliExpress: [link1](https://www.aliexpress.com/item/1005003401903108.html) <br> AliExpress: [link2](https://www.aliexpress.com/item/1005004744650232.html) |
 -------------------------------
 
 ### Tuya Other Sensors
