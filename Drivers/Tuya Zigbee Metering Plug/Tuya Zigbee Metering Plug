@@ -45,14 +45,15 @@
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
  *  ver. 1.6.5 2022-12-19 kkossev - _TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
+ *  ver. 1.6.6 2023-01-20 kkossev - (dev. branch) Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.5" }
-def timeStamp() {"2022/12/19 3:52 PM"}
+def version() { "1.6.6" }
+def timeStamp() {"2023/01/20 5:13 PM"}
 
 @Field static final Boolean debug = false
 
@@ -121,12 +122,15 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_5f43h46b", deviceJoinName: " XUELILI 16A UK Standards Smart Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zloso4jk", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
-        // NOT WORKING WITH HE?
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_7dndcnnb", deviceJoinName: "LELLKI Smart Switch 25A Energy Monitor" // https://www.aliexpress.com/item/1005004564755069.html
+        // NOT WORKING WITH HE !
+        /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"   // NOT WORKING WITH HE!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702",                 model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "UK Plug 20A"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "EU Power Outlet"  // @user3186 Application version A0
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
+        */
         
         // NON-Tuya metering plugs
         // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
@@ -174,7 +178,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0B05", outClusters:"0019", model:"3200", manufacturer:"CentraLite", deviceJoinName: "CentraLite Smart Plug"
         */
         // experimental
-        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"            // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"                    // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,FC57,FCA0", outClusters:"0019", model:"Z111PL0H-1JX", manufacturer:"SONOFF", deviceJoinName: "SONOFF smart plug" // https://community.hubitat.com/t/help-getting-started-with-a-smart-plug-driver/109480/5?u=kkossev           // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,FC57,FCA0", outClusters:"0019", model:"Z111PL0H-1JX", manufacturer:"Woolley", deviceJoinName: "Woolley smart plug" // not tested
+        fingerprint profileId:"C05E", endpointId:"0D", inClusters:"1000", outClusters:"1000", model:"unknown", manufacturer:"unknown", deviceJoinName: "SONOFF smart plug"                                   // SONOFF Z111PL0H-1JX
     }
     
     
@@ -272,6 +279,7 @@ def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 private boolean isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
 private boolean isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
 private boolean isDinRail() {device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"] }
+private boolean isHEProblematic() {device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
 
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
@@ -791,7 +799,9 @@ def parseZDOcommand( Map descMap ) {
         case "0013" : // device announcement
             if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             state.rejoinCounter = (state.rejoinCounter ?: 0) + 1
-            //sendZigbeeCommands(tuyaBlackMagic())
+            // sendZigbeeCommands(tuyaBlackMagic())
+            // activeEndpoints()
+            // configure()
             break
         case "8004" : // simple descriptor response
             if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
@@ -862,25 +872,25 @@ def parseSimpleDescriptorResponse(Map descMap) {
 def disableUnsupportedAttribute(String clusterId, String attrId) {
     switch (clusterId) {
         case "0006" :    // Switch
-            if (logEnable==true) log.warn "${device.displayName} Switch polling is not supported -> Switch polling will be disabled."
+            logWarn "Switch polling is not supported -> Switch polling will be disabled."
             state.switchPollingSupported = false
             break
         case "0B04" : // Electrical Measurement attribute is not supported!
             switch (attrId) {
                 case "0505" :    // Voltage
-                    if (logEnable==true) log.warn "${device.displayName} Voltage polling is not supported -> Voltage polling will be disabled."
+                    logWarn "Voltage polling is not supported -> Voltage polling will be disabled."
                     state.voltagePollingSupported = false
                     break
                 case "0508" :     // Current
-                    if (logEnable==true) log.warn "${device.displayName} Current polling is not supported -> Current polling will be disabled."
+                    logWarn "Current polling is not supported -> Current polling will be disabled."
                     state.currentPollingSupported = false
                     break
                 case "050B" :     // Power
-                    if (logEnable==true) log.warn "${device.displayName} Power polling is not supported! -> Power polling will be disabled."
+                    logWarn "Power polling is not supported! -> Power polling will be disabled."
                     state.powerPollingSupported = false
                     break
                 default :
-                    if (logEnable==true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} for Electrical Measurement cluster ${clusterId}"
+                    logWarn "Read attribute response: unsupported Attributte ${attrId} for Electrical Measurement cluster ${clusterId}"
                     break
             }
             break
@@ -894,7 +904,7 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
             }
             break
         default :
-            if (logEnable==true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
+            logWarn "Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
             break
     }
 }
@@ -1010,7 +1020,7 @@ def parseZHAcommand( Map descMap) {
                                     energyEvent(value/getEnergyDiv())
                                 }
                                 else {
-                                    voltageEvent((zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8) / getVoltageDiv())
+                                    voltageEvent((zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) *256) / getVoltageDiv())
                                 }
                                 break
                             case "66" : // (102) Amperage HOCH or Produced Energy
@@ -1188,11 +1198,11 @@ private int getAttributeValue(ArrayList _data) {
 
 def off() {
     if (alwaysOn == true) {
-        if (logEnable==true) log.warn "${device.displayName} AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
+        logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
     }
     else {
         state.isDigital = true
-        if (logEnable) {log.debug "${device.displayName} Switching ${device.displayName} Off"}
+        logDebug "Switching ${device.displayName} Off"
         def cmds = zigbee.off()
         if (device.getDataValue("model") == "HY0105") {
             cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
@@ -1205,8 +1215,9 @@ def off() {
                 cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
             }
         }
-        else if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs') {
-            cmds = ["he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 0 {}","delay 200"]
+        else if (isHEProblematic()) {
+            cmds = ["he cmd 0x${device.deviceNetworkId}  0x01 0x0006 0 {}","delay 200"]
+            logWarn "isHEProblematic() : sending off() : ${cmds}"
         }
         else if (device.endpointId == "F2") {
             cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0 {}","delay 200"]
@@ -1233,8 +1244,9 @@ def on() {
             cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
         }
     }
-    else if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs') {
-        cmds = ["he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0006 1 {}","delay 200"]
+    else if (isHEProblematic()) {
+        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"]
+        logWarn "isHEProblematic() : sending off() : ${cmds}"
     }
     else if (device.endpointId == "F2") {
         cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"]
@@ -1308,7 +1320,7 @@ def poll( refreshAll = false ) {
         cmds += zigbee.onOffRefresh()                            // switch - polled only on full Refresh or nothing else to poll
     }
     if (cmds == []) { // if nothing to poll...
-        cmds += zigbee.readAttribute(0x0000, 0x0004, [destEndpoint :ep], delay=200)
+        cmds += zigbee.readAttribute(0x0000, 0x0001, [destEndpoint :ep], delay=200)
     }
     state.isRefreshRequest = refreshAll
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
@@ -1334,11 +1346,9 @@ def autoPoll() {
 
 def tuyaBlackMagic() {
     List<String> cmds = []
-    def ep = safeToInt(state.destinationEP)
-    if (ep==null || ep==0) ep = 1
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :255], delay=150) // destEndpoint: 255 ??? seq 2   // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [destEndpoint :ep], delay=50)
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=150) // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [:], delay=50)
     return cmds
 }
 
@@ -1346,13 +1356,20 @@ def fixOtherTuyaOddities() {
     List<String> cmds = []
     def ep = device.getEndpointId()
     logDebug "ep=${ep} isF2=${ep=='F2'}"
-    if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs' || ep == 'F2') {
+    if (isHEProblematic() || ep == 'F2') {
         log.warn "fixing other Tuya oddities ..."
         def endpoint = '01'
-        cmds =  ["zdo bind ${device.deviceNetworkId} ${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}",
-                "delay 250", 
-                "he cr 0x${device.deviceNetworkId} ${endpoint} 6 0 16 0 900 {}",
-                "delay 250"]   
+        cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]    // node descriptor response as for Aqara E1 hub, doesn't seem to improve anything ...
+        cmds +=   ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+        cmds +=  ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0B04 {${device.zigbeeId}} {}", "delay 252", ]
+        //int intMinTime = 60; int intMaxTime = 3600; 
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1285 33 60 3600 {0500} {}", "delay 253", ]        // zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, 5)    // voltage
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1288 33 60 3600 {3200} {}", "delay 254", ]        // zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, 50)    // amperage
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1291 41 60 3600 {0A00} {}", "delay 255", ]        // zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, 10)    // power
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 1794 0 37 60 3600 {010000000000} {}", "delay 256", ]    //zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, 1)    // energy
+        cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
+        cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
+        cmds += zigbee.readAttribute(0x0000, 0x0001, [destEndpoint : 0x01], delay=200)    // App version
         return cmds
     }
     else {
@@ -1374,8 +1391,8 @@ def configure() {
     List<String> cmds = []
     cmds =  tuyaBlackMagic()
     cmds += fixOtherTuyaOddities()
-    if (device.getDataValue('manufacturer') == '_TZ3000_okaz9tjs' || device.getEndpointId() == 'F2') {
-        if (logEnable==true) log.debug "${device.displayName} skipping onOff standard configuration for an odd Tuya device..."
+    if (isHEProblematic() || device.getEndpointId() == 'F2') {
+        logWarn "skipping onOff standard cluster configuration for a problematic Tuya device ${device.getDataValue('manufacturer')} ..."
     }
     else {
         if (isFrientEnergyMonitor()) {
@@ -1433,8 +1450,8 @@ def configure() {
     
     sendZigbeeCommands(cmds)
     //  
-    if (device.getDataValue('manufacturer') in ['_TZ3000_okaz9tjs', '_TZ3000_r6buo8ba']) {
-        log.warn "${device.displayName} WARNING! This TS011F plug manufacturer ${device.getDataValue('manufacturer')} is known to be problematic with HE!"
+    if (isHEProblematic() ) {
+        logWarn "<b>WARNING! This ${device.getDataValue('model')} plug manufacturer ${device.getDataValue('manufacturer')} is known to be problematic with HE!</b>"
     }
 }
 
