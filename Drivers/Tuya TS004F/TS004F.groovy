@@ -31,13 +31,14 @@
  * ver. 2.4.6 2022-11-20 kkossev     - added TS004F _TZ3000_ja5osu5g - 1 button!; isTuya() bug fix
  * ver. 2.4.7 2022-12-22 kkossev     - added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
  * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured, now hardcoded to 8 hours; bug fix: 'released'event; debug info improvements; declared supportedButtonValues attribute
+ * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.5.0" }
-def timeStamp() {"2023/01/14 5:16 PM"}
+def version() { "2.5.1" }
+def timeStamp() {"2023/01/20 12:55 PM"}
 
 @Field static final Boolean debug = false
 
@@ -160,16 +161,22 @@ def parse(String description) {
     
 	if (event) {
         if (logEnable) log.debug "${device.displayName} Event enter: $event"
-        if (event.name in ['battery', 'batteryVoltage']) {
-            event.isStateChange = true
-            event.type = 'physical'
-            event.unit = event.name == 'battery' ? '%' : event.name == 'batteryVoltage' ? 'V' : ''
-            event.descriptionText = "${event.name} is ${event.value} ${event.unit}"
-            if (txtEnable) log.info "${device.displayName} ${event.descriptionText}"
+        switch (event.name) {
+            case 'battery' :
+                event.value = event.value as int    // HomeKit
+                event.unit = '%'
+                break
+            case 'batteryVoltage' :
+                event.unit = 'V'
+                break
+            default :
+                if (logEnable) log.debug "${device.displayName} Unexpected event: $event"
+                break
         }
-        else {
-            if (logEnable) log.debug "${device.displayName} Unexpected event: $event"
-        }
+        event.descriptionText = "${event.name} is ${event.value} ${event.unit}"
+        event.isStateChange = true
+        event.type = 'physical'
+        if (txtEnable) log.info "${device.displayName} ${event.descriptionText}"
         result = event
     }
     else if (description?.startsWith("catchall")) {
