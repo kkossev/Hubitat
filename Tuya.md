@@ -146,6 +146,16 @@
 
 ----------------------------
 
+### Valves
+|  Device |  Links |
+|---|---|
+| Tuya ZigBee 3.0 Smart Gas Water Valve Controller <br> ![image](https://user-images.githubusercontent.com/6189950/164885487-70778b88-cb9c-444e-a9ec-5a1ce0fa8334.png) | AliExpress:   [(link)](https://www.aliexpress.com/item/4000334424893.html )<br> AliExpress: [(link)](https://www.aliexpress.com/item/1005002633228786.html) <br><br>Review: [(link)](https://investio.pro/review-smart-electric-actuator-of-water-gas-by-tuya/)<br>Review: [(link)](https://investio.pro/zigbee-actuator-to-control-water-and-gas/) | 
+| Tuya Water Gas Shut Off Valve <br> ![image](https://user-images.githubusercontent.com/6189950/164885860-b081306d-af46-4d37-8f79-7dba509d6e92.png) | Amazon.de: [(link)](https://www.amazon.de/-/en/Intelligent-Control-Compatible-Assistant-Kitchen/dp/B097F3GWTN)  |
+| ZIGBEE Sprinkler / Water Irrigation Valve <br> ![image](https://user-images.githubusercontent.com/6189950/213847222-6c40ccbb-d162-4cfa-9cd6-2d107aab6d11.png) |  Amazon  : [(link)](https://www.amazon.com/ZIGBEE-Sprinkler-Separate-Watering-Schedules/dp/B0B1JN6KZX) |
+| SASWELL Irrigation Timer <br> ![image](https://user-images.githubusercontent.com/6189950/213847257-d841a3c6-fa9f-4c48-bec2-33ab2f8aa573.png)| Saswell: [link](https://www.saswell.com/smart-irrigation-wifi-water-timer-sas980swt-7-z01_p147.html) <br> Amazon: [link](https://www.amazon.com/SASWELL-Irrigation-Sprinkler-Programmable-SAS980SWT-7-Z01/dp/B09TP86CKY) |
+
+----------------------------
+
 ### Tuya Light Switches 
 |  Device |  Links |
 |---|---|
