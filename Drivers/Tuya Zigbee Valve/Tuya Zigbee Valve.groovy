@@ -18,6 +18,7 @@
  *  ver. 1.0.2 2022-08-14 kkossev - added _TZE200_sh1btabb WaterIrrigationValve (On/Off only); fingerprint inClusters correction; battery capability; open/close commands changes
  *  ver. 1.0.3 2022-08-19 kkossev - decreased delay betwen Tuya commands to 200 milliseconds; irrigation valve open/close commands are sent 2 times; digital/physicla timer changed to 3 seconds;
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
+ *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, measuredValue, automatic timer state, timeLeft, lastValveOpenDuration; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *
  *            TODO Presence check timer
  *
@@ -27,8 +28,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/11/28 10:43 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2023/01/21 10:07 AM"}
 
 @Field static final Boolean debug = false
 
@@ -58,6 +59,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"     // clusters verified
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_akjefhj5"     // SASWELL SAS980SWT-7-Z01 (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"     // WaterIrrigationValve https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_81isopgh"     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"     // not tested // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_htnnfasr"     // not tested // // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
         // TODO: _TZE200_5uodvhgc https://github.com/sprut/Hub/issues/1316 https://www.youtube.com/watch?v=lpL6xAYuBHk 
         
    
@@ -106,6 +110,7 @@ private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }    // https://www.aliexpress.com/item/1005004222098040.html
+def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ] }
 
 def parse(String description) {
     if (logEnable==true) {log.debug "${device.displayName} description is $description"}
@@ -319,7 +324,9 @@ def parseZHAcommand( Map descMap) {
                         switch (cmd) {
                             case "01" : // switch
                                 if (!isWaterIrrigationValve()) {
-                                    switchEvent(value==0 ? "off" : "on")
+                                    switchEvent(value==0 ? "off" : "on")    // also SASWELL?
+                                    // There is no way to disable the "Auto off" timer for when the valve is turned on manually
+                                    // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
                                 }
                                 else {
                                     if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
@@ -329,11 +336,46 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value} (data=${descMap.data})"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
-                            case "07" : // Countdown
-                                if (txtEnable==true) log.info "${device.displayName} Countdown (${cmd}) is: ${value}"
+                            case "05" : // isSASWELL() - measuredValue
+                                // assuming value is reported in fl. oz. ? => { water_consumed: (value / 33.8140226).toFixed(2) }
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                                break
+                            case "07" : // Battery for SASWELL, Countdown for the others?
+                                if (isSASWELL()) {
+                                    if (txtEnable==true) log.info "${device.displayName} Battery (${cmd}) is: ${value}"
+                                    sendBatteryEvent(value)                                    
+                                }
+                                else {
+                                    if (txtEnable==true) log.info "${device.displayName} Countdown (${cmd}) is: ${value}"
+                                }
+                                break
+                            case "0A" : // automatic timer ?
+                                //   0 -> disabled; 1 -> "24h"; 2 -> "48h";  3 -> "72h"
+                                if (txtEnable==true) log.info "${device.displayName} automatic timer (${cmd}) is: ${value}"
+                                break
+                            case "0B" : // SASWELL timeLeft in seconds
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL timeLeft (${cmd}) is: ${value}"
+                                break
+                            case "0C" : // SASWELL state 1-open 2-closed ?
+                                /*
+                                if (value === 0) return {timer_state: 'disabled'};
+                                else if (value === 1) return {timer_state: 'active', state: 'ON'};
+                                else return {timer_state: 'enabled', state: 'OFF'};                            
+                                */ 
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL state (${cmd}) is: ${value}"
                                 break
                             case "0D" : // relay status
                                 if (txtEnable==true) log.info "${device.displayName} relay status (${cmd}) is: ${value}"
+                                break
+                            case "0F" : // SASWELL lastValveOpenDuration in seconds
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL lastValveOpenDuration (${cmd}) is: ${value}"
+                                break
+                            case "10" : // SASWELL RawToCycleTimer1 ?    
+                                // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1205015123 
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL RawToCycleTimer1 (${cmd}) is: ${value}"
+                                break
+                            case "11" : // SASWELL RawToCycleTimer2 ?
+                                if (txtEnable==true) log.info "${device.displayName} SASWELL RawToCycleTimer2 (${cmd}) is: ${value}"
                                 break
                             case "13" : // inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
