@@ -30,7 +30,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.5" }
-def timeStamp() {"2023/01/21 1:13 PM"}
+def timeStamp() {"2023/01/21 1:34 PM"}
 
 @Field static final Boolean debug = false
 
@@ -48,6 +48,8 @@ metadata {
             "active (on)",
             "enabled (off)"
         ]
+        attribute "timer_time_left", "number"
+        attribute "last_valve_open_duration", "number"
         
         if (debug == true) {        
             command "testTuyaCmd", [
@@ -366,8 +368,9 @@ def parseZHAcommand( Map descMap) {
                                 //   0 -> disabled; 1 -> "24h"; 2 -> "48h";  3 -> "72h"
                                 if (txtEnable==true) log.info "${device.displayName} automatic timer (${cmd}) is: ${value}"
                                 break
-                            case "0B" : // SASWELL timeLeft in seconds
-                                if (txtEnable==true) log.info "${device.displayName} SASWELL timeLeft (${cmd}) is: ${value}"
+                            case "0B" : // SASWELL timeLeft in seconds timer_time_left
+                                if (txtEnable==true) log.info "${device.displayName} timer time left (${cmd}) is: ${value} seconds"
+                                sendEvent(name: 'timer_time_left', value: value, type: "physical")
                                 break
                             case "0C" : // SASWELL state 0-disabled 1-active on (open) 2-enabled off (closed) ?
                                 def valueString = timerStateOptions[safeToInt(value).toString()]
@@ -377,8 +380,9 @@ def parseZHAcommand( Map descMap) {
                             case "0D" : // relay status
                                 if (txtEnable==true) log.info "${device.displayName} relay status (${cmd}) is: ${value}"
                                 break
-                            case "0F" : // SASWELL lastValveOpenDuration in seconds
-                                if (txtEnable==true) log.info "${device.displayName} SASWELL lastValveOpenDuration (${cmd}) is: ${value}"
+                            case "0F" : // SASWELL lastValveOpenDuration in seconds last_valve_open_duration
+                                if (txtEnable==true) log.info "${device.displayName} last valve open duration (${cmd}) is: ${value} seconds"
+                                sendEvent(name: 'last_valve_open_duration', value: value, type: "physical")
                                 break
                             case "10" : // SASWELL RawToCycleTimer1 ?    
                                 // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1205015123 
