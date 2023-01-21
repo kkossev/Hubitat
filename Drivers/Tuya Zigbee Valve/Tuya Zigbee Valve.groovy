@@ -30,7 +30,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.0.5" }
-def timeStamp() {"2023/01/21 7:44 PM"}
+def timeStamp() {"2023/01/21 8:19 PM"}
 
 @Field static final Boolean debug = false
 
@@ -57,7 +57,7 @@ metadata {
             "72h"
         ]
         
-        command "setIrrigationTimer", [[name:"dpCommand", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
+        command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
         
         if (debug == true) {        
             command "testTuyaCmd", [
