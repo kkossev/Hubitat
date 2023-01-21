@@ -57,6 +57,8 @@ metadata {
             "72h"
         ]
         
+        command "setIrrigationTimer", [[name:"dpCommand", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
+        
         if (debug == true) {        
             command "testTuyaCmd", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -922,6 +924,19 @@ def logWarn(msg) {
         log.warn "${device.displayName} " + msg
     }
 }
+def setIrrigationTimer( timer ) {
+    ArrayList<String> cmds = []
+    def timerSec = safeToInt(timer, -1)
+    if (timerSec < 0 || timerSec > 86400) {
+        logWarn "timer must be withing 0 and 86400 seconds"
+        return
+    }
+    logDebug "setting the irrigation timer to ${timerSec} seconds"
+    def dpValHex = zigbee.convertToHexString(timerSec as int, 8)
+    cmds = sendTuyaCommand("0B", DP_TYPE_VALUE, dpValHex)
+    sendZigbeeCommands( cmds )
+}
+
 
 def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     ArrayList<String> cmds = []
