@@ -17,14 +17,14 @@
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
- * ver. 1.2.0 2023-01-02 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
- *
+ * ver. 1.2.0 2023-01-22 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
+ *                                  added advancedOptions: restoreAlarmSettings; presetBeepAndChimeSettings
  *                                  TODO: mute/unmute
  *
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/01/02 10:37 PM"}
+def timeStamp() {"2023/01/22 1:10 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -49,7 +49,9 @@ metadata {
         capability "RelativeHumidityMeasurement"
         
         attribute "duration", "number"
+        attribute "Info", "text"
         
+        command "configure",  [[name:"Will load the DEFAULT settings!", type: "TEXT"]]
         command "setMelody", [
             [name:"alarmType", type: "ENUM", description: "Sound Type", constraints: soundTypeOptions],
             [name:"melodyNumber", type: "NUMBER", description: "Set the Melody Number 1..18"]
@@ -95,15 +97,23 @@ metadata {
         input (name: "playSoundDuration", type: "number", title: "<b>Play Sound (Chime) default Duration</b>, seconds", description: "<i>Select the default duration used in the playSound (Chime) command, seconds</i>", range: "1..$TUYA_MAX_DURATION", defaultValue: TUYA_DEFAULT_DURATION)
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced options</b>", description: "<i>These are automatically set up in an optimal way</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>Restore the default Alarm settings 7 seconds after playing Beep or Chime</i>", defaultValue: false)
-            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Preset Beep and Chime Settings every time before playing Beep or Chime</i>", defaultValue: "fast", options:["fast", "slow", "none"])
+            input (name: "restoreAlarmSettings", type: "bool", title: "<b>Restore Default Alarm Settings</b>", description: "<i>After playing Beep or Chime sounds, the default Alarm settings will be restored after 7 seconds </i>", defaultValue: false)
+            input (name: "presetBeepAndChimeSettings", type: "enum", title: "<b>Preset Beep and Chime Settings</b>", description: "<i>Before playing Beep or Chime sounds, the preset Beep/Chime settings will be restored first</i>", defaultValue: "fast", options:["fast", /*"slow",*/ "none"])
         } 
     }
 }
 
 
-def isNeo() {device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']}
+def isNeo() {(device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']) || (debug == true)}
 
+@Field static final Map disabledEnabledOptions = [
+    '0' : 'disabled',
+    '1' : 'enabled'
+]
+@Field static final Map temperatureScaleOptions = [
+    '0' : 'Fahrenheit',
+    '1' : 'Celsius'
+]
 @Field static final List<String> volumeNameOptions = [
     'low',
     'medium',
@@ -297,7 +307,7 @@ def processTuyaCluster( descMap ) {
         //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x74 : // Neo Siren Volume ['low', 'medium', 'high']
-                logDebug "Neo Siren Volume is ${fncmd}"
+                logDebug "Neo Siren Volume is (${fncmd})"
             case TUYA_DP_VOLUME :    // (05) volume [ENUM] 0:low 1: mid 2:high
                 def volumeName = 'unknown'
                 def volumePct = -1
@@ -316,7 +326,7 @@ def processTuyaCluster( descMap ) {
                 break
             
             case 0x68 : // Neo Alarm On 0x01 Off 0x00
-                logDebug "Neo Alarm is ${fncmd}"
+                logDebug "Neo Alarm status is ${fncmd}"
             case TUYA_DP_ALARM :    // (13) alarm [BOOL]
                 def value = fncmd == 0 ? "off" : fncmd == 1 ? state.lastCommand : "unknown"
                 if (settings?.logEnable) logInfo "confirmed alarm state ${value} (${fncmd})"
@@ -348,37 +358,37 @@ def processTuyaCluster( descMap ) {
             case 0x65 : // Neo Power Mode  ['battery_full', 'battery_high', 'battery_medium', 'battery_low', 'usb']
                 if (settings?.logEnable) logInfo "Neo Power Mode is ${fncmd}"
                 break
-            case 0x69 : // Neo Temperature  ( x10 ?)
-                if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd}"
+            case 0x69 : // Neo Temperature  ( x10 )
+                if (settings?.logEnable) logInfo "Neo Temperature is ${fncmd/10.0} C (${fncmd})"
                 sendTemperatureEvent( fncmd/10.0 )
                 break
-            case 0x6A : // Neo Humidity Level (x100 ?)
-                if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd}"
-                sendHumidityEvent( fncmd/100.0 )
+            case 0x6A : // Neo Humidity Level (x10 )
+                if (settings?.logEnable) logInfo "Neo Humidity Level is ${fncmd/10.0} %RH (${fncmd})"
+                sendHumidityEvent( fncmd/10.0 )
                 break
             case 0x6B : // Neo Min Alarm Temperature -20 .. 80
-                if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Min Alarm Temperature is ${fncmd} C"
                 break
             case 0x6C : // Neo Max Alarm Temperature -20 .. 80
-                if (settings?.logEnable) logInfo "Neo Max Alarm Temperature is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Max Alarm Temperature is ${fncmd} C"
                 break
             case 0x6D : // Neo Min Alarm Humidity 1..100
-                if (settings?.logEnable) logInfo "Neo Min Alarm Humidity is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Min Alarm Humidity is ${fncmd} %RH"
                 break
             case 0x6E : // Neo Max Alarm Humidity 1..100
-                if (settings?.logEnable) logInfo "Neo Max Alarm Humidity is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Max Alarm Humidity is ${fncmd} %RH"
                 break
             case 0x70 : // Neo Temperature Unit (F 0x00, C 0x01)
-                if (settings?.logEnable) logInfo "Neo Temperature Unit is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Temperature Unit is ${temperatureScaleOptions[safeToInt(fncmd).toString()]} (${fncmd})"
                 break
             case 0x71 : // Neo Alarm by Temperature status
-                if (settings?.logEnable) logInfo "Neo Alarm by Temperature status is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Alarm by Temperature status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})"
                 break
             case 0x72 : // Neo Alarm by Humidity status
-                if (settings?.logEnable) logInfo "Neo Alarm by Humidity status is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo Alarm by Humidity status is ${disabledEnabledOptions[safeToInt(fncmd).toString()]} (${fncmd})"
                 break
             case 0x73 : // Neo ???
-                if (settings?.logEnable) logInfo "Neo ??? is ${fncmd}"
+                if (settings?.logEnable) logInfo "Neo unknown parameter (x073) is ${fncmd}"
                 break
             default :
                 logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
@@ -475,49 +485,55 @@ def siren() {
     sendTuyaAlarm( "siren")
 }
 
-
 def sendTuyaAlarm( commandName ) {
-    logDebug "swithing alarm ${commandName} settings?.presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings}"
+    logDebug "swithing alarm ${commandName} (presetBeepAndChimeSettings = ${settings?.presetBeepAndChimeSettings})"
     String cmds = ""
     state.lastCommand = commandName
-    if (settings?.presetBeepAndChimeSettings == "none") {
-        if (commandName != "off") {
-            sendSimpleTuyaCommand(0x00, "0D01000101")
-        }
-        else {
-            sendSimpleTuyaCommand(0x00, "0D01000100")
-        }
-    }
-    else {
-        wakeUpTuya()
-        if (commandName != "off") {
-            // volume
-            def volumeName = settings?.alarmSoundVolume ?: 'high'
-            def volumeTuya = volumeNameOptions.indexOf(volumeName)
-            if (volumeTuya >= 0 && volumeTuya <=2) {
-                cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int ) 
-            } 
-            // duration
-            def durationTuya = safeToInt( settings?.alarmSoundDuration )
-            if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
-                cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
+    def mode = settings?.presetBeepAndChimeSettings ?: "fast"
+    switch (mode) {
+        case "none" :
+            if (commandName != "off") {
+                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101")
             }
-            // melody
-            def melodyName = settings?.alarmMelody ?: '12=Alarm Siren'
-            def melodyTuya = melodiesOptions.indexOf(melodyName)
-            if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
-                cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int) 
+            else {
+                sendSimpleTuyaCommand(0x00, isNeo() ? "6801000100" : "0D01000100")
             }
-            // play it
-            unschedule(restoreDefaultSettings)
-            cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
-            sendZigbeeCommands( combinedTuyaCommands(cmds) )    
-        }
-        else {
-            unschedule(restoreDefaultSettings)
-            sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
-        }
+            break
+        case "fast" :
+            wakeUpTuya()
+            if (commandName != "off") {
+                // volume
+                def volumeName = settings?.alarmSoundVolume ?: 'high'
+                def volumeTuya = volumeNameOptions.indexOf(volumeName)
+                if (volumeTuya >= 0 && volumeTuya <=2) {
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_VOLUME : TUYA_DP_VOLUME, DP_TYPE_ENUM, volumeTuya as int ) 
+                } 
+                // duration
+                def durationTuya = safeToInt( settings?.alarmSoundDuration )
+                if (durationTuya >=1 && durationTuya <= TUYA_MAX_DURATION) {
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_DURATION : TUYA_DP_DURATION, DP_TYPE_VALUE, durationTuya as int ) 
+                }
+                // melody
+                def melodyName = settings?.alarmMelody ?: '12=Alarm Siren'
+                def melodyTuya = melodiesOptions.indexOf(melodyName)
+                if (melodyTuya >=0 && melodyTuya <= TUYA_MAX_MELODIES-1) {
+                    cmds += appendTuyaCommand( isNeo() ? NEO_DP_MELODY :TUYA_DP_MELODY, DP_TYPE_ENUM, melodyTuya as int) 
+                }
+                // play it
+                unschedule(restoreDefaultSettings)
+                cmds += appendTuyaCommand( isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, DP_TYPE_BOOL, 1 ) 
+                sendZigbeeCommands( combinedTuyaCommands(cmds) )    
+            }
+            else {
+                unschedule(restoreDefaultSettings)
+                sendZigbeeCommands( sendTuyaCommand(zigbee.convertToHexString(isNeo() ? NEO_DP_ALARM : TUYA_DP_ALARM, 2), DP_TYPE_BOOL, "00"))    
+            }
+            break
+        case "slow" :
+            logWarn "NOT IMPLEMENTED!"
+            break
     }
+      
 }
 
 // capability "Tone"
@@ -527,7 +543,7 @@ def beep() {
     logDebug "sending beep() beepVolume = ${settings?.beepVolume}"
     
     if (settings?.presetBeepAndChimeSettings == "none") {
-        sendSimpleTuyaCommand(0x00, "0D01000101")    // just turn the siren on!  // TODO!
+        sendSimpleTuyaCommand(0x00, isNeo() ? "6801000101" : "0D01000101") // just turn the siren on!  // TODO!
     }
     else {
         wakeUpTuya()
@@ -644,7 +660,7 @@ def playSound(soundnumber=null, volumeLevel=null, duration=null) {
     if (volumeLevel == null) {    // use the default playSoundVolume    
         volumeName = settings?.playSoundVolume ?: TUYA_DEFAULT_VOLUME
         (volumeTuya, volumePct) = findVolumeByName( volumeName )        
-        logDebug "volumeLevel is null, volumeTuya = ${volumeTuya}"
+        logDebug "volumeLevel parameter is null, using default Chime volume ${volumeName} (${volumeTuya})"
     }
     else {
         def nearestVolume = getNearestTuyaVolumeLevel( volumeLevel )
@@ -813,6 +829,7 @@ def installed() {
     log.info "${device.displayName} installed()"
     unschedule()
     unmute()
+    sendEvent(name: "Info", "installed", isStateChange: true, type: "digital")
 }
 
 // called when preferences are saved
@@ -846,6 +863,7 @@ def checkDriverVersion() {
         state.remove('setVolume')
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
+        sendEvent(name: "Info", value: "driver updated to new version ${driverVersionAndTimeStamp()}", isStateChange: true, type: "digital")
     }
 }
 
@@ -870,16 +888,16 @@ void initializeVars(boolean fullInit = true ) {
 
     if (fullInit == true || settings?.logEnable == null)          device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null)          device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.beepVolume == null)         device.updateSetting("beepVolume", [value:"low", type:"enum"])
-    if (fullInit == true || settings?.alarmMelody == null)        device.updateSetting("alarmMelody",        [value:'12=Alarm Siren', type:"enum"])
-    if (fullInit == true || settings?.alarmSoundVolume == null)   device.updateSetting("alarmSoundVolume",   [value:'high', type:"enum"])
-    if (fullInit == true || settings?.alarmSoundDuration == null) device.updateSetting("alarmSoundDuration", [value:TUYA_MAX_DURATION, type:"number"])
-    if (fullInit == true || settings?.playSoundMelody == null)    device.updateSetting("playSoundMelody",    [value:TUYA_DEFAULT_MELODY, type:"enum"]) 
-    if (fullInit == true || settings?.playSoundVolume == null)    device.updateSetting("playSoundVolume",    [value: TUYA_DEFAULT_VOLUME, type:"enum"])
-    if (fullInit == true || settings?.playSoundDuration == null)  device.updateSetting("playSoundDuration",  [value:TUYA_DEFAULT_DURATION, type:"number"])
+    /*if (fullInit == true || settings?.beepVolume == null)*/         device.updateSetting("beepVolume", [value:"low", type:"enum"])
+    /*if (fullInit == true || settings?.alarmMelody == null)*/         device.updateSetting("alarmMelody",        [value:'12=Alarm Siren', type:"enum"])
+    /*if (fullInit == true || settings?.alarmSoundVolume == null)*/    device.updateSetting("alarmSoundVolume",   [value:'high', type:"enum"])
+    /*if (fullInit == true || settings?.alarmSoundDuration == null)*/  device.updateSetting("alarmSoundDuration", [value:TUYA_MAX_DURATION, type:"number"])
+    /*if (fullInit == true || settings?.playSoundMelody == null)*/     device.updateSetting("playSoundMelody",    [value:TUYA_DEFAULT_MELODY, type:"enum"]) 
+    /*if (fullInit == true || settings?.playSoundVolume == null)*/     device.updateSetting("playSoundVolume",    [value: TUYA_DEFAULT_VOLUME, type:"enum"])
+    /*if (fullInit == true || settings?.playSoundDuration == null)*/   device.updateSetting("playSoundDuration",  [value:TUYA_DEFAULT_DURATION, type:"number"])
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
-    if (fullInit == true || settings?.restoreAlarmSettings == null) device.updateSetting("restoreAlarmSettings", false)
-    if (fullInit == true || settings?.presetBeepAndChimeSettings == null) device.updateSetting("presetBeepAndChimeSettings", [value: "fast", type:"enum"])
+    /*if (fullInit == true || settings?.restoreAlarmSettings == null)*/ device.updateSetting("restoreAlarmSettings", false)
+    /*if (fullInit == true || settings?.presetBeepAndChimeSettings == null)*/  device.updateSetting("presetBeepAndChimeSettings", [value: "fast", type:"enum"])
     
    
 }
