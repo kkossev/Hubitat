@@ -29,14 +29,16 @@
  *            monitoring_mode bug fix; approachDistance bug fix; setMotion command for tests/tuning of automations; added motion active/inactive simulation for FP1
  * ver. 1.2.1 2022-08-10 kkossev  - code / traces cleanup; change device name on initialize(); 
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
- * ver. 1.2.3 2022-12-26 kkossev  - (dev. branch ) added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
+ * ver. 1.2.3 2022-12-26 kkossev  - added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
+ * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices
  *
+ *                                 TODO: Regions            
  *
 */
 
-def version() { "1.2.3" }
-def timeStamp() {"2022/12/26 8:32 PM"}
+def version() { "1.2.4" }
+def timeStamp() {"2023/01/26 6:35 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -125,8 +127,8 @@ metadata {
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
             }
-            if (aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.homeKitCompatibility) {
-                input (name: "homeKitCompatibility",  type: "bool", title: "<b>HomeKit Compatibility</b>",  description: "Enable/disable HomeKit Compatibility", defaultValue: false)
+            if (aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices) {
+                input (name: "sendBatteryEventsForDCdevices",  type: "bool", title: "<b>Send Battery Events For DC Devices</b>",  description: "Send Battery Events For FP1 DC-powered device (used for online/offline alerts)", defaultValue: false)
             }
         }
     }
@@ -142,7 +144,7 @@ metadata {
         attributes: ["presence", "presence_type"],
         preferences: [
             "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
-            "approachDistance":true, "monitoringMode":true, "homeKitCompatibility":true
+            "approachDistance":true, "monitoringMode":true, "sendBatteryEventsForDCdevices":true
         ],
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
@@ -877,7 +879,7 @@ def setPresent() {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
         if (safeToInt(device.currentValue('battery', true)) == 0 ) {
             if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                if ((!isFP1()) || (isFP1() && settings?.homeKitCompatibility == true)) {
+                if ((!isFP1()) || (isFP1() && settings?.sendBatteryEventsForDCdevices == true)) {
                     sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
                 }
             }
@@ -899,7 +901,7 @@ def checkIfNotPresent() {
                 handleMotion(false, isDigital=true)
                 logWarn "forced motion to <b>inactive</b>"
             }
-            if ((!isFP1()) || (isFP1() && settings?.homeKitCompatibility == true)) {
+            if ((!isFP1()) || (isFP1() && settings?.sendBatteryEventsForDCdevices == true)) {
                 if (safeToInt(device.currentValue('battery', true)) != 0) {
                     logWarn "${device.displayName} forced battery to '<b>0 %</b>"
                     sendBatteryEvent( 0, isDigital=true )
@@ -928,7 +930,7 @@ def checkDriverVersion() {
         state.motionStarted = now()
         // added 12/04/2022
         if (isFP1()) {
-            if (device.currentValue('battery', true) == null && settings?.homeKitCompatibility == true) {
+            if (device.currentValue('battery', true) == null && settings?.sendBatteryEventsForDCdevices == true) {
                 sendBatteryEvent( 100, isDigital=true )
             }
             if (state.lastBattery == null || safeToInt(state.lastBattery) == 0) {
@@ -999,7 +1001,7 @@ def updated() {
             if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringModeOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
-        if (settings?.homeKitCompatibility == false) {
+        if (settings?.sendBatteryEventsForDCdevices == false) {
             device.deleteCurrentState("battery")
         }
         else if (device.currentValue('battery', true) == null) {
@@ -1059,7 +1061,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
-    if (fullInit == true || settings?.homeKitCompatibility == null) device.updateSetting("homeKitCompatibility", false)
+    if (fullInit == true || settings?.sendBatteryEventsForDCdevices == null) device.updateSetting("sendBatteryEventsForDCdevices", false)
     
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
