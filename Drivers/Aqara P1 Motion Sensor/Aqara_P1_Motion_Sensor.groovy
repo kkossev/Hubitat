@@ -31,14 +31,14 @@
  * ver. 1.2.2 2022-08-21 kkossev  - added motionRetriggerInterval for T1 model; filter illuminance parsing for RTCGQ13LM
  * ver. 1.2.3 2022-12-26 kkossev  - added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
- * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices
+ * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  *
  *                                 TODO: Regions            
  *
 */
 
 def version() { "1.2.4" }
-def timeStamp() {"2023/01/26 6:35 PM"}
+def timeStamp() {"2023/01/26 7:32 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -936,6 +936,9 @@ def checkDriverVersion() {
             if (state.lastBattery == null || safeToInt(state.lastBattery) == 0) {
                 state.lastBattery = "100"
             }
+        }
+        if(device.getDataValue('aqaraModel') == null) {
+            setDeviceName()
         }
         state.driverVersion = driverVersionAndTimeStamp()
     }
