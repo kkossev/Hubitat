@@ -32,14 +32,14 @@
  * ver. 2.4.7 2022-12-22 kkossev     - added TS004F _TZ3000_rco1yzb1 LIDL Smart Button SSBM A1; added _TZ3000_u3nv1jwk 
  * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured, now hardcoded to 8 hours; bug fix: 'released'event; debug info improvements; declared supportedButtonValues attribute
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
- * ver. 2.5.2 2023-01-21 kkossev     - (dev. branch) _TZ3000_vp6clf9d (TS0044) debouncing; 
+ * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.5.2" }
-def timeStamp() {"2023/01/21 5:19 PM"}
+def timeStamp() {"2023/01/28 9:48 PM"}
 
 @Field static final Boolean debug = false
 
@@ -123,6 +123,7 @@ metadata {
 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zqtiam4u", deviceJoinName: "Tuya 6 button Scene Switch"    // not tested
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "TLoraTap 6 Scene Switch"       // https://community.hubitat.com/t/loratap-6-button-controller-drivers/91951/20?u=kkossev
         
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0B05,1000", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
 
@@ -179,7 +180,6 @@ def parse(String description) {
         event.type = 'physical'
         if (txtEnable) log.info "${device.displayName} ${event.descriptionText}"
         result = event
-        if (logEnable) log.debug "${device.displayName} sendEvent $event"
     }
     else if (description?.startsWith("catchall")) {
         def descMap = zigbee.parseDescriptionAsMap(description)            
@@ -447,7 +447,10 @@ def initialize() {
             supportedValues = ["pushed", "double", "held"]    // no released events are generated in scene switch mode
         }
     }
-    else if (device.getDataValue("model") == "TS0601") {
+    else if (device.getDataValue("model") == "TS0045") {    // just in case a new Tuya devices manufacturer decides to invent a new  model! :) 
+    	numberOfButtons = 5
+    }
+    else if (device.getDataValue("model") in ["TS0601", "TS0046"]) {
         numberOfButtons = 6
     }
     else if (isIcasa()) {
@@ -457,6 +460,7 @@ def initialize() {
     else {
     	numberOfButtons = 4	// unknown
         supportedValues = ["pushed", "double", "held", "released"]
+        log.warn "${device.displayName}<b>unknown device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}. Please report this log to the developer.</b>"
     }
     sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
     sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
