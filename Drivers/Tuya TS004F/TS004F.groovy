@@ -33,17 +33,17 @@
  * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured, now hardcoded to 8 hours; bug fix: 'released'event; debug info improvements; declared supportedButtonValues attribute
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
- * ver. 2.6.0 2023-01-28 kkossev     - (dev.branch) - added healthStatus; Initialize button is disabled''
+ * ver. 2.6.0 2023-01-28 kkossev     - (dev.branch) - added healthStatus; Initialize button is disabled;
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
 def version() { "2.6.0" }
-def timeStamp() {"2023/01/28 11:21 PM"}
+def timeStamp() {"2023/01/28 11:22 PM"}
 
 @Field static final Boolean debug = false
-@Field static final Integer healthStatusCountTreshold = 3
+@Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -556,18 +556,21 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
 
 void scheduleDeviceHealthCheck() {
     Random rnd = new Random()
+    //schedule("1 * * * * ? *", 'deviceHealthCheck') // test
     schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
 }
 
 // called every 3 hours
 def deviceHealthCheck() {
-    logDebug "${device.displayName} deviceHealthCheck"
     state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
-    if (state.notPresentCounter  >= healthStatusCountTreshold) {
+    if (state.notPresentCounter > healthStatusCountTreshold) {
         if (!(device.currentValue('healthStatus', true) in ['offline'])) {
             setHealthStatusValue('offline')
-            log.warn "is offline!"
+            log.warn "${device.displayName} is offline!"
         }
+    }
+    else {
+        if (logEnable) log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
     }
 }
 
@@ -575,7 +578,7 @@ def setHealthStatusOnline() {
     state.notPresentCounter = 0
     if (!(device.currentValue('healthStatus', true) in ['online'])) {   
         setHealthStatusValue('online')
-        log.info "is online"
+        log.info "${device.displayName} is online"
     }
 }
 
