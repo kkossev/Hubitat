@@ -33,15 +33,17 @@
  * ver. 2.5.0 2023-01-14 kkossev     - bug fix: battery percentage remaining automatic reporting was not configured, now hardcoded to 8 hours; bug fix: 'released'event; debug info improvements; declared supportedButtonValues attribute
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
+ * ver. 2.6.0 2023-01-28 kkossev     - (dev.branch) - added healthStatus; Initialize button is disabled''
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
  *
  */
 
-def version() { "2.5.2" }
-def timeStamp() {"2023/01/28 9:48 PM"}
+def version() { "2.6.0" }
+def timeStamp() {"2023/01/28 11:21 PM"}
 
 @Field static final Boolean debug = false
+@Field static final Integer healthStatusCountTreshold = 3
 
 import groovy.transform.Field
 import hubitat.helper.HexUtils
@@ -57,12 +59,13 @@ metadata {
     capability "HoldableButton"
    	capability "ReleasableButton"
     capability "Battery"
-    capability "Initialize"
+    //capability "Initialize"
     capability "Configuration"
 
     attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
+    attribute "healthStatus", "enum", ["offline", "online"]
         
     if (debug == true) {
         command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
@@ -108,7 +111,8 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_rrjr1q0u", deviceJoinName: "Tuya 3 button Scene Switch"    // not tested
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_w4thianr", deviceJoinName: "Tuya 3 button Scene Switch"    // not tested
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_a7ouggvs", deviceJoinName: "Zigbee Lonsonho 3 Button"      // not tested
-        
+
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_vp6clf9d", deviceJoinName: "Zemismart Wireless Scene Switch"          
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_vp6clf9d", model: "TS0044", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_ufhtxr59", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_wkai4ga5", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
@@ -149,6 +153,7 @@ def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDa
 
 // Parse incoming device messages to generate events
 def parse(String description) {
+    setHealthStatusOnline()
     checkDriverVersion()
     if (logEnable) log.debug "${device.displayName} description is $description"
 	def event = null
@@ -387,11 +392,10 @@ def refresh() {
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-    }
-    else {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
+        scheduleDeviceHealthCheck()
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -406,7 +410,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
-    
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
 }
 
 def configure() {
@@ -464,12 +468,15 @@ def initialize() {
     }
     sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
     sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
+    if(device.currentValue('healthStatus') == null) setHealthStatusValue('unknown')
     state.lastButtonNumber = 0
+    scheduleDeviceHealthCheck()
 }
 
 def updated() 
 {
     if (logEnable) {log.debug "${device.displayName} updated()"}
+    scheduleDeviceHealthCheck()
 }
 
 def buttonDebounce(button) {
@@ -545,6 +552,35 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
     sendHubCommand(allActions)
+}
+
+void scheduleDeviceHealthCheck() {
+    Random rnd = new Random()
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
+}
+
+// called every 3 hours
+def deviceHealthCheck() {
+    logDebug "${device.displayName} deviceHealthCheck"
+    state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
+    if (state.notPresentCounter  >= healthStatusCountTreshold) {
+        if (!(device.currentValue('healthStatus', true) in ['offline'])) {
+            setHealthStatusValue('offline')
+            log.warn "is offline!"
+        }
+    }
+}
+
+def setHealthStatusOnline() {
+    state.notPresentCounter = 0
+    if (!(device.currentValue('healthStatus', true) in ['online'])) {   
+        setHealthStatusValue('online')
+        log.info "is online"
+    }
+}
+
+def setHealthStatusValue(value) {
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
 def test(String description) {
