@@ -19,9 +19,10 @@
  *  ver. 1.0.3 2022-08-19 kkossev - decreased delay betwen Tuya commands to 200 milliseconds; irrigation valve open/close commands are sent 2 times; digital/physicla timer changed to 3 seconds;
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
+ *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
  *
  *            TODO Presence check timer
- *            TODO: timer; ; ; water_consumed; cycle_timer_1 
+ *            TODO: timer; water_consumed; cycle_timer_1 
  *
  *
  */
@@ -29,8 +30,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.5" }
-def timeStamp() {"2023/01/21 8:19 PM"}
+def version() { "1.1.0" }
+def timeStamp() {"2023/01/29 11:30 PM"}
 
 @Field static final Boolean debug = false
 
@@ -43,6 +44,7 @@ metadata {
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Battery"
         
+        attribute "healthStatus", "enum", ["offline", "online"]
         attribute "timer_state", "enum", [
             "disabled",
             "active (on)",
@@ -673,23 +675,13 @@ def configure() {
             //cmds += zigbee.readAttribute(0xE001, 0xD010, [:], delay=101)
         }
     }
-    /*
-    if (settings?.switchType != null) {
-        def modeName =  switchTypeOptions.find{it.key==settings?.switchType}
-        if (modeName != null) {
-            logDebug "setting switchType to ${modeName.value} (${settings?.switchType})"
-            cmds += zigbee.writeAttribute(0xE001, 0xD030, DataType.ENUM8, (byte) safeToInt(settings?.switchType), [:], delay=252)
-            //cmds += zigbee.readAttribute(0xE001, 0xD030, [:], delay=101)
-        }
-    }
-    */
-    
     sendZigbeeCommands(cmds)
 }
 
 
 // This method is called when the preferences of a device are updated.
 def updated(){
+    checkDriverVersion()
     if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
@@ -699,8 +691,6 @@ def updated(){
     else {
         unschedule(logsOff)
     }
-
-    if (txtEnable==true) log.info "configuring the switch and energy reporting.."
     configure()
 }
 
@@ -718,7 +708,6 @@ void initializeVars( boolean fullInit = true ) {
     state.txCounter = 0
     
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    //if (fullInit == true || state.lastPresenceState == null) state.lastPresenceState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
@@ -730,7 +719,7 @@ void initializeVars( boolean fullInit = true ) {
     if (isBatteryPowered()) {
         if (state.lastBattery == null) state.lastBattery = "100"
     }
-
+    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -755,12 +744,11 @@ void initializeVars( boolean fullInit = true ) {
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-        //log.trace "driverVersion is the same ${driverVersionAndTimeStamp()}"
-    }
-    else {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.debug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
+        state.remove("lastPresenceState")
+        scheduleDeviceHealthCheck()
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -791,29 +779,33 @@ void uninstalled() {
     unschedule()     //Unschedule any existing schedules
 }
 
+void scheduleDeviceHealthCheck() {
+    Random rnd = new Random()
+    //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
+}
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    //if (state.lastPresenceState != "present") {
-    if (isBatteryPowered()) {
-    	sendEvent(name: "powerSource", value: "battery", type: "digital") 
+    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
+        sendHealthStatusEvent("online")
+        if (isBatteryPowered()) {
+        	sendEvent(name: "powerSource", value: "battery", type: "digital") 
+        }
+        else {
+        	sendEvent(name: "powerSource", value: "dc", type: "digital") 
+        }
     }
-    else {
-    	sendEvent(name: "powerSource", value: "dc", type: "digital") 
-    }
-        state.lastPresenceState = "present"
-    //}
     state.notPresentCounter = 0
 }
 
-// called from autoPoll()
-def checkIfNotPresent() {
-    state.notPresentCounter = state.notPresentCounter ?: 0 + 1
+def deviceHealthCheck() {
+    state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
     if (state.notPresentCounter > presenceCountTreshold) {
-        if (state.lastPresenceState != "not present") {
+        if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
+            sendHealthStatusEvent("offline")
+            if (logEnable==true) log.warn "${device.displayName} not present!"
     	    sendEvent(name: "powerSource", value: "unknown", type: "digital")
-            state.lastPresenceState = "not present"
-            if (txtEnable==true) log.warn "${device.displayName} is not present!"
             if (isBatteryPowered()) {
                 if (safeToInt(device.currentValue('battery', true)) != 0) {
                     logWarn "${device.displayName} forced battery to '<b>0 %</b>"
@@ -822,8 +814,15 @@ def checkIfNotPresent() {
             }
         }
     }
+    else {
+        if (logEnable) log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
+    }
+
 }
 
+def sendHealthStatusEvent(value) {
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+}
 
 private getPACKET_ID() {
     state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
