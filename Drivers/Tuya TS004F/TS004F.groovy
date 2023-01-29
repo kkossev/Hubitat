@@ -35,12 +35,12 @@
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - (dev.branch) - added healthStatus; Initialize button is disabled;
  *
- *                                   - TODO: add Advanced options; TODO: debounce timer configuration; TODO: show Battery events in the logs; TODO: remove Initialize, replace with Configure
+ *                                   - TODO: add Advanced options; TODO: debounce timer configuration;
  *
  */
 
-def version() { "2.6.0" }
-def timeStamp() {"2023/01/28 11:22 PM"}
+def version() { "2.6.1" }
+def timeStamp() {"2023/01/29 6:11 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -121,7 +121,7 @@ metadata {
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_dku2cfsc", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TYZB01_cnlmkhbk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_u3nv1jwk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
-        
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_mh9px7cq", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
 
     fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044"
 
