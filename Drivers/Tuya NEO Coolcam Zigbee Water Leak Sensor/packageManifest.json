@@ -1,12 +1,12 @@
 {
   "packageName": "Tuya NEO Coolcam Zigbee Water Leak Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-05-14",
+  "dateReleased": "2023-01-30",
   "documentationLink": "https://github.com/kkossev/Hubitat/blob/main/Drivers/Tuya%20NEO%20Coolcam%20Zigbee%20Water%20Leak%20Sensor/README.md",
   "communityLink": "https://community.hubitat.com/t/beta-tuya-neo-coolcam-zigbee-water-leak-sensor/91370",
-  "releaseNotes": "1.0.0 2022-03-26 - inital version\n1.0.1 2022-04-12 - added _TYST11_qq9mpfhw fingerprint\n1.0.2 2022-04-14 - Check-in info logs; model 'q9mpfhw' inClusters correction\n1.0.3 2022-04-16 - 'Last Updated' workaround for NEO sensors\n1.0.4 2022-05-14 - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button",
+  "releaseNotes": "1.0.7 2022-11-20 - offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline;                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix; added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability;\n1.0.6 2022-11-15 kkossev  - fixed _TZ3000_qdmnmddg fingerprint; added _TZ3000_rurvxhcx ; added _TZ3000_kyb656no\n1.0.5 2022-08-03 - added batterySource, added watchDog, set battery 0% if OFFLINE\n1.0.4 2022-05-14 - code cleanup; debug logging is off by default; fixed debug logging not turning off after 24 hours; added Configure button\n1.0.3 2022-04-16 - 'Last Updated' workaround for NEO sensors\n\n1.0.0 2022-03-26 - inital version\n1.0.2 2022-04-14 - Check-in info logs; model 'q9mpfhw' inClusters correction\n1.0.1 2022-04-12 - added _TYST11_qq9mpfhw fingerprint\n",
   "drivers": [
     {
       "id": "6278d570-44aa-4837-8ac6-63eadf0c0b06",
