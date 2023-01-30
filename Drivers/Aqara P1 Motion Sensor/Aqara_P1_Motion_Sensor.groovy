@@ -32,14 +32,14 @@
  * ver. 1.2.3 2022-12-26 kkossev  - added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
- * ver. 1.2.5 2023-01-28 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor';
+ * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
  *
  *                                 TODO: Regions            
  *
 */
 
 def version() { "1.2.5" }
-def timeStamp() {"2023/01/28 2:54 PM"}
+def timeStamp() {"2023/01/30 2:31 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1030,7 +1030,7 @@ void setDeviceName() {
     def currentModelMap = null
     aqaraModels.each { k, v -> 
         //log.trace "${k}:${v}" 
-        if (v.model ==  device.getDataValue('model') && v.manufacturer == device.getDataValue('manufacturer')) {
+        if (v.model ==  device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
             currentModelMap = k
             //log.trace "found ${k}"
             updateDataValue("aqaraModel", currentModelMap)
@@ -1049,9 +1049,13 @@ void setDeviceName() {
             updateDataValue("aqaraModel", currentModelMap)
         }        
     }
-    //
-    device.setName(deviceName)
-    logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> deviceName was set to ${deviceName}"
+    if (deviceName != NULL) {
+        device.setName(deviceName)
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> deviceName was set to ${deviceName}"
+    }
+    else {
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>aqaraModel ${device.getDataValue('aqaraModel')}</b> was not found!"
+    }
 }
 
 void initializeVars( boolean fullInit = false ) {
@@ -1264,10 +1268,25 @@ def logWarn(msg) {
 }
 
 def test( description ) {
+/*    
         List<String> cmds = []
             value = safeToInt( description )
             if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
-            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)    
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
+
+*/
+    /*
+    def map = aqaraModels
+    map.each{ k, v -> log.trace "${k}:${v}" }
+    log.trace "aqaraModels joinName = ${aqaraModels['RTCGQ13LM'].deviceJoinName} sensitivity(3) = ${aqaraModels['RTCGQ13LM'].motionSensitivity.options['3']}"
+    */
+    
+    // RTCZCGQ11LM:[model:lumi.motion.ac01, manufacturer:LUMI, deviceJoinName:Aqara FP1 Human Presence Detector RTCZCGQ11LM, capabilities:[motionSensor, temperatureMeasurement, battery, powerSource, signalStrength], attributes:[presence, presence_type], preferences:[motionSensitivity, approachDistance, monitoringMode, sendBatteryEventsForDCdevices], isSleepy:true, motionRetriggerInterval:[min:1, scale:0, max:200, step:1, type:Integer], motionSensitivity:[min:1, scale:0, max:3, step:1, type:Integer, options:[1:low, 2:medium, 3:high]]]
+    def ptr = aqaraModels['RTCZCGQ11LM']
+    log.trace "aqaraModel=${device.getDataValue('aqaraModel')} sendBatteryEventsForDCdevices=${aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices} "
+    
+
+    //setDeviceName()
 }
 
 
