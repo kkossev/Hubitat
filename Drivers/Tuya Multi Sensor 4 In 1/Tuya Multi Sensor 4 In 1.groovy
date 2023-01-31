@@ -31,13 +31,13 @@
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3210_wuhzzfqg
  * ver. 1.1.1  2023-01-08 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters; _TZ3000_6ygjfyll bug fix;
- * ver. 1.2.0  2023-01-31 kkossev  - (dev. branch) - healthStatus
+ * ver. 1.2.0  2023-01-31 kkossev  - (dev. branch) - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix;
  *
- *                                   TODO: runEvery1Hour, logsOff mod!
+ *                                   TODO:
 */
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/01/31 3:31 PM"}
+def timeStamp() {"2023/01/31 6:25 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -559,9 +559,11 @@ def processTuyaCluster( descMap ) {
             case 0x65 :    // (101)
                 if (isRadar()) {
                     def value = fncmd / 10
-                    logInfo "(dp=${dp}) received Radar detection delay : ${value} seconds (${fncmd})"    //detectionDelay
-                    device.updateSetting("detectionDelay", [value:value , type:"decimal"])
-                    if (settings?.parEvents == true) sendEvent(name : "detectionDelay", value : value)
+                    if (value != settings?.detectionDelay) {
+                        logInfo "(dp=${dp}) received Radar detection delay : ${value} seconds (${fncmd})"    //detectionDelay
+                        device.updateSetting("detectionDelay", [value:value , type:"decimal"])
+                        if (settings?.parEvents == true) sendEvent(name : "detectionDelay", value : value)
+                    }
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -578,9 +580,11 @@ def processTuyaCluster( descMap ) {
             case 0x66 :     // (102)
                 if (isRadar()) {
                     def value = fncmd / 10
-                    logInfo "${device.displayName} (dp=${dp}) received Radar fading time : ${value} seconds (${fncmd})"        // 
-                    device.updateSetting("fadingTime", [value:value , type:"decimal"])
-                    if (settings?.parEvents == true) sendEvent(name : "fadingTime", value : value)
+                    if (value != settings?.fadingTime ) {
+                        logInfo "${device.displayName} (dp=${dp}) received Radar fading time : ${value} seconds (${fncmd})"        // 
+                        device.updateSetting("fadingTime", [value:value , type:"decimal"])
+                        if (settings?.parEvents == true) sendEvent(name : "fadingTime", value : value)
+                    }
                 }                    
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -1071,7 +1075,7 @@ def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(86400, logsOff)    // turn off debug logging after 24 hours
+        runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
         if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
     }
     else {
