@@ -27,14 +27,15 @@
  *                                  added TS0601_Soil _TZE200_myd45weu ; added _TZE200_znbl8dj5 _TZE200_a8sdabtg _TZE200_qoy0ekbd
  * ver. 1.1.1  2023-01-14 kkossev - added _TZ3000_ywagc4rj TS0201_TH; bug fix: negative temperatures not calculated correctly;
  * ver. 1.2.0  2023-01-15 kkossev - parsing multiple DP received in one command;
+ * ver. 1.2.1  2023-01-15 kkossev - _TZE200_locansqn fixes;_TZ3000_bguser20 correct model;
  * 
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.2.0" }
-def timeStamp() {"2023/01/15 12:42 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2023/01/15 5:43 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -95,7 +96,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                  // not tested
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_xr3htd96", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_yd2e749y", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
@@ -185,6 +187,7 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
+    '_TZE200_nnrfa68v'  : 'TS0601_Haozee',       // not tested NOUS E6 https://noussmart.pl/product/e6.html 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
@@ -193,6 +196,11 @@ metadata {
     '_TYZB01_a476raq2'  : 'TS0201',
     '_TYZB01_hjsgdkfl'  : 'TS0201',
     '_TZ2000_hjsgdkfl'  : 'TS0201',             // "AVATTO S-H02"
+    '_TZ3000_bguser20'  : 'TS0201',             // Model WSD500A 
+    '_TZ3000_xr3htd96'  : 'TS0201',             // Model WSD500A 
+    '_TZ3000_fllyghyj'  : 'TS0201',
+    '_TZ3000_yd2e749y'  : 'TS0201',
+    '_TZ3000_6uzkisv2'  : 'TS0201',    
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
@@ -817,12 +825,6 @@ def updated() {
     Map lastRxMap = stringToJsonMap(state.lastRx)
     Map lastTxMap = stringToJsonMap(state.lastTx)
 
-
-    /*
-    if (modelGroupPreference == null) {
-        device.updateSetting("modelGroupPreference", "Auto detect")
-    }
-    */
     state.modelGroup = getModelGroup()
 
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
@@ -870,11 +872,11 @@ def updated() {
         cmds += sendTuyaCommand("14", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
         intValue = ((settings?.maxReportingTimeTemp * 2.5) as int) / 60
-        if (settings?.logEnable) log.trace "${device.displayName} setting Temperature Max reporting time to ${intValue} minutes"
+        if (settings?.logEnable) log.trace "${device.displayName} setting Temperature Max reporting time to ${(intValue/2.5) as int} minutes"
         cmds += sendTuyaCommand("11", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
         //
         intValue = ((settings?.maxReportingTimeHumidity *2.5) as int) / 60
-        if (settings?.logEnable) log.trace "${device.displayName} setting Humidity Max reporting time to ${intValue} minutes"
+        if (settings?.logEnable) log.trace "${device.displayName} setting Humidity Max reporting time to ${(intValue/2.5) as int} minutes"
         cmds += sendTuyaCommand("12", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
 
         /*
@@ -1166,7 +1168,7 @@ void initializeVars(boolean fullInit = true ) {
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    //cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // commented out ver 1.0.10  2022/11/10
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // was commented out ver 1.0.10  2022/11/10; returned back ver 1.20 01/15/2023
     return  cmds
 }
 
@@ -1318,13 +1320,6 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
     def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
 
     if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
-
-    switch ( getModelGroup() ) {
-        case 'MOES' :
-        case 'UNKNOWN' :
-        default :
-            break
-    }
 
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
