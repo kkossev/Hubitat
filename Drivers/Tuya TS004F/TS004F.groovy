@@ -34,13 +34,14 @@
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
+ * ver. 2.6.1 2023-01-29 kkossev     - (dev.branch) - added _TZ3000_mh9px7cq; isSmartKnob() typo fix';
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration;
  *
  */
 
-def version() { "2.6.0" }
-def timeStamp() {"2023/01/28 11:22 PM"}
+def version() { "2.6.1" }
+def timeStamp() {"2023/02/01 10:49 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -115,13 +116,13 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_vp6clf9d", deviceJoinName: "Zemismart Wireless Scene Switch"          
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_vp6clf9d", model: "TS0044", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_ufhtxr59", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"
-    fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_wkai4ga5", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
+    fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_wkai4ga5", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/79?u=kkossev
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested        
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_ee8nrt2l", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_dku2cfsc", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TYZB01_cnlmkhbk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_u3nv1jwk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
-        
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_mh9px7cq", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
 
     fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044"
 
@@ -146,9 +147,9 @@ metadata {
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1000
 
-def isTuya()  {debug == true ? false : device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
-def isIcasa() {debug == true ? false : device.getDataValue("manufacturer") == "icasa"}
-def isSmartKob() {debug == true ? false : device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
+def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
+def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
+def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 
 // Parse incoming device messages to generate events
@@ -442,11 +443,13 @@ def initialize() {
     	numberOfButtons = 3
     }
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
-        if (isSmartKob()) {    // Smart Knob 
+        if (isSmartKnob()) {    // Smart Knob 
+            log.debug "${device.displayName} device ${device.data.manufacturer} identified as Smart Knob model ${device.data.model}"
         	numberOfButtons = 3
             supportedValues = ["pushed", "double", "held", "released"]
         }
         else {
+            log.debug "${device.displayName} device ${device.data.manufacturer} identified as 4 keys scene switch model ${device.data.model}"
         	numberOfButtons = 4
             supportedValues = ["pushed", "double", "held"]    // no released events are generated in scene switch mode
         }
