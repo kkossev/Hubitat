@@ -23,6 +23,7 @@ metadata {
         capability "Configuration"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw"
     }
 }
 
