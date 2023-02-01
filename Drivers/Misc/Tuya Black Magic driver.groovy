@@ -20,6 +20,7 @@ metadata {
     definition (name: "Tuya Black Magic driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Misc/Tuya%20%Black%20Magic%20driver.groovy") {
         capability "Actuator"
         capability "Outlet"
+        capability "Configuration"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs"
     }
@@ -33,7 +34,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        logWarn "parse: exception caught while parsing description: ${description}"
+        log.warn "parse: exception caught while parsing description: ${description}"
     }
     if (event) {
         sendEvent(event)
@@ -48,6 +49,7 @@ def on() {
 def off() {
     zigbee.off()
 }
+
 def configure()
 {
     log.warn "running configure in 5 seconds..."
