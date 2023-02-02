@@ -34,14 +34,14 @@
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
- * ver. 2.6.1 2023-01-29 kkossev     - (dev.branch) - added _TZ3000_mh9px7cq; isSmartKnob() typo fix';
+ * ver. 2.6.1 2023-02-02 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration;
  *
  */
 
 def version() { "2.6.1" }
-def timeStamp() {"2023/02/01 10:49 AM"}
+def timeStamp() {"2023/02/02 10:30 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -60,8 +60,8 @@ metadata {
     capability "HoldableButton"
    	capability "ReleasableButton"
     capability "Battery"
-    //capability "Initialize"
     capability "Configuration"
+    capability "Health Check"
 
     attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
