@@ -45,15 +45,17 @@
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
  *  ver. 1.6.5 2022-12-19 kkossev - _TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
- *  ver. 1.6.6 2023-01-20 kkossev - (dev. branch) Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
+ *  ver. 1.6.6 2023-01-20 kkossev - Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
+ *  ver. 1.7.0 2023-01-29 kkossev - added healthStatus;
+ *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.6.6" }
-def timeStamp() {"2023/01/20 5:13 PM"}
+def version() { "1.7.1" }
+def timeStamp() {"2023/02/02 10:15 PM"}
 
 @Field static final Boolean debug = false
 
@@ -69,6 +71,8 @@ metadata {
         capability "Refresh"
         capability "Sensor"
         capability "PresenceSensor"
+        capability "Health Check"
+        
         
         attribute "powerFactor", "NUMBER"
         attribute "energyCost", "NUMBER"
@@ -76,6 +80,8 @@ metadata {
         attribute "html", "string"
         attribute "hourlyEnergy", "NUMBER"
         //attribute "dailyEnergy", "string"
+        attribute "healthStatus", "enum", ["offline", "online"]
+        
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
@@ -120,7 +126,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_5f43h46b", deviceJoinName: " XUELILI 16A UK Standards Smart Outlet"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
+        // temporary removed for tests //       fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zloso4jk", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_7dndcnnb", deviceJoinName: "LELLKI Smart Switch 25A Energy Monitor" // https://www.aliexpress.com/item/1005004564755069.html
@@ -1385,7 +1391,10 @@ def fixOtherTuyaOddities() {
 */
 def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
-
+    /*
+    log.warn "running configure in 5 seconds..."
+    pauseExecution(5000)
+    */
     scheduleHourlyAndDailyEnergy()
         
     List<String> cmds = []
@@ -1542,11 +1551,9 @@ void initializeVars( boolean fullInit = true ) {
     state.rxCounter = 0
     state.txCounter = 0
     //if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
-    //if (state.lastEnergy == null) state.lastEnergy = 0.0
     if (state.lastEnergyRaw == null) state.lastEnergyRaw = 0.0
     if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
     if (state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    //if (state.lastPresenceState == null) state.lastPresenceState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
@@ -1580,7 +1587,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
     if (fullInit == true || settings?.pulseConfiguration == null) device.updateSetting("pulseConfiguration", [value:1000, type:"number"])
     if (fullInit == true || settings?.frientEnergyMeterMode == null) device.updateSetting("frientEnergyMeterMode", [value:"0", type:"enum"])    // electricity
-    
+    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
@@ -1625,10 +1632,7 @@ void initializeVars( boolean fullInit = true ) {
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
-    if (state.driverVersion != null && driverVersionAndTimeStamp() == state.driverVersion) {
-        //log.trace "${device.displayName} driverVersion is the same ${driverVersionAndTimeStamp()}"
-    }
-    else {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         state.remove("lastAmperage")
@@ -1636,7 +1640,6 @@ def checkDriverVersion() {
         state.remove("lastEnergy")
         state.remove("lastPower")
         state.remove("lastPresenceState")
-        //
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -1686,9 +1689,9 @@ def powerRefresh() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if (device.currentValue("presence", true) != "present") {
+    if (device.currentValue("presence", true) != "present" || device.currentValue("healthStatus", true) != "online") {
     	sendEvent(name: "presence", value: "present") 
-        //state.lastPresenceState = "present"
+        sendHealthStatusEvent("online")
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     state.notPresentCounter = 0
@@ -1699,9 +1702,9 @@ def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter > presenceCountTreshold) {
-            if (device.currentValue("presence", true) != "not present") {
+            if (device.currentValue("presence", true) != "not present" || device.currentValue("healthStatus", true) != "offline" ) {
     	        sendEvent(name: "presence", value: "not present")
-                //state.lastPresenceState = "not present"
+                sendHealthStatusEvent("offline")
                 if (logEnable==true) log.warn "${device.displayName} not present!"
                 runIn( 1, formatAttrib, [overwrite: true])    
             }
@@ -1710,8 +1713,6 @@ def checkIfNotPresent() {
 }
 
 private getPACKET_ID() {
-//    state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
-//    return zigbee.convertToHexString(state.packetID, 4)
     return zigbee.convertToHexString(Math.abs(new Random().nextInt() % 65536), 4) 
 }
 
@@ -2080,7 +2081,7 @@ void formatAttrib() {
     if (settings?.logEnable) log.debug "formatAttrib"
     String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
     
-    attrStr += addToAttr("Presence", "presence")
+    attrStr += addToAttr("status", "healthStatus")
     if (!isFrientEnergyMonitor()) {
         attrStr += addToAttr("Switch","switch")
     }
@@ -2206,6 +2207,18 @@ def setEnergyMeterMode( mode ) {
             logWarn "invalid energy mode ${mode}"
         }
     }
+    return cmds
+}
+
+def sendHealthStatusEvent(value) {
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+}
+
+
+def test() {
+        ArrayList<String> cmds = []
+        cmds += zigbee.readAttribute(0x0000, 0x0001, [destEndpoint : 0x01], delay=200)    // App version
+        cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint : 0x01], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
     return cmds
 }
 
