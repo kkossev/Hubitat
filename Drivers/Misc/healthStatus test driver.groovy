@@ -13,13 +13,15 @@
  *	for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0 2023-01-27 kkossev  - inital version
+ * ver. 1.0.1 2023-02-02 kkossev  - a dummy capability 'Health Check' already exists in Hubitat! (unfortunately, the attribute 'healthStatus' still has to be declared)
  *
 */
 
 metadata {
     definition (name: "healthStatus test driver", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Misc/healthStatus%20test%20driver.groovy") {
         capability "Sensor"
-
+        capability "Health Check"
+        
         attribute "healthStatus", "enum", ["offline", "online"]
         
         command "offline", [[name: "Set healthStatus offline"]]
