@@ -16,14 +16,20 @@
  *
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
+ *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *
- *                                  TODO :
+ *          TODO :Add the "Last Activity At" devices property in the table
+ *                    Green if time less than 8 hours
+ *                    Black if time is less than 25 hours
+ *                    Red if time is greater than 25 hours
+ *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
+ *                Add Info/Debig options
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.1" }
-def timeStamp() {"2023/02/03 3:44 PM"}
+def version() { "1.0.2" }
+def timeStamp() {"2023/02/03 9:15 PM"}
 
 @Field static final Boolean debug = true
 
