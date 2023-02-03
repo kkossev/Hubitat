@@ -17,6 +17,7 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
+ *  ver. 1.0.3 2023-02-03 tonesto7 - Added last activity date
  *
  *          TODO :Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
@@ -28,8 +29,8 @@
 
 import groovy.transform.Field
 
-def version() { "1.0.2" }
-def timeStamp() {"2023/02/03 9:15 PM"}
+def version() { "1.0.3" }
+def timeStamp() {"2023/02/03 3:00 PM"}
 
 @Field static final Boolean debug = true
 
@@ -99,6 +100,7 @@ String displayTable() {
     		"<th>model</th>"  +
     		"<th>manufacturer</th>"  +
     		"<th>driver</th>"  +
+            "<th>last activity</th>" +
         "</tr></thead>"
     
 	devices.sort{it.displayName.toLowerCase()}.each {dev ->
@@ -114,7 +116,8 @@ String displayTable() {
             "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
             "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
             "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
-            "<td style='color:${black}'>${devType ?: "n/a"}</td>" // +
+            "<td style='color:${black}'>${devType ?: "n/a"}</td>" +
+            "<td style='color:${black}'>${dev.getLastActivity() ?: "n/a"}</td>" // +
 	}
 	str += "</table></div>"
 	str
