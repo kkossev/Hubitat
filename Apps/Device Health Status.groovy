@@ -44,14 +44,16 @@ preferences {
 def mainPage() {
 	if(state.devices == null) state.devices = [:]
 	if(state.devicesList == null) state.devicesList = []
+	if(app.getInstallationState() == "COMPLETE") {hideDevices=true} else {hideDevices=false}
+
 	dynamicPage(name: "mainPage", title: "Device Health Status Control Table", uninstall: true, install: true) {
-		section {
-            input name: "filterHealthCheckOnly", type: "bool", title: "Filter only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
+		section("Device Selection", hideable: true,hidden: hideDevices) {
+			input name: "filterHealthCheckOnly", type: "bool", title: "Filter only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
 			input name:"devices", type: filterHealthCheckOnly ? "capability.healthCheck" : "capability.*", title: "Select devices w/ <b>Health Status</b> attribute", multiple: true, submitOnChange: true, width: 4
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
 					state.devices["$dev.id"] = [
-                        healthStatus: dev.currentValue("healthStatus"), 
+						healthStatus: dev.currentValue("healthStatus"), 
                     ]
 					state.devicesList += dev.id
 				}
@@ -63,9 +65,17 @@ def mainPage() {
 					devices.each{d ->  newState["$d.id"] = state.devices["$d.id"]}
 					state.devices = newState
 				}
+			}
+		}
+		if(hideDevices) {
+			section {
 				updated()
 				paragraph displayTable()
 				input "refresh", "button", title: "Refresh Table", width: 2
+			}
+		} else {
+			section("CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES") {
+				paragraph ""
 			}
 		}
 	}
