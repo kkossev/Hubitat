@@ -15,15 +15,15 @@
  *  Based on "Light Usage Table" Hubitat sample code by Bruce Ravenel
  *
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
- *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery
+ *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name;
  *
- *                                  TODO : 
+ *                                  TODO :
  */
 
 import groovy.transform.Field
 
 def version() { "1.0.1" }
-def timeStamp() {"2023/02/03 11:37 AM"}
+def timeStamp() {"2023/02/03 11:53 AM"}
 
 @Field static final Boolean debug = true
 
@@ -79,17 +79,25 @@ String displayTable() {
     		"<th>healthStatus</th>"  +
     		"<th>powerSource</th>"  +
     		"<th>battery</th>"  +
+    		"<th>model</th>"  +
+    		"<th>manufacturer</th>"  +
+    		"<th>driver</th>"  +
         "</tr></thead>"
     
 	devices.sort{it.displayName.toLowerCase()}.each {dev ->
 		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
         def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
         def healthStatus = dev.currentHealthStatus ?: "n/a"
+        def devData = dev.getData()              // [model:TS0601, application:44, manufacturer:_TZE200_ikvncluo]
+        def devType = dev.getTypeName()
             
 		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
 			"<td style='color:${healthColor}'>$healthStatus</td>" +
             "<td style='color:${black}'>${dev.currentpowerSource ?: "n/a"}</td>" +
-            "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" // +
+            "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
+            "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
+            "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
+            "<td style='color:${black}'>${devType ?: "n/a"}</td>" // +
 	}
 	str += "</table></div>"
 	str
