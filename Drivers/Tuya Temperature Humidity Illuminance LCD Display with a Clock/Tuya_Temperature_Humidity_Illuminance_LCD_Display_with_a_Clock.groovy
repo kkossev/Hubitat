@@ -28,14 +28,15 @@
  * ver. 1.1.1  2023-01-14 kkossev - added _TZ3000_ywagc4rj TS0201_TH; bug fix: negative temperatures not calculated correctly;
  * ver. 1.2.0  2023-01-15 kkossev - parsing multiple DP received in one command;
  * ver. 1.2.1  2023-01-15 kkossev - _TZE200_locansqn fixes;_TZ3000_bguser20 correct model;
+ * ver. 1.3.0  2023-02-02 kkossev - healthStatus; added capability 'Health Check'
  * 
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.2.1" }
-def timeStamp() {"2023/01/15 5:43 PM"}
+def version() { "1.3.0" }
+def timeStamp() {"2023/02/02 10:56 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -57,6 +58,7 @@ metadata {
         capability "IlluminanceMeasurement"
         //capability "ContactSensor"   // uncomment for _TZE200_pay2byax contact w/ illuminance sensor
         //capability "MotionSensor"    // uncomment for SiHAS multi sensor
+        capability "Health Check"
 
         if (debug == true) {        
             command "zTest", [
@@ -70,7 +72,7 @@ metadata {
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
         attribute   "_info", "string"        // when defined as attributes, will be shown on top of the 'Current States' list ...
-        
+        attribute "healthStatus", "enum", ["offline", "online"]
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock"
@@ -219,6 +221,7 @@ def isConfigurable()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
+@Field static final Integer presenceCountTreshold = 4
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -1158,6 +1161,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.maxReportingTimeTemp == null) device.updateSetting("maxReportingTimeTemp",  [value:3600, type:"number"])
     if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity",  [value:10, type:"number"])
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"number"])
+    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     //
     if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
     //if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
@@ -1270,6 +1274,51 @@ private Map getBatteryResult(rawValue) {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
     }
 }
+
+// called when any event was received from the Zigbee device in parse() method..
+def setPresent() {
+    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
+        sendHealthStatusEvent("online")
+        powerSourceEvent() // sent ony once now - 2023-01-31
+        if (settings?.txtEnable) log.info "${device.displayName} is present"
+        if (!isRadar()) {
+            if (device.currentValue('battery', true) == 0 ) {
+                if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
+                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
+                }
+            }
+        }
+    }    
+    state.notPresentCounter = 0    
+}
+
+def deviceHealthCheck() {
+    state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
+    if (state.notPresentCounter > presenceCountTreshold) {
+        if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
+            sendHealthStatusEvent("offline")
+            if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
+ 	        powerSourceEvent("unknown")
+            if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
+                handleMotion(false, isDigital=true)
+                if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
+            }
+            if (safeToInt(device.currentValue('battery', true)) != 0) {
+                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
+                sendBatteryEvent( 0, isDigital=true )
+            }
+        }
+    }
+    else {
+        if (logEnable) log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
+    }
+    
+}
+
+def sendHealthStatusEvent(value) {
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+}
+
 
 String mapToJsonString( Map map) {
     if (map==null || map==[:]) return ""
