@@ -15,7 +15,7 @@
  *  Based on "Light Usage Table" Hubitat sample code by Bruce Ravenel
  *
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
- *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name;
+ *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; temporary removed the 'capability.healthCheck' filter;
  *
  *                                  TODO :
  */
@@ -23,7 +23,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.1" }
-def timeStamp() {"2023/02/03 11:53 AM"}
+def timeStamp() {"2023/02/03 3:08 PM"}
 
 @Field static final Boolean debug = true
 
@@ -46,7 +46,7 @@ def mainPage() {
 	if(state.devicesList == null) state.devicesList = []
 	dynamicPage(name: "mainPage", title: "Device Health Status Control Table", uninstall: true, install: true) {
 		section {
-			input "devices", "capability.healthCheck", title: "Select devices w/ <b>Health Status</b> attribute", multiple: true, submitOnChange: true, width: 4
+			input "devices", "capability.*", title: "Select devices w/ <b>Health Status</b> attribute", multiple: true, submitOnChange: true, width: 4
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
 					state.devices["$dev.id"] = [
