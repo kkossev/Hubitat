@@ -17,7 +17,7 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
- *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type; added an option to filter battery-powered only devices;
+ *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type; added an option to filter battery-powered only devices, hide poweSource column;
  *
  *          TODO :Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
@@ -29,7 +29,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/04 9:18 PM"}
+def timeStamp() {"2023/02/04 10:15 PM"}
 
 @Field static final Boolean debug = true
 
@@ -104,8 +104,11 @@ def mainPage() {
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
                 paragraph "<b>Device selection</b> options:"
     			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
-                paragraph "<b>Table</b> display options:"
-    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide the <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
+                paragraph "<b>Table</b> display options: rows filtering"
+    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
+    			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
+                paragraph "<b>Table</b> display options: columns filtering"
+    			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
        		}            
 		} else {
 			section("CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES") {
@@ -123,7 +126,7 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'>Device</th>" +
     		"<th>healthStatus</th>"  +
     		"<th>battery</th>"  +
-    		"<th>powerSource</th>"  +
+             (settings?.hidePowerSourceColumn != true ? "<th>powerSource</th>" : "") +  
     		"<th>model</th>"  +
     		"<th>manufacturer</th>"  +
     		"<th>type</th>"  +
@@ -136,6 +139,9 @@ String displayTable() {
         if (settings?.hideNotBatteryDevices == true && state.devices["$dev.id"].hasBattery == false) {
             //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
         }
+        else if (settings?.hideNoHealthStatusAttributeDevices == true && state.devices["$dev.id"].healthStatus == null) {
+            //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
+        }
         else {
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
@@ -144,7 +150,7 @@ String displayTable() {
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
-                "<td style='color:${black}'>${dev.currentpowerSource ?: "n/a"}</td>" +
+                (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentpowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
