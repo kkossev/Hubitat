@@ -34,14 +34,14 @@
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
- * ver. 2.6.1 2023-02-02 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'
+ * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code;
  *
  *                                   - TODO: add Advanced options; TODO: debounce timer configuration;
  *
  */
 
 def version() { "2.6.1" }
-def timeStamp() {"2023/02/02 10:30 PM"}
+def timeStamp() {"2023/02/04 12:12 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -60,6 +60,7 @@ metadata {
     capability "HoldableButton"
    	capability "ReleasableButton"
     capability "Battery"
+    capability "PowerSource"
     capability "Configuration"
     capability "Health Check"
 
@@ -67,6 +68,7 @@ metadata {
     attribute "switchMode", "enum", ["dimmer", "scene"]
     attribute "batteryVoltage", "number"
     attribute "healthStatus", "enum", ["offline", "online"]
+    attribute "powerSource", "enum", ["battery", "dc", "mains", "unknown"]
         
     if (debug == true) {
         command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["dimmer", "scene"], description: "Select device mode"]]
@@ -472,6 +474,8 @@ def initialize() {
     sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
     sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
     if(device.currentValue('healthStatus') == null) setHealthStatusValue('unknown')
+    if(device.currentValue('powerSource') == null) sendEvent(name: "powerSource", value: "battery", isStateChange: true)
+    
     state.lastButtonNumber = 0
     scheduleDeviceHealthCheck()
 }
@@ -588,6 +592,11 @@ def setHealthStatusOnline() {
 def setHealthStatusValue(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
+
+def ping() {
+    if (logEnable) log.debug "ping() is not implemented"
+}
+
 
 def test(String description) {
     log.warn "test: ${description}"
