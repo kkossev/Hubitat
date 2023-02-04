@@ -17,7 +17,7 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
- *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column;
+ *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column;
  *
  *          TODO : * Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
@@ -29,7 +29,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/04 10:48 PM"}
+def timeStamp() {"2023/02/05 12:15 AM"}
 
 @Field static final Boolean debug = true
 
@@ -66,11 +66,11 @@ def mainPage() {
                 else {
                     //logDebug "Device Selection : existing device ${state.devices["$dev.id"]}" 
                 }
-                def devData = dev.getData()              // [model:TS0601, application:44, manufacturer:_TZE200_ikvncluo]
-                def devType = dev.getTypeName()
                 def hasBattery = dev.capabilities.find { it.toString().contains('Battery') }  ? true : false
+                def hasPowerSource = dev.capabilities.find { it.toString().contains('PowerSource') }  ? true : false
         		state.devices["$dev.id"] = [
 		    		healthStatus: dev.currentValue("healthStatus"), 
+		    		hasPowerSource: hasPowerSource,
                     hasBattery: hasBattery
                 ]
 			    state.devicesList += dev.id
@@ -152,12 +152,11 @@ String displayTable() {
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
-                
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
                 (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${dev.lastActivity ?: "n/a"}</td>"  : "") +  
-                (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentpowerSource ?: "n/a"}</td>"  : "") +  
+                (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
