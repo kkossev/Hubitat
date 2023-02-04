@@ -17,19 +17,19 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
+ *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options;
  *
  *          TODO :Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
  *                    Black if time is less than 25 hours
  *                    Red if time is greater than 25 hours
  *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
- *                Add Info/Debig options
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.2" }
-def timeStamp() {"2023/02/03 9:15 PM"}
+def version() { "1.0.4" }
+def timeStamp() {"2023/02/04 6:44 PM"}
 
 @Field static final Boolean debug = true
 
@@ -38,9 +38,12 @@ definition(
 	namespace: "kkossev",
 	author: "Krassimir Kossev",
 	description: "Device Health Status",
-	category: "Convenience",
+	category: "Utility",
 	iconUrl: "",
-	iconX2Url: ""
+	iconX2Url: "",
+	importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Device%20Health%20Status.groovy",
+    documentationLink: "https://community.hubitat.com/t/alpha-device-health-status/111817/1"
+    
 )
 
 preferences {
@@ -52,9 +55,13 @@ def mainPage() {
 	if(state.devicesList == null) state.devicesList = []
 	if(app.getInstallationState() == "COMPLETE") {hideDevices=true} else {hideDevices=false}
 
-	dynamicPage(name: "mainPage", title: "Device Health Status Control Table", uninstall: true, install: true) {
-		section("Device Selection", hideable: true,hidden: hideDevices) {
-			input name: "filterHealthCheckOnly", type: "bool", title: "Filter only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
+    dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> ver. ${driverVersionAndTimeStamp()}", uninstall: true, install: true) {
+ 		section("Options", hideable: true, hidden: hideDevices) {
+   			input("logEnable", "bool", title: "Debug logging.", defaultValue: false, required: false)
+   			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
+			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
+   		}            
+		section("Device Selection", hideable: true, hidden: hideDevices) {
 			input name:"devices", type: filterHealthCheckOnly ? "capability.healthCheck" : "capability.*", title: "Select devices w/ <b>Health Status</b> attribute", multiple: true, submitOnChange: true, width: 4
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
@@ -72,7 +79,8 @@ def mainPage() {
 					state.devices = newState
 				}
 			}
-		}
+		} // section "Device Selection"
+        
 		if(hideDevices) {
 			section {
 				updated()
@@ -133,23 +141,38 @@ void appButtonHandler(btn) {
 	} 
 }
 
+private void updateTableOnEvent() {
+    logDebug "updateTableOnEvent"
+}
+
+void healthStatusOnlineHandler(evt) {
+    logDebug "healthStatusOnlineHandler evt.name=${evt.name} evt.value=${evt.value}"
+    runIn(1, 'updateTableOnEvent'/*,  [overwrite: true, data: evt]*/)
+}
+
+void healthStatusOfflineHandler(evt) {
+    logDebug "healthStatusOfflineHandler evt.name=${evt.name} evt.value=${evt.value}"
+    runIn(1, 'updateTableOnEvent'/*,  [overwrite: true, data: evt]*/)
+}
+
+def driverVersionAndTimeStamp() {version()+' '+timeStamp().split(" ")[0]}
+
+def logDebug(msg) { if (logEnable) log.debug(msg) }
+def logInfo(msg)  { if (txtEnable) log.info(msg) }
+
 def updated() {
+    logDebug "updated()"
 	unsubscribe()
 	initialize()
 }
 
 def installed() {
+    logInfo "installed()"
 }
 
 void initialize() {
+    logDebug "initialize()"
 	subscribe(devices, "healthStatus.online", healthStatusOnlineHandler)
 	subscribe(devices, "healthStatus.offline", healthStatusOfflineHandler)
 }
 
-void healthStatusOnlineHandler(evt) {
-    log.debug "healthStatusOnlineHandler evt=${evt}"
-}
-
-void healthStatusOfflineHandler(evt) {
-    log.debug "healthStatusOfflineHandler evt=${evt}"
-}
