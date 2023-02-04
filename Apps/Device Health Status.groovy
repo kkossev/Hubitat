@@ -17,9 +17,9 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
- *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type; added an option to filter battery-powered only devices, hide poweSource column;
+ *  ver. 1.0.3 2023-02-04 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column;
  *
- *          TODO :Add the "Last Activity At" devices property in the table
+ *          TODO : * Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
  *                    Black if time is less than 25 hours
  *                    Red if time is greater than 25 hours
@@ -29,7 +29,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/04 10:15 PM"}
+def timeStamp() {"2023/02/04 10:48 PM"}
 
 @Field static final Boolean debug = true
 
@@ -102,13 +102,17 @@ def mainPage() {
      		section("Options", hideable: true, hidden: hideDevices) {
        			input("logEnable", "bool", title: "Debug logging.", defaultValue: false, required: false)
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
+                paragraph "==="
                 paragraph "<b>Device selection</b> options:"
     			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
-                paragraph "<b>Table</b> display options: rows filtering"
+                paragraph "==="
+                paragraph "Table display options: <b>rows filtering</b> :"
     			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
     			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
-                paragraph "<b>Table</b> display options: columns filtering"
+                paragraph "==="
+                paragraph "Table display options: <b>columns filtering</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
+    			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
        		}            
 		} else {
 			section("CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES") {
@@ -123,14 +127,16 @@ String displayTable() {
 	str += "<style>.mdl-data-table tbody tr:hover{background-color:inherit} .tstat-col td,.tstat-col th { padding:8px 8px;text-align:center;font-size:12px} .tstat-col td {font-size:15px }" +
 		"</style><div style='overflow-x:auto'><table class='mdl-data-table tstat-col' style=';border:2px solid black'>" +
         
-		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'>Device</th>" +
-    		"<th>healthStatus</th>"  +
-    		"<th>battery</th>"  +
-             (settings?.hidePowerSourceColumn != true ? "<th>powerSource</th>" : "") +  
-    		"<th>model</th>"  +
-    		"<th>manufacturer</th>"  +
-    		"<th>type</th>"  +
-    		"<th>driver</th>"  +
+		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
+    		"<th><div>Health</div><div>Status</div></th>"  +
+    		"<th><div>Battery</div><div>%</div></th>"  +
+             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
+             (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
+    		"<th><div>Device</div><div>Model</div></th>"  +
+    		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
+    		"<th><div>Device</div><div>Type</div></th>"  +
+    		"<th><div>Driver</div><div>Name</div></th>"  +
+    		"<th><div>Driver</div><div>Type</div></th>"  +
         "</tr></thead>"
     
 	devices.sort{it.displayName.toLowerCase()}.each {dev ->
@@ -150,11 +156,13 @@ String displayTable() {
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
+                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${dev.lastActivity ?: "n/a"}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentpowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
-                "<td style='color:${black}'>${devType ?: "n/a"}</td>" // +
+                "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
+                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" // +
         }
 	} // for each device
 	str += "</table></div>"
