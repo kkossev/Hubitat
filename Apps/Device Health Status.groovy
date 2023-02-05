@@ -17,7 +17,7 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
- *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column;
+ *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *
  *          TODO : * Add the "Last Activity At" devices property in the table
  *                    Green if time less than 8 hours
@@ -29,7 +29,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/05 12:15 AM"}
+def timeStamp() {"2023/02/05 9:03 AM"}
 
 @Field static final Boolean debug = true
 
@@ -57,7 +57,7 @@ def mainPage() {
 
     dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> ver. ${driverVersionAndTimeStamp()}", uninstall: true, install: true) {
 		section("Device Selection", hideable: true, hidden: hideDevices) {
-			input name:"devices", type: filterHealthCheckOnly ? "capability.healthCheck" : "capability.*", title: "Select devices w/ <b>Health Status</b> attribute", multiple: true, submitOnChange: true, width: 4
+			input name:"devices", type: "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
             logDebug "Device Selection : start"
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
@@ -102,14 +102,14 @@ def mainPage() {
      		section("Options", hideable: true, hidden: hideDevices) {
        			input("logEnable", "bool", title: "Debug logging.", defaultValue: false, required: false)
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
-                paragraph "==="
+                paragraph ""
                 paragraph "<b>Device selection</b> options:"
     			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
-                paragraph "==="
+                paragraph ""
                 paragraph "Table display options: <b>rows filtering</b> :"
     			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
     			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
-                paragraph "==="
+                paragraph ""
                 paragraph "Table display options: <b>columns filtering</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
     			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
@@ -130,7 +130,7 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
+             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time, UTC?</div></th>" : "") +  
              (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
     		"<th><div>Device</div><div>Model</div></th>"  +
     		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
@@ -152,10 +152,12 @@ String displayTable() {
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
+            def lastActivity = (dev.lastActivity ?: "n/a").toString()
+            lastActivity = lastActivity.tokenize( '+' )[0]
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
-                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${dev.lastActivity ?: "n/a"}</td>"  : "") +  
+                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${lastActivity}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
