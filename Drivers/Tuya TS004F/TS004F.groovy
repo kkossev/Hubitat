@@ -34,14 +34,14 @@
  * ver. 2.5.1 2023-01-20 kkossev     - battery percentage remaining HomeKit compatibility
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
- * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code;
+ * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  *
- *                                   - TODO: add Advanced options; TODO: debounce timer configuration;
+ *                                   - TODO: add Advanced options; TODO: debounce timer configuration; add 'auto revert to scene mode' option
  *
  */
 
 def version() { "2.6.1" }
-def timeStamp() {"2023/02/04 12:12 AM"}
+def timeStamp() {"2023/02/05 8:08 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -114,6 +114,7 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_rrjr1q0u", deviceJoinName: "Tuya 3 button Scene Switch"    // not tested
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_w4thianr", deviceJoinName: "Tuya 3 button Scene Switch"    // not tested
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_a7ouggvs", deviceJoinName: "Zigbee Lonsonho 3 Button"      // not tested
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0043", manufacturer:"_TZ3000_famkxci2", deviceJoinName: "Loratap 3 Button rRemote"      // https://community.hubitat.com/t/zigbee-3-switch-remote-driver/111935/3?u=kkossev
 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_vp6clf9d", deviceJoinName: "Zemismart Wireless Scene Switch"          
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_vp6clf9d", model: "TS0044", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
