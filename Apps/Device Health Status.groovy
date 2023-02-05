@@ -29,7 +29,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/05 9:03 AM"}
+def timeStamp() {"2023/02/05 9:35 AM"}
 
 @Field static final Boolean debug = true
 
@@ -130,7 +130,7 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time, UTC?</div></th>" : "") +  
+             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
              (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
     		"<th><div>Device</div><div>Model</div></th>"  +
     		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
@@ -152,8 +152,13 @@ String displayTable() {
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
-            def lastActivity = (dev.lastActivity ?: "n/a").toString()
-            lastActivity = lastActivity.tokenize( '+' )[0]
+            def readableUTCDate = (dev.lastActivity ?: "n/a").toString().tokenize( '+' )[0]
+            def lastActivity = "n/a"
+            if (readableUTCDate != "n/a") {
+                Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
+                lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
+            }
+            //lastActivity = lastActivity.tokenize( '+' )[0]
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
