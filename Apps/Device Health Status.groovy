@@ -18,20 +18,18 @@
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
+ *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option;
  *
  *          TODO : * Add the "Last Activity At" devices property in the table
- *                    Green if time less than 8 hours
- *                    Black if time is less than 25 hours
- *                    Red if time is greater than 25 hours
  *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
  */
 
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/05 9:35 AM"}
+def timeStamp() {"2023/02/05 11:23 AM"}
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 
 definition(
 	name: "Device Health Status",
@@ -113,6 +111,11 @@ def mainPage() {
                 paragraph "Table display options: <b>columns filtering</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
     			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
+                paragraph ""
+                paragraph "Thresholds :"
+    			input name: "lastActivityGreen", type: "number", title: "Devices w/ lastActivity less than N hours will be shown in green", submitOnChange: true, defaultValue: 9
+    			input name: "lastActivityRed", type: "number", title: "Devices w/ lastActivity more than N hours will be shown in red", submitOnChange: true, defaultValue: 25
+    			input name: "batteryLowThreshold", type: "number", title: "Devices w/ Battery percentage below N % will be shown in red", submitOnChange: true, defaultValue: 33
        		}            
 		} else {
 			section("CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES") {
@@ -154,15 +157,41 @@ String displayTable() {
             def healthStatus = dev.currentHealthStatus ?: "n/a"
             def readableUTCDate = (dev.lastActivity ?: "n/a").toString().tokenize( '+' )[0]
             def lastActivity = "n/a"
+            def lastActivityColor = "black"
+            def batteryPercentageColor = "black"
             if (readableUTCDate != "n/a") {
                 Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
                 lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
+                def now = new Date()
+                long diff = now.getTime() - date.getTime()
+                long diffHours = diff / (60 * 60 * 1000)
+                if (diffHours < settings?.lastActivityGreen && healthStatus != "offline") {
+                    lastActivityColor = "green"
+                }
+                else if (diffHours >= settings?.lastActivityRed) {
+                    lastActivityColor = "red"
+                } else 
+                {
+                    lastActivityColor = "black"
+                }
             }
-            //lastActivity = lastActivity.tokenize( '+' )[0]
+            if (dev.currentBattery == null && dev.currentPowerSource == "battery") {
+                batteryPercentageColor = "red"
+            }
+            else if (healthStatus == "online" && lastActivityColor != "red" && dev.currentPowerSource == "battery" && (dev.currentBattery as int) >= settings?.batteryLowThreshold) {
+                batteryPercentageColor = "green"
+            }
+            else if (healthStatus == "online" && lastActivityColor == "green" && dev.currentPowerSource == "battery" && (dev.currentBattery as int) < settings?.batteryLowThreshold) {
+                batteryPercentageColor = "red"
+            }
+            else {
+                batteryPercentageColor = "black"    // not sure if the battery percentage remaining is accurate ...
+            }
+            //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
-                "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
-                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${lastActivity}</td>"  : "") +  
+                "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: "n/a"}</td>" +
+                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
