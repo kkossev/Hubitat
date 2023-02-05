@@ -18,7 +18,7 @@
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
- *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list;
+ *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
  *
  *          TODO : * Add the "Last Activity At" devices property in the table
  *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
@@ -26,8 +26,8 @@
 
 import groovy.transform.Field
 
-def version() { "1.0.4" }
-def timeStamp() {"2023/02/05 2:58 PM"}
+def version() { "1.0.3" }
+def timeStamp() {"2023/02/05 4:10 PM"}
 
 @Field static final Boolean debug = false
 
@@ -152,6 +152,7 @@ String displayTable() {
     		"<th><div>Device</div><div>Type</div></th>"  +
     		"<th><div>Driver</div><div>Name</div></th>"  +
     		"<th><div>Driver</div><div>Type</div></th>"  +
+    		"<th><div>Device</div><div>Status</div></th>"  +
         "</tr></thead>"
     
         
@@ -219,7 +220,8 @@ String displayTable() {
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
-                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" // +
+                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" +
+                "<td style='color:${black}'>${dev.status ?: "n/a"}</td>" //+
         }
 	} // for each device
 	str += "</table></div>"
