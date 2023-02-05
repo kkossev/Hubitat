@@ -18,20 +18,18 @@
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
+ *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
  *
  *          TODO : * Add the "Last Activity At" devices property in the table
- *                    Green if time less than 8 hours
- *                    Black if time is less than 25 hours
- *                    Red if time is greater than 25 hours
  *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.4" }
-def timeStamp() {"2023/02/05 9:03 AM"}
+def version() { "1.0.3" }
+def timeStamp() {"2023/02/05 4:10 PM"}
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 
 definition(
 	name: "Device Health Status",
@@ -66,15 +64,27 @@ def mainPage() {
                 else {
                     //logDebug "Device Selection : existing device ${state.devices["$dev.id"]}" 
                 }
-                def hasBattery = dev.capabilities.find { it.toString().contains('Battery') }  ? true : false
-                def hasPowerSource = dev.capabilities.find { it.toString().contains('PowerSource') }  ? true : false
-        		state.devices["$dev.id"] = [
-		    		healthStatus: dev.currentValue("healthStatus"), 
-		    		hasPowerSource: hasPowerSource,
-                    hasBattery: hasBattery
-                ]
-			    state.devicesList += dev.id
+                try {
+                if (dev != null && dev?.status != null) {
+                    //log.trace 'status = ${dev.status} (device ${state.devices["$dev.id"]})'
+                    def hasBattery = dev.capabilities.find { it.toString().contains('Battery') }  ? true : false
+                    def hasPowerSource = dev.capabilities.find { it.toString().contains('PowerSource') }  ? true : false
+            		state.devices["$dev.id"] = [
+    		    		healthStatus: dev.currentValue("healthStatus"), 
+    		    		hasPowerSource: hasPowerSource,
+                        hasBattery: hasBattery
+                    ]
+    			    state.devicesList += dev.id
+                }
+                else {
+                    logWarn "dev is null?  state.devices[dev.id] is ${state.devices["$dev.id"]}"
+                }
+                }
+                catch (e) {
+                    logWarn "exception catched when procesing device ${dev.id}"
+                }
             }
+            
 			if(devices) {
 				if(devices.id.sort() != state.devicesList.sort()) { //something was removed
                     logDebug "Device Selection : something was changed" 
@@ -113,6 +123,11 @@ def mainPage() {
                 paragraph "Table display options: <b>columns filtering</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
     			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
+                paragraph ""
+                paragraph "Thresholds :"
+    			input name: "lastActivityGreen", type: "number", title: "Devices w/ lastActivity less than N hours will be shown in green", submitOnChange: true, defaultValue: 9
+    			input name: "lastActivityRed", type: "number", title: "Devices w/ lastActivity more than N hours will be shown in red", submitOnChange: true, defaultValue: 25
+    			input name: "batteryLowThreshold", type: "number", title: "Devices w/ Battery percentage below N % will be shown in red", submitOnChange: true, defaultValue: 33
        		}            
 		} else {
 			section("CLICK DONE TO INSTALL APP AFTER SELECTING DEVICES") {
@@ -130,16 +145,27 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time, UTC?</div></th>" : "") +  
+             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
              (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
     		"<th><div>Device</div><div>Model</div></th>"  +
     		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
     		"<th><div>Device</div><div>Type</div></th>"  +
     		"<th><div>Driver</div><div>Name</div></th>"  +
     		"<th><div>Driver</div><div>Type</div></th>"  +
+    		"<th><div>Device</div><div>Status</div></th>"  +
         "</tr></thead>"
     
-	devices.sort{it.displayName.toLowerCase()}.each {dev ->
+        
+    def devicesSorted = devices
+    try {
+        devices.sort{it?.displayName.toLowerCase()}
+    }
+    catch (e) {
+        logWarn "catched exception while sorting devices : ${e} "
+        return "INTERNAL ERROR, please send the debug logs to the developer"
+    }
+    devices = devicesSorted
+	devices.sort{it?.displayName.toLowerCase()}.each {dev ->
         def devData = dev.getData()
         def devType = dev.getTypeName()
         if (settings?.hideNotBatteryDevices == true && state.devices["$dev.id"].hasBattery == false) {
@@ -152,18 +178,50 @@ String displayTable() {
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
-            def lastActivity = (dev.lastActivity ?: "n/a").toString()
-            lastActivity = lastActivity.tokenize( '+' )[0]
+            def readableUTCDate = (dev.lastActivity ?: "n/a").toString().tokenize( '+' )[0]
+            def lastActivity = "n/a"
+            def lastActivityColor = "black"
+            def batteryPercentageColor = "black"
+            if (readableUTCDate != "n/a") {
+                Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
+                lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
+                def now = new Date()
+                long diff = now.getTime() - date.getTime()
+                long diffHours = diff / (60 * 60 * 1000)
+                if (diffHours < settings?.lastActivityGreen && healthStatus != "offline") {
+                    lastActivityColor = "green"
+                }
+                else if (diffHours >= settings?.lastActivityRed) {
+                    lastActivityColor = "red"
+                } else 
+                {
+                    lastActivityColor = "black"
+                }
+            }
+            if (dev.currentBattery == null && dev.currentPowerSource == "battery") {
+                batteryPercentageColor = "red"
+            }
+            else if (healthStatus == "online" && lastActivityColor != "red" && dev.currentPowerSource == "battery" && (dev.currentBattery as int) >= settings?.batteryLowThreshold) {
+                batteryPercentageColor = "green"
+            }
+            else if (healthStatus == "online" && lastActivityColor == "green" && dev.currentPowerSource == "battery" && (dev.currentBattery as int) < settings?.batteryLowThreshold) {
+                batteryPercentageColor = "red"
+            }
+            else {
+                batteryPercentageColor = "black"    // not sure if the battery percentage remaining is accurate ...
+            }
+            //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
     		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
-                "<td style='color:${black}'>${dev.currentBattery ?: "n/a"}</td>" +
-                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${black}'>${lastActivity}</td>"  : "") +  
+                "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: "n/a"}</td>" +
+                (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
-                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" // +
+                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" +
+                "<td style='color:${black}'>${dev.status ?: "n/a"}</td>" //+
         }
 	} // for each device
 	str += "</table></div>"
@@ -175,12 +233,26 @@ String buttonLink(String btnName, String linkText, color = "#1A77C9", font = "15
 }
 
 void appButtonHandler(btn) {
-    if(btn == "refresh") state.devices.each{k, v ->
-		def dev = devices.find{"$it.id" == k}
-		if(dev.currentHealthStatus == "online") {
-			//state.devices[k].refreshTime = now()
-		}
-	} 
+    logDebug "appButtonHandler(${btn} start)"
+    List toBeDel = []
+    if(btn == "refresh") state.devices.each {k, v ->
+        try {
+    		def dev = devices.find{"$it.id" == k}
+            //logDebug "checking state.devices[${k}]"
+            if(dev.currentStatus ?: "unknown" == "ACTIVE") {
+    		    //state.devices[k].refreshTime = now()
+    	    }
+        }
+        catch (e) {
+            logWarn "catched exception in appButtonHandler : ${e} "
+            logWarn "problematic device has key=${k}"
+            toBeDel += k
+        }
+    }
+    toBeDel.each { k ->
+        logDebug "TODO: delete ${toBeDel} from state.devices list .."
+    }
+    logDebug "appButtonHandler(${btn} exited)"
 }
 
 private void updateTableOnEvent() {
@@ -215,7 +287,12 @@ def installed() {
 
 void initialize() {
     logDebug "initialize()"
-	subscribe(devices, "healthStatus.online", healthStatusOnlineHandler)
-	subscribe(devices, "healthStatus.offline", healthStatusOfflineHandler)
+    try {
+    	subscribe(devices, "healthStatus.online", healthStatusOnlineHandler)
+    	subscribe(devices, "healthStatus.offline", healthStatusOfflineHandler)
+    }
+    catch (e) {
+        logWarn "catched exception while processing initialize() : ${e} "
+    }
 }
 
