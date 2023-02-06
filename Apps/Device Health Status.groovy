@@ -19,14 +19,15 @@
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
- *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed;
+ *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
  *
+ *                                  TODO: 
  */
 
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 1:05 PM"}
+def timeStamp() {"2023/02/06 10:20 PM"}
 
 @Field static final Boolean debug = false
 
@@ -119,8 +120,9 @@ def mainPage() {
                 paragraph ""
                 paragraph "Table filtering options: <b>columns</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
-    			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
+    			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: true
     			input name: "hideModelAndManufacturerColumns", type: "bool", title: "Hide Model and Manufacturer columns", submitOnChange: true, defaultValue: false
+    			input name: "hidePresenceColumn", type: "bool", title: "Hide Presence column (the one that we are trying to depricate)", submitOnChange: true, defaultValue: false
                 paragraph ""
                 paragraph "Table filtering options: <b>rows</b> :"
     			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
@@ -148,8 +150,9 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-            (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
-    		"<th><div>Device</div><div>Status</div></th>"  +
+            (settings?.hideLastActivityAtColumn != true ? "<th><div>Last</div><div>Activity</div></th>" : "") +  
+    		"<th><div>HE</div><div>Status</div></th>"  +
+            (settings?.hidePresenceColumn != true ? "<th><div>Presence</div><div>Attr.</div></th>" : "") +  
             (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
     		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Model</div></th>" : "")  +
     		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Manufacturer</div></th>" : "") + 
@@ -189,6 +192,7 @@ String displayTable() {
             def lastActivityColor = "black"
             def batteryPercentageColor = "black"
             def statusColor = (dev.status ?: "n/a") == "INACTIVE" ? "red" : (dev.status ?: "n/a") == "ACTIVE" ? "green" : "black"
+            def presenceColor = (dev.currentPresence ?: "n/a") == "not present" ? "red" : (dev.currentPresence ?: "n/a") == "present" ? "green" : "black"
             if (readableUTCDate != "n/a") {
                 Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
                 lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
@@ -223,6 +227,7 @@ String displayTable() {
                 "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: "n/a"}</td>" +
                 (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
                 "<td style='color:${statusColor}'>${dev.status ?: "n/a"}</td>" +
+                (settings?.hidePresenceColumn != true ? "<td style='color:${presenceColor}'>${dev.currentPresence ?: "n/a"}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
                 (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.model ?: "n/a"}</td>"  : "") +  
                 (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>"  : "") +  
