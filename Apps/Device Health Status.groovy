@@ -19,14 +19,14 @@
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
- *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; 
+ *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed;
  *
  */
 
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 11:29 AM"}
+def timeStamp() {"2023/02/06 12:40 PM"}
 
 @Field static final Boolean debug = false
 
@@ -109,6 +109,8 @@ def mainPage() {
 				input "refresh", "button", title: "Refresh Table", width: 2
 			}
      		section("Options", hideable: true, hidden: hideDevices) {
+                label title:"Change this <b>Device Health Status</b> app instance name:", submitOnChange: true, required:false
+                paragraph ""
        			input("logEnable", "bool", title: "Debug logging.", defaultValue: false, required: false)
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
                 paragraph ""
