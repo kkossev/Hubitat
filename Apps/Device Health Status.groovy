@@ -27,7 +27,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 10:20 PM"}
+def timeStamp() {"2023/02/06 11:39 PM"}
 
 @Field static final Boolean debug = false
 
@@ -120,9 +120,9 @@ def mainPage() {
                 paragraph ""
                 paragraph "Table filtering options: <b>columns</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
-    			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: true
+    			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
     			input name: "hideModelAndManufacturerColumns", type: "bool", title: "Hide Model and Manufacturer columns", submitOnChange: true, defaultValue: false
-    			input name: "hidePresenceColumn", type: "bool", title: "Hide Presence column (the one that we are trying to depricate)", submitOnChange: true, defaultValue: false
+    			input name: "hidePresenceColumn", type: "bool", title: "Hide Presence column (the one that we are trying to depricate)", submitOnChange: true, defaultValue: true
                 paragraph ""
                 paragraph "Table filtering options: <b>rows</b> :"
     			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
