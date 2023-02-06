@@ -19,14 +19,14 @@
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
- *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; 
+ *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; 
  *
  */
 
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 10:16 AM"}
+def timeStamp() {"2023/02/06 11:29 AM"}
 
 @Field static final Boolean debug = false
 
@@ -115,15 +115,17 @@ def mainPage() {
                 paragraph "<b>Device selection</b> options:"
     			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
                 paragraph ""
-                paragraph "Table display options: <b>rows filtering</b> :"
-    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
-    			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
-                paragraph ""
-                paragraph "Table display options: <b>columns filtering</b> :"
+                paragraph "Table filtering options: <b>columns</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
     			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
+    			input name: "hideModelAndManufacturerColumns", type: "bool", title: "Hide Model and Manufacturer columns", submitOnChange: true, defaultValue: false
                 paragraph ""
-                paragraph "Thresholds :"
+                paragraph "Table filtering options: <b>rows</b> :"
+    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
+    			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
+    			input name: "hideVirtualAndUnknownDevices", type: "bool", title: "Hide virtual/unknown type devices", submitOnChange: true, defaultValue: false
+                paragraph ""
+                paragraph "<b>Thresholds</b> :"
     			input name: "lastActivityGreen", type: "number", title: "Devices w/ lastActivity less than N hours will be shown in green", submitOnChange: true, defaultValue: 9
     			input name: "lastActivityRed", type: "number", title: "Devices w/ lastActivity more than N hours will be shown in red", submitOnChange: true, defaultValue: 25
     			input name: "batteryLowThreshold", type: "number", title: "Devices w/ Battery percentage below N % will be shown in red", submitOnChange: true, defaultValue: 33
@@ -144,11 +146,11 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
+            (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
     		"<th><div>Device</div><div>Status</div></th>"  +
-             (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
-    		"<th><div>Device</div><div>Model</div></th>"  +
-    		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
+            (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
+    		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Model</div></th>" : "")  +
+    		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Manufacturer</div></th>" : "") + 
     		"<th><div>Device</div><div>Type</div></th>"  +
     		"<th><div>Driver</div><div>Name</div></th>"  +
     		"<th><div>Driver</div><div>Type</div></th>"  +
@@ -168,12 +170,15 @@ String displayTable() {
         def devData = dev.getData()
         def devType = dev.getTypeName()
         if (settings?.hideNotBatteryDevices == true && state.devices["$dev.id"].hasBattery == false) {
-            //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
+            //logDebug "SKIPPING dev.id=${dev.id} w/o Battery "
         }
         else if (settings?.hideNoHealthStatusAttributeDevices == true && state.devices["$dev.id"].healthStatus == null) {
-            //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
+            //logDebug "SKIPPING dev.id=${dev.id} w/o healthStatus"
         }
-        else {
+        else if (settings?.hideVirtualAndUnknownDevices == true && !(dev.controllerType in ["ZGB", "ZWV", "LNK"])) {
+            //logDebug "SKIPPING dev.id=${dev.id} VirtualAndUnknownDevices ${dev.controllerType}"
+        }
+        else { // 
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
@@ -217,8 +222,8 @@ String displayTable() {
                 (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
                 "<td style='color:${statusColor}'>${dev.status ?: "n/a"}</td>" +
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
-                "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
-                "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
+                (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.model ?: "n/a"}</td>"  : "") +  
+                (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
                 "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" //+
