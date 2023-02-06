@@ -26,7 +26,7 @@
 import groovy.transform.Field
 
 def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 12:40 PM"}
+def timeStamp() {"2023/02/06 1:05 PM"}
 
 @Field static final Boolean debug = false
 
@@ -54,7 +54,7 @@ def mainPage() {
 
     dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> ver. ${driverVersionAndTimeStamp()}", uninstall: true, install: true) {
 		section("Device Selection", hideable: true, hidden: hideDevices) {
-			input name:"devices", type: "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
+			input name:"devices", type: settings?.selectHealthCheckOnly == true? "capability.healthCheck" : "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
             logDebug "Device Selection : start"
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
@@ -115,7 +115,7 @@ def mainPage() {
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
                 paragraph ""
                 paragraph "<b>Device selection</b> options:"
-    			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
+    			input name: "selectHealthCheckOnly", type: "bool", title: "Select only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
                 paragraph ""
                 paragraph "Table filtering options: <b>columns</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
