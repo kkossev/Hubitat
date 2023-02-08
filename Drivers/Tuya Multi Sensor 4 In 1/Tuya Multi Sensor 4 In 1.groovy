@@ -31,13 +31,14 @@
  * ver. 1.0.16 2022-12-10 kkossev  - _TZE200_3towulqd (2-in-1) motion detection inverted; excluded from IAS group;
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3210_wuhzzfqg
  * ver. 1.1.1  2023-01-08 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters; _TZ3000_6ygjfyll bug fix;
- * ver. 1.2.0  2023-02-06 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion and battery %; 
+ * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
+ * ver. 1.2.1  2023-02-07 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1)
  *
- *                                   TODO: check the bindings commands in configure()
+ *                                   TODO: check the bindings commans in configure()
 */
 
-def version() { "1.2.0" }
-def timeStamp() {"2023/02/06 9:35 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2023/02/07 7:24 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -58,7 +59,7 @@ metadata {
         capability "IlluminanceMeasurement"
         capability "TamperAlert"
         capability "PowerSource"
-        capability "Health Check"
+        capability "HealthCheck"
         capability "Refresh"
 
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -93,6 +94,7 @@ metadata {
         if (debug == true) {
             command "testX", [[name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]]
         }
+        //command "ping"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
@@ -483,8 +485,8 @@ def processTuyaCluster( descMap ) {
         switch (dp) {
             case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR and BlackSquareRadar
                 if (settings?.logEnable) log.debug "${device.displayName} (DP=0x01) motion event fncmd = ${fncmd}"
-                if (device.getDataValue('manufacturer') in ['_TZE200_3towulqd']) {    // 2-in-1 TS0601 motion flag was inverted, then inverted once again in the newer versions ...
-                    handleMotion(motionActive = true)
+                if (device.getDataValue('manufacturer') in ['_TZE200_3towulqd']) {    // 2-in-1 TS0601 motion flag is inverted!
+                    handleMotion(motionActive = !fncmd)
                 }
                 else {
                     handleMotion(motionActive = fncmd)
@@ -518,12 +520,7 @@ def processTuyaCluster( descMap ) {
                 }
                 else {        // also battery level for TS0202 
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-                    if (device.getDataValue('manufacturer') in ['_TZE200_3towulqd']) {
-                        handleTuyaBatteryLevel( fncmd * 2 )
-                    }
-                    else {
-                        handleTuyaBatteryLevel( fncmd )
-                    }
+                    handleTuyaBatteryLevel( fncmd )                    
                 }
                 break
             
@@ -1211,6 +1208,9 @@ def updated() {
     if (settings?.txtEnable) log.info "${device.displayName} preferencies updates are sent to the device..."
 }
 
+def ping() {
+    logInfo "ping() is not implemented" 
+}
 
 def refresh() {
     ArrayList<String> cmds = []
