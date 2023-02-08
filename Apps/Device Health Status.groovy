@@ -20,14 +20,15 @@
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
  *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
+ *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
  *
  *                                  TODO: 
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.4" }
-def timeStamp() {"2023/02/06 11:39 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2023/02/08 1:52 PM"}
 
 @Field static final Boolean debug = false
 
@@ -53,7 +54,7 @@ def mainPage() {
 	if(state.devicesList == null) state.devicesList = []
 	if(app.getInstallationState() == "COMPLETE") {hideDevices=true} else {hideDevices=false}
 
-    dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> ver. ${driverVersionAndTimeStamp()}", uninstall: true, install: true) {
+    dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> (app ver. ${driverVersionAndTimeStamp()})", uninstall: true, install: true) {
 		section("Device Selection", hideable: true, hidden: hideDevices) {
 			input name:"devices", type: settings?.selectHealthCheckOnly == true? "capability.healthCheck" : "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
             logDebug "Device Selection : start"
@@ -106,6 +107,9 @@ def mainPage() {
 		if(hideDevices) {
 			section {
 				updated()
+                paragraph ""
+    			input name: "showOfflineOnly", type: "bool", title: "Show only offline (INACTIVE / not present) devices", submitOnChange: true, defaultValue: false
+                paragraph ""
 				paragraph displayTable()
 				input "refresh", "button", title: "Refresh Table", width: 2
 			}
@@ -221,8 +225,12 @@ String displayTable() {
             else {
                 batteryPercentageColor = "black"    // not sure if the battery percentage remaining is accurate ...
             }
-            //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
-    		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
+            if (settings.showOfflineOnly == true && (healthStatus == "online" || dev.status == "ACTIVE")) {
+                //logDebug "SKIPPING dev.id=${dev.id} offline"
+            }
+            else {
+                //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
+        		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: "n/a"}</td>" +
                 (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
@@ -234,6 +242,7 @@ String displayTable() {
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
                 "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" //+
+            }
         }
 	} // for each device
 	str += "</table></div>"
