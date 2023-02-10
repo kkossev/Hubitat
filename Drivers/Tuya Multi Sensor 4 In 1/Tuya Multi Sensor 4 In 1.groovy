@@ -32,13 +32,13 @@
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3210_wuhzzfqg
  * ver. 1.1.1  2023-01-08 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters; _TZ3000_6ygjfyll bug fix;
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
- * ver. 1.2.1  2023-02-10 kkossev  - (dev. branch) reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; 
+ * ver. 1.2.1  2023-02-10 kkossev  - (dev. branch) reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; added just another TUYATEC-gqhxixyk manufacturer
  *
  *                                   TODO: check the bindings commans in configure()
 */
 
 def version() { "1.2.1" }
-def timeStamp() {"2023/02/10 6:45 PM"}
+def timeStamp() {"2023/02/10 11:30 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -167,6 +167,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-zn9wyqtr", deviceJoinName: "Samotech RH3040 Motion Sensor"        // vendor: 'Samotech', model: 'SM301Z'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-b3ov3nor", deviceJoinName: "Zemismart RH3040 Motion Sensor"       // vendor: 'Nedis', model: 'ZBSM10WT'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3040 Motion Sensor"        // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406",      outClusters:"0003",                model:"OCP305", manufacturer:"OWON"            // 
