@@ -19,15 +19,16 @@
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
  *  ver. 1.0.3 2023-02-05 kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
  *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
+ *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
+ *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
  *
- *          TODO : * Add the "Last Activity At" devices property in the table
- *                Show the time elapsed in a format (999d,23h) / (23h,59m) / (59m,59s) since the last battery report. Display the battery percentage remaining in red, if last report was before more than 25 hours. (will this work for all drivers ?)
+ *                                  TODO: 
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.3" }
-def timeStamp() {"2023/02/05 4:10 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2023/02/08 1:52 PM"}
 
 @Field static final Boolean debug = false
 
@@ -53,9 +54,9 @@ def mainPage() {
 	if(state.devicesList == null) state.devicesList = []
 	if(app.getInstallationState() == "COMPLETE") {hideDevices=true} else {hideDevices=false}
 
-    dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> ver. ${driverVersionAndTimeStamp()}", uninstall: true, install: true) {
+    dynamicPage(name: "mainPage", title: "<b>Device Health Status</b> (app ver. ${driverVersionAndTimeStamp()})", uninstall: true, install: true) {
 		section("Device Selection", hideable: true, hidden: hideDevices) {
-			input name:"devices", type: "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
+			input name:"devices", type: settings?.selectHealthCheckOnly == true? "capability.healthCheck" : "capability.*", title: "Select devices", multiple: true, submitOnChange: true, width: 4
             logDebug "Device Selection : start"
 			devices.each {dev ->
 				if(!state.devices["$dev.id"]) {
@@ -106,25 +107,33 @@ def mainPage() {
 		if(hideDevices) {
 			section {
 				updated()
+                paragraph ""
+    			input name: "showOfflineOnly", type: "bool", title: "Show only offline (INACTIVE / not present) devices", submitOnChange: true, defaultValue: false
+                paragraph ""
 				paragraph displayTable()
 				input "refresh", "button", title: "Refresh Table", width: 2
 			}
      		section("Options", hideable: true, hidden: hideDevices) {
+                label title:"Change this <b>Device Health Status</b> app instance name:", submitOnChange: true, required:false
+                paragraph ""
        			input("logEnable", "bool", title: "Debug logging.", defaultValue: false, required: false)
        			input("txtEnable", "bool", title: "Description text logging.", defaultValue: false, required: false)
                 paragraph ""
                 paragraph "<b>Device selection</b> options:"
-    			input name: "filterHealthCheckOnly", type: "bool", title: "Show only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
+    			input name: "selectHealthCheckOnly", type: "bool", title: "Select only devices that have 'Healtch Check' capability", submitOnChange: true, defaultValue: false
                 paragraph ""
-                paragraph "Table display options: <b>rows filtering</b> :"
-    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
-    			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
-                paragraph ""
-                paragraph "Table display options: <b>columns filtering</b> :"
+                paragraph "Table filtering options: <b>columns</b> :"
     			input name: "hidePowerSourceColumn", type: "bool", title: "Hide powerSource column", submitOnChange: true, defaultValue: false
     			input name: "hideLastActivityAtColumn", type: "bool", title: "Hide LastActivityAt column", submitOnChange: true, defaultValue: false
+    			input name: "hideModelAndManufacturerColumns", type: "bool", title: "Hide Model and Manufacturer columns", submitOnChange: true, defaultValue: false
+    			input name: "hidePresenceColumn", type: "bool", title: "Hide Presence column (the one that we are trying to depricate)", submitOnChange: true, defaultValue: true
                 paragraph ""
-                paragraph "Thresholds :"
+                paragraph "Table filtering options: <b>rows</b> :"
+    			input name: "hideNotBatteryDevices", type: "bool", title: "Hide <b>not</b> battery-powered devices", submitOnChange: true, defaultValue: false
+    			input name: "hideNoHealthStatusAttributeDevices", type: "bool", title: "Hide devices without healthStatus attribute", submitOnChange: true, defaultValue: false
+    			input name: "hideVirtualAndUnknownDevices", type: "bool", title: "Hide virtual/unknown type devices", submitOnChange: true, defaultValue: false
+                paragraph ""
+                paragraph "<b>Thresholds</b> :"
     			input name: "lastActivityGreen", type: "number", title: "Devices w/ lastActivity less than N hours will be shown in green", submitOnChange: true, defaultValue: 9
     			input name: "lastActivityRed", type: "number", title: "Devices w/ lastActivity more than N hours will be shown in red", submitOnChange: true, defaultValue: 25
     			input name: "batteryLowThreshold", type: "number", title: "Devices w/ Battery percentage below N % will be shown in red", submitOnChange: true, defaultValue: 33
@@ -145,14 +154,15 @@ String displayTable() {
 		"<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
     		"<th><div>Health</div><div>Status</div></th>"  +
     		"<th><div>Battery</div><div>%</div></th>"  +
-             (settings?.hideLastActivityAtColumn != true ? "<th><div>Last Activity</div><div>Time</div></th>" : "") +  
-             (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
-    		"<th><div>Device</div><div>Model</div></th>"  +
-    		"<th><div>Device</div><div>Manufacturer</div></th>"  + 
+            (settings?.hideLastActivityAtColumn != true ? "<th><div>Last</div><div>Activity</div></th>" : "") +  
+    		"<th><div>HE</div><div>Status</div></th>"  +
+            (settings?.hidePresenceColumn != true ? "<th><div>Presence</div><div>Attr.</div></th>" : "") +  
+            (settings?.hidePowerSourceColumn != true ? "<th><div>Power</div><div>Source</div></th>" : "") +  
+    		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Model</div></th>" : "")  +
+    		(settings?.hideModelAndManufacturerColumns != true ? "<th><div>Device</div><div>Manufacturer</div></th>" : "") + 
     		"<th><div>Device</div><div>Type</div></th>"  +
     		"<th><div>Driver</div><div>Name</div></th>"  +
     		"<th><div>Driver</div><div>Type</div></th>"  +
-    		"<th><div>Device</div><div>Status</div></th>"  +
         "</tr></thead>"
     
         
@@ -169,12 +179,15 @@ String displayTable() {
         def devData = dev.getData()
         def devType = dev.getTypeName()
         if (settings?.hideNotBatteryDevices == true && state.devices["$dev.id"].hasBattery == false) {
-            //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
+            //logDebug "SKIPPING dev.id=${dev.id} w/o Battery "
         }
         else if (settings?.hideNoHealthStatusAttributeDevices == true && state.devices["$dev.id"].healthStatus == null) {
-            //logDebug "SKIPPING dev.id=${dev.id} hasBattery = ${state.devices["$dev.id"].hasBattery}"
+            //logDebug "SKIPPING dev.id=${dev.id} w/o healthStatus"
         }
-        else {
+        else if (settings?.hideVirtualAndUnknownDevices == true && !(dev.controllerType in ["ZGB", "ZWV", "LNK"])) {
+            //logDebug "SKIPPING dev.id=${dev.id} VirtualAndUnknownDevices ${dev.controllerType}"
+        }
+        else { // 
     		String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
             def healthColor = dev.currentHealthStatus == null ? "black" : dev.currentHealthStatus == "online" ? "green" : "red"
             def healthStatus = dev.currentHealthStatus ?: "n/a"
@@ -182,6 +195,8 @@ String displayTable() {
             def lastActivity = "n/a"
             def lastActivityColor = "black"
             def batteryPercentageColor = "black"
+            def statusColor = (dev.status ?: "n/a") == "INACTIVE" ? "red" : (dev.status ?: "n/a") == "ACTIVE" ? "green" : "black"
+            def presenceColor = (dev.currentPresence ?: "n/a") == "not present" ? "red" : (dev.currentPresence ?: "n/a") == "present" ? "green" : "black"
             if (readableUTCDate != "n/a") {
                 Date date = Date.parse('yyyy-MM-dd HH:mm:ss', readableUTCDate)
                 lastActivity = new Date(date.getTime() + TimeZone.getDefault().getOffset(date.getTime()))
@@ -210,18 +225,24 @@ String displayTable() {
             else {
                 batteryPercentageColor = "black"    // not sure if the battery percentage remaining is accurate ...
             }
-            //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
-    		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
+            if (settings.showOfflineOnly == true && (healthStatus == "online" || dev.status == "ACTIVE")) {
+                //logDebug "SKIPPING dev.id=${dev.id} offline"
+            }
+            else {
+                //lastActivity = lastActivity.tokenize( '+' )[0]   batteryLowThreshold
+        		str += "<tr style='color:black'><td style='border-right:2px solid black'>$devLink</td>" +
     			"<td style='color:${healthColor}'>$healthStatus</td>" +
                 "<td style='color:${batteryPercentageColor}'>${dev.currentBattery ?: "n/a"}</td>" +
                 (settings?.hideLastActivityAtColumn != true ? "<td style='color:${lastActivityColor}'>${lastActivity}</td>"  : "") +  
+                "<td style='color:${statusColor}'>${dev.status ?: "n/a"}</td>" +
+                (settings?.hidePresenceColumn != true ? "<td style='color:${presenceColor}'>${dev.currentPresence ?: "n/a"}</td>"  : "") +  
                 (settings?.hidePowerSourceColumn != true ? "<td style='color:${black}'>${dev.currentPowerSource ?: "n/a"}</td>"  : "") +  
-                "<td style='color:${black}'>${devData.model ?: "n/a"}</td>" +
-                "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>" +
+                (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.model ?: "n/a"}</td>"  : "") +  
+                (settings?.hideModelAndManufacturerColumns != true ? "<td style='color:${black}'>${devData.manufacturer ?: "n/a"}</td>"  : "") +  
                 "<td style='color:${black}'>${dev.controllerType ?: "n/a"}</td>" +
                 "<td style='color:${black}'>${devType ?: "n/a"}</td>"  +
-                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" +
-                "<td style='color:${black}'>${dev.status ?: "n/a"}</td>" //+
+                "<td style='color:${black}'>${dev.driverType ?: "n/a"}</td>" //+
+            }
         }
 	} // for each device
 	str += "</table></div>"
