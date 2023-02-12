@@ -19,7 +19,7 @@
 
 
 def version() { "1.0.0" }
-def timeStamp() {"2023/02/12 8:19 AM"}
+def timeStamp() {"2023/02/12 9:31 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -70,6 +70,8 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000",      outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000",      outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"    // Model ZG-102ZL
+        
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model:"DS01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Contact Sensor" 
 
     }
     preferences {
@@ -149,7 +151,20 @@ metadata {
                                                     "humidityOffset"   : [min: -50, scale: 0, max: 50, step: 1, type: 'number', defaultValue: 0]
                                             ],
                                             batteries     : "2xAAA"
-        ]
+        ],
+        'SONOFF_CONTACT_BATT'         : [
+                                            model         : "DS01",
+                                            manufacturers : ["eWeLink"],
+                                            deviceJoinName: "Sonoff Contact Sensor",
+                                            inClusters    : "0000,0003,0500,0001",
+                                            outClusters   : "0003",
+                                            capabilities  : ["contactSensor": true, "battery": true],
+                                            attributes    : ["healthStatus"],
+                                            preferences   : [
+                                            ],
+                                            batteries     : "CR2032"
+            ]
+    
 ]
 
 
@@ -159,24 +174,24 @@ def isConfigurable()  { false }
 @Field static final Integer ConfigTimer = 15
 @Field static final Integer presenceCountThreshold = 4
 
-private getCLUSTER_TUYA()       { 0xEF00 }
-private getSETDATA()            { 0x00 }
-private getSETTIME()            { 0x24 }
+private static getCLUSTER_TUYA()       { 0xEF00 }
+private static getSETDATA()            { 0x00 }
+private static getSETTIME()            { 0x24 }
 
 // Tuya Commands
-private getTUYA_REQUEST()       { 0x00 }
-private getTUYA_REPORTING()     { 0x01 }
-private getTUYA_QUERY()         { 0x02 }
-private getTUYA_STATUS_SEARCH() { 0x06 }
-private getTUYA_TIME_SYNCHRONISATION() { 0x24 }
+private static getTUYA_REQUEST()       { 0x00 }
+private static getTUYA_REPORTING()     { 0x01 }
+private static getTUYA_QUERY()         { 0x02 }
+private static getTUYA_STATUS_SEARCH() { 0x06 }
+private static getTUYA_TIME_SYNCHRONISATION() { 0x24 }
 
 // tuya DP type
-private getDP_TYPE_RAW()        { "01" }    // [ bytes ]
-private getDP_TYPE_BOOL()       { "01" }    // [ 0/1 ]
-private getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ]
-private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
-private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
-private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
+private static getDP_TYPE_RAW()        { "01" }    // [ bytes ]
+private static getDP_TYPE_BOOL()       { "01" }    // [ 0/1 ]
+private static getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ]
+private static getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
+private static getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
+private static getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -297,7 +312,7 @@ def parse(String description) {
             parseZHAcommand(descMap)
         }
         else {
-            if (settings?.logEnable) log.warn "${device.displayName} <b> NOT PARSED </b> :  ${descMap}"
+            logDebug "<b> NOT PARSED </b> :  ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
     else {
@@ -558,22 +573,7 @@ def getContactResult( contactActive, isDigital=false ) {
 
 
 def getModelGroup() {
-    def manufacturer = device.getDataValue("manufacturer")
-    def modelGroup = 'UNKNOWN'
-    if (modelGroupPreference == null) {
-        device.updateSetting("modelGroupPreference", [value: "Auto detect", type: "enum"])
-    }
-    if (modelGroupPreference == "Auto detect") {
-        if (manufacturer in Models) {
-            modelGroup = Models[manufacturer]
-        } else {
-            modelGroup = 'UNKNOWN'
-        }
-    } else {
-        modelGroup = modelGroupPreference
-    }
-    //    if (settings?.logEnable) log.trace "${device.displayName} manufacturer ${manufacturer} group is ${modelGroup}"
-    return modelGroup
+    return state.tuyaModel ?: "UNKNOWN"
 }
 
 
@@ -708,7 +708,7 @@ def updated() {
     Map lastRxMap = stringToJsonMap(state.lastRx)
     Map lastTxMap = stringToJsonMap(state.lastTx)
 
-    state.modelGroup = getModelGroup()
+    //state.modelGroup = getModelGroup()
 
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
@@ -987,12 +987,40 @@ def logInitializeRezults() {
     if (settings?.txtEnable) log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
 }
 
+// called from  initializeVars( fullInit = true)
+void setDeviceName() {
+    String deviceName
+    def currentModelMap = null
+    tuyaModels.each { k, v -> 
+        //log.trace "${k}:${v}" 
+        if (v.model ==  device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
+            currentModelMap = k
+            //log.trace "found ${k}"
+            state.tuyaModel = currentModelMap
+            deviceName = tuyaModels[currentModelMap].deviceJoinName
+        }
+    }
+    if (currentModelMap == null) {
+            logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+            // don't change the device name when unknown
+            state.tuyaModel = currentModelMap
+    }
+    if (deviceName != NULL) {
+        device.setName(deviceName)
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>tuyaModel ${device.getDataValue('tuyaModel')}</b> deviceName was set to ${deviceName}"
+    }
+    else {
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>tuyaModel ${device.getDataValue('tuyaModel')}</b> was not found!"
+    }
+}
+
 // called by initialize() button
 void initializeVars(boolean fullInit = true ) {
     log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
         resetStats()
+        setDeviceName()        
         state.driverVersion = driverVersionAndTimeStamp()
     }
     state.configState = 0    // reset the configuration state machine
@@ -1016,13 +1044,13 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity",  [value:3600, type:"number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     //
-    if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
+    //if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
 }
 
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // was commented out ver 1.0.10  2022/11/10; returned back ver 1.20 01/15/2023
+    //cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // was commented out ver 1.0.10  2022/11/10; returned back ver 1.20 01/15/2023
     return  cmds
 }
 
@@ -1217,6 +1245,20 @@ def zTest( dpCommand, dpValue, dpTypeString ) {
 }
 
 def test( String description) {
+    /*
     log.warn "parising : ${description}"
     parse( description)
+    */
+    
+    
+    def map = tuyaModels
+    map.each{ k, v -> log.trace "${k}:${v}" }
+    
+    log.trace "tuyaModels joinName = ${tuyaModels['SONOFF_CONTACT_BATT'].deviceJoinName}"
+    log.trace "capabilities = ${tuyaModels['SONOFF_CONTACT_BATT'].capabilities} preferences= ${tuyaModels['SONOFF_CONTACT_BATT'].preferences} "
+    
+    
+    //setDeviceName()    
+    
+   
 }
