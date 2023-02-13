@@ -15,14 +15,14 @@
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-12 kkossev  - dynamic Preferences, depending on the device Profile
  *
- *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact; set battery to 'unknown'
- *                                   TODO: on Refresh() - poll for battery; TODO - option 'Convert battery voltage to percent'
+ *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
+ *                                   TODO: - option 'Convert Battery Voltage to Percent'
  */
 
 
 static def version() { "1.0.1" }
 
-static def timeStamp() { "2023/02/13 12:38 PM" }
+static def timeStamp() { "2023/02/13 9:24 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -84,7 +84,7 @@ metadata {
         if (isConfigurable()) {
             input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
             def model = getModelGroup()
-            def modelProperties = tuyaProfiles["$model"] as Map
+            def modelProperties = deviceProfiles["$model"] as Map
             if (modelProperties != null) {
                 def preferences =  modelProperties.find{it.key=="preferences"}
                 if (preferences != null && preferences != []) {
@@ -116,21 +116,20 @@ metadata {
 ]
 */
 
-@Field static final Map tuyaProfiles = [
+@Field static final Map deviceProfiles = [
         "TS0203_CONTACT_BATT"          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
-                model         : "TS0203",
+                model         : "TS0203",      // default battery reporting period = 4 hours
                 manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr", 
                                  "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
                 deviceJoinName: "Tuya Zigbee Contact Sensor",
                 inClusters    : "0001,0003,0500,0000",
                 outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
                 capabilities  : ["contactSensor": true, "battery": true],
+                configuration : ["battery": true],
                 attributes    : ["healthStatus"],
-            /*
                 preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting2",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12]
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12] //,
                 ],
-            */
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_ILLUM_BATT'    : [
@@ -138,6 +137,7 @@ metadata {
                 manufacturers : ["_TZE200_pay2byax", "_TZE200_n8dljorx"],
                 deviceJoinName: "Tuya Zigbee Contact w/ Illuminance Sensor",
                 capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
+                configuration : ["battery": false],
                 attributes    : ["healthStatus"],
             /*
                 preferences   : [
@@ -154,6 +154,7 @@ metadata {
                 inClusters    : "0000,0001,0500,EF00",
                 outClusters   : "0019,000A",
                 capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
+                configuration : ["battery": false],
                 attributes    : ["healthStatus"],
             /*
                 preferences   : [
@@ -170,16 +171,17 @@ metadata {
                 inClusters    : "0000,0003,0500,0001",
                 outClusters   : "0003",
                 capabilities  : ["contactSensor": true, "battery": true],
+                configuration : ["battery": true],
                 attributes    : ["healthStatus"],
                 preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12],
-                        "testParam2" : [ name: "testParam2name",  type: "number", title: "test param2 title", description: "<i>test param2 description</i>"]
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12] //,
+                        //"testParam2" : [ name: "testParam2name",  type: "number", title: "test param2 title", description: "<i>test param2 description</i>"]
                 ],
                 batteries     : "CR2032"
         ]
 ]
 
-def isConfigurable(model) { return (tuyaProfiles["$model"]?.preferences != null && tuyaProfiles["$model"]?.preferences != []) }
+def isConfigurable(model) { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 def isConfigurable() { def model = getModelGroup(); return isConfigurable(model) }
 
 @Field static final Integer MaxRetries = 3
@@ -309,7 +311,6 @@ def parse(String description) {
     if (isPendingConfig()) {
         ConfigurationStateMachine()
     }
-
 }
 
 def parseZHAcommand(Map descMap) {
@@ -371,7 +372,7 @@ def parseZHAcommand(Map descMap) {
                     attributeName = descMap.clusterId
                 }
                 if (lastTxMap.humiCfgOK == true && lastTxMap.tempCfgOK == true && lastTxMap.battCfgOK == true) {
-                    logDebug "both parameters configured!"
+                    logDebug "all parameters configured!"
                 }
                 if (txtEnable == true) {
                     log.info "${device.displayName} Reporting Configuration Response for ${attributeName}  (status: ${descMap.data[0] == "00" ? 'Success' : '<b>Failure</b>'}) is: min=${min} max=${max} delta=${delta}"
@@ -510,7 +511,6 @@ def processTuyaDP(descMap, dp, dp_id, fncmd) {
 
 private int getTuyaAttributeValue(ArrayList _data, index) {
     int retValue = 0
-
     if (_data.size() >= 6) {
         int dataLength = _data[5 + index] as Integer
         int power = 1
@@ -554,13 +554,12 @@ def getContactResult(contactActive, isDigital = false) {
     )
 }
 
-
 def getModelGroup() {
-    return state.tuyaModel ?: "UNKNOWN"
+    return state.deviceProfile ?: "UNKNOWN"
 }
 
-
 def temperatureEvent(temperature, isDigital = false) {
+    Map lastRxMap = stringToJsonMap(state.lastRx)
     def map = [:]
     map.name = "temperature"
     def Scale = location.temperatureScale
@@ -575,7 +574,6 @@ def temperatureEvent(temperature, isDigital = false) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
-    Map lastRxMap = stringToJsonMap(state.lastRx)
     def timeElapsed = Math.round((now() - (lastRxMap['tempTime'] ?: now() - (minReportingTimeTemp * 2000))) / 1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeTemp) {
@@ -595,18 +593,14 @@ def temperatureEvent(temperature, isDigital = false) {
 
 private void sendDelayedEventTemp(Map map) {
     logInfo "${map.descriptionText} (${map.type})"
-
     Map lastRxMap = stringToJsonMap(state.lastRx)
-    try {
-        lastRxMap['tempTime'] = now()
-    } catch (e) {
-        lastRxMap['tempTime'] = now() - (minReportingTimeHumidity * 2000)
-    }
+    lastRxMap['tempTime'] = now()
     state.lastRx = mapToJsonString(lastRxMap)
     sendEvent(map)
 }
 
 def humidityEvent(humidity, isDigital = false) {
+    Map lastRxMap = stringToJsonMap(state.lastRx)
     def map = [:]
     def humidityAsDouble = safeToDouble(humidity) + safeToDouble(settings?.humidityOffset)
     humidityAsDouble = humidityAsDouble < 0.0 ? 0.0 : humidityAsDouble > 100.0 ? 100.0 : humidityAsDouble
@@ -616,7 +610,6 @@ def humidityEvent(humidity, isDigital = false) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
-    Map lastRxMap = stringToJsonMap(state.lastRx)
     def timeElapsed = Math.round((now() - (lastRxMap['humiTime'] ?: now() - (minReportingTimeHumidity * 2000))) / 1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeHumidity) {
@@ -637,12 +630,7 @@ def humidityEvent(humidity, isDigital = false) {
 private void sendDelayedEventHumi(Map map) {
     logInfo "${map.descriptionText} (${map.type})"
     Map lastRxMap = stringToJsonMap(state.lastRx)
-    try {
-        lastRxMap['humiTime'] = now()
-    }
-    catch (e) {
-        lastRxMap['humiTime'] = now() - (minReportingTimeHumidity * 2000)
-    }
+    lastRxMap['humiTime'] = now()
     state.lastRx = mapToJsonString(lastRxMap)
     sendEvent(map)
 }
@@ -703,9 +691,9 @@ def updated() {
     } else {
         unschedule("logsOff")
     }
-    Integer fncmd
-    //
-    if (getModelGroup() in ["SONOFF_CONTACT_BATT"]) {
+    
+    if (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) {
+        //
         // try to configure some parameters and see what happens ..temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
         /*
         lastTxMap.tempCfg = (settings?.minReportingTimeTemp as int).toString() + "," + (settings?.maxReportingTimeTemp as int).toString() + "," + ((settings?.temperatureSensitivity * 100) as int).toString()
@@ -728,15 +716,15 @@ def updated() {
             lastTxMap.humiCfgOK = true
         }
         */
-            log.warn "settings?.batteryReporting = ${settings?.batteryReporting}"
+        log.trace "settings?.batteryReporting = ${settings?.batteryReporting}"
         def newBattCfg = "10" + "," + (((settings?.batteryReporting ?: 12) *3600) as int).toString() + "," + "1"
         if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
             lastTxMap.battCfg = newBattCfg
             log.warn "lastTxMap.battCfg = ${lastTxMap.battCfg}"
-   		    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 201)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-   		    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 202)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
-            cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 203)
-            cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 204)
+   		    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+   		    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+            cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
+            cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
             log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
             lastTxMap.battCfgOK = false
         } else {
@@ -849,11 +837,10 @@ def configTimer() {
 
 def refresh() {
     checkDriverVersion()
-    if (getModelGroup() in ['TS0201_TH']) {
+    if (deviceProfiles[getModelGroup()]?.capabilities?.battery?.value == true) {
         List<String> cmds = []
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
+        cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
         sendZigbeeCommands(cmds)
     } else {
         logInfo "refresh() is not implemented for this sleepy Zigbee device"
@@ -866,12 +853,9 @@ def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars(fullInit = false)
-
         if (state.lastRx == null || state.stats == null || state.lastTx == null) {
             resetStats()
         }
-
-
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -920,19 +904,19 @@ def logInitializeRezults() {
 void setDeviceName() {
     String deviceName
     def currentModelMap = null
-    tuyaProfiles.each { k, v ->
+    deviceProfiles.each { k, v ->
         //log.trace "${k}:${v}" 
         if (v.model == device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
             currentModelMap = k
             //log.trace "found ${k}"
-            state.tuyaModel = currentModelMap
-            deviceName = tuyaProfiles[currentModelMap].deviceJoinName
+            state.deviceProfile = currentModelMap
+            deviceName = deviceProfiles[currentModelMap].deviceJoinName
         }
     }
     if (currentModelMap == null) {
         logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
         // don't change the device name when unknown
-        state.tuyaModel = currentModelMap
+        state.deviceProfile = currentModelMap
     }
     if (deviceName != NULL) {
         device.setName(deviceName)
@@ -947,8 +931,10 @@ void initializeVars(boolean fullInit = true) {
     log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true) {
         state.clear()
+        unschedule()
         resetStats()
         setDeviceName()
+        log.info "${device.displayName} all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()
     }
     state.configState = 0    // reset the configuration state machine
@@ -971,15 +957,12 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity", [value: 10, type: "number"])
     if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity", [value: 3600, type: "number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    //
-    //if (fullInit == true || state.modelGroup == null)  state.modelGroup = getModelGroup()
+
 }
 
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay = 200)
-    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    //cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)    // was commented out ver 1.0.10  2022/11/10; returned back ver 1.20 01/15/2023
     return cmds
 }
 
@@ -1017,11 +1000,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     cmd.each {
         allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
-    Map statsMap = stringToJsonMap(state.stats); try {
-        statsMap['txCtr']++
-    } catch (e) {
-        statsMap['txCtr'] = 0
-    }; state.stats = mapToJsonString(statsMap)
+    Map statsMap = stringToJsonMap(state.stats); try {statsMap['txCtr']++} catch (e) {statsMap['txCtr'] = 0}; state.stats = mapToJsonString(statsMap)
     sendHubCommand(allActions)
 }
 
@@ -1104,10 +1083,6 @@ def deviceHealthCheck() {
                 handleMotion(false, isDigital=true)
                 if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
             }
-            if (safeToInt(device.currentValue('battery', true)) != 0) {
-                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
-                sendBatteryEvent( 0, isDigital=true )
-            }
             */
         }
     } else {
@@ -1185,16 +1160,16 @@ def test(String description) {
 
     
     /*
-    def map = tuyaProfiles
+    def map = deviceProfiles
     map.each { k, v -> log.trace "${k}:${v}" }
 
-    log.trace "tuyaProfiles joinName = ${tuyaProfiles['SONOFF_CONTACT_BATT'].deviceJoinName}"
+    log.trace "deviceProfiles joinName = ${deviceProfiles['SONOFF_CONTACT_BATT'].deviceJoinName}"
     */
-    
+/*    
     def model = "SONOFF_CONTACT_BATT"    //"getModelGroup(); 
     log.trace "model=${model}"
-    def modelPreferences = tuyaProfiles["$model"].preferences; 
-    log.trace "capabilities = ${tuyaProfiles["$model"].capabilities} modelPreferences= ${(tuyaProfiles['SONOFF_CONTACT_BATT'].preferences)} "
+    def modelPreferences = deviceProfiles["$model"].preferences; 
+    log.trace "capabilities = ${deviceProfiles["$model"].capabilities} modelPreferences= ${(deviceProfiles['SONOFF_CONTACT_BATT'].preferences)} "
     log.trace "isConfigurable($model) = ${isConfigurable(model)}"
     //log.trace "isConfigurable('unknown') = ${isConfigurable('unknown')}"
     
@@ -1202,7 +1177,7 @@ def test(String description) {
         if (isConfigurable(model)) {
             //input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
             //def model = getModelGroup()
-            def modelProperties = tuyaProfiles["$model"] as Map
+            def modelProperties = deviceProfiles["$model"] as Map
             def preferences =  modelProperties.find{it.key=="preferences"}
             log.warn "preferences = ${preferences}"
             if (preferences != null && preferences != []) {
@@ -1214,4 +1189,14 @@ def test(String description) {
         }
     //settings.remove("batteryReporting")
     log.warn "batteryReporting = ${settings.batteryReporting}"
+*/    
+    
+    def model = getModelGroup()
+    def modelProperties = deviceProfiles["$model"] as Map
+
+    log.trace "a = ${modelProperties.Xconfiguration?.Xbattery?.value}"
+    log.trace "b = ${deviceProfiles['SONOFF_CONTACT_BATT'].configuration.battery.value}"
+    log.trace "c = ${deviceProfiles[state.deviceProfile].configuration.battery.value}"
+    log.trace "d = ${deviceProfiles[getModelGroup()]?.configuration?.battery?.value}"
+
 }
