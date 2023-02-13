@@ -13,7 +13,7 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
- * ver. 1.0.1  2023-02-12 kkossev  - dynamic Preferences, depending on the device Profile
+ * ver. 1.0.1  2023-02-12 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed;
  *
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
  *                                   TODO: - option 'Convert Battery Voltage to Percent'
@@ -22,7 +22,7 @@
 
 static def version() { "1.0.1" }
 
-static def timeStamp() { "2023/02/13 9:24 PM" }
+static def timeStamp() { "2023/02/13 11:17 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -90,7 +90,7 @@ metadata {
                 if (preferences != null && preferences != []) {
                     preferences.value.each { key, value ->
                         def strMap = value as Map
-                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "1..10000", defaultValue: 1)
+                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "${strMap.range}", defaultValue: "${strMap.defaultValue}")
                     }
                 }
             }
@@ -128,8 +128,17 @@ metadata {
                 configuration : ["battery": true],
                 attributes    : ["healthStatus"],
                 preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12] //,
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12] //,
                 ],
+                batteries     : "unknown"
+        ],
+        "TS0203_UNKNOWN"      : [
+                model         : "TS0203",
+                manufacturers : [],
+                deviceJoinName: "Tuya TS0203 Sensor",
+                capabilities  : ["contactSensor": true, "battery": true],
+                configuration : ["battery": true],
+                attributes    : ["healthStatus"],
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_ILLUM_BATT'    : [
@@ -164,7 +173,15 @@ metadata {
             */
                 batteries     : "2xAAA"
         ],
-        'SONOFF_CONTACT_BATT'          : [
+        'TS0601_UNKNOWN'      : [
+                model         : "TS0601",
+                manufacturers : [],
+                deviceJoinName: "Tuya TS0601 Sensor",
+                capabilities  : ["contactSensor": true, "battery": true],
+                attributes    : ["healthStatus"],
+                batteries     : "unknown"
+        ],
+        'SONOFF_CONTACT_BATT' : [
                 model         : "DS01",
                 manufacturers : ["eWeLink"],
                 deviceJoinName: "Sonoff Contact Sensor",
@@ -174,11 +191,19 @@ metadata {
                 configuration : ["battery": true],
                 attributes    : ["healthStatus"],
                 preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12] //,
-                        //"testParam2" : [ name: "testParam2name",  type: "number", title: "test param2 title", description: "<i>test param2 description</i>"]
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
+                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
                 ],
                 batteries     : "CR2032"
-        ]
+        ],
+        'UNKNOWN'             : [
+                model         : "",
+                manufacturers : [],
+                deviceJoinName: "Unknown Sensor",
+                capabilities  : ["contactSensor": true, "battery": true],
+                attributes    : ["healthStatus"],
+                batteries     : "unknown"
+        ],
 ]
 
 def isConfigurable(model) { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
@@ -574,9 +599,9 @@ def temperatureEvent(temperature, isDigital = false) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
-    def timeElapsed = Math.round((now() - (lastRxMap['tempTime'] ?: now() - (minReportingTimeTemp * 2000))) / 1000)
-    Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
-    if (timeElapsed >= minReportingTimeTemp) {
+    def timeElapsed = Math.round((now() - (lastRxMap['tempTime'] ?: now() - (minReportingTime * 2000))) / 1000)
+    Integer timeRamaining = (minReportingTime - timeElapsed) as Integer
+    if (timeElapsed >= minReportingTime) {
         if (settings?.txtEnable) {
             log.info "${device.displayName} ${map.descriptionText}"
         }
@@ -610,9 +635,9 @@ def humidityEvent(humidity, isDigital = false) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
-    def timeElapsed = Math.round((now() - (lastRxMap['humiTime'] ?: now() - (minReportingTimeHumidity * 2000))) / 1000)
-    Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
-    if (timeElapsed >= minReportingTimeHumidity) {
+    def timeElapsed = Math.round((now() - (lastRxMap['humiTime'] ?: now() - (minReportingTime * 2000))) / 1000)
+    Integer timeRamaining = (minReportingTime - timeElapsed) as Integer
+    if (timeElapsed >= minReportingTime) {
         if (settings?.txtEnable) {
             log.info "${device.displayName} ${map.descriptionText}"
         }
@@ -904,19 +929,24 @@ def logInitializeRezults() {
 void setDeviceName() {
     String deviceName
     def currentModelMap = null
-    deviceProfiles.each { k, v ->
-        //log.trace "${k}:${v}" 
-        if (v.model == device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
-            currentModelMap = k
-            //log.trace "found ${k}"
-            state.deviceProfile = currentModelMap
-            deviceName = deviceProfiles[currentModelMap].deviceJoinName
+    def deviceModel = device.getDataValue('model')
+    def deviceManufacturer = device.getDataValue('manufacturer')
+    deviceProfiles.each { profileName, profileMap ->
+        if ((profileMap.model?.value as String) == (deviceModel as String)) {
+            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String)) 
+            {
+                currentModelMap = profileName
+                state.deviceProfile = currentModelMap
+                deviceName = deviceProfiles[currentModelMap].deviceJoinName                
+                //log.debug "FOUND! currentModelMap=${currentModelMap}, deviceName =${deviceName}"
+            }
         }
     }
+    
     if (currentModelMap == null) {
         logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
         // don't change the device name when unknown
-        state.deviceProfile = currentModelMap
+        state.deviceProfile = 'UNKNOWN'
     }
     if (deviceName != NULL) {
         device.setName(deviceName)
@@ -939,23 +969,15 @@ void initializeVars(boolean fullInit = true) {
     }
     state.configState = 0    // reset the configuration state machine
 
-    if (fullInit == true || settings?.modelGroupPreference == null) device.updateSetting("modelGroupPreference", [value: "Auto detect", type: "enum"])
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.temperatureOffset == null) device.updateSetting("temperatureOffset", [value: 0.0, type: "decimal"])
     if (fullInit == true || settings?.humidityOffset == null) device.updateSetting("humidityOffset", [value: 0.0, type: "decimal"])
-    //if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || settings?.temperatureSensitivity == null) device.updateSetting("temperatureSensitivity", [value: 0.5, type: "decimal"])
     if (fullInit == true || settings?.humiditySensitivity == null) device.updateSetting("humiditySensitivity", [value: 5, type: "number"])
     if (fullInit == true || settings?.illuminanceSensitivity == null) device.updateSetting("illuminanceSensitivity", [value: 12, type: "number"])
-    if (fullInit == true || settings?.minTempAlarmPar == null) device.updateSetting("minTempAlarmPar", [value: 0.0, type: "decimal"])
-    if (fullInit == true || settings?.maxTempAlarmPar == null) device.updateSetting("maxTempAlarmPar", [value: 39.0, type: "decimal"])
-    if (fullInit == true || settings?.minHumidityAlarmPar == null) device.updateSetting("minHumidityAlarmPar", [value: 20, type: "number"])
-    if (fullInit == true || settings?.maxHumidityAlarmPar == null) device.updateSetting("maxHumidityAlarmPar", [value: 60, type: "number"])
-    if (fullInit == true || settings?.minReportingTimeTemp == null) device.updateSetting("minReportingTimeTemp", [value: 10, type: "number"])
-    if (fullInit == true || settings?.maxReportingTimeTemp == null) device.updateSetting("maxReportingTimeTemp", [value: 3600, type: "number"])
-    if (fullInit == true || settings?.minReportingTimeHumidity == null) device.updateSetting("minReportingTimeHumidity", [value: 10, type: "number"])
-    if (fullInit == true || settings?.maxReportingTimeHumidity == null) device.updateSetting("maxReportingTimeHumidity", [value: 3600, type: "number"])
+    if (fullInit == true || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value: 10, type: "number"])
+    if (fullInit == true || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value: 3600, type: "number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
 
 }
