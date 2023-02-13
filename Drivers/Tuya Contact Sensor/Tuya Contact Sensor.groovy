@@ -13,14 +13,16 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
+ * ver. 1.0.1  2023-02-12 kkossev  - dynamic Preferences, depending on the device Profile
  *
- *                                   TODO:
+ *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact; set battery to 'unknown'
+ *                                   TODO: on Refresh() - poll for battery; TODO - option 'Convert battery voltage to percent'
  */
 
 
-static def version() { "1.0.0" }
+static def version() { "1.0.1" }
 
-static def timeStamp() { "2023/02/12 9:31 AM" }
+static def timeStamp() { "2023/02/13 12:38 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -57,34 +59,21 @@ metadata {
         // when defined as attributes, will be shown on top of the 'Current States' list ...
         attribute "healthStatus", "enum", ["offline", "online", "unknown"]
 
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_26fmupbb", deviceJoinName: "Tuya Contact Sensor"
-        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_n2egfsli", deviceJoinName: "Tuya Contact Sensor"
-        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_oxslv1c9", deviceJoinName: "Tuya Contact Sensor"
-        // Model iH-F001
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_2mbfxlzr", deviceJoinName: "Tuya Contact Sensor"
-        // https://community.hubitat.com/t/tuya-zigbee-contact-sensor/82854/25?u=kkossev
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_402jjyro", deviceJoinName: "Tuya Contact Sensor"
-        // 
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_7d8yme6f", deviceJoinName: "Tuya Contact Sensor"
-        // + tamper? check
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_psqjayrd", deviceJoinName: "Tuya Contact Sensor"
-        // + tamper
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_ebar6ljy", deviceJoinName: "Tuya Contact Sensor"
-        // + tamper
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_xph99wvr", deviceJoinName: "Tuya Contact Sensor"
-        // Model ZM-CG205
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_ncdapbwy", deviceJoinName: "Tuya Contact Sensor"
-        // Model ZM-CG205
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_fab7r7mc", deviceJoinName: "Tuya Contact Sensor"
-        // +tamper Model GD-D-Z
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "Tuya Contact Sensor"
-        // Model SNTZ007
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_26fmupbb", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_n2egfsli", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_oxslv1c9", deviceJoinName: "Tuya Contact Sensor"        // Model iH-F001
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_2mbfxlzr", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/tuya-zigbee-contact-sensor/82854/25?u=kkossev
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_402jjyro", deviceJoinName: "Tuya Contact Sensor"        // 
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_7d8yme6f", deviceJoinName: "Tuya Contact Sensor"        // + tamper? check
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_psqjayrd", deviceJoinName: "Tuya Contact Sensor"        // + tamper
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_ebar6ljy", deviceJoinName: "Tuya Contact Sensor"        // + tamper
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_xph99wvr", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_ncdapbwy", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_fab7r7mc", deviceJoinName: "Tuya Contact Sensor"        // +tamper Model GD-D-Z
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "Tuya Contact Sensor"        // Model SNTZ007
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"
-        // Model ZG-102ZL
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"                           // Model ZG-102ZL
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model: "DS01", manufacturer: "eWeLink", deviceJoinName: "Sonoff Contact Sensor"
 
@@ -92,21 +81,20 @@ metadata {
     preferences {
         input(name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input(name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
-        /*
-        input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
-        if (advancedOptions == true) {
-            if (isConfigurable()) {
-                input (title: "To configure a sleepy device, try any of the methods below :", description: "<b> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
-            }
-            configParams.each {
-                //log.warn "it.value.input.limit = ${it.value.input.limit}"
-                if (it.value.input.limit == null || 'ALL' in it.value.input.limit || getModelGroup() in it.value.input.limit) {
-                    //log.trace "it = ${it.value.input.limit}"
-                    input it.value.input
+        if (isConfigurable()) {
+            input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
+            def model = getModelGroup()
+            def modelProperties = tuyaProfiles["$model"] as Map
+            if (modelProperties != null) {
+                def preferences =  modelProperties.find{it.key=="preferences"}
+                if (preferences != null && preferences != []) {
+                    preferences.value.each { key, value ->
+                        def strMap = value as Map
+                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "1..10000", defaultValue: 1)
+                    }
                 }
             }
         }
-        */
     }
 }
 
@@ -128,28 +116,34 @@ metadata {
 ]
 */
 
-@Field static final Map tuyaModels = [
-        'TS0203_CONTACT_BATT'          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
+@Field static final Map tuyaProfiles = [
+        "TS0203_CONTACT_BATT"          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
                 model         : "TS0203",
-                manufacturers : ["_TZ3000_26fmupbb", "_TZ3000_oxslv1c9"],
+                manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr", 
+                                 "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
                 deviceJoinName: "Tuya Zigbee Contact Sensor",
                 inClusters    : "0001,0003,0500,0000",
                 outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
                 capabilities  : ["contactSensor": true, "battery": true],
                 attributes    : ["healthStatus"],
+            /*
                 preferences   : [
+                        "batteryReporting" : [ name: "batteryReporting2",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12]
                 ],
+            */
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_ILLUM_BATT'    : [
                 model         : "TS0601",
-                manufacturers : ["_TZE200_pay2byax", "_TZE200_n8dljorx "],
+                manufacturers : ["_TZE200_pay2byax", "_TZE200_n8dljorx"],
                 deviceJoinName: "Tuya Zigbee Contact w/ Illuminance Sensor",
                 capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
                 attributes    : ["healthStatus"],
+            /*
                 preferences   : [
                         "illuminanceSensitivity": [min: 1, scale: 0, max: 100, step: 1, type: 'number', defaultValue: 1]
                 ],
+            */
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_TEMP_HUMI_BATT': [     // https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357        @Pr0z4k
@@ -161,10 +155,12 @@ metadata {
                 outClusters   : "0019,000A",
                 capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
                 attributes    : ["healthStatus"],
+            /*
                 preferences   : [
                        "temperatureOffset": [min: -10, scale: 0, max: 10, step: 1, type: 'number', defaultValue: 0],
                        "humidityOffset"   : [min: -50, scale: 0, max: 50, step: 1, type: 'number', defaultValue: 0]
                 ],
+            */
                 batteries     : "2xAAA"
         ],
         'SONOFF_CONTACT_BATT'          : [
@@ -176,13 +172,15 @@ metadata {
                 capabilities  : ["contactSensor": true, "battery": true],
                 attributes    : ["healthStatus"],
                 preferences   : [
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", min: 1, scale: 0, max: 24, step: 1, defaultValue: 12],
+                        "testParam2" : [ name: "testParam2name",  type: "number", title: "test param2 title", description: "<i>test param2 description</i>"]
                 ],
                 batteries     : "CR2032"
         ]
 ]
 
-
-def isConfigurable() { false }
+def isConfigurable(model) { return (tuyaProfiles["$model"]?.preferences != null && tuyaProfiles["$model"]?.preferences != []) }
+def isConfigurable() { def model = getModelGroup(); return isConfigurable(model) }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -365,11 +363,15 @@ def parseZHAcommand(Map descMap) {
                     }
                 } else if (descMap.clusterId == "0001") {
                     attributeName = "battery %"
+                    lastRxMap.battCfg = min.toString() + "," + max.toString() + "," + delta.toString()
+                    if (lastRxMap.battCfg == lastTxMap.battCfg) {
+                        lastTxMap.battCfgOK = true
+                    }                
                 } else {
                     attributeName = descMap.clusterId
                 }
-                if (lastTxMap.humiCfgOK == true && lastTxMap.tempCfgOK == true) {
-                    logDebug "both T&H configured!"
+                if (lastTxMap.humiCfgOK == true && lastTxMap.tempCfgOK == true && lastTxMap.battCfgOK == true) {
+                    logDebug "both parameters configured!"
                 }
                 if (txtEnable == true) {
                     log.info "${device.displayName} Reporting Configuration Response for ${attributeName}  (status: ${descMap.data[0] == "00" ? 'Success' : '<b>Failure</b>'}) is: min=${min} max=${max} delta=${delta}"
@@ -705,7 +707,7 @@ def updated() {
     //
     if (getModelGroup() in ["SONOFF_CONTACT_BATT"]) {
         // try to configure some parameters and see what happens ..temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
-
+        /*
         lastTxMap.tempCfg = (settings?.minReportingTimeTemp as int).toString() + "," + (settings?.maxReportingTimeTemp as int).toString() + "," + ((settings?.temperatureSensitivity * 100) as int).toString()
         lastTxMap.humiCfg = (settings?.minReportingTimeHumidity as int).toString() + "," + (settings?.maxReportingTimeHumidity as int).toString() + "," + ((settings?.humiditySensitivity * 100) as int).toString()
 
@@ -725,18 +727,30 @@ def updated() {
             logDebug "Humidity reporting already configured (${lastTxMap.humiCfg}), skipping ..."
             lastTxMap.humiCfgOK = true
         }
-   		cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-   		cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 0, 21600, 1, [:], 200)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
-
-        cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
-        cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
-        cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 250)
-        cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 250)
-    }
+        */
+            log.warn "settings?.batteryReporting = ${settings?.batteryReporting}"
+        def newBattCfg = "10" + "," + (((settings?.batteryReporting ?: 12) *3600) as int).toString() + "," + "1"
+        if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
+            lastTxMap.battCfg = newBattCfg
+            log.warn "lastTxMap.battCfg = ${lastTxMap.battCfg}"
+   		    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 201)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+   		    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 202)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+            cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 203)
+            cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 204)
+            log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
+            lastTxMap.battCfgOK = false
+        } else {
+            logDebug "Battery reporting already configured (${lastRxMap.battCfg} == ${lastTxMap.battCfg}), skipping ..."
+            lastTxMap.battCfgOK = true
+        }
+    } // SONOFF
 
     state.lastTx = mapToJsonString(lastTxMap)
-    def pendingConfig = lastTxMap.tempCfgOK == true ? 0 : 1
+    
+    def pendingConfig = 0
+    pendingConfig += lastTxMap.tempCfgOK == true ? 0 : 1
     pendingConfig += lastTxMap.humiCfgOK == true ? 0 : 1
+    pendingConfig += lastTxMap.battCfgOK == true ? 0 : 1
     if (isConfigurable()) {
         logInfo "pending ${pendingConfig} reporting configurations"
         if (pendingConfig != 0) {
@@ -754,7 +768,7 @@ def updated() {
 
 def isPendingConfig() {
     Map lastTxMap = stringToJsonMap(state.lastTx)
-    if (lastTxMap.tempCfgOK == false || lastTxMap.humiCfgOK == false) {
+    if (lastTxMap.tempCfgOK == false || lastTxMap.humiCfgOK == false || lastTxMap.battCfgOK == false) {
         return true
     } else {
         return false
@@ -790,8 +804,7 @@ def ConfigurationStateMachine() {
                 configState = 0
                 unschedule("configTimer")
             } else if (lastTxMap.cfgTimer == null || lastTxMap.cfgTimer == 0) {    // timeout
-                logDebug "Timeout!"
-                updateInfo("Timeout!")
+                updateInfo("Timeout when waiting for configuration result confirmation!")
                 lastTxMap.cfgTimer = 0
                 unschedule("configTimer")
                 configState = 0    // try again next time a packet is received from the device..
@@ -847,7 +860,7 @@ def refresh() {
     }
 }
 
-def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
+static def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
@@ -876,18 +889,21 @@ def resetStats() {
                       humiTime : now() - defaultMinReportingTime * 1000,
                       tempCfg : '-1,-1,-1',
                       humiCfg : '-1,-1,-1'
-          */
+                      battCfg : '-1,-1,-1',
+                 */
     ]
 
-    Map lastTx = [:
+    Map lastTx = [
                   /*
                       tempCfg : '-1,-1,-1',
                       humiCfg : '-1,-1,-1',
-                      tempCfgOK : false,
-                      humiCfgOK : false,
-                      cfgTimer : 0
           */
+                      tempCfgOK : true,
+                      humiCfgOK : true,
+                      battCfgOK : true,
+                      cfgTimer : 0
     ]
+    
     state.stats = mapToJsonString(stats)
     state.lastRx = mapToJsonString(lastRx)
     state.lastTx = mapToJsonString(lastTx)
@@ -904,13 +920,13 @@ def logInitializeRezults() {
 void setDeviceName() {
     String deviceName
     def currentModelMap = null
-    tuyaModels.each { k, v ->
+    tuyaProfiles.each { k, v ->
         //log.trace "${k}:${v}" 
         if (v.model == device.getDataValue('model') /*&& v.manufacturer == device.getDataValue('manufacturer')*/) {
             currentModelMap = k
             //log.trace "found ${k}"
             state.tuyaModel = currentModelMap
-            deviceName = tuyaModels[currentModelMap].deviceJoinName
+            deviceName = tuyaProfiles[currentModelMap].deviceJoinName
         }
     }
     if (currentModelMap == null) {
@@ -920,9 +936,9 @@ void setDeviceName() {
     }
     if (deviceName != NULL) {
         device.setName(deviceName)
-        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>tuyaModel ${device.getDataValue('tuyaModel')}</b> deviceName was set to ${deviceName}"
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
     } else {
-        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>tuyaModel ${device.getDataValue('tuyaModel')}</b> was not found!"
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} was not found!"
     }
 }
 
@@ -942,7 +958,7 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.temperatureOffset == null) device.updateSetting("temperatureOffset", [value: 0.0, type: "decimal"])
     if (fullInit == true || settings?.humidityOffset == null) device.updateSetting("humidityOffset", [value: 0.0, type: "decimal"])
-    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
+    //if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || settings?.temperatureSensitivity == null) device.updateSetting("temperatureSensitivity", [value: 0.5, type: "decimal"])
     if (fullInit == true || settings?.humiditySensitivity == null) device.updateSetting("humiditySensitivity", [value: 5, type: "number"])
     if (fullInit == true || settings?.illuminanceSensitivity == null) device.updateSetting("illuminanceSensitivity", [value: 12, type: "number"])
@@ -1148,6 +1164,7 @@ def logWarn(msg) {
 }
 
 def updateInfo(msg = ' ') {
+    logInfo "$msg"
     sendEvent(name: "Info", value: msg, isStateChange: false)
 }
 
@@ -1155,27 +1172,46 @@ def zTest(dpCommand, dpValue, dpTypeString) {
     ArrayList<String> cmds = []
     def dpType = dpTypeString == "DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString == "DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString == "DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
     def dpValHex = dpTypeString == "DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
-
     if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
-
     sendZigbeeCommands(sendTuyaCommand(dpCommand, dpType, dpValHex))
 }
 
+
 def test(String description) {
     /*
-    log.warn "parising : ${description}"
+    log.warn "parsing : ${description}"
     parse( description)
     */
 
-
-    def map = tuyaModels
+    
+    /*
+    def map = tuyaProfiles
     map.each { k, v -> log.trace "${k}:${v}" }
 
-    log.trace "tuyaModels joinName = ${tuyaModels['SONOFF_CONTACT_BATT'].deviceJoinName}"
-    log.trace "capabilities = ${tuyaModels['SONOFF_CONTACT_BATT'].capabilities} preferences= ${tuyaModels['SONOFF_CONTACT_BATT'].preferences} "
+    log.trace "tuyaProfiles joinName = ${tuyaProfiles['SONOFF_CONTACT_BATT'].deviceJoinName}"
+    */
+    
+    def model = "SONOFF_CONTACT_BATT"    //"getModelGroup(); 
+    log.trace "model=${model}"
+    def modelPreferences = tuyaProfiles["$model"].preferences; 
+    log.trace "capabilities = ${tuyaProfiles["$model"].capabilities} modelPreferences= ${(tuyaProfiles['SONOFF_CONTACT_BATT'].preferences)} "
+    log.trace "isConfigurable($model) = ${isConfigurable(model)}"
+    //log.trace "isConfigurable('unknown') = ${isConfigurable('unknown')}"
+    
 
-
-    //setDeviceName()    
-
-
+        if (isConfigurable(model)) {
+            //input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
+            //def model = getModelGroup()
+            def modelProperties = tuyaProfiles["$model"] as Map
+            def preferences =  modelProperties.find{it.key=="preferences"}
+            log.warn "preferences = ${preferences}"
+            if (preferences != null && preferences != []) {
+                preferences.value.each { key, value ->
+                    def strMap = value as Map
+                    log.debug "<b>INPUT:</b> name:${strMap.name}, type:${strMap.type}, title: <b>${strMap.title}</b>, description: <i>${strMap.description}</i> TODO MORE"
+                }
+            }
+        }
+    //settings.remove("batteryReporting")
+    log.warn "batteryReporting = ${settings.batteryReporting}"
 }
