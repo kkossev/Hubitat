@@ -14,7 +14,7 @@
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
- * ver. 1.0.2  2023-02-15 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back;
+ * ver. 1.0.2  2023-02-15 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix;
  *
  *                                   TODO: when offlineThreshold = 0 (disabled), delete the healthStatus property. When enabled, set it to uknown 1
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
@@ -25,7 +25,7 @@
 
 static def version() { "1.0.2" }
 
-static def timeStamp() { "2023/02/15 1:22 PM" }
+static def timeStamp() { "2023/02/15 3:57 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1124,7 +1124,7 @@ def setHealthStatusOnline() {
 
 def deviceHealthCheck() {
     state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
-    if (state.notPresentCounter > settings?.offlineThreshold ?: presenceCountDefaultThreshold) {
+    if (state.notPresentCounter > safeToInt(settings?.offlineThreshold, presenceCountDefaultThreshold)) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline") {
             sendHealthStatusEvent("offline")
             if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
