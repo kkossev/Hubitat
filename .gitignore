@@ -2,3 +2,12 @@
 Drivers/Tuya TS004F/TS004F.groovy.bak
 *.bak
 Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/new 16.txt
+Hubitat.iml
+.idea/.gitignore
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+Drivers/Drivers.iml
+Drivers/SmartThings/SmartThings.iml
+.idea/libraries/groovy_2_4_21.xml
+.idea/encodings.xml
