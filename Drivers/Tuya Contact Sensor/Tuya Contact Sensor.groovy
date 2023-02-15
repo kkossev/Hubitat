@@ -14,17 +14,18 @@
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
+ * ver. 1.0.2  2023-02-15 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back;
  *
- *                                   TODO: add presenceCountThreshold option (default 12 hours)
+ *                                   TODO: when offlineThreshold = 0 (disabled), delete the healthStatus property. When enabled, set it to uknown 1
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
-static def version() { "1.0.1" }
+static def version() { "1.0.2" }
 
-static def timeStamp() { "2023/02/15 11:34 AM" }
+static def timeStamp() { "2023/02/15 1:22 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -64,7 +65,7 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0004,0005,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"                           // Model ZG-102ZL
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_26fmupbb", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_26fmupbb", deviceJoinName: "Tuya Contact Sensor"        // KK; https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_n2egfsli", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_oxslv1c9", deviceJoinName: "Tuya Contact Sensor"        // Model iH-F001
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_2mbfxlzr", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/tuya-zigbee-contact-sensor/82854/25?u=kkossev
@@ -75,15 +76,17 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_xph99wvr", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_ncdapbwy", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_fab7r7mc", deviceJoinName: "Tuya Contact Sensor"        // +tamper Model GD-D-Z
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "BlitzWolf Contact Sensor"   // Model SNTZ007
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-trhrga6p", deviceJoinName: "BlitzWolf Contact Sensor"   // Model BW-IS2
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,000A,0001,0500", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "BlitzWolf Contact Sensor"   // Model SNTZ007
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,000A,0001,0500", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-trhrga6p", deviceJoinName: "BlitzWolf Contact Sensor"   // Model BW-IS2
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,000A,0001,0500", outClusters: "0019", model: "RH3001", manufacturer: "TUYATEC-0l6xaqmi", deviceJoinName: "BlitzWolf Contact Sensor"   // KK
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model: "DS01", manufacturer: "eWeLink", deviceJoinName: "Sonoff Contact Sensor"
 
     }
     preferences {
-        input(name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-        input(name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input(name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+        input(name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input(name: "offlineThreshold", type: "number", title: "<b>HealthCheck Offline Threshold</b>", description: "<i>HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check</i>", range:"0..24", defaultValue: presenceCountDefaultThreshold)
         if (isConfigurable()) {
             input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
             def model = getModelGroup()
@@ -186,10 +189,10 @@ metadata {
         ],
         'BLITZWOLF_CONTACT_BATT' : [
                 model         : "RH3001",
-                manufacturers : ["TUYATEC-trhrga6p", "TUYATEC-nznq0233"],
+                manufacturers : ["TUYATEC-trhrga6p", "TUYATEC-nznq0233", "TUYATEC-0l6xaqmi"],
                 deviceJoinName: "BlitzWolf Contact Sensor",
-                inClusters    : "0000,0003,0500,0001",
-                outClusters   : "0003",
+                inClusters    : "0000,000A,0001,0500",
+                outClusters   : "0019",
                 capabilities  : ["contactSensor": true, "battery": true],
                 configuration : ["battery": true],
                 attributes    : ["healthStatus"],
@@ -229,7 +232,7 @@ def isConfigurable() { def model = getModelGroup(); return isConfigurable(model)
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
-@Field static final Integer presenceCountDefaultThreshold = 4    // 4*3 = 12 hours
+@Field static final Integer presenceCountDefaultThreshold = 12    // 12 hours
 
 private static getCLUSTER_TUYA() { 0xEF00 }
 private static getSETDATA() { 0x00 }
@@ -734,6 +737,7 @@ def updated() {
     } else {
         unschedule("logsOff")
     }
+    scheduleDeviceHealthCheck()
     
     if (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) {
         //
@@ -1001,6 +1005,8 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value: 10, type: "number"])
     if (fullInit == true || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value: 3600, type: "number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    if (fullInit == true || settings?.offlineThreshold == null) device.updateSetting("offlineThreshold", [value: presenceCountDefaultThreshold, type: "number"])
+    
 
 }
 
@@ -1118,16 +1124,10 @@ def setHealthStatusOnline() {
 
 def deviceHealthCheck() {
     state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
-    if (state.notPresentCounter > presenceCountDefaultThreshold) {
+    if (state.notPresentCounter > settings?.offlineThreshold ?: presenceCountDefaultThreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline") {
             sendHealthStatusEvent("offline")
             if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
-            /*
-            if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
-                handleMotion(false, isDigital=true)
-                if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
-            }
-            */
         }
     } else {
         if (logEnable) log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
@@ -1142,7 +1142,18 @@ def sendHealthStatusEvent(value) {
 void scheduleDeviceHealthCheck() {
     Random rnd = new Random()
     //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
-    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
+    if (safeToInt(settings?.offlineThreshold, presenceCountDefaultThreshold) != 0) {
+        schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/1 * * ? *", "deviceHealthCheck")
+        if (device.currentValue('healthStatus') == null) {
+            sendHealthStatusEvent('unknown')    
+        }
+    } else {
+        logDebug "unscheduling the healthCheck..."
+        unschedule("deviceHealthCheck")
+        if (device.currentValue('healthStatus') != null) {
+            device.deleteCurrentState('healthStatus')
+        }
+    }
 }
 
 
