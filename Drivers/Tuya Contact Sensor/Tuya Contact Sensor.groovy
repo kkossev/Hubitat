@@ -13,16 +13,18 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
- * ver. 1.0.1  2023-02-12 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed;
+ * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; 
  *
+ *                                   TODO: healthStatus timer
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
- *                                   TODO: - option 'Convert Battery Voltage to Percent'
+ *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
+ *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
 static def version() { "1.0.1" }
 
-static def timeStamp() { "2023/02/13 11:17 PM" }
+static def timeStamp() { "2023/02/15 7:32 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -30,7 +32,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 
-@Field static final Boolean debug = true
+@Field static final Boolean debug = false
 @Field static final Integer defaultMinReportingTime = 10
 
 
@@ -59,6 +61,9 @@ metadata {
         // when defined as attributes, will be shown on top of the 'Current States' list ...
         attribute "healthStatus", "enum", ["offline", "online", "unknown"]
 
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0004,0005,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"                           // Model ZG-102ZL
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_26fmupbb", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/30?u=kkossev
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_n2egfsli", deviceJoinName: "Tuya Contact Sensor"        // https://community.hubitat.com/t/tuya-zigbee-door-contact/95698/5?u=kkossev
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_oxslv1c9", deviceJoinName: "Tuya Contact Sensor"        // Model iH-F001
@@ -70,10 +75,8 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_xph99wvr", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TYZB01_ncdapbwy", deviceJoinName: "Tuya Contact Sensor"        // Model ZM-CG205
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "TS0203", manufacturer: "_TZ3000_fab7r7mc", deviceJoinName: "Tuya Contact Sensor"        // +tamper Model GD-D-Z
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "Tuya Contact Sensor"        // Model SNTZ007
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_n8dljorx", deviceJoinName: "Tuya Contact and Illuminance Sensor"                           // Model ZG-102ZL
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-nznq0233", deviceJoinName: "BlitzWolf Contact Sensor"   // Model SNTZ007
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0003,0500,0000", outClusters: "0003,0004,0005,0006,0008,1000,0019,000A", model: "RH3001", manufacturer: "TUYATEC-trhrga6p", deviceJoinName: "BlitzWolf Contact Sensor"   // Model BW-IS2
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model: "DS01", manufacturer: "eWeLink", deviceJoinName: "Sonoff Contact Sensor"
 
@@ -181,6 +184,21 @@ metadata {
                 attributes    : ["healthStatus"],
                 batteries     : "unknown"
         ],
+        'BLITZWOLF_CONTACT_BATT' : [
+                model         : "RH3001",
+                manufacturers : ["TUYATEC-trhrga6p", "TUYATEC-nznq0233"],
+                deviceJoinName: "BlitzWolf Contact Sensor",
+                inClusters    : "0000,0003,0500,0001",
+                outClusters   : "0003",
+                capabilities  : ["contactSensor": true, "battery": true],
+                configuration : ["battery": true],
+                attributes    : ["healthStatus"],
+                preferences   : [
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
+                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
+                ],
+                batteries     : "CR2032"
+        ],
         'SONOFF_CONTACT_BATT' : [
                 model         : "DS01",
                 manufacturers : ["eWeLink"],
@@ -246,7 +264,7 @@ def parse(String description) {
         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
         logInfo "Sending IAS enroll response..."
         ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        logDebug "enroll response: ${cmds}"
+        logDebug "sending enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
     } else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
@@ -396,7 +414,7 @@ def parseZHAcommand(Map descMap) {
                 } else {
                     attributeName = descMap.clusterId
                 }
-                if (lastTxMap.humiCfgOK == true && lastTxMap.tempCfgOK == true && lastTxMap.battCfgOK == true) {
+                if ((lastTxMap.humiCfgOK != null ? lastTxMap.humiCfgOK : true) && (lastTxMap.tempCfgOK != null ? lastTxMap.tempCfgOK : true) && (lastTxMap.battCfgOK != null ? lastTxMap.battCfgOK : true)) {
                     logDebug "all parameters configured!"
                 }
                 if (txtEnable == true) {
@@ -708,11 +726,11 @@ def updated() {
     Map lastRxMap = stringToJsonMap(state.lastRx)
     Map lastTxMap = stringToJsonMap(state.lastTx)
 
-    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b> modelGroupPreference = <b>${modelGroupPreference}</b> (${getModelGroup()})"
+    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>, deviceProfile = ${getModelGroup()}"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
     if (logEnable == true) {
         runIn(86400, "logsOff", [overwrite: true, misfire: "ignore"])    // turn off debug logging after 30 minutes
-        if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
+        if (settings?.txtEnable) log.info "${device.displayName} Debug logging will be turned off after 24 hours"
     } else {
         unschedule("logsOff")
     }
@@ -761,9 +779,9 @@ def updated() {
     state.lastTx = mapToJsonString(lastTxMap)
     
     def pendingConfig = 0
-    pendingConfig += lastTxMap.tempCfgOK == true ? 0 : 1
-    pendingConfig += lastTxMap.humiCfgOK == true ? 0 : 1
-    pendingConfig += lastTxMap.battCfgOK == true ? 0 : 1
+    pendingConfig += lastTxMap.tempCfgOK != null ? (lastTxMap.tempCfgOK == true ?  0 : 1) : 0
+    pendingConfig += lastTxMap.humiCfgOK != null ? (lastTxMap.humiCfgOK == true ?  0 : 1) : 0
+    pendingConfig += lastTxMap.battCfgOK != null ? (lastTxMap.battCfgOK == true ?  0 : 1) : 0  
     if (isConfigurable()) {
         logInfo "pending ${pendingConfig} reporting configurations"
         if (pendingConfig != 0) {
@@ -781,7 +799,7 @@ def updated() {
 
 def isPendingConfig() {
     Map lastTxMap = stringToJsonMap(state.lastTx)
-    if (lastTxMap.tempCfgOK == false || lastTxMap.humiCfgOK == false || lastTxMap.battCfgOK == false) {
+    if ((lastTxMap.tempCfgOK != null && lastTxMap.tempCfgOK == false) || (lastTxMap.humiCfgOK != null && lastTxMap.humiCfgOK == false) || (lastTxMap.battCfgOK != null && lastTxMap.battCfgOK == false)) {
         return true
     } else {
         return false
@@ -907,9 +925,11 @@ def resetStats() {
                       tempCfg : '-1,-1,-1',
                       humiCfg : '-1,-1,-1',
           */
+        /*
                       tempCfgOK : true,
                       humiCfgOK : true,
                       battCfgOK : true,
+          */
                       cfgTimer : 0
     ]
     
@@ -964,6 +984,7 @@ void initializeVars(boolean fullInit = true) {
         unschedule()
         resetStats()
         setDeviceName()
+        state.comment = 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
         log.info "${device.displayName} all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()
     }
