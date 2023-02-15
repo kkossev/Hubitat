@@ -17,11 +17,12 @@
  *  ver. 1.0.0 2023-02-03 kkossev - first version: 'Light Usage Table' sample app code modification
  *  ver. 1.0.1 2023-02-03 kkossev - added powerSource, battery, model, manufacturer, driver name; added option to skip the 'capability.healthCheck' filtering;
  *  ver. 1.0.2 2023-02-03 FriedCheese2006 - Tweaks to Install Process
- *  ver. 1.0.3 2023-02-03 tonesto7 - Added last activity date; kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
- *                                - added 'Last Activity Time'; last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
+ *  ver. 1.0.3 2023-02-03 tonesto7 - Added last activity date; 
+                          kkossev - importUrl; documentationLink; app version; debug and info logs options; added controller type, driver type; added an option to filter battery-powered only devices, hide poweSource column; filterHealthCheckOnly bug fix;
+ *                                 -last activity thresholds and color options; battery threshold option; catching some exceptions when a device is deleted from HE, but was present in the list; added device status
  *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
  *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
- *  ver. 1.0.6 2023-02-10 kkossev - IntelliJ lint;
+ *  ver. 1.0.6 2023-02-15 kkossev - (development) IntelliJ lint; merged Tonesto7 pull request; 
  *
  *                                  TODO: 
  */
@@ -30,7 +31,7 @@ import groovy.transform.Field
 
 def version() { "1.0.6" }
 
-def timeStamp() { "2023/02/10 8:22 PM" }
+def timeStamp() { "2023/02/15 3:30 PM" }
 
 @Field static final Boolean debug = false
 
