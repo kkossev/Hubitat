@@ -13,9 +13,9 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
- * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; 
+ * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
  *
- *                                   TODO: healthStatus timer
+ *                                   TODO: add presenceCountThreshold option (default 12 hours)
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
@@ -24,7 +24,7 @@
 
 static def version() { "1.0.1" }
 
-static def timeStamp() { "2023/02/15 7:32 AM" }
+static def timeStamp() { "2023/02/15 11:34 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -229,7 +229,7 @@ def isConfigurable() { def model = getModelGroup(); return isConfigurable(model)
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
-@Field static final Integer presenceCountThreshold = 4
+@Field static final Integer presenceCountDefaultThreshold = 4    // 4*3 = 12 hours
 
 private static getCLUSTER_TUYA() { 0xEF00 }
 private static getSETDATA() { 0x00 }
@@ -725,7 +725,7 @@ def updated() {
     ArrayList<String> cmds = []
     Map lastRxMap = stringToJsonMap(state.lastRx)
     Map lastTxMap = stringToJsonMap(state.lastTx)
-
+    checkDriverVersion()
     if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>, deviceProfile = ${getModelGroup()}"
     if (settings?.txtEnable) log.info "${device.displayName} Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
     if (logEnable == true) {
@@ -899,6 +899,7 @@ def checkDriverVersion() {
         if (state.lastRx == null || state.stats == null || state.lastTx == null) {
             resetStats()
         }
+        scheduleDeviceHealthCheck()
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -1117,7 +1118,7 @@ def setHealthStatusOnline() {
 
 def deviceHealthCheck() {
     state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
-    if (state.notPresentCounter > presenceCountTreshold) {
+    if (state.notPresentCounter > presenceCountDefaultThreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline") {
             sendHealthStatusEvent("offline")
             if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
@@ -1137,6 +1138,14 @@ def deviceHealthCheck() {
 def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
+
+void scheduleDeviceHealthCheck() {
+    Random rnd = new Random()
+    //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
+}
+
+
 
 def ping() {
     logInfo "ping() is not implemented"
