@@ -59,7 +59,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.2" }
-def timeStamp() {"2023/02/16 2:20 PM"}
+def timeStamp() {"2023/02/16 6:01 PM"}
 
 @Field static final Boolean debug = false
 
@@ -518,7 +518,7 @@ def parseOnOffAttributes( it ) {
             break
         case "4003" :    // non-Tuya "powerOnState" (ENUM8), read-write, default=1 
             attrName = "Power On State"
-            mode = value == 0 ? "off" : value == 1 ? "on" : value == 255 ?  "Last state" : null
+            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : "UNKNOWN"
             break
         case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
             attrName = "Child Lock"
@@ -1906,7 +1906,7 @@ def powerOnState( mode ) {
         // continue anyway ..
     }
     else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdReality()) {
-        value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "FF" : null
+        value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "02" : null
         attribute = 0x4003
     }
     else {    // Tuya TS004F
