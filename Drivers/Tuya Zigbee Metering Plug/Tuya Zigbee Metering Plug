@@ -59,7 +59,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.2" }
-def timeStamp() {"2023/02/16 2:07 PM"}
+def timeStamp() {"2023/02/16 2:20 PM"}
 
 @Field static final Boolean debug = false
 
@@ -1835,7 +1835,7 @@ boolean otherTuyaOddities( String description ) {
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else {
-                    if (settings?.logEnable) log.warn "${device.displayName} Unknown On/Off Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
+                    //if (settings?.logEnable) log.warn "${device.displayName} unprocessed On/Off Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
                 }
                 break
             default :
@@ -1900,14 +1900,22 @@ def ledMode( mode ) {
 def powerOnState( mode ) {
     ArrayList<String> cmds = []
     String value = null
+    Integer attribute = 0
     if (state.model == "TS0601") {
         if (settings?.logEnable) log.warn "${device.displayName} Power On State not implemented for TS0601: ${mode}"
         // continue anyway ..
     }
-    value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "02" : null
+    else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdReality()) {
+        value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "FF" : null
+        attribute = 0x4003
+    }
+    else {    // Tuya TS004F
+        value = mode == "off" ? "00" : mode == "on" ? "01" : mode == "Last state" ? "02" : null
+        attribute = 0x8002
+    }
     if (value != null) {
-        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, 0x8002, DataType.ENUM8, value.toInteger())
-        if (settings?.logEnable) log.trace "${device.displayName} sending LED mode : ${mode}"
+        cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, attribute, DataType.ENUM8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending Power On State mode : ${mode}"
         sendZigbeeCommands( cmds )    
     }
     else {
