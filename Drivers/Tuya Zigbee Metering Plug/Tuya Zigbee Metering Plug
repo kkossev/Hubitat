@@ -48,9 +48,10 @@
  *  ver. 1.6.6 2023-01-20 kkossev - Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
  *  ver. 1.7.0 2023-01-29 kkossev - added healthStatus;
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
- *  ver. 1.7.2 2023-02-11 kkossev - (dev.branch) InteliJ lint +bug fixes;
+ *  ver. 1.7.2 2023-02-16 kkossev - (dev.branch) InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
+ *                                 TODO: 
  *
  */
 import groovy.json.*
@@ -58,7 +59,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.2" }
-def timeStamp() {"2023/02/02 6:25 PM"}
+def timeStamp() {"2023/02/16 2:07 PM"}
 
 @Field static final Boolean debug = false
 
@@ -152,8 +153,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-134", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-134"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-137", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-137"   // frient smart plug mini
-        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SMRZB-143", manufacturer:"frient A/S", deviceJoinName: "frient smart cable"   // // frient smart cable
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"   // SIHAS Smart Plug with on/off button
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SMRZB-143", manufacturer:"frient A/S", deviceJoinName: "frient smart cable"        // frient smart cable
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"                    // SIHAS Smart Plug with on/off button
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality smart plug"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
+        
         // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
         // Manually switching to this driver for the plugs below will still work.
         /*
@@ -300,11 +303,12 @@ private boolean isHeiman() { device.getDataValue("manufacturer") == "HEIMAN" }
 private boolean isDevelco() { device.getDataValue("model") == "EMIZB-132" }
 private boolean isOsramPlug01() {(device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM')}
 private boolean isSiHAS() { device.getDataValue("manufacturer") == "ShinaSystem" }
+private boolean isThirdReality() { device.getDataValue("manufacturer") == "Third Reality, Inc" }
 
-private int getPowerDiv() { ( isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
-private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) ? 1000 : 100 }    // Tuya :  energyDiv = 100
-private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
-private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
+private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
+private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }    // Tuya :  energyDiv = 100
+private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || isThirdReality() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
+private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : 10 }
 private int getPowerFactorDiv() { isDinRail() ? 1000 : 100 }
 
@@ -500,6 +504,22 @@ def parseOnOffAttributes( it ) {
     }
     def value = zigbee.convertHexToInt(it.value)
     switch (it.attrId) {
+        case "4000" :    // non-Tuya GlobalSceneControl (bool), read-only
+            attrName = "Global Scene Control"
+            mode = value == 0 ? "off" : value == 1 ? "on" : null
+            break
+        case "4001" :    // non-Tuya OnTime (UINT16), read-only
+            attrName = "On Time"
+            mode = value
+            break
+        case "4002" :    // non-Tuya OffWaitTime (UINT16), read-only
+            attrName = "Off Wait Time"
+            mode = value
+            break
+        case "4003" :    // non-Tuya "powerOnState" (ENUM8), read-write, default=1 
+            attrName = "Power On State"
+            mode = value == 0 ? "off" : value == 1 ? "on" : value == 255 ?  "Last state" : null
+            break
         case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]]
             attrName = "Child Lock"
             mode = value == 0 ? "off" : "on"
@@ -1810,13 +1830,12 @@ boolean otherTuyaOddities( String description ) {
                 }
                 break
             case "0006" :
-                if (it.attrId in ["8000", "8001", "8002", "8003"]) {
+                if (it.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"]) {
                     parseOnOffAttributes(it)
                     bWasAtLeastOneAttributeProcessed = true
                 }
-                if (it.attrId in ["4001", "4002"]) {
-                    if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
-                    bWasAtLeastOneAttributeProcessed = true
+                else {
+                    if (settings?.logEnable) log.warn "${device.displayName} Unknown On/Off Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
                 }
                 break
             default :
