@@ -178,6 +178,16 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "b6e99a33-7aa3-4b25-ac03-9e44b0be5816",
+      "name": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Contact%20Sensor/packageManifest.json",
+      "description": "Tuya Zigbee Contact Sensor++ w/ healthStatus - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
