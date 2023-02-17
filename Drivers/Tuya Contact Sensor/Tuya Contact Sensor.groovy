@@ -14,7 +14,7 @@
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
- * ver. 1.0.2  2023-02-15 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix;
+ * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
  *
  *                                   TODO: when offlineThreshold = 0 (disabled), delete the healthStatus property. When enabled, set it to uknown 1
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
@@ -25,7 +25,7 @@
 
 static def version() { "1.0.2" }
 
-static def timeStamp() { "2023/02/15 3:57 PM" }
+static def timeStamp() { "2023/02/17 7:58 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -81,6 +81,7 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,000A,0001,0500", outClusters: "0019", model: "RH3001", manufacturer: "TUYATEC-0l6xaqmi", deviceJoinName: "BlitzWolf Contact Sensor"   // KK
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model: "DS01", manufacturer: "eWeLink", deviceJoinName: "Sonoff Contact Sensor"
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor"             // application: 17 https://community.hubitat.com/t/best-motion-sensor-on-battery/40054/158?u=kkossev
 
     }
     preferences {
@@ -216,6 +217,21 @@ metadata {
                         "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
                 ],
                 batteries     : "CR2032"
+        ],
+        '3RDREALITY_CONTACT_BATT' : [
+                model         : "3RDS17BZ",
+                manufacturers : ["Third Reality, Inc"],
+                deviceJoinName: "Third Reality Contact Sensor",
+                inClusters    : "0000,0001,0500",
+                outClusters   : "0019",
+                capabilities  : ["contactSensor": true, "battery": true],
+                configuration : ["battery": true],
+                attributes    : ["healthStatus"],
+                preferences   : [
+                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
+                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
+                ],
+                batteries     : "2xAAA"
         ],
         'UNKNOWN'             : [
                 model         : "",
