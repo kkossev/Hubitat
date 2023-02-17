@@ -23,6 +23,7 @@
  *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
  *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
  *  ver. 1.0.6 2023-02-15 kkossev - (development) IntelliJ lint; merged Tonesto7 pull request; 
+ *  ver. 1.0.7 2023-02-16 FriedCheese2006 - Added DataTables for enhance table sorting/searching
  *
  *                                  TODO: 
  */
