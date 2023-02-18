@@ -11,7 +11,7 @@ Driver code is also availabe in Github: [link](https://raw.githubusercontent.com
 ## Supported Tuya models
 |  Device |  Links |
 |---|---|
-| Tuya Contact and Temperature/Humidity Sensor <br> ![image](https://user-images.githubusercontent.com/6189950/219631200-fc858613-788b-45f3-b0a7-2a729a05887a.png)  |Model: TS0601<br>Manufacturer: TZE200_nvups4nh <br>Features: Contact, temperature, humidity, battery<br>Battery: <br><br> Links: TODO <br> |
+| Tuya Contact and Temperature/Humidity Sensor <br> ![image](https://user-images.githubusercontent.com/6189950/219631200-fc858613-788b-45f3-b0a7-2a729a05887a.png)  |Model: TS0601<br>Manufacturer: TZE200_nvups4nh <br>Features: Contact, temperature, humidity, battery<br>Battery: TODO<br>Driver status: operational<br><br> AliExpress: [link](https://www.aliexpress.us/item/3256804692294345.html) <br> |
 | Tuya Contact and Illuminance Sensor<br> ![image](https://user-images.githubusercontent.com/6189950/219630061-b9ecc3bd-3a07-45b0-a2fb-78349cf3c42e.png) |Model: TS0601<br>Manufacturer: TZE200_pay2byax, TZE200_n8dljorx<br>Features: Contact, illuminance, battery<br>Battery: <br><br>Driver status: <b>work-in-progress</b><br> Links: TODO |
 | Tuya ContactSensor <br> ![image](https://user-images.githubusercontent.com/6189950/219629284-80dd012f-25b8-406e-ab31-9ab0094dcf6d.png)| Model: TS0203<br>Manufacturers: "_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr", "_TZ3000_402jjyro",  "_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr", "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233" <br>Features: Contact, illuminance, battery<br>Battery: <br><br> Links: TODO|
 
