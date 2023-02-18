@@ -1,0 +1,18 @@
+{
+  "packageName": "Device Health Status",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2023-02-18",
+  "apps": [
+    {
+      "id": "18f500cd-fe3e-45fa-8b9d-2c17089c7d7f",
+      "name": "Device Health Status",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/Device%20Health%20Status.groovy",
+      "required": true,
+      "oauth": false,
+      "primary": false
+    }
+  ]
+}
