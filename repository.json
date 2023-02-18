@@ -188,6 +188,13 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "8c11f83d-3fa8-4843-bf02-d7652089c952",
+      "name": "Device Health Status",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/packageManifest_DeviceHealthStatus.json",
+      "description": "Device Health Status - app for Hubitat Elevation hub"
     }
   ]
 }
