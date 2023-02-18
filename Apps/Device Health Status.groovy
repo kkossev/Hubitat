@@ -23,6 +23,7 @@
  *  ver. 1.0.4 2023-02-06 kkossev - added 'Device Status' red/green colors; added hideModelAndManufacturerColumns and hideVirtualAndUnknownDevices filtering options; app instance name can be changed; added Presence column
  *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
  *  ver. 1.0.6 2023-02-15 kkossev - (development) IntelliJ lint; merged Tonesto7 pull request; 
+ *  ver. 1.0.7 2023-02-16 FriedCheese2006 - Added DataTables for enhance table sorting/searching
  *
  *                                  TODO: 
  */
@@ -150,9 +151,12 @@ def mainPage() {
 }
 
 String displayTable() {
-    String str = "<script src='https://code.iconify.design/iconify-icon/1.0.0/iconify-icon.min.js'></script>"
-    str += "<style>.mdl-data-table tbody tr:hover{background-color:inherit} .tstat-col td,.tstat-col th { padding:8px 8px;text-align:center;font-size:12px} .tstat-col td {font-size:15px }" +
-            "</style><div style='overflow-x:auto'><table class='mdl-data-table tstat-col' style=';border:2px solid black'>" +
+	String str = "<script src='https://code.iconify.design/iconify-icon/1.0.0/iconify-icon.min.js'></script>"
+    //Import DataTables library
+	str += "<link rel='stylesheet' type='text/css' href='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.css'/>"
+	str += "<script type='text/javascript' src='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.js'></script>"
+	str += "<style>.mdl-data-table tbody tr:hover{background-color:inherit} .tstat-col td,.tstat-col th { padding:8px 8px;text-align:center;font-size:12px} .tstat-col td {font-size:15px }" +
+		"</style><div style='overflow-x:auto'><table table id='main-table' class='mdl-data-table tstat-col' style=';border:2px solid black'>" +
 
             "<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
             "<th><div>Health</div><div>Status</div></th>" +
@@ -166,7 +170,8 @@ String displayTable() {
             "<th><div>Device</div><div>Type</div></th>" +
             "<th><div>Driver</div><div>Name</div></th>" +
             "<th><div>Driver</div><div>Type</div></th>" +
-            "</tr></thead>"
+            //End header row; start table body
+            "</tr></thead><tbody>"
 
 
     def devicesSorted = devices
@@ -240,6 +245,8 @@ String displayTable() {
         }
     } // for each device
     str += "</table></div>"
+    //Use DataTable to process the table
+    str += "<script type='text/javascript'>\$(document).ready(function() { \$('#main-table').DataTable( {paging: false} ); } );</script>"
     str
 }
 

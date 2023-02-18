@@ -11,3 +11,4 @@ Drivers/Drivers.iml
 Drivers/SmartThings/SmartThings.iml
 .idea/libraries/groovy_2_4_21.xml
 .idea/encodings.xml
+.hubitat/metadata.json
