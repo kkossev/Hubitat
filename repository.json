@@ -120,11 +120,81 @@
       ]
     },
     {
-      "id": "a0f9472f-7fef-4c9b-afee-c71240bba07c",
+      "id": "0e9a6b4f-744d-4fa2-b31d-4ec95e58e472",
+      "name": "SiHAS Multipurpose Sensor USM-300-ZB",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_usm300zb.json",
+      "description": "SiHAS Multipurpose Sensor USM-300-ZB - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "c25fb12f-a13d-4d84-8bc5-40a2bba258d3",
+      "name": "Tuya Zigbee Smoke Detector",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/packageManifest.json",
+      "description": "Tuya Zigbee Smoke Detector - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "9e3aacd4-7f2a-4e11-a918-16cc4a73a66d",
+      "name": "SiHAS Zigbee Power Meter PMM-300-Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_PMM-300z.json",
+      "description": "SiHAS Zigbee Power Meter and Energy Monitor PMM-300-Z(1,2,3) - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "adff4e60-c83b-43b2-873c-8052eef10e90",
+      "name": "SiHAS People Counter CSM-300-ZB (V2)",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_CSM-300z.json",
+      "description": "SiHAS People Counter CSM-300-ZB (V2) - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "deb4b85c-54b8-4cba-8518-76a26886f158",
       "name": "SiHAS ZigBee Lock Without Codes DLM-300-Z",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_DLM-300z.json",
-      "description": "SiHAS ZigBee Lock Without Codes- driver for Hubitat Elevation hub"
+      "description": "SiHAS ZigBee Lock Without Codes- driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "30925b17-5276-403f-993d-2b35298756bb",
+      "name": "SiHAS Dual Motion Sensor DMS-300Z",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat-SiHAS/main/packageManifest_DMS-300z.json",
+      "description": "SiHAS Dual Motion Sensor DMS-300Z - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "b6e99a33-7aa3-4b25-ac03-9e44b0be5816",
+      "name": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Contact%20Sensor/packageManifest.json",
+      "description": "Tuya Zigbee Contact Sensor++ w/ healthStatus - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+    },
+    {
+      "id": "8c11f83d-3fa8-4843-bf02-d7652089c952",
+      "name": "Device Health Status",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/packageManifest_DeviceHealthStatus.json",
+      "description": "Device Health Status - app for Hubitat Elevation hub"
     }
   ]
 }

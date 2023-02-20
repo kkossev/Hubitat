@@ -1,0 +1,19 @@
+{
+  "packageName": "Tuya Zigbee Smoke Detector",
+  "author": "Krassimir Kossev",
+  "version": "1.0.2",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2022-11-17",
+  "releaseNotes": "1.0.2 2022-11-17 - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button\n1.0.1 2022-10-31 - added _TZE200_uebojraa\n1.0.0 2022-10-29 - inital version for _TZE200_ntcy3xu1",
+  "documentationLink": "https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159/2?u=kkossev",
+  "communityLink": "https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159",  
+  "drivers": [
+    {
+      "id": "95fd080b-c541-4426-a849-247a3678945b",
+      "name": "Tuya Zigbee Smoke Detector",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy",
+      "required": true
+    }
+  ]
+}

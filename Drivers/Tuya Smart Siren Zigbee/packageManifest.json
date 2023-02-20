@@ -1,9 +1,11 @@
 {
   "packageName": "Tuya Smart Siren Zigbee",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.1.1",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-04-02",
+  "dateReleased": "2022-12-27",
+  "releaseNotes": "1.1.1 2022-12-27 - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;\n1.1.0 2022-11-05 - Alarm events are registered upon confirmation from the device only; added switch capability; added Tone capability (beep command); combined Tuya commands; default settings are restored after the beep command; added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.\n1.0.0 2022-04-02 - First published version",
+  "communityLink": "https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772",
   "drivers": [
     {
       "id": "21580e40-cf53-445a-a729-a67d4608458b",

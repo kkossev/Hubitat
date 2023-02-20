@@ -1,0 +1,16 @@
+{
+  "packageName": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2023-021728",
+  "drivers": [
+    {
+      "id": "ea11eefa-641f-440c-9f4e-e4d921e3204f",
+      "name": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Contact%20Sensor/Tuya%20Contact%20Sensor.groovy",
+      "required": true
+    }
+  ]
+}
