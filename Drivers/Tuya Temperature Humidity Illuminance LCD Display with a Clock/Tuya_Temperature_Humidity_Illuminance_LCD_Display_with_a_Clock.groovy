@@ -29,14 +29,15 @@
  * ver. 1.2.0  2023-01-15 kkossev - parsing multiple DP received in one command;
  * ver. 1.2.1  2023-01-15 kkossev - _TZE200_locansqn fixes;_TZ3000_bguser20 correct model;
  * ver. 1.3.0  2023-02-02 kkossev - healthStatus; added capability 'Health Check'
+ * ver. 1.3.1  2023-02-10 kkossev - added RH3052 TUYATEC-gqhxixyk ; 
  * 
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.3.0" }
-def timeStamp() {"2023/02/02 10:56 PM"}
+def version() { "1.3.1" }
+def timeStamp() {"2023/02/10 11:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -103,6 +104,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_yd2e749y", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0402,0405", outClusters:"0003,0402,0405", model:"RH3052", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3052 Motion Sensor"        // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
+
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
         
@@ -202,7 +205,8 @@ metadata {
     '_TZ3000_xr3htd96'  : 'TS0201',             // Model WSD500A 
     '_TZ3000_fllyghyj'  : 'TS0201',
     '_TZ3000_yd2e749y'  : 'TS0201',
-    '_TZ3000_6uzkisv2'  : 'TS0201',    
+    '_TZ3000_6uzkisv2'  : 'TS0201',
+    'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
