@@ -15,16 +15,17 @@
  *
  *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
- *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation'; added Clear Detected Tested buttons; removed Configure button
+ *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
+ *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
  *
- *
+ *            TODO: add [digital] in the logs
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.2" }
-def timeStamp() {"2022/11/17 1:13 PM"}
+def version() { "1.0.3" }
+def timeStamp() {"2022/12/15 7:00 AM"}
 
 @Field static final Boolean debug = false
 
@@ -56,6 +57,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ntcy3xu1"    // https:www.aliexpress.com/item/1005003951429372.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_uebojraa"    // https://community.hubitat.com/t/tuya-zigbee-smart-smoke-detector-support/102471
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_t5p1vj8r"    // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_e2bedvo9"    // https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159/16?u=kkossev
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_yh7aoahi"    // https://github.com/Koenkk/zigbee2mqtt/issues/11119 silence = Code 16; smoke detection state = code 1; Fault Alarm = Code 11; battery level state = code 14; battery level = Code 15;
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_5d3vhjro"    // 'SA12IZL'
