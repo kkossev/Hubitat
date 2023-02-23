@@ -35,15 +35,22 @@
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
- * ver. 2.6.2 2023-02-06 kkossev     - (dev. branch) added Konke button model: 3AFE280100510001 ; 
+ * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  *
+ *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
+ *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
+ *                                   - TODO: add Advanced options
+ *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
  *                                   - TODO: calculate battery % from Voltage event for Konke button!
- *                                   - TODO: add Advanced options; TODO: debounce timer configuration; add 'auto revert to scene mode' option
+ *                                   - TODO: add '*Works with ' state comment
+ *                                   - TODO: ; TODO: debounce timer configuration; add 'auto revert to scene mode' option
+ *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
+ *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
  *
  */
 
 def version() { "2.6.2" }
-def timeStamp() {"2023/02/06 12:02 PM"}
+def timeStamp() {"2023/02/23 9:51 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -133,10 +140,11 @@ metadata {
 
     fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
     fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zqtiam4u", deviceJoinName: "Tuya 6 button Scene Switch"    // not tested
-    fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "TLoraTap 6 Scene Switch"       // https://community.hubitat.com/t/loratap-6-button-controller-drivers/91951/20?u=kkossev
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "LoraTap 6 Scene Switch"       // https://community.hubitat.com/t/loratap-6-button-controller-drivers/91951/20?u=kkossev
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "LoraTap 6 Scene Switch"       // https://user-images.githubusercontent.com/42491156/210933986-16fc9854-b7d8-4239-a6ef-311ba631e480.png 
         
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
-    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
             
     }
@@ -218,6 +226,12 @@ def parse(String description) {
             else if (descMap.sourceEndpoint == "01") {
        	        buttonNumber = reverseButton==true  ? 1 : 4
             }
+	        else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
+   	            buttonNumber = reverseButton==true  ? 5 : 5
+            }
+            else if (descMap.sourceEndpoint == "06") {
+       	        buttonNumber = reverseButton==true  ? 6 : 6
+            }            
             if (descMap.data[0] == "00")
                 buttonState = "pushed"
             else if (descMap.data[0] == "01")
