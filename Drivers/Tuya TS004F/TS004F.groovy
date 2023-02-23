@@ -36,7 +36,9 @@
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
+ * ver. 2.6.3 2023-02-23 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv
  *
+ *                                   - TODO: simulate double-click for the 4-button knobs
  *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
  *                                   - TODO: add Advanced options
@@ -49,8 +51,8 @@
  *
  */
 
-def version() { "2.6.2" }
-def timeStamp() {"2023/02/23 9:51 PM"}
+def version() { "2.6.3" }
+def timeStamp() {"2023/02/23 10:24 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -146,6 +148,12 @@ metadata {
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
+        
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "4 Button Smart Remote Controller"     // https://www.aliexpress.com/item/4001062612446.html
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_fsiepnrh", deviceJoinName: "4 Button Smart Remote Controller"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_p6ju8myv", deviceJoinName: "4 Button Smart Remote Controller"
+    
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_fsiepnrh", deviceJoinName: "Nedis Zigbee 4 Button Fob"
             
     }
     preferences {
@@ -243,6 +251,29 @@ def parse(String description) {
                 return null 
             }
         } // command == "FD"
+        else if (descMap.clusterInt == 0x0501) { 
+            if (descMap.command == "02" && descMap.data.size() == 0)  {
+      	        buttonNumber = reverseButton == true  ? 1 : 3
+            } 
+            else if (descMap.command == "00" && descMap.data.size() >= 1) {
+                if (descMap.data[0] == "03") {
+          	        buttonNumber = reverseButton == true  ? 2 : 4
+                }
+                else if (descMap.data[0] == "01") {
+          	        buttonNumber = reverseButton == true  ? 3 : 1
+                }
+                else if (descMap.data[0] == "00") {
+          	        buttonNumber = reverseButton == true  ? 4 : 2
+                }
+            } 
+            if (buttonNumber != 0 ) {
+                buttonState = "pushed"
+            }
+            else {
+                if (logEnable) {log.warn "${device.displayName} unkknown event from cluster=${descMap.clusterInt} command=${descMap.command} data=${descMap?.data}"}
+                return null            
+            }
+        }
         else if (descMap.clusterInt == 0x0006 && descMap.command == "FC") {
             // Smart knob
             if (descMap.data[0] == "00") {            // Rotate one click right
@@ -482,47 +513,50 @@ def installed()
 def initialize() {
     if (true /*isTuya()*/) {
         tuyaMagic()
-    }
-    else {
+    } else {
     	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
     }
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
     if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || device.getDataValue("manufacturer") == "_TZ3000_ja5osu5g") {
     	numberOfButtons = 1
-    }
+    } 
     else if (device.getDataValue("model") == "TS0042") {
     	numberOfButtons = 2
-    }
+    } 
     else if (device.getDataValue("model") == "TS0043") {
     	numberOfButtons = 3
-    }
+    } 
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
         if (isSmartKnob()) {    // Smart Knob 
             log.debug "${device.displayName} device ${device.data.manufacturer} identified as Smart Knob model ${device.data.model}"
         	numberOfButtons = 3
             supportedValues = ["pushed", "double", "held", "released"]
-        }
+        } 
         else {
             log.debug "${device.displayName} device ${device.data.manufacturer} identified as 4 keys scene switch model ${device.data.model}"
         	numberOfButtons = 4
             supportedValues = ["pushed", "double", "held"]    // no released events are generated in scene switch mode
         }
-    }
+    } 
+    else if (device.getDataValue("model") == "TS0215") {
+    	numberOfButtons = 4
+        supportedValues = ["pushed"]
+    } 
     else if (device.getDataValue("model") == "TS0045") {    // just in case a new Tuya devices manufacturer decides to invent a new  model! :) 
     	numberOfButtons = 5
-    }
+    } 
     else if (device.getDataValue("model") in ["TS0601", "TS0046"]) {
         numberOfButtons = 6
-    }
+    } 
     else if (isIcasa()) {
         numberOfButtons = 8
         supportedValues = ["pushed", "held", "released"]
-    }
+    } 
     else {
     	numberOfButtons = 4	// unknown
         supportedValues = ["pushed", "double", "held", "released"]
-        log.warn "${device.displayName}<b>unknown device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}. Please report this log to the developer.</b>"
+        log.warn "${device.displayName} <b>unknown device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}. Please report this log to the developer.</b>"
     }
     sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true)
     sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true)
