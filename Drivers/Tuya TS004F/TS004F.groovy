@@ -35,13 +35,22 @@
  * ver. 2.5.2 2023-01-28 kkossev     - _TZ3000_vp6clf9d (TS0044) debouncing; added Loratap TS0046 (6 buttons); 
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
+ * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  *
- *                                   - TODO: add Advanced options; TODO: debounce timer configuration; add 'auto revert to scene mode' option
+ *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
+ *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
+ *                                   - TODO: add Advanced options
+ *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
+ *                                   - TODO: calculate battery % from Voltage event for Konke button!
+ *                                   - TODO: add '*Works with ' state comment
+ *                                   - TODO: ; TODO: debounce timer configuration; add 'auto revert to scene mode' option
+ *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
+ *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
  *
  */
 
-def version() { "2.6.1" }
-def timeStamp() {"2023/02/05 8:08 AM"}
+def version() { "2.6.2" }
+def timeStamp() {"2023/02/23 9:51 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -125,16 +134,18 @@ metadata {
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TZ3000_dku2cfsc", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019", manufacturer: "_TYZB01_cnlmkhbk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_u3nv1jwk", model: "TS0044", deviceJoinName: "Tuya 4 button Scene Switch"        // not tested https://community.hubitat.com/t/zigbee-wireless-scene-switch/108146?u=kkossev
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_mh9px7cq", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_mh9px7cq", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
 
     fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_abci1hiu", model: "TS0044", deviceJoinName: "MOES Remote TS0044"
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zqtiam4u", deviceJoinName: "Tuya 6 button Scene Switch"    // not tested
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "TLoraTap 6 Scene Switch"       // https://community.hubitat.com/t/loratap-6-button-controller-drivers/91951/20?u=kkossev
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_2m38mh6k", deviceJoinName: "LoraTap 6 button Scene Switch"        
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zqtiam4u", deviceJoinName: "Tuya 6 button Scene Switch"    // not tested
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "LoraTap 6 Scene Switch"       // https://community.hubitat.com/t/loratap-6-button-controller-drivers/91951/20?u=kkossev
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0046", manufacturer:"_TZ3000_iszegwpd", deviceJoinName: "LoraTap 6 Scene Switch"       // https://user-images.githubusercontent.com/42491156/210933986-16fc9854-b7d8-4239-a6ef-311ba631e480.png 
         
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0B05,1000", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
-
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
             
     }
     preferences {
@@ -153,6 +164,7 @@ metadata {
 def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
 def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
+def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 
 // Parse incoming device messages to generate events
@@ -179,6 +191,12 @@ def parse(String description) {
                 break
             case 'batteryVoltage' :
                 event.unit = 'V'
+                break
+            case 'switch' : // Konke button
+                if (isKonkeButton()) {
+                    processKonkeButton(description)
+                    return null
+                }
                 break
             default :
                 if (logEnable) log.debug "${device.displayName} Unexpected event: $event"
@@ -208,6 +226,12 @@ def parse(String description) {
             else if (descMap.sourceEndpoint == "01") {
        	        buttonNumber = reverseButton==true  ? 1 : 4
             }
+	        else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
+   	            buttonNumber = reverseButton==true  ? 5 : 5
+            }
+            else if (descMap.sourceEndpoint == "06") {
+       	        buttonNumber = reverseButton==true  ? 6 : 6
+            }            
             if (descMap.data[0] == "00")
                 buttonState = "pushed"
             else if (descMap.data[0] == "01")
@@ -270,7 +294,7 @@ def parse(String description) {
             (buttonNumber,buttonState) = processIcasa( descMap )
         }
         else {
-            if (logEnable) {log.warn "${device.displayName} unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
+            if (logEnable) {log.debug "${device.displayName} unprocessed catchall from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint}"}
             if (logEnable) {log.debug "${device.displayName} catchall descMap: $descMap"}
         }
         //
@@ -295,7 +319,6 @@ def parse(String description) {
         }
         
         if (event) {
-            //if (logEnable) {log.debug "${device.displayName} Creating event: ${event}"}
 		    result = createEvent(event)
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
@@ -306,7 +329,7 @@ def parse(String description) {
         def descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) log.debug "${device.displayName} raw: descMap: $descMap"
         //log.trace "${device.displayName} descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
-        if (descMap.cluster == "0006" && descMap.attrId == "8004" /* && command in ["01", "0A"] */) {
+        if (descMap.cluster == "0006" && descMap.attrId == "8004") {
             if (descMap.value == "00") {
                 sendEvent(name: "switchMode", value: "dimmer", isStateChange: true) 
                 if (txtEnable) log.info "${device.displayName} mode is <b>dimmer</b>"
@@ -324,7 +347,7 @@ def parse(String description) {
             return null
         }
         else {
-            if (logEnable) {log.warn "${device.displayName} DID NOT PARSE MESSAGE for description : $description"}
+            if (logEnable) {log.debug "${device.displayName} did not parse descMap: $descMap"}
         }
 	}
     return result
@@ -389,6 +412,35 @@ def processIcasa( descMap ) {
     return [buttonNumber, buttonState]
 }
 
+def processKonkeButton( description ) {
+    def buttonNumber = 0
+    def buttonState = "unknown"    
+    def descMap = zigbee.parseDescriptionAsMap(description)            
+    if (logEnable) log.debug "${device.displayName} KonkeButton descMap: $descMap"
+    if (descMap.cluster != "0006" ) {
+        return
+    }
+    buttonNumber = 1
+    if (descMap.value == "80") {
+        buttonState = "pushed"
+    }
+    else if (descMap.value == "81") {
+        buttonState = "doubleTapped"
+    }
+    else if (descMap.value == "82") {
+        buttonState = "held"
+    }
+    else if (descMap.value == "CD") {
+        logInfo "${device.displayName} KonkeButton reset/pair button was pressed"
+        return
+    }
+    else {
+        return
+    }
+    state.lastButtonNumber = buttonNumber
+    buttonEvent(buttonNumber, buttonState)
+    return
+}
 
 def refresh() {
 }
@@ -436,7 +488,7 @@ def initialize() {
     }
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
-    if (device.getDataValue("model") == "TS0041" || device.getDataValue("manufacturer") =="_TZ3000_ja5osu5g") {
+    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || device.getDataValue("manufacturer") == "_TZ3000_ja5osu5g") {
     	numberOfButtons = 1
     }
     else if (device.getDataValue("model") == "TS0042") {
@@ -505,7 +557,6 @@ def switchToDimmerMode()
 }
 
 def buttonEvent(buttonNumber, buttonState, isDigital=false) {
-
     def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital==true ? 'digital' : 'physical']
     if (txtEnable) {log.info "${device.displayName} $event.descriptionText"}
     sendEvent(event)
@@ -598,6 +649,23 @@ def ping() {
     if (logEnable) log.debug "ping() is not implemented"
 }
 
+def logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
+}
 
 def test(String description) {
     log.warn "test: ${description}"
