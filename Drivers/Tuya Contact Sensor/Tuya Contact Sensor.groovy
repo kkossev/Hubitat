@@ -15,9 +15,9 @@
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
  * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
- * ver. 1.0.3  2023-02-18 kkossev  - (dev. branch) added the missing illuminance event handler for _TZE200_pay2byax;
+ * ver. 1.0.3  2023-02-25 kkossev  - (dev. branch) added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  *
- *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
+ *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contactif not supported by the device profile
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
@@ -25,7 +25,7 @@
 
 static def version() { "1.0.3" }
 
-static def timeStamp() { "2023/02/18 11:18 AM" }
+static def timeStamp() { "2023/02/25 9:06 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -34,7 +34,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
-@Field static final Boolean debug = false
+@Field static final Boolean DEBUG = false
 @Field static final Integer defaultMinReportingTime = 10
 
 
@@ -50,7 +50,7 @@ metadata {
         capability "Health Check"
 
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
-        if (debug == true) {
+        if (DEBUG == true) {
             command "zTest", [
                     [name: "dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                     [name: "dpValue", type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -156,11 +156,6 @@ metadata {
                 capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
                 configuration : ["battery": false],
                 attributes    : ["healthStatus"],
-                /*
-                    preferences   : [
-                            "illuminanceSensitivity": [min: 1, scale: 0, max: 100, step: 1, type: 'number', defaultValue: 1]
-                    ],
-                */
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_TEMP_HUMI_BATT': [     // https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357        @Pr0z4k
@@ -275,8 +270,11 @@ def parse(String description) {
     checkDriverVersion()
     setHealthStatusOnline()
     Map statsMap = stringToJsonMap(state.stats)
+    Map descMap = [:]
     try { statsMap['rxCtr']++ } catch (e) { statsMap['rxCtr'] = 0 }; state.stats = mapToJsonString(statsMap)
-    logDebug "parse() descMap = ${zigbee.parseDescriptionAsMap(description)} (description=$description)"
+    descMap = zigbee.parseDescriptionAsMap(description)
+//    /*try{*/ logDebug "parse() description=$description /*descMap = ${zigbee.parseDescriptionAsMap(description)}*/ " // } catch (e) {logWarn "exception catched when procesing description ${description}"}
+    
     if (description?.startsWith('zone status') || description?.startsWith('zone report')) {
         logDebug "Zone status: $description"
         parseIasMessage(description)    // TS0203 contact sensors
@@ -287,7 +285,12 @@ def parse(String description) {
         logDebug "sending enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
     } else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
-        Map descMap = zigbee.parseDescriptionAsMap(description)
+        try {
+            descMap = zigbee.parseDescriptionAsMap(description)
+        }
+        catch (e) {
+            logWarn "exception ${e} catched when procesing description ${description}"
+        }
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
                 sendBatteryPercentageEvent(Integer.parseInt(descMap.value, 16))
@@ -364,7 +367,9 @@ def parse(String description) {
         } else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
             parseZHAcommand(descMap)
         } else {
-            logDebug "<b> NOT PARSED </b> :  ${descMap}"
+            if (descMap != [:]) {
+                logDebug "<b> NOT PARSED </b> :  ${descMap}"
+            }
         }
     } // if 'catchall:' or 'read attr -'
     else {
@@ -528,7 +533,7 @@ def processTuyaCluster(descMap) {
             // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             def fncmd = getTuyaAttributeValue(descMap?.data, i)                //
-            if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
             //log.warn "next index is : ${i}"
@@ -540,9 +545,9 @@ def processTuyaCluster(descMap) {
 
 def processTuyaDP(descMap, dp, dp_id, fncmd) {
     switch (dp) {
-        case 0x01: // contact open/close
+        case 0x01: // contact 1=open 0=closed
             logDebug "(dp=$dp) contact event fncmd = ${fncmd}"
-            sendContactEvent(fncmd)
+            sendContactEvent(contactActive = fncmd)
             break
         case 0x02: // 'TS0601_Contact' battery %
             logDebug "(dp=$dp) battery event fncmd = ${fncmd}"
@@ -609,10 +614,7 @@ def parseIasMessage(String description) {
 }
 
 def sendContactEvent(contactActive, isDigital = false) {
-    def descriptionText = "contact is open"
-    if (!contactActive) {
-        descriptionText = "contact is closed"
-    }
+    def descriptionText = "contact is " + (contactActive  ? "open" : "closed")
     if (txtEnable) log.info "${device.displayName} ${descriptionText}"
     sendEvent(
             name: 'contact',
@@ -1093,7 +1095,7 @@ def logsOff() {
 }
 
 def sendBatteryPercentageEvent(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+    //if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
 
     if (0 <= rawValue && rawValue <= 200) {
@@ -1250,11 +1252,8 @@ def zTest(dpCommand, dpValue, dpTypeString) {
 
 
 def test(String description) {
-    /*
-    log.warn "parsing : ${description}"
+    log.warn "test parsing : ${description}"
     parse( description)
-    */
-
 
     /*
     def map = deviceProfiles
@@ -1287,7 +1286,7 @@ def test(String description) {
     //settings.remove("batteryReporting")
     log.warn "batteryReporting = ${settings.batteryReporting}"
 */
-
+/*
     def model = getModelGroup()
     def modelProperties = deviceProfiles["$model"] as Map
 
@@ -1295,5 +1294,5 @@ def test(String description) {
     log.trace "b = ${deviceProfiles['SONOFF_CONTACT_BATT'].configuration.battery.value}"
     log.trace "c = ${deviceProfiles[state.deviceProfile].configuration.battery.value}"
     log.trace "d = ${deviceProfiles[getModelGroup()]?.configuration?.battery?.value}"
-
+*/
 }
