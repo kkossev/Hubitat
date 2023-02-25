@@ -20,6 +20,7 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
+ *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) declared capability 'HealthCheck'; added deviceProfiles; 
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -30,8 +31,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.1.0" }
-def timeStamp() {"2023/01/29 11:30 PM"}
+def version() { "1.2.0" }
+def timeStamp() {"2023/02/25 6:57 PM"}
 
 @Field static final Boolean debug = false
 
@@ -42,6 +43,7 @@ metadata {
         capability "Refresh"
         capability "Configuration"
         capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        capability "HealthCheck"
         capability "Battery"
         
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -61,7 +63,7 @@ metadata {
         
         command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
         
-        if (debug == true) {        
+        if (_DEBUG == true) {        
             command "testTuyaCmd", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -71,14 +73,14 @@ metadata {
         }
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_iedbgyxt"     // https://community.hubitat.com/t/generic-zigbee-3-0-valve-not-getting-fingerprint/92614
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"     // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"     // clusters verified
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"     // clusters verified! model: 'ZN231392'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"     // clusters verified! model: 'ZN231392'
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"     // WaterIrrigationValve 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_akjefhj5"     // SASWELL SAS980SWT-7-Z01 (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"     // WaterIrrigationValve https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_81isopgh"     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"     // not tested // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_htnnfasr"     // not tested // // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
@@ -144,6 +146,89 @@ metadata {
     '6': 'fog'
 ]
 
+@Field static final Map deviceProfiles = [
+    "TS0001_VALVE_ONOFF"  : [
+            model         : "TS0001",
+            manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TZ3000_oxslv1c9", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5"],
+            deviceJoinName: "Tuya Zigbee Valve TS0001",
+            inClusters    : "0003,0004,0005,0006,E000,E001,0000",
+            outClusters   : "0019,000A",
+            capabilities  : ["valve": true, "battery": false],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+            "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+    
+    "TS0011_VALVE_ONOFF"  : [
+            model         : "TS0011",
+            manufacturers : ["_TYZB01_rifa0wlb",  "_TYZB01_ymcdbl3u"],
+            deviceJoinName: "Tuya Zigbee Valve TS0011",
+            inClusters    : "0000,0004,0005,0006",
+            outClusters   : "0019",
+            capabilities  : ["valve": true, "battery": false],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+            
+    "TS011F_VALVE_ONOFF"  : [
+            model         : "TS0011",
+            manufacturers : ["_TZ3000_rk2yzt0u"],
+            deviceJoinName: "Tuya Zigbee Valve TS011F",
+            inClusters    : "0000,0003,0004,0005,0006,E000,E001",
+            outClusters   : "0019,000A",
+            capabilities  : ["valve": true, "battery": false],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+            
+    "TS0601_IRRIGATION_VALVE"    : [         // https://www.aliexpress.com/item/1005004222098040.html
+            model         : "TS0601",        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js 
+            manufacturers : ["_TZE200_sh1btabb"],
+            deviceJoinName: "Tuya Zigbee Irrigation Valve",
+            inClusters    : "0004,0005,EF00,0000",
+            outClusters   : "0019,000A",
+            capabilities  : ["valve": true, "battery": true],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+
+    "TS0601_SASWELL_VALVE"    : [
+            model         : "TS0601",
+            manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy", "_TZE200_htnnfasr"],
+            deviceJoinName: "Saswell Zigbee Irrigation Valve",
+            inClusters    : "0004,0005,EF00,0000",
+            outClusters   : "0019,000A",
+            capabilities  : ["valve": true, "battery": true],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+    
+    "UNKNOWN"      : [
+        model         : "UNKNOWN",
+        manufacturers : [],
+        deviceJoinName: "Unknown device",
+        capabilities  : ["valve": true],
+        configuration : ["battery": true],
+        attributes    : ["healthStatus"],
+        batteries     : "unknown"
+    ]
+]
+
+
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
 private getSETDATA()            { 0x00 }
@@ -157,8 +242,8 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
-def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }    // https://www.aliexpress.com/item/1005004222098040.html
-def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (debug == true)}
+def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }
+def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (_DEBUG == true)}
 def isBatteryPowered()       { return isWaterIrrigationValve() || isSASWELL()}
 
 def parse(String description) {
@@ -377,11 +462,11 @@ def parseZHAcommand( Map descMap) {
                                     // There is no way to disable the "Auto off" timer for when the valve is turned on manually
                                     // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
                                 }
-                                else {
+                                else {    // WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
                                     if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                 }
                                 break
-                            case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff                               
+                            case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1                       
                                 if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value} (data=${descMap.data})"
                                 switchEvent(value==0 ? "off" : "on")
                                 break
@@ -451,32 +536,32 @@ def parseZHAcommand( Map descMap) {
                             case "13" : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
                                 break
-                            case "65" : // (101) WaterValveIrrigationStartTime
+                            case "65" : // (101) WaterValveIrrigationStartTime     // IrrigationStartTime       # (string) ex: "08:12:26"
                                 if (txtEnable==true) log.info "${device.displayName} IrrigationStartTime (${cmd}) is: ${value}"
                                 break
-                            case "66" : // (102) WaterValveIrrigationEndTime
+                            case "66" : // (102) WaterValveIrrigationEndTime      // IrrigationStopTime        # (string) ex: "08:13:36"
                                 if (txtEnable==true) log.info "${device.displayName} IrrigationEndTime (${cmd}) is: ${value}"
                                 break
-                            case "67" : // (103) WaterValveCycleIrrigationNumTimes                                                      // TODO - Send to device cycle_irrigation_num_times ?
+                            case "67" : // (103) WaterValveCycleIrrigationNumTimes          // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
                                 if (txtEnable==true) log.info "${device.displayName} CycleIrrigationNumTimes (${cmd}) is: ${value}"
                                 break
-                            case "68" : // (104) WaterValveIrrigationTarget
+                            case "68" : // (104) WaterValveIrrigationTarget                // IrrigationTarget          # duration in minutes or capacity in Liters (depending on mode)
                                 if (txtEnable==true) log.info "${device.displayName} IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
                                 break
-                            case "69" : // (105) WaterValveCycleIrrigationInterval                                                      // TODO - Send to device cycle_irrigation_interval ?
+                            case "69" : // (105) WaterValveCycleIrrigationInterval        // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
                                 if (txtEnable==true) log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}"
                                 break
-                            case "6A" : // (106) WaterValveCurrentTempurature
+                            case "6A" : // (106) WaterValveCurrentTempurature            // CurrentTemperature        # (value ignored because isn't a valid tempurature reading.  Misdocumented and usage unclear)
                                 if (txtEnable==true) log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}"        // ignore!
                                 break
-                            case "6C" : // (108) WaterValveBattery - _TZE200_sh1btabb
+                            case "6C" : // (108) WaterValveBattery - _TZE200_sh1btabb    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (txtEnable==true) log.info "${device.displayName} Battery (${cmd}) is: ${value}"
                                 sendBatteryEvent(value)
                                 break
-                            case "6F" : // (111) WaterValveWaterConsumed
+                            case "6F" : // (111) WaterValveWaterConsumed                // WaterConsumed             # water consumed (Litres)
                                 if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value}"
                                 break
-                            case "72" : // (114) WaterValveLastIrrigationDuration
+                            case "72" : // (114) WaterValveLastIrrigationDuration    LastIrrigationDuration    # (string) Ex: "00:01:10,0"
                                 if (txtEnable==true) log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}"
                                 break
                             case "D1" : // cycle timer
@@ -823,6 +908,7 @@ def deviceHealthCheck() {
 def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
+
 
 private getPACKET_ID() {
     state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
