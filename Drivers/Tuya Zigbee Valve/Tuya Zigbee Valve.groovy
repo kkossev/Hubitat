@@ -20,7 +20,7 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) declared capability 'HealthCheck'; added deviceProfiles; 
+ *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) added deviceProfiles; stats; 
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -32,7 +32,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/25 8:07 PM"}
+def timeStamp() {"2023/02/25 8:56 PM"}
 
 @Field static final Boolean debug = false
 
@@ -338,14 +338,12 @@ def parse(String description) {
     } // descMap
 }
 
-def switchEvent( value ) {
-    if (value == 'on') value = 'open'
-    else if (value == 'off') value = 'closed'
-    else value = 'unknown'
-
+def switchEvent( switchValue ) {
+    def value = (switchValue == null) ? 'unknown' : (switchValue == 'on') ? 'open' : (switchValue == 'off') ? 'closed' : 'unknown'
     def map = [:] 
     boolean bWasChange = false
-    if (state.switchDebouncing==true && value==state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
+    boolean debounce = state.states["debounce"] ?: false
+    if (state.debounce == true && value == state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "${device.displayName} Ignored duplicated switch event for model ${state.model}"} 
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
         return null
@@ -353,23 +351,26 @@ def switchEvent( value ) {
     else {
         //log.trace "value=${value}  lastSwitchState=${state.lastSwitchState}"
     }
-    
-    map.type = state.isDigital == true ? "digital" : "physical"
+    log.trace "states=${state.states}"
+    def isDigital = state.states["isDigital"]
+    log.trace "isDigital=${isDigital}"
+    map.type = isDigital == true ? "digital" : "physical"
     if (state.lastSwitchState != value ) {
         bWasChange = true
         if (logEnable) {log.debug "${device.displayName} Valve state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
-        state.switchDebouncing = true
+        state.states["debounce"] = true
         state.lastSwitchState = value
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])        
     }
     else {
-        state.switchDebouncing = true
+        state.states["debounce"] = true
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])     
     }
         
     map.name = "valve"
     map.value = value
-    if (state.isRefreshRequest == true) {
+    boolean isRefresh = state.states["isRefresh"] ?: false
+    if (isRefresh == true) {
         map.descriptionText = "${device.displayName} is ${value} (Refresh)"
     }
     else {
@@ -655,8 +656,7 @@ private int getAttributeValue(ArrayList _data) {
 }
 
 def close() {
-    state.isDigital = true
-    //log.trace "state.isDigital = ${state.isDigital}"
+    state.states["isDigital"] = true
     if (logEnable) {log.debug "${device.displayName} closing"}
     //def cmds
     ArrayList<String> cmds = []
@@ -678,8 +678,7 @@ def close() {
 }
 
 def open() {
-    state.isDigital = true
-    //log.trace "state.isDigital = ${state.isDigital}"
+    state.states["isDigital"] = true
     if (logEnable) {log.debug "${device.displayName} opening"}
     ArrayList<String> cmds = []
     if (isWaterIrrigationValve()) {
@@ -707,10 +706,9 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
 }
 
 
-def clearIsDigital() { state.isDigital = false; /*log.trace "clearIsDigital()"*/ }
-def switchDebouncingClear() { state.switchDebouncing = false; /*log.trace "switchDebouncingClear()" */ }
-
-def isRefreshRequestClear() { state.isRefreshRequest = false }
+def clearIsDigital() { state.states["isDigital"] = false }
+def switchDebouncingClear() { state.states["debounce"] = false }
+def isRefreshRequestClear() { state.states["isRefresh"] = false }
 
 
 // * PING is used by Device-Watch in attempt to reach the Device
@@ -723,7 +721,7 @@ def poll() {
     if (logEnable) {log.trace "${device.displayName} polling.."}
     checkDriverVersion()
     List<String> cmds = []
-    state.isRefreshRequest = true
+    state.states["isRefresh"] = true
     if (device.getDataValue("model") != 'TS0601') {
         cmds = zigbee.onOffRefresh()
     }
@@ -830,8 +828,12 @@ def updated(){
 
 def resetStats() {
     state.stats = [:]
+    state.states = [:]
     state.stats["RxCtr"] = 0
     state.stats["TxCtr"] = 0
+    state.states["isDigital"] = false
+    state.states["isRefresh"] = false
+    state.states["debounce"] = false
 }
 
 
@@ -842,17 +844,17 @@ void initializeVars( boolean fullInit = true ) {
         unschedule()
         resetStats()
         setDeviceName()
-        state.comment = 'Works with Tuya TS0001 TS0011 TS011F shutoff valves; TS0601 & Saswell irrigation valves'
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F shutoff valves; Tuya TS0601 & Saswell irrigation valves'
         logInfo "all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()    
     }
     
-    if (state.stats == null) { state.stats = [:] }
+    if (state.stats == null)  { state.stats  = [:] }
+    if (state.states == null) { state.states = [:] }
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (fullInit == true || state.isDigital == null) state.isDigital = true
-    if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
-    if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = false
+    //if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
+    //if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = false
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
