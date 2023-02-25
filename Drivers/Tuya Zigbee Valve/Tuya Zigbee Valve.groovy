@@ -32,7 +32,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/25 6:57 PM"}
+def timeStamp() {"2023/02/25 8:07 PM"}
 
 @Field static final Boolean debug = false
 
@@ -64,6 +64,7 @@ metadata {
         command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
         
         if (_DEBUG == true) {        
+            command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
             command "testTuyaCmd", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -242,15 +243,18 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
+def isConfigurable(model)    { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
+def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
 def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }
 def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (_DEBUG == true)}
 def isBatteryPowered()       { return isWaterIrrigationValve() || isSASWELL()}
 
 def parse(String description) {
-    if (logEnable==true) {log.debug "${device.displayName} description is $description"}
     checkDriverVersion()
-    if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
-    setPresent()    // powerSource event
+    state.stats["RxCtr"] = (state.stats["RxCtr"] ?: 0) + 1
+    setHealthStatusOnline()
+    logDebug "parse: description is $description"
+    
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
     }
@@ -723,6 +727,11 @@ def poll() {
     if (device.getDataValue("model") != 'TS0601') {
         cmds = zigbee.onOffRefresh()
     }
+    if (deviceProfiles[getModelGroup()]?.capabilities?.battery?.value == true) {
+        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
+        cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
+        sendZigbeeCommands(cmds)
+    }    
     runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     return cmds
 }
@@ -760,7 +769,47 @@ def configure() {
             //cmds += zigbee.readAttribute(0xE001, 0xD010, [:], delay=101)
         }
     }
+    
+    if (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) {
+        // TODO - configure battery reporting
+        logDebug "settings.batteryReporting = ${settings?.batteryReporting}"
+    }
     sendZigbeeCommands(cmds)
+}
+
+def getModelGroup() {
+    return state.deviceProfile ?: "UNKNOWN"
+}
+
+// called from  initializeVars( fullInit = true)
+void setDeviceName() {
+    String deviceName
+    def currentModelMap = null
+    def deviceModel = device.getDataValue('model')
+    def deviceManufacturer = device.getDataValue('manufacturer')
+    deviceProfiles.each { profileName, profileMap ->
+        if ((profileMap.model?.value as String) == (deviceModel as String)) {
+            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String))
+            {
+                currentModelMap = profileName
+                state.deviceProfile = currentModelMap
+                deviceName = deviceProfiles[currentModelMap].deviceJoinName
+                //log.debug "FOUND! currentModelMap=${currentModelMap}, deviceName =${deviceName}"
+            }
+        }
+    }
+
+    if (currentModelMap == null) {
+        logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+        // don't change the device name when unknown
+        state.deviceProfile = 'UNKNOWN'
+    }
+    if (deviceName != NULL) {
+        device.setName(deviceName)
+        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
+    } else {
+        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} was not found!"
+    }
 }
 
 
@@ -779,19 +828,26 @@ def updated(){
     configure()
 }
 
+def resetStats() {
+    state.stats = [:]
+    state.stats["RxCtr"] = 0
+    state.stats["TxCtr"] = 0
+}
 
 
 void initializeVars( boolean fullInit = true ) {
-    if (txtEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
+    logInfo "InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
-        state.driverVersion = driverVersionAndTimeStamp()
+        unschedule()
+        resetStats()
+        setDeviceName()
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F shutoff valves; TS0601 & Saswell irrigation valves'
+        logInfo "all states and scheduled jobs cleared!"
+        state.driverVersion = driverVersionAndTimeStamp()    
     }
     
-    state.packetID = 0
-    state.rxCounter = 0
-    state.txCounter = 0
-    
+    if (state.stats == null) { state.stats = [:] }
     if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
@@ -830,9 +886,8 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        if (txtEnable==true) log.debug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
-        state.remove("lastPresenceState")
         scheduleDeviceHealthCheck()
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -842,12 +897,13 @@ def logInitializeRezults() {
     if (logEnable==true) log.info "${device.displayName} Initialization finished"
 }
 
+// NOT called when the driver is initialized as a new device, because the Initialize capability is NOT declared!
 def initialize() {
-    if (txtEnable==true) log.info "${device.displayName} Initialize()..."
+    log.info "${device.displayName} Initialize()..."
     unschedule()
-    initializeVars(fullInit = false)
+    initializeVars(fullInit = true)
     updated()            // calls also configure()
-    runIn( 12, logInitializeRezults, [overwrite: true])
+    runIn(3, logInitializeRezults, [overwrite: true])
 }
 
 // This method is called when the device is first created.
@@ -871,17 +927,18 @@ void scheduleDeviceHealthCheck() {
 }
 
 // called when any event was received from the Zigbee device in parse() method..
-def setPresent() {
-    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
-        sendHealthStatusEvent("online")
+def setHealthStatusOnline() {
+    state.notPresentCounter = 0
+    if (!((device.currentValue('healthStatus', true) ?: "unknown") in ['online'])) {   
+        setHealthStatusValue('online')
         if (isBatteryPowered()) {
         	sendEvent(name: "powerSource", value: "battery", type: "digital") 
         }
         else {
         	sendEvent(name: "powerSource", value: "dc", type: "digital") 
         }
+        logInfo "is online"
     }
-    state.notPresentCounter = 0
 }
 
 def deviceHealthCheck() {
@@ -911,8 +968,7 @@ def sendHealthStatusEvent(value) {
 
 
 private getPACKET_ID() {
-    state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
-    return zigbee.convertToHexString(state.packetID, 4)
+    return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
@@ -920,7 +976,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
-    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    state.stats["TxCtr"] = state.stats["TxCtr"] != null ? state.stats["TxCtr"] + 1 : 1
     return cmds
 }
 
@@ -929,7 +985,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.txCounter != null) state.txCounter = state.txCounter + 1
+            state.stats["TxCtr"] = state.stats["TxCtr"] != null ? state.stats["TxCtr"] + 1 : 1
     }
     sendHubCommand(allActions)
 }
