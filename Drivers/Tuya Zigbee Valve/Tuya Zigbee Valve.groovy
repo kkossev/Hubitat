@@ -20,7 +20,7 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) added deviceProfiles; stats; 
+ *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile;
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -32,7 +32,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/25 9:07 PM"}
+def timeStamp() {"2023/02/25 11:30 PM"}
 
 @Field static final Boolean debug = false
 
@@ -78,9 +78,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"     // clusters verified
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"     // clusters verified
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"     // clusters verified! model: 'ZN231392'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"     // WaterIrrigationValve 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_akjefhj5"     // SASWELL SAS980SWT-7-Z01 (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_81isopgh"     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"     // not tested // 
@@ -94,6 +94,10 @@ metadata {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options: powerOnBehaviourOptions)
+        input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
+        if (advancedOptions == true) {
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Device Profile<br>Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+        }
         //input (name: "switchType", type: "enum", title: "<b>Switch Type</b>", description:"<i>Select witch Type</i>", defaultValue: "0", options: switchTypeOptions)
     }
 }
@@ -147,6 +151,8 @@ metadata {
     '6': 'fog'
 ]
 
+def getDeviceProfiles() { deviceProfiles.keySet() }
+
 @Field static final Map deviceProfiles = [
     "TS0001_VALVE_ONOFF"  : [
             model         : "TS0001",
@@ -181,6 +187,20 @@ metadata {
             manufacturers : ["_TZ3000_rk2yzt0u"],
             deviceJoinName: "Tuya Zigbee Valve TS011F",
             inClusters    : "0000,0003,0004,0005,0006,E000,E001",
+            outClusters   : "0019,000A",
+            capabilities  : ["valve": true, "battery": false],
+            configuration : ["battery": false],
+            attributes    : ["healthStatus"],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+            
+    "TS0601_VALVE_ONOFF"  : [
+            model         : "TS0601",
+            manufacturers : ["_TZE200_vrjkcam9"],
+            deviceJoinName: "Tuya Zigbee Valve TS0601",
+            inClusters    : "0000,0004,0005,EF00",
             outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
@@ -245,8 +265,10 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 def isConfigurable(model)    { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
-def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }
-def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (_DEBUG == true)}
+//def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }
+def isWaterIrrigationValve() { return getModelGroup().contains("IRRIGATION") }
+//def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (_DEBUG == true)}
+def isSASWELL()              { return getModelGroup().contains("SASWELL") }
 def isBatteryPowered()       { return isWaterIrrigationValve() || isSASWELL()}
 
 def parse(String description) {
@@ -757,6 +779,14 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
     
+    if (settings?.forcedProfile != null) {
+        if (settings?.forcedProfile != state.deviceProfile) {
+            logWarn "changing the device profile from ${state.deviceProfile} to ${settings?.forcedProfile}"
+            state.deviceProfile = settings?.forcedProfile
+            logInfo "press F5 to refresh the page"
+        }
+    }
+    
     if (settings?.powerOnBehaviour != null) {
         def modeName =  powerOnBehaviourOptions.find{it.key==settings?.powerOnBehaviour}
         if (modeName != null) {
@@ -859,6 +889,8 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
     if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
+    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])                // toggle
+    
     if (isBatteryPowered()) {
         if (state.states["lastBattery"] == null) state.states["lastBattery"] = "100"
     }
