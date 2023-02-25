@@ -32,7 +32,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/25 8:56 PM"}
+def timeStamp() {"2023/02/25 9:07 PM"}
 
 @Field static final Boolean debug = false
 
@@ -342,24 +342,23 @@ def switchEvent( switchValue ) {
     def value = (switchValue == null) ? 'unknown' : (switchValue == 'on') ? 'open' : (switchValue == 'off') ? 'closed' : 'unknown'
     def map = [:] 
     boolean bWasChange = false
-    boolean debounce = state.states["debounce"] ?: false
-    if (state.debounce == true && value == state.lastSwitchState) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
-        if (logEnable) {log.debug "${device.displayName} Ignored duplicated switch event for model ${state.model}"} 
+    boolean debounce   = state.states["debounce"] ?: false
+    def lastSwitch = state.states["lastSwitch"] ?: "unknown"
+    if (debounce == true && value == lastSwitch) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
+        if (logEnable) {log.debug "${device.displayName} Ignored duplicated switch event for model ${getModelGroup()}"} 
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
         return null
     }
     else {
-        //log.trace "value=${value}  lastSwitchState=${state.lastSwitchState}"
+        //log.trace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
     }
-    log.trace "states=${state.states}"
     def isDigital = state.states["isDigital"]
-    log.trace "isDigital=${isDigital}"
     map.type = isDigital == true ? "digital" : "physical"
-    if (state.lastSwitchState != value ) {
+    if (lastSwitch != value ) {
         bWasChange = true
-        if (logEnable) {log.debug "${device.displayName} Valve state changed from <b>${state.lastSwitchState}</b> to <b>${value}</b>"}
-        state.states["debounce"] = true
-        state.lastSwitchState = value
+        if (logEnable) {log.debug "${device.displayName} Valve state changed from <b>${lastSwitch}</b> to <b>${value}</b>"}
+        state.states["debounce"]   = true
+        state.states["lastSwitch"] = value
         runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])        
     }
     else {
@@ -667,7 +666,7 @@ def close() {
         cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
-    else if (state.model == "TS0601") {
+    else if (getModelGroup().contains("TS0601")) {
         cmds = sendTuyaCommand("01", DP_TYPE_BOOL, "00")
     }
     else {
@@ -688,7 +687,7 @@ def open() {
         cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
-    else if (state.model == "TS0601") {
+    else if (getModelGroup().contains("TS0601")) {
         cmds = sendTuyaCommand("01", DP_TYPE_BOOL, "01")
     }
     else {
@@ -701,7 +700,7 @@ def open() {
 def sendBatteryEvent( roundedPct, isDigital=false ) {
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )
     if (isDigital==false) {
-        state.lastBattery = roundedPct.toString()
+        state.states["lastBattery"] = roundedPct.toString()
     }
 }
 
@@ -814,7 +813,7 @@ void setDeviceName() {
 // This method is called when the preferences of a device are updated.
 def updated(){
     checkDriverVersion()
-    if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${state.model} "
+    if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${getModelGroup()} "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
@@ -834,6 +833,9 @@ def resetStats() {
     state.states["isDigital"] = false
     state.states["isRefresh"] = false
     state.states["debounce"] = false
+    state.states["lastSwitch"] = "unknown"
+    if (isBatteryPowered()) { state.states["lastBattery"] = "100" }
+    state.states["notPresentCtr"] = 0
 }
 
 
@@ -851,27 +853,23 @@ void initializeVars( boolean fullInit = true ) {
     
     if (state.stats == null)  { state.stats  = [:] }
     if (state.states == null) { state.states = [:] }
-    if (fullInit == true || state.lastSwitchState == null) state.lastSwitchState = "unknown"
-    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    //if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false    
-    //if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = false
+    if (fullInit == true || state.states["lastSwitch"] == null) state.states["lastSwitch"] = "unknown"
+    if (fullInit == true || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
     if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
     if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
     if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
     if (isBatteryPowered()) {
-        if (state.lastBattery == null) state.lastBattery = "100"
+        if (state.states["lastBattery"] == null) state.states["lastBattery"] = "100"
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
-        state.model = mm
-        if (logEnable==true) log.trace " model = ${state.model}"
+        if (logEnable==true) log.trace " model = ${mm}"
     }
     else {
         if (txtEnable==true) log.warn " Model not found, please re-pair the device!"
-        state.model = UNKNOWN
     }
     def ep = device.getEndpointId()
     if ( ep  != null) {
@@ -930,7 +928,7 @@ void scheduleDeviceHealthCheck() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setHealthStatusOnline() {
-    state.notPresentCounter = 0
+    state.states["notPresentCtr"]  = 0
     if (!((device.currentValue('healthStatus', true) ?: "unknown") in ['online'])) {   
         setHealthStatusValue('online')
         if (isBatteryPowered()) {
@@ -944,8 +942,8 @@ def setHealthStatusOnline() {
 }
 
 def deviceHealthCheck() {
-    state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
-    if (state.notPresentCounter > presenceCountTreshold) {
+    def ctr = state.states["notPresentCtr"] ?: 0
+    if (ctr  >= presenceCountTreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
             if (logEnable==true) log.warn "${device.displayName} not present!"
@@ -959,9 +957,9 @@ def deviceHealthCheck() {
         }
     }
     else {
-        if (logEnable) log.debug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${state.notPresentCounter})"
+        logDebug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${ctr})"
     }
-
+    state.states["notPresentCtr"] = ctr + 1
 }
 
 def sendHealthStatusEvent(value) {
