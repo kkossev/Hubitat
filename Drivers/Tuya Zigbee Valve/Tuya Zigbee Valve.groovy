@@ -20,7 +20,7 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints;
+ *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer; 
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -32,10 +32,9 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/26 8:04 PM"}
+def timeStamp() {"2023/02/26 9:32 PM"}
 
 @Field static final Boolean _DEBUG = true
-//def dummyRef() {deviceProfilesV2}
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy", singleThreaded: true ) {
@@ -43,7 +42,7 @@ metadata {
         capability "Valve"
         capability "Refresh"
         capability "Configuration"
-        capability "PowerSource"    //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
+        capability "PowerSource"
         capability "HealthCheck"
         capability "Battery"
         
@@ -87,6 +86,9 @@ metadata {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options: powerOnBehaviourOptions)
+        if (isSASWELL() || isWaterIrrigationValve()) {
+       		input (name: "autoOffTimer", type: "number", title: "<b>Auto off timer</b>", description: "<i>Automatically turn off after how many seconds?</i>", defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+        }
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Device Profile<br>Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
@@ -209,6 +211,7 @@ metadata {
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 15
+@Field static final Integer DEFAULT_AUTOOFF_TIMER = 60
 @Field static final Integer DEBOUNCING_TIMER = 300
 @Field static final Integer DIGITAL_TIMER = 3000
 @Field static final Integer REFRESH_TIMER = 3000
@@ -720,7 +723,19 @@ def open() {
         cmds =  zigbee.on()
     }
     runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true])
+    if (isSASWELL() || isWaterIrrigationValve()) {
+        logDebug "scheduled to set the autoOff timer to ${settings?.autoOffTimer} after 5 seconds"
+        runIn( 5, "sendAutoOffTimer")
+    }
     sendZigbeeCommands( cmds )
+}
+
+def sendAutoOffTimer() {
+   ArrayList<String> cmds = []
+   String autoOffTime = "00010B020004" + zigbee.convertToHexString((settings?.autoOffTimer) as Integer, 8)
+   cmds = zigbee.command(0xEF00, 0x0, autoOffTime)
+   logDebug "sendAutoOffTimer= ${settings?.autoOffTimer} : ${cmds}"
+   sendZigbeeCommands(cmds) 
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
@@ -753,10 +768,15 @@ def poll() {
     if (deviceProfilesV2[getModelGroup()]?.capabilities?.battery?.value == true) {
         cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
         cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
-        sendZigbeeCommands(cmds)
-    }    
+    }
+    if (isSASWELL() || isWaterIrrigationValve()) {
+        cmds += zigbee.command(0xEF00, 0x0, "00020100")
+    }
     runInMillis( REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 3 seconds
-    return cmds
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }
+
 }
 
 
@@ -894,6 +914,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
     if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])                // toggle
+    if (fullInit == true || settings?.autoOffTimer == null) device.updateSetting("autoOffTimer", [value: DEFAULT_AUTOOFF_TIMER, type: "number"])
     
     if (isBatteryPowered()) {
         if (state.states["lastBattery"] == null) state.states["lastBattery"] = "100"
@@ -1109,9 +1130,14 @@ def setIrrigationTimer( timer ) {
         return
     }
     logDebug "setting the irrigation timer to ${timerSec} seconds"
+    device.updateSetting("autoOffTimer", [value: timerSec, type: "number"])
+    
+    runIn( 1, "sendAutoOffTimer")
+    /*   
     def dpValHex = zigbee.convertToHexString(timerSec as int, 8)
     cmds = sendTuyaCommand("0B", DP_TYPE_VALUE, dpValHex)
     sendZigbeeCommands( cmds )
+    */
 }
 
 
