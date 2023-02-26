@@ -20,7 +20,8 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer; 
+ *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
+ *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -32,7 +33,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/26 9:32 PM"}
+def timeStamp() {"2023/02/26 11:44 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -47,7 +48,7 @@ metadata {
         capability "Battery"
         
         attribute "healthStatus", "enum", ["offline", "online"]
-        attribute "timer_state", "enum", [
+        attribute "timerState", "enum", [
             "disabled",
             "active (on)",
             "enabled (off)"
@@ -60,6 +61,10 @@ metadata {
             "48h",
             "72h"
         ]
+        attribute "irrigationStartTime", "string"
+        attribute "irrigationEndTime", "string"
+        attribute "lastIrrigationDuration", "string"
+        attribute "waterConsumed", "number"
         
         command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
         
@@ -499,9 +504,11 @@ def parseZHAcommand( Map descMap) {
                                     if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                 }
                                 break
-                            case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1                       
-                                if (txtEnable==true) log.info "${device.displayName} Water Valve State (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                            case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
+                                def timerState = timerStateOptions[value.toString()]
+                                logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 switchEvent(value==0 ? "off" : "on")
+                                sendEvent(name: 'timerState', value: timerState, type: "physical")
                                 break
                             case "03" : // flow_state or percent_state?  (0..100%) SASWELL ?
                                 if (txtEnable==true) log.info "${device.displayName} flow_state (${cmd}) is: ${value} %"
@@ -570,10 +577,14 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
                                 break
                             case "65" : // (101) WaterValveIrrigationStartTime     // IrrigationStartTime       # (string) ex: "08:12:26"
-                                if (txtEnable==true) log.info "${device.displayName} IrrigationStartTime (${cmd}) is: ${value}"
+                                def str = getAttributeString(descMap.data)
+                                logInfo "IrrigationStartTime (${cmd}) is: ${str}"
+                                sendEvent(name: 'irrigationStartTime', value: str, type: "physical")
                                 break
                             case "66" : // (102) WaterValveIrrigationEndTime      // IrrigationStopTime        # (string) ex: "08:13:36"
-                                if (txtEnable==true) log.info "${device.displayName} IrrigationEndTime (${cmd}) is: ${value}"
+                                def str = getAttributeString(descMap.data)
+                                logInfo "IrrigationEndTime (${cmd}) is: ${str}"
+                                sendEvent(name: 'irrigationEndTime', value: str, type: "physical")
                                 break
                             case "67" : // (103) WaterValveCycleIrrigationNumTimes          // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
                                 if (txtEnable==true) log.info "${device.displayName} CycleIrrigationNumTimes (${cmd}) is: ${value}"
@@ -592,10 +603,13 @@ def parseZHAcommand( Map descMap) {
                                 sendBatteryEvent(value)
                                 break
                             case "6F" : // (111) WaterValveWaterConsumed                // WaterConsumed             # water consumed (Litres)
-                                if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value}"
+                                if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value} (Litres)"
+                                sendEvent(name: 'waterConsumed', value: value, type: "physical")
                                 break
                             case "72" : // (114) WaterValveLastIrrigationDuration    LastIrrigationDuration    # (string) Ex: "00:01:10,0"
+                                def str = getAttributeString(descMap.data)
                                 if (txtEnable==true) log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}"
+                                sendEvent(name: 'lastIrrigationDuration', value: str, type: "physical")
                                 break
                             case "D1" : // cycle timer
                                 if (txtEnable==true) log.info "${device.displayName} cycle timer (${cmd}) is: ${value}"
@@ -675,6 +689,21 @@ private int getAttributeValue(ArrayList _data) {
                 retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
                 power = power * 256
             }
+        }
+    }
+    catch(e) {
+        log.error "${device.displayName} Exception caught : data = ${_data}"
+    }
+    return retValue
+}
+
+private String getAttributeString(ArrayList _data) {
+    String retValue = ""
+    try {    
+        if (_data.size() >= 6) {
+            for (int i=6; i< _data.size(); i++) {
+                retValue = retValue + (zigbee.convertHexToInt(_data[i]) as char)
+            }            
         }
     }
     catch(e) {
@@ -1151,6 +1180,8 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
  
 
 def test( description ) {
+    
     log.warn "testing <b>${description}</b>"
     parse(description)
+    
 }
