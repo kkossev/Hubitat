@@ -20,7 +20,7 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-25 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile;
+ *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile;
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -32,7 +32,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/25 11:30 PM"}
+def timeStamp() {"2023/02/25 10:20 AM"}
 
 @Field static final Boolean debug = false
 
@@ -103,11 +103,11 @@ metadata {
 }
 
 // Constants
-@Field static final Integer presenceCountTreshold = 3
-@Field static final Integer defaultPollingInterval = 15
-@Field static final Integer debouncingTimer = 300
-@Field static final Integer digitalTimer = 3000
-@Field static final Integer refreshTimer = 3000
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 15
+@Field static final Integer DEBOUNCING_TIMER = 300
+@Field static final Integer DIGITAL_TIMER = 3000
+@Field static final Integer REFRESH_TIMER = 3000
 @Field static String UNKNOWN = "UNKNOWN"
 
 @Field static final Map powerOnBehaviourOptions = [   
@@ -151,29 +151,36 @@ metadata {
     '6': 'fog'
 ]
 
-def getDeviceProfiles() { deviceProfiles.keySet() }
-
 @Field static final Map deviceProfiles = [
     "TS0001_VALVE_ONOFF"  : [
             model         : "TS0001",
             manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TZ3000_oxslv1c9", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_iedbgyxt"],    // https://community.hubitat.com/t/generic-zigbee-3-0-valve-not-getting-fingerprint/92614
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"],    // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"],    // clusters verified
+                [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"],    // clusters verified
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],    // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"]     // clusters verified
+            ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
-            inClusters    : "0003,0004,0005,0006,E000,E001,0000",
-            outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
             preferences   : [
-            "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
     
     "TS0011_VALVE_ONOFF"  : [
             model         : "TS0011",
             manufacturers : ["_TYZB01_rifa0wlb",  "_TYZB01_ymcdbl3u"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"]      // clusters verified
+            ],
+        
             deviceJoinName: "Tuya Zigbee Valve TS0011",
-            inClusters    : "0000,0004,0005,0006",
-            outClusters   : "0019",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
@@ -185,9 +192,10 @@ def getDeviceProfiles() { deviceProfiles.keySet() }
     "TS011F_VALVE_ONOFF"  : [
             model         : "TS0011",
             manufacturers : ["_TZ3000_rk2yzt0u"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS011F", manufacturer:"_TZ3000_rk2yzt0u"]     // clusters verified! model: 'ZN231392'
+            ],
             deviceJoinName: "Tuya Zigbee Valve TS011F",
-            inClusters    : "0000,0003,0004,0005,0006,E000,E001",
-            outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
@@ -199,9 +207,10 @@ def getDeviceProfiles() { deviceProfiles.keySet() }
     "TS0601_VALVE_ONOFF"  : [
             model         : "TS0601",
             manufacturers : ["_TZE200_vrjkcam9"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"]     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
+            ],
             deviceJoinName: "Tuya Zigbee Valve TS0601",
-            inClusters    : "0000,0004,0005,EF00",
-            outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
@@ -213,9 +222,10 @@ def getDeviceProfiles() { deviceProfiles.keySet() }
     "TS0601_IRRIGATION_VALVE"    : [         // https://www.aliexpress.com/item/1005004222098040.html
             model         : "TS0601",        // https://github.com/Koenkk/zigbee-herdsman-converters/blob/21a66c05aa533de356a51c8417073f28092c6e9d/devices/giex.js 
             manufacturers : ["_TZE200_sh1btabb"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_sh1btabb"]     // WaterIrrigationValve 
+            ],
             deviceJoinName: "Tuya Zigbee Irrigation Valve",
-            inClusters    : "0004,0005,EF00,0000",
-            outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": true],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
@@ -227,9 +237,13 @@ def getDeviceProfiles() { deviceProfiles.keySet() }
     "TS0601_SASWELL_VALVE"    : [
             model         : "TS0601",
             manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy", "_TZE200_htnnfasr"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_akjefhj5"],     // SASWELL SAS980SWT-7-Z01 (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_81isopgh"],     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"],     // not tested // 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_htnnfasr"]      // not tested // // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+            ],
             deviceJoinName: "Saswell Zigbee Irrigation Valve",
-            inClusters    : "0004,0005,EF00,0000",
-            outClusters   : "0019,000A",
             capabilities  : ["valve": true, "battery": true],
             configuration : ["battery": false],
             attributes    : ["healthStatus"],
@@ -263,11 +277,10 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
+def getDeviceProfiles()      { deviceProfiles.keySet() }
 def isConfigurable(model)    { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
-//def isWaterIrrigationValve() { return device.getDataValue('manufacturer') in ['_TZE200_sh1btabb'] }
 def isWaterIrrigationValve() { return getModelGroup().contains("IRRIGATION") }
-//def isSASWELL()              { return device.getDataValue('manufacturer') in ['_TZE200_81isopgh', '_TZE200_akjefhj5', '_TZE200_2wg5qrjy' ]  || (_DEBUG == true)}
 def isSASWELL()              { return getModelGroup().contains("SASWELL") }
 def isBatteryPowered()       { return isWaterIrrigationValve() || isSASWELL()}
 
@@ -368,7 +381,7 @@ def switchEvent( switchValue ) {
     def lastSwitch = state.states["lastSwitch"] ?: "unknown"
     if (debounce == true && value == lastSwitch) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) {log.debug "${device.displayName} Ignored duplicated switch event for model ${getModelGroup()}"} 
-        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return null
     }
     else {
@@ -381,11 +394,11 @@ def switchEvent( switchValue ) {
         if (logEnable) {log.debug "${device.displayName} Valve state changed from <b>${lastSwitch}</b> to <b>${value}</b>"}
         state.states["debounce"]   = true
         state.states["lastSwitch"] = value
-        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])        
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])        
     }
     else {
         state.states["debounce"] = true
-        runInMillis( debouncingTimer, switchDebouncingClear, [overwrite: true])     
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])     
     }
         
     map.name = "valve"
@@ -694,7 +707,7 @@ def close() {
     else {
         cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster   
     }
-    runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
+    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands( cmds )
 }
 
@@ -715,7 +728,7 @@ def open() {
     else {
         cmds =  zigbee.on()
     }
-    runInMillis( digitalTimer, clearIsDigital, [overwrite: true])
+    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands( cmds )
 }
 
@@ -751,7 +764,7 @@ def poll() {
         cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
         sendZigbeeCommands(cmds)
     }    
-    runInMillis( refreshTimer, isRefreshRequestClear, [overwrite: true])           // 3 seconds
+    runInMillis( REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     return cmds
 }
 
@@ -975,7 +988,7 @@ def setHealthStatusOnline() {
 
 def deviceHealthCheck() {
     def ctr = state.states["notPresentCtr"] ?: 0
-    if (ctr  >= presenceCountTreshold) {
+    if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
             if (logEnable==true) log.warn "${device.displayName} not present!"
