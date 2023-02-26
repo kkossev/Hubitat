@@ -21,7 +21,8 @@
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
  *  ver. 1.2.0 2023-02-26 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
- *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed
+ *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed; removed the douubled open/close commands for _TZE200_sh1btabb; 
+ *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *
  *            TODO Presence check timer
  *            TODO: timer; water_consumed; cycle_timer_1 
@@ -33,7 +34,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/26 11:44 PM"}
+def timeStamp() {"2023/02/26 11:45 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -53,8 +54,8 @@ metadata {
             "active (on)",
             "enabled (off)"
         ]
-        attribute "timer_time_left", "number"
-        attribute "last_valve_open_duration", "number"
+        attribute "timerTimeLeft", "number"                // was timer_time_left
+        attribute "lastValveOpenDuration", "number"       // was last_valve_open_duration
         attribute "weather_delay", "enum", [
             "disabled",
             "24h",
@@ -65,6 +66,7 @@ metadata {
         attribute "irrigationEndTime", "string"
         attribute "lastIrrigationDuration", "string"
         attribute "waterConsumed", "number"
+        attribute "autoOffTimer", "number"
         
         command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
         
@@ -543,7 +545,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "0B" : // (11) SASWELL countdown timeLeft in seconds timer_time_left "irrigation_time" (0..86400, seconds)
                                 if (txtEnable==true) log.info "${device.displayName} timer time left (${cmd}) is: ${value} seconds"
-                                sendEvent(name: 'timer_time_left', value: value, type: "physical")
+                                sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
                                 break
                             case "0C" : // (12) SASWELL ("work_state") state 0-disabled 1-active on (open) 2-enabled off (closed) ? or auto/manual/idle ?
                                 def valueString = timerStateOptions[safeToInt(value).toString()]
@@ -564,7 +566,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "0F" : // (15) SASWELL lastValveOpenDuration in seconds last_valve_open_duration (once_using_time, last irrigation duration) (0..86400, seconds)
                                 if (txtEnable==true) log.info "${device.displayName} last valve open duration (${cmd}) is: ${value} seconds"
-                                sendEvent(name: 'last_valve_open_duration', value: value, type: "physical")
+                                sendEvent(name: 'lastValveOpenDuration', value: value, type: "physical")
                                 break
                             case "10" : // (16) SASWELL RawToCycleTimer1 ?     ("cycle_irrigation")
                                 // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1205015123 
@@ -721,7 +723,7 @@ def close() {
         Short paramVal = 0
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -742,7 +744,7 @@ def open() {
         Short paramVal = 1
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
+        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -831,6 +833,11 @@ def configure() {
     cmds += tuyaBlackMagic()
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
+ 
+    if (settings?.autoOffTimer != null ) {
+        sendEvent(name: 'autoOffTimer', value: settings?.autoOffTimer, type: "digital")
+    }
+
     
     if (settings?.forcedProfile != null) {
         if (settings?.forcedProfile != state.deviceProfile) {
@@ -1160,7 +1167,7 @@ def setIrrigationTimer( timer ) {
     }
     logDebug "setting the irrigation timer to ${timerSec} seconds"
     device.updateSetting("autoOffTimer", [value: timerSec, type: "number"])
-    
+    sendEvent(name: 'autoOffTimer', value: timerSec, type: "digital")
     runIn( 1, "sendAutoOffTimer")
     /*   
     def dpValHex = zigbee.convertToHexString(timerSec as int, 8)
