@@ -24,8 +24,8 @@
  *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed; removed the douubled open/close commands for _TZE200_sh1btabb; 
  *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *
- *            TODO Presence check timer
- *            TODO: timer; water_consumed; cycle_timer_1 
+ *                                  TODO: duration in minutes ?
+ *                                  TODO: Water Valve Mode; IrrigationTarget
  *
  *
  */
@@ -34,7 +34,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/26 11:45 PM"}
+def timeStamp() {"2023/02/26 11:46 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -56,7 +56,7 @@ metadata {
         ]
         attribute "timerTimeLeft", "number"                // was timer_time_left
         attribute "lastValveOpenDuration", "number"       // was last_valve_open_duration
-        attribute "weather_delay", "enum", [
+        attribute "weatherDelay", "enum", [
             "disabled",
             "24h",
             "48h",
@@ -503,7 +503,7 @@ def parseZHAcommand( Map descMap) {
                                     // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
                                 }
                                 else {    // WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
-                                    if (txtEnable==true) log.info "${device.displayName} Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
+                                    logInfo "Water Valve Mode (dp=${cmd}) is: ${value}"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                 }
                                 break
                             case "02" : // isWaterIrrigationValve() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
@@ -513,70 +513,70 @@ def parseZHAcommand( Map descMap) {
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
                                 break
                             case "03" : // flow_state or percent_state?  (0..100%) SASWELL ?
-                                if (txtEnable==true) log.info "${device.displayName} flow_state (${cmd}) is: ${value} %"
+                                logInfo "flow_state (${cmd}) is: ${value} %"
                                 break                                
                             case "04" : // failure_to_report
-                                if (txtEnable==true) log.info "${device.displayName} failure_to_report (${cmd}) is: ${value}"
+                                logInfo "failure_to_report (${cmd}) is: ${value}"
                                 break                                
                             case "05" : // isSASWELL() - measuredValue ( water_once, or last irrigation volume ) ( 0..1000, divisor:10, unit: 'L')
                                 // assuming value is reported in fl. oz. ? => { water_consumed: (value / 33.8140226).toFixed(2) }
-                                if (txtEnable==true) log.info "${device.displayName} SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                                logInfo "SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
                                 break
                             case "07" : // Battery for SASWELL (0..100%), Countdown for the others?
                                 if (isSASWELL()) {
-                                    if (txtEnable==true) log.info "${device.displayName} battery (${cmd}) is: ${value} %"
+                                    logInfo "battery (${cmd}) is: ${value} %"
                                     sendBatteryEvent(value)                                    
                                 }
                                 else {
-                                    if (txtEnable==true) log.info "${device.displayName} Countdown (${cmd}) is: ${value}"
+                                    logInfo "Countdown (${cmd}) is: ${value}"
                                 }
                                 break
                             case "08" : // battery_state batteryStateOptions
                                 def valueString = batteryStateOptions[safeToInt(value).toString()]
-                                if (txtEnable==true) log.info "${device.displayName} battery_state (${cmd}) is: ${valueString} (${value})"
+                                logInfo "battery_state (${cmd}) is: ${valueString} (${value})"
                                 break                                
                             case "09" : // accumulated_usage_time (0..2592000, seconds)
-                                if (txtEnable==true) log.info "${device.displayName} accumulated_usage_time (${cmd}) is: ${value} seconds"
+                                logInfo "accumulated_usage_time (${cmd}) is: ${value} seconds"
                                 break                                
                             case "0A" : // (10) weather_delay //   0 -> disabled; 1 -> "24h"; 2 -> "48h";  3 -> "72h"
                                 def valueString = weatherDelayOptions[safeToInt(value).toString()]
-                                if (txtEnable==true) log.info "${device.displayName} weather_delay (${cmd}) is: ${valueString} (${value})"
-                                sendEvent(name: 'weather_delay', value: valueString, type: "physical")
+                                logInfo "weatherDelay (${cmd}) is: ${valueString} (${value})"
+                                sendEvent(name: 'weatherDelay', value: valueString, type: "physical")
                                 break
                             case "0B" : // (11) SASWELL countdown timeLeft in seconds timer_time_left "irrigation_time" (0..86400, seconds)
-                                if (txtEnable==true) log.info "${device.displayName} timer time left (${cmd}) is: ${value} seconds"
+                                logInfo "timer time left (${cmd}) is: ${value} seconds"
                                 sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
                                 break
                             case "0C" : // (12) SASWELL ("work_state") state 0-disabled 1-active on (open) 2-enabled off (closed) ? or auto/manual/idle ?
                                 def valueString = timerStateOptions[safeToInt(value).toString()]
-                                if (txtEnable==true) log.info "${device.displayName} timer_state (work state) (${cmd}) is: ${valueString} (${value})"
-                                sendEvent(name: 'timer_state', value: valueString, type: "physical")
+                                logInfo "timer_state (work state) (${cmd}) is: ${valueString} (${value})"
+                                sendEvent(name: 'timerState', value: valueString, type: "physical")
                                 break
                             case "0D" : // (13) "smart_weather" for SASWELL or relay status for others?
                                 if (isSASWELL()) {
                                     def valueString = smartWeatherOptions[safeToInt(value).toString()]
-                                    if (txtEnable==true) log.info "${device.displayName} smart_weather (${cmd}) is: ${valueString} (${value})"
+                                    logInfo "smart_weather (${cmd}) is: ${valueString} (${value})"
                                 }
                                 else {
-                                    if (txtEnable==true) log.info "${device.displayName} relay status (${cmd}) is: ${value}"
+                                    logInfo "relay status (${cmd}) is: ${value}"
                                 }
                                 break
                             case "0E" : // (14) SASWELL "smart_weather_switch"
-                                if (txtEnable==true) log.info "${device.displayName} smart_weather_switch (${cmd}) is: ${value}"
+                                logInfo "smart_weather_switch (${cmd}) is: ${value}"
                                 break
                             case "0F" : // (15) SASWELL lastValveOpenDuration in seconds last_valve_open_duration (once_using_time, last irrigation duration) (0..86400, seconds)
-                                if (txtEnable==true) log.info "${device.displayName} last valve open duration (${cmd}) is: ${value} seconds"
+                                logInfo "last valve open duration (${cmd}) is: ${value} seconds"
                                 sendEvent(name: 'lastValveOpenDuration', value: value, type: "physical")
                                 break
                             case "10" : // (16) SASWELL RawToCycleTimer1 ?     ("cycle_irrigation")
                                 // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1205015123 
-                                if (txtEnable==true) log.info "${device.displayName} SASWELL RawToCycleTimer1 (${cmd}) is: ${value}"
+                                logInfo "SASWELL RawToCycleTimer1 (${cmd}) is: ${value}"
                                 break
                             case "11" : // (17) SASWELL RawToCycleTimer2 ?     ("normal_timer")
-                                if (txtEnable==true) log.info "${device.displayName} SASWELL RawToCycleTimer2 (${cmd}) is: ${value}"
+                                logInfo "SASWELL RawToCycleTimer2 (${cmd}) is: ${value}"
                                 break
                             case "13" : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
-                                if (txtEnable==true) log.info "${device.displayName} inching switch(!?!) is: ${value}"
+                                logInfo "inching switch(!?!) is: ${value}"
                                 break
                             case "65" : // (101) WaterValveIrrigationStartTime     // IrrigationStartTime       # (string) ex: "08:12:26"
                                 def str = getAttributeString(descMap.data)
@@ -589,10 +589,10 @@ def parseZHAcommand( Map descMap) {
                                 sendEvent(name: 'irrigationEndTime', value: str, type: "physical")
                                 break
                             case "67" : // (103) WaterValveCycleIrrigationNumTimes          // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
-                                if (txtEnable==true) log.info "${device.displayName} CycleIrrigationNumTimes (${cmd}) is: ${value}"
+                                logInfo "CycleIrrigationNumTimes (${cmd}) is: ${value}"
                                 break
                             case "68" : // (104) WaterValveIrrigationTarget                // IrrigationTarget          # duration in minutes or capacity in Liters (depending on mode)
-                                if (txtEnable==true) log.info "${device.displayName} IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
+                                logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
                                 break
                             case "69" : // (105) WaterValveCycleIrrigationInterval        // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
                                 if (txtEnable==true) log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}"
