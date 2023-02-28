@@ -25,8 +25,10 @@
  *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
- *
+ *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
+ * 
  *                                  TODO: duration in minutes ? 
+ *                                  
  *
  *
  */
@@ -35,9 +37,9 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/28 6:08 PM"}
+def timeStamp() {"2023/02/28 11:55 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition (name: "Tuya Zigbee Valve", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy", singleThreaded: true ) {
@@ -175,7 +177,7 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_a7sghmms"]     // WaterIrrigationValve 
             ],
             deviceJoinName: "Tuya Zigbee Irrigation Valve",
-            capabilities  : ["valve": true, "battery": true],
+            capabilities  : ["valve": true, "battery": true],        // no consumption reporting ? 
             configuration : ["battery": false],
             attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
             preferences   : [
@@ -185,19 +187,37 @@ metadata {
 
     "TS0601_SASWELL_VALVE"    : [
             model         : "TS0601",
-            manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy", "_TZE200_htnnfasr"],
+            manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy", "_TZE200_htnnfasr"],    // TODO - remove _TZE200_htnnfasr - only on/off and timer?
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_akjefhj5"],     // SASWELL SAS980SWT-7-Z01 (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_81isopgh"],     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"],     // not tested // 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",          model:"TS0601", manufacturer:"_TZE200_htnnfasr"]      // not tested // // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_akjefhj5"],     // SASWELL SAS980SWT-7-Z01 (RTX ZVG1 ) (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_81isopgh"],     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"]      // not tested // 
             ],
             deviceJoinName: "Saswell Zigbee Irrigation Valve",
+            instructions  : "https://fccid.io/2AOIFSAS980SWT/User-Manual/User-Manual-5361734.pdf",
             capabilities  : ["valve": true, "battery": true],
             configuration : ["battery": false],
-            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery", "battery": "---", "timerTimeLeft": "---", "lastValveOpenDuration": "---"],
+            tuyaCommands  : ["timerState": "0x02", "timerTimeLeft": "0x0B"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+    
+    "TS0601_LIDL_VALVE"   : [
+            model         : "TS0601",                                    // TS0601 _TZE200_c88teujp model: 'PSBZS A1'   PARKSIDE® Smart Irrigation Computer     Lidl https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201 
+            manufacturers : ["_TZE200_htnnfasr", "_TZE200_c88teujp"],    // TS0601 _TZE200_htnnfasr 'Parkside smart watering timer' -  only DP1 and 5 (timer) !!!  'PSBZS A1',    // https://github.com/mgrom/zigbee-herdsman-converters/blob/ce171e86f9bde6004046b9f4a3701b8024569a2a/devices/lidl.js
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,EF00", outClusters:"000A,0019", model:"TS0601", manufacturer:"_TZE200_htnnfasr"],     // not tested // LIDL // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,EF00", outClusters:"000A,0019", model:"TS0601", manufacturer:"_TZE200_htnnfasr"]      // not tested // LIDL // PARKSIDE® Smart Irrigation Computer //https://www.lidl.de/p/parkside-smarter-bewaesserungscomputer-zigbee-smart-home/p100325201
+            ],
+            deviceJoinName: "LIDL Parkside smart watering timer",        // also https://gist.github.com/zinserjan/e0486af73d0aa8c6aeed31762e831022
+            capabilities  : ["valve": true, "battery": true],            // Lidl commands set : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084932081 
+            configuration : ["battery": false],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery", "battery": "---"],
+            tuyaCommands  : ["switch": "0x01", "timeSchedule": "0x6B", "frostReset": "0x6D"],
+            preferences   : [
+//                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
     ],
     
@@ -513,7 +533,7 @@ def parseZHAcommand( Map descMap) {
                                     sendEvent(name: 'waterMode', value: str, type: "physical")
                                 }
                                 else { // switch 
-                                    switchEvent(value==0 ? "off" : "on")    // also SASWELL
+                                    switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
                                     // There is no way to disable the "Auto off" timer for when the valve is turned on manually
                                     // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
                                     logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
@@ -525,8 +545,11 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 switchEvent(value==0 ? "off" : "on")
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
-                                logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                runIn( 5, "sendIrrigationDuration")
+                                // TODO - for isGIEX() only? (skip it for SASWELL!)
+                                if (true) {
+                                    logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                    runIn( 5, "sendIrrigationDuration")
+                                }
                                 break
                             case "03" : // flow_state or percent_state?  (0..100%) SASWELL ?
                                 logInfo "flow_state (${cmd}) is: ${value} %"
@@ -535,10 +558,18 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "failure_to_report (${cmd}) is: ${value}"
                                 break                                
                             case "05" : // isSASWELL() - measuredValue ( water_once, or last irrigation volume ) ( 0..1000, divisor:10, unit: 'L')
-                                // assuming value is reported in fl. oz. ? => { water_consumed: (value / 33.8140226).toFixed(2) }
-                                logInfo "SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                                // for GiEX - assuming value is reported in fl. oz. ? => { water_consumed: (value / 33.8140226).toFixed(2) }
+                                if (isSASWELL()) {
+                                    logInfo "SASWELL measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                                }
+                                else if (isGIEX()) {
+                                    logInfo "GiEX measuredValue (dp=${cmd}) is: ${(value / 33.8140226).toFixed(2)} (data=${descMap.data})"    // or the reported value is in litres - keep it as it is?
+                                }
+                                else {
+                                    logInfo "measuredValue (dp=${cmd}) is: ${value} (data=${descMap.data})"
+                                }
                                 break
-                            case "06" : // unknown
+                            case "06" : // unknown ; LIDL - TODO !!!! 
                                 logDebug "SASWELL unknown cmd (${cmd}) value is: ${value}"
                                 break                                
                             case "07" : // Battery for SASWELL (0..100%), Countdown for the others?
@@ -597,7 +628,7 @@ def parseZHAcommand( Map descMap) {
                             case "13" : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
-                            case "65" : // (101) WaterValveIrrigationStartTime for GiEX    // IrrigationStartTime       # (string) ex: "08:12:26"
+                            case "65" : // (101) WaterValveIrrigationStartTime for GiEX and LIDL?   // IrrigationStartTime       # (string) ex: "08:12:26"
                                 def str = getAttributeString(descMap.data)
                                 logInfo "IrrigationStartTime (${cmd}) is: ${str}"
                                 sendEvent(name: 'irrigationStartTime', value: str, type: "physical")
@@ -619,9 +650,19 @@ def parseZHAcommand( Map descMap) {
                             case "6A" : // (106) WaterValveCurrentTempurature            // CurrentTemperature        # (value ignored because isn't a valid tempurature reading.  Misdocumented and usage unclear)
                                 if (txtEnable==true) log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}"        // ignore!
                                 break
+                            case "6B" : // (107) - LIDL time schedile                    // https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-868509538
+                                logInfo "Lidl  LIDL time schedile (${cmd}) is: ${value}"
+                                break
                             case "6C" : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
-                                if (txtEnable==true) log.info "${device.displayName} Battery (${cmd}) is: ${value}"
-                                sendBatteryEvent(value)
+                                if (isGIEX()) {
+                                    logInfo "GiEX Battery (${cmd}) is: ${value}"
+                                    sendBatteryEvent(value)
+                                } else {    // Lidl
+                                    logInfo "LIDL frost state (${cmd}) is: ${value}"
+                                }
+                                break
+                            case "6D" : // LIDL frost reset
+                                logInfo "LIDL reset frost alarmcommand (${cmd}) is: ${value}"    // to be sent to the device! TODO: reset frost alarm : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084774734 - command 0x6D ?TYPE_ENUM value 01
                                 break
                             case "6F" : // (111) WaterValveWaterConsumed for GiEX       // WaterConsumed             # water consumed (Litres)
                                 if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value} (Litres)"
@@ -829,7 +870,11 @@ def refresh() {
 
 
 def tuyaBlackMagic() {
-    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    List<String> cmds = []
+    if (state.txCounter != null) state.txCounter = state.txCounter + 1
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=150) // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [:], delay=50)
+    return cmds
 }
 
 /*
@@ -944,7 +989,7 @@ void initializeVars( boolean fullInit = true ) {
         unschedule()
         resetStats()
         setDeviceNameAndProfile()
-        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya GiEX & Saswell irrigation valves'
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya, GiEX, Saswell, Lidl irrigation valves'
         logInfo "all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()    
     }
@@ -1240,7 +1285,6 @@ def setIrrigationMode( mode ) {
     sendZigbeeCommands( cmds )
     
 }
-
 
 def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     ArrayList<String> cmds = []
