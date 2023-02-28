@@ -24,7 +24,7 @@
  *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed; removed the doubled open/close commands for _TZE200_sh1btabb; 
  *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
- *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; 
+ *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *
  *                                  TODO: duration in minutes ? 
  *
@@ -35,7 +35,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/28 1:06 PM"}
+def timeStamp() {"2023/02/28 6:08 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -50,19 +50,10 @@ metadata {
         capability "Battery"
         
         attribute "healthStatus", "enum", ["offline", "online"]
-        attribute "timerState", "enum", [
-            "disabled",
-            "active (on)",
-            "enabled (off)"
-        ]
-        attribute "timerTimeLeft", "number"                // was timer_time_left
-        attribute "lastValveOpenDuration", "number"       // was last_valve_open_duration
-        attribute "weatherDelay", "enum", [
-            "disabled",
-            "24h",
-            "48h",
-            "72h"
-        ]
+        attribute "timerState", "enum", ["disabled", "active (on)", "enabled (off)"]
+        attribute "timerTimeLeft", "number"
+        attribute "lastValveOpenDuration", "number"
+        attribute "weatherDelay", "enum", ["disabled", "24h", "48h", "72h"]
         attribute "irrigationStartTime", "string"
         attribute "irrigationEndTime", "string"
         attribute "lastIrrigationDuration", "string"
@@ -103,11 +94,12 @@ metadata {
         }
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely set Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
         }
     }
 }
 
+// TODO : change 'model' to 'models' list; combine TS0001_VALVE_ONOFF TS0011_VALVE_ONOFF TS011F_VALVE_ONOFF in one profile; 
 @Field static final Map deviceProfilesV2 = [
     "TS0001_VALVE_ONOFF"  : [
             model         : "TS0001",
@@ -122,8 +114,8 @@ metadata {
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
             capabilities  : ["valve": true, "battery": false],
+            attributes    : ["valve": "", "healthStatus": "unknown", "powerSource": "dc"],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -136,11 +128,10 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"]      // clusters verified
             ],
-        
             deviceJoinName: "Tuya Zigbee Valve TS0011",
             capabilities  : ["valve": true, "battery": false],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -155,7 +146,7 @@ metadata {
             deviceJoinName: "Tuya Zigbee Valve TS011F",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -170,7 +161,7 @@ metadata {
             deviceJoinName: "Tuya Zigbee Valve TS0601",
             capabilities  : ["valve": true, "battery": false],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -186,7 +177,7 @@ metadata {
             deviceJoinName: "Tuya Zigbee Irrigation Valve",
             capabilities  : ["valve": true, "battery": true],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -204,7 +195,7 @@ metadata {
             deviceJoinName: "Saswell Zigbee Irrigation Valve",
             capabilities  : ["valve": true, "battery": true],
             configuration : ["battery": false],
-            attributes    : ["healthStatus"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
             preferences   : [
                 "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -216,7 +207,7 @@ metadata {
         deviceJoinName: "Unknown device",
         capabilities  : ["valve": true],
         configuration : ["battery": true],
-        attributes    : ["healthStatus"],
+        attributes    : [],
         batteries     : "unknown"
     ]
 ]    
@@ -295,8 +286,10 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
+def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
 def isConfigurable(model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
+def getPowerSource(profile=null) { def ps = deviceProfilesV2["${profile ?: getModelGroup()}"]?.attributes?.powerSource; return ps != null && ps != [] ? ps : null }
 def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
 def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
 def isSASWELL()              { return getModelGroup().contains("SASWELL") }
@@ -882,16 +875,12 @@ def configure() {
     sendZigbeeCommands(cmds)
 }
 
-def getModelGroup() {
-    return state.deviceProfile ?: "UNKNOWN"
-}
-
 // called from  initializeVars( fullInit = true)
-void setDeviceName() {
+def setDeviceNameAndProfile( model=null, manufacturer=null) {
     String deviceName
     def currentModelMap = null
-    def deviceModel = device.getDataValue('model')
-    def deviceManufacturer = device.getDataValue('manufacturer')
+    def deviceModel        = model != null ? model : device.getDataValue('model')
+    def deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
     deviceProfilesV2.each { profileName, profileMap ->
         if ((profileMap.model?.value as String) == (deviceModel as String)) {
             if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String))
@@ -899,22 +888,23 @@ void setDeviceName() {
                 currentModelMap = profileName
                 state.deviceProfile = currentModelMap
                 deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
-                //log.debug "FOUND! currentModelMap=${currentModelMap}, deviceName =${deviceName}"
+                logDebug "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
             }
         }
     }
 
     if (currentModelMap == null) {
-        logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
+        logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = 'UNKNOWN'
     }
     if (deviceName != NULL) {
         device.setName(deviceName)
-        logInfo "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} deviceName was set to ${deviceName}"
+        logInfo "device model ${deviceModel} manufacturer ${deviceManufacturer} deviceName was set to ${deviceName}"
     } else {
-        logWarn "device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} was not found!"
+        logWarn "device model ${deviceModel} manufacturer ${deviceManufacturer} was not found!"
     }
+    return [deviceName, currentModelMap]
 }
 
 
@@ -953,8 +943,8 @@ void initializeVars( boolean fullInit = true ) {
         state.clear()
         unschedule()
         resetStats()
-        setDeviceName()
-        state.comment = 'Works with Tuya TS0001 TS0011 TS011F shutoff valves; Tuya GiEX & Saswell irrigation valves'
+        setDeviceNameAndProfile()
+        state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya GiEX & Saswell irrigation valves'
         logInfo "all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()    
     }
@@ -1042,11 +1032,8 @@ def setHealthStatusOnline() {
     state.states["notPresentCtr"]  = 0
     if (!((device.currentValue('healthStatus', true) ?: "unknown") in ['online'])) {   
         sendHealthStatusEvent('online')
-        if (isBatteryPowered()) {
-        	sendEvent(name: "powerSource", value: "battery", type: "digital") 
-        }
-        else {
-        	sendEvent(name: "powerSource", value: "dc", type: "digital") 
+        if (getPowerSource() != null) {
+        	sendEvent(name: "powerSource", value: getPowerSource(), type: "digital") 
         }
         logInfo "is online"
     }
@@ -1058,7 +1045,9 @@ def deviceHealthCheck() {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
             if (logEnable==true) log.warn "${device.displayName} not present!"
-    	    sendEvent(name: "powerSource", value: "unknown", type: "digital")
+            if (getPowerSource() != null) {
+    	        sendEvent(name: "powerSource", value: "unknown", type: "digital")
+            }
             if (isBatteryPowered()) {
                 if (safeToInt(device.currentValue('battery', true)) != 0) {
                     logWarn "${device.displayName} forced battery to '<b>0 %</b>"
