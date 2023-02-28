@@ -20,13 +20,13 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-27 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
+ *  ver. 1.2.0 2023-02-28 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
  *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed; removed the doubled open/close commands for _TZE200_sh1btabb; 
  *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
+ *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; 
  *
- *                                  TODO: duration in minutes ?
- *                                  TODO: addWater Valve Mode; IrrigationTarget
+ *                                  TODO: duration in minutes ? 
  *
  *
  */
@@ -35,7 +35,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.0" }
-def timeStamp() {"2023/02/27 23:33 PM"}
+def timeStamp() {"2023/02/28 1:06 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -67,9 +67,12 @@ metadata {
         attribute "irrigationEndTime", "string"
         attribute "lastIrrigationDuration", "string"
         attribute "waterConsumed", "number"
-        attribute "autoOffTimer", "number"
+        attribute "irrigationDuration", "number"
+        attribute "irrigationCapacity", "number"
         
-        command "setIrrigationTimer", [[name:"timer", type: "NUMBER", description: "Set Irrigation Timer, seconds", constraints: ["0..86400"]]]
+        command "setIrrigationTimer", [[name:"timer, seconds", type: "NUMBER", description: "Set Irrigation Duration timer, seconds", constraints: ["0..86400"]]]
+        command "setIrrigationCapacity", [[name:"capacity, liters", type: "NUMBER", description: "Set Irrigation Capacity, litres", constraints: ["0..9999"]]]
+        command "setIrrigationMode", [[name:"select the mode", type: "ENUM", description: "Set Irrigation Mode", constraints: ['--select--', 'duration', 'capacity']]]
         
         if (_DEBUG == true) {        
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
@@ -96,10 +99,11 @@ metadata {
         input (name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options: powerOnBehaviourOptions)
         if (isSASWELL() || isGIEX()) {
        		input (name: "autoOffTimer", type: "number", title: "<b>Auto off timer</b>", description: "<i>Automatically turn off after how many seconds?</i>", defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+       		input (name: "irrigationCapacity", type: "number", title: "<b>Irrigation Capacity</b>", description: "<i>Automatically turn off agter how many liters</i>", defaultValue: DEFAULT_CAPACITY, required: false)
         }
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Device Profile<br>Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely set Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
         }
     }
 }
@@ -221,6 +225,9 @@ metadata {
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 15
 @Field static final Integer DEFAULT_AUTOOFF_TIMER = 60
+@Field static final Integer MAX_AUTOOFF_TIMER = 86400
+@Field static final Integer DEFAULT_CAPACITY = 99
+@Field static final Integer MAX_CAPACITY = 999
 @Field static final Integer DEBOUNCING_TIMER = 300
 @Field static final Integer DIGITAL_TIMER = 3000
 @Field static final Integer REFRESH_TIMER = 3000
@@ -291,7 +298,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
 def isConfigurable(model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
 def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
-def isGIEX() { return getModelGroup().contains("GIEX") }    // GiEX valve device
+def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
 def isSASWELL()              { return getModelGroup().contains("SASWELL") }
 def isBatteryPowered()       { return isGIEX() || isSASWELL()}
 
@@ -506,7 +513,7 @@ def parseZHAcommand( Map descMap) {
                         if (logEnable==true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
                         def map = [:]
                         switch (cmd) {
-                            case "01" :   // WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
+                            case "01" :   // WaterMode  for GiEX : duration=0 / capacity=1
                                 if (isGIEX()) {
                                     def str = waterModeOptions[safeToInt(value).toString()]
                                     logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
@@ -516,8 +523,8 @@ def parseZHAcommand( Map descMap) {
                                     switchEvent(value==0 ? "off" : "on")    // also SASWELL
                                     // There is no way to disable the "Auto off" timer for when the valve is turned on manually
                                     // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
-                                    logDebug "scheduled again to set the SASWELL autoOff timer to ${settings?.autoOffTimer} after 5 seconds"
-                                    runIn( 5, "sendAutoOffTimer")
+                                    logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                    runIn( 5, "sendIrrigationDuration")
                                 }
                                 break
                             case "02" : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
@@ -525,8 +532,8 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 switchEvent(value==0 ? "off" : "on")
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
-                                logDebug "scheduled again to set the GiEX autoOff timer to ${settings?.autoOffTimer} after 5 seconds"
-                                runIn( 5, "sendAutoOffTimer")
+                                logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                runIn( 5, "sendIrrigationDuration")
                                 break
                             case "03" : // flow_state or percent_state?  (0..100%) SASWELL ?
                                 logInfo "flow_state (${cmd}) is: ${value} %"
@@ -597,37 +604,37 @@ def parseZHAcommand( Map descMap) {
                             case "13" : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
-                            case "65" : // (101) WaterValveIrrigationStartTime     // IrrigationStartTime       # (string) ex: "08:12:26"
+                            case "65" : // (101) WaterValveIrrigationStartTime for GiEX    // IrrigationStartTime       # (string) ex: "08:12:26"
                                 def str = getAttributeString(descMap.data)
                                 logInfo "IrrigationStartTime (${cmd}) is: ${str}"
                                 sendEvent(name: 'irrigationStartTime', value: str, type: "physical")
                                 break
-                            case "66" : // (102) WaterValveIrrigationEndTime      // IrrigationStopTime        # (string) ex: "08:13:36"
+                            case "66" : // (102) WaterValveIrrigationEndTime  for GiEX    // IrrigationStopTime        # (string) ex: "08:13:36"
                                 def str = getAttributeString(descMap.data)
                                 logInfo "IrrigationEndTime (${cmd}) is: ${str}"
                                 sendEvent(name: 'irrigationEndTime', value: str, type: "physical")
                                 break
-                            case "67" : // (103) WaterValveCycleIrrigationNumTimes          // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
+                            case "67" : // (103) WaterValveCycleIrrigationNumTimes  for GiEX        // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
                                 logInfo "CycleIrrigationNumTimes (${cmd}) is: ${value}"
                                 break
-                            case "68" : // (104) WaterValveIrrigationTarget                // IrrigationTarget   for _TZE200_sh1btabb       # duration in minutes or capacity in Liters (depending on mode)
+                            case "68" : // (104) WaterValveIrrigationTarget for GiEX        // IrrigationTarget   for _TZE200_sh1btabb       # duration in minutes or capacity in Liters (depending on mode)
                                 logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
                                 break
-                            case "69" : // (105) WaterValveCycleIrrigationInterval        // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
+                            case "69" : // (105) WaterValveCycleIrrigationInterval for GiEX      // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
                                 if (txtEnable==true) log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}"
                                 break
                             case "6A" : // (106) WaterValveCurrentTempurature            // CurrentTemperature        # (value ignored because isn't a valid tempurature reading.  Misdocumented and usage unclear)
                                 if (txtEnable==true) log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}"        // ignore!
                                 break
-                            case "6C" : // (108) WaterValveBattery - _TZE200_sh1btabb    // 0001/0021,mul:2           # match to BatteryPercentage
+                            case "6C" : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (txtEnable==true) log.info "${device.displayName} Battery (${cmd}) is: ${value}"
                                 sendBatteryEvent(value)
                                 break
-                            case "6F" : // (111) WaterValveWaterConsumed                // WaterConsumed             # water consumed (Litres)
+                            case "6F" : // (111) WaterValveWaterConsumed for GiEX       // WaterConsumed             # water consumed (Litres)
                                 if (txtEnable==true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value} (Litres)"
                                 sendEvent(name: 'waterConsumed', value: value, type: "physical")
                                 break
-                            case "72" : // (114) WaterValveLastIrrigationDuration    LastIrrigationDuration    # (string) Ex: "00:01:10,0"
+                            case "72" : // (114) WaterValveLastIrrigationDuration for GiEX   LastIrrigationDuration    # (string) Ex: "00:01:10,0"
                                 def str = getAttributeString(descMap.data)
                                 if (txtEnable==true) log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}"
                                 sendEvent(name: 'lastIrrigationDuration', value: str, type: "physical")
@@ -773,19 +780,11 @@ def open() {
     }
     runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     if (isSASWELL() || isGIEX()) {
-        logDebug "scheduled to set the autoOff timer to ${settings?.autoOffTimer} after 5 seconds"
-        runIn( 5, "sendAutoOffTimer")
+        logDebug "scheduled to set the autoOff Iirrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+        runIn( 5, "sendIrrigationDuration")
     }
     logDebug "open()... sent cmds=${cmds}"
     sendZigbeeCommands( cmds )
-}
-
-def sendAutoOffTimer() {
-   ArrayList<String> cmds = []
-   String autoOffTime = "00010B020004" + zigbee.convertToHexString((settings?.autoOffTimer) as Integer, 8)
-   cmds = zigbee.command(0xEF00, 0x0, autoOffTime)
-   logDebug "sendAutoOffTimer= ${settings?.autoOffTimer} : ${cmds}"
-   sendZigbeeCommands(cmds) 
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
@@ -854,7 +853,7 @@ def configure() {
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
  
     if (settings?.autoOffTimer != null ) {
-        sendEvent(name: 'autoOffTimer', value: settings?.autoOffTimer, type: "digital")
+        sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: "digital")
     }
 
     
@@ -1180,19 +1179,77 @@ def logWarn(msg) {
 def setIrrigationTimer( timer ) {
     ArrayList<String> cmds = []
     def timerSec = safeToInt(timer, -1)
-    if (timerSec < 0 || timerSec > 86400) {
-        logWarn "timer must be withing 0 and 86400 seconds"
+    if (timerSec < 0 || timerSec > MAX_AUTOOFF_TIMER) {
+        logWarn "timer must be withing 0 and ${MAX_AUTOOFF_TIMER} seconds"
         return
     }
     logDebug "setting the irrigation timer to ${timerSec} seconds"
     device.updateSetting("autoOffTimer", [value: timerSec, type: "number"])
-    sendEvent(name: 'autoOffTimer', value: timerSec, type: "digital")
-    runIn( 1, "sendAutoOffTimer")
-    /*   
-    def dpValHex = zigbee.convertToHexString(timerSec as int, 8)
-    cmds = sendTuyaCommand("0B", DP_TYPE_VALUE, dpValHex)
+    sendEvent(name: 'irrigationDuration', value: timerSec, type: "digital")
+    runIn( 1, "sendIrrigationDuration")
+}
+
+def sendIrrigationDuration() {
+    ArrayList<String> cmds = []
+    def dpValHex
+    if (isSASWELL()) {
+        dpValHex = zigbee.convertToHexString((settings?.autoOffTimer) as Integer, 8)
+        String autoOffTime = "00010B020004" + dpValHex
+        cmds = zigbee.command(0xEF00, 0x0, autoOffTime)
+    } else if (isGIEX()) {
+        cmds = sendTuyaCommand("68", DP_TYPE_VALUE, dpValHex)
+    }
+    else {
+        logWarn "sendIrrigationDuration is avaiable for GiEX or SASWELL valves only"
+        return
+    }
+    logDebug "sendIrrigationDuration = ${settings?.autoOffTimer} : ${cmds}"
+    sendZigbeeCommands(cmds) 
+}
+
+def setIrrigationCapacity( litres ) {
+    ArrayList<String> cmds = []
+    def value = safeToInt(litres, -1)
+    if (value < 0 || value > MAX_CAPACITY) {
+        logWarn "irrigation capacity must be withing 0 and ${MAX_CAPACITY} litres"
+        return
+    }
+    logDebug "setting the irrigation capacity to ${value} litres"
+    device.updateSetting("irrigationCapacity", [value: value, type: "number"])
+    sendEvent(name: 'irrigationCapacity', value: value, type: "digital")
+    runIn( 1, "sendIrrigationCapacity")
+}
+
+def sendIrrigationCapacity() {
+    ArrayList<String> cmds = []
+    if (isGIEX()) {
+        def dpValHex = zigbee.convertToHexString(settings?.irrigationCapacity as int, 8)
+        cmds = sendTuyaCommand("68", DP_TYPE_VALUE, dpValHex)
+        logDebug "sendIrrigationCapacity= ${settings?.irrigationCapacity} : ${cmds}"
+        sendZigbeeCommands( cmds )
+    } else {
+        logWarn "sendIrrigationCapacity is avaiable for GiEX valves only"
+    }
+}
+
+def setIrrigationMode( mode ) {
+    ArrayList<String> cmds = []
+    def dpValHex
+    switch (mode)  {
+        case 'duration':
+            dpValHex = "00"
+            break
+        case 'capacity':
+            dpValHex = "01"
+            break
+        default : 
+        logWarn "incorrect irrigationMode ${mode}, must be ${(waterModeOptions.each {it})}"
+            return
+    }
+    cmds = sendTuyaCommand("01", DP_TYPE_ENUM, dpValHex)
+    logDebug "setIrrigationMode= ${mode} : ${cmds}"
     sendZigbeeCommands( cmds )
-    */
+    
 }
 
 
