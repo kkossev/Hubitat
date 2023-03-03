@@ -33,13 +33,19 @@
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
+ * ver. 1.2.6 2023-03-03 kkossev  - (dev.branch)
  *
+ *                                 TODO: ping
+ *                                 TODO: RTT measurement 
+ *                                 TODO: send  Reset presence commands if isFP1() on setMotion (inactive) command'; 
  *                                 TODO: Regions            
+ *                                 TODO: configure to clear the current states and events
+ *                                 TODO: Info logs only when parameters (sensitivity, etc..) were changed from the previous value
  *
 */
 
-def version() { "1.2.5" }
-def timeStamp() {"2023/01/30 2:31 PM"}
+def version() { "1.2.6" }
+def timeStamp() {"2023/03/03 9:08 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -59,7 +65,7 @@ metadata {
 		capability "TemperatureMeasurement"        
 		capability "Battery"
         capability "PowerSource"
-        capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER
+        //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
         attribute "batteryVoltage", "string"
         attribute "presence", "enum", [
@@ -286,62 +292,58 @@ def parseAqaraAttributeFF01 ( description ) {
                      
 def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+    def value = safeToInt(it.value)
     switch (it.attrId) {
         case "0005" :
-            if (logEnable) log.info "${device.displayName} (parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
+            logDebug "(parseAqaraClusterFCC0) device ${it.value} button was pressed (driver version ${driverVersionAndTimeStamp()})"
             break
         case "0064" :
-            logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0065" :
-            def value = safeToInt(it.value)
             if (isFP1()) { // FP1    'not present':'present'
-                if (txtEnable) log.info "${device.displayName} (attr 0x065) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
+                logDebug "(attr 0x065) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
                 presenceEvent( fp1PresenceEventOptions[value.toString()] )
             }
             else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
                 illuminanceEventLux( value )
-                if (txtEnable) log.info "${device.displayName} <b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                logDebug "<b>received illuminance only report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
             break
         case "0069" : // (105) PIR sensitivity RTCGQ13LM; distance for RTCZCGQ11LM; detection (retrigger) interval for RTCGQ14LM
             if (isRTCGQ13LM()) { 
                 // sensitivity
-                def value = safeToInt(it.value)
                 device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-                if (txtEnable) log.info "${device.displayName} <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                logDebug "<b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
             else if (isP1()) {
                 // retrigger interval
-                def value = safeToInt(it.value)
                 device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
-                if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             }
             else if (isFP1()) { // FP1
-                def value = safeToInt(it.value)
-                if (txtEnable) log.info "${device.displayName} (0x69) <b>received approach_distance report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+                logDebug "(0x69) <b>received approach_distance report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
                 device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             }
             else {
-                logWarn "Received unknown device report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                logWarn "Received unknown device report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
             }
             break
         case "00F7" :
             decodeAqaraStruct(description)
             break
         case "00FC" :
-            logWarn "received unknown FC report:  (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logWarn "received unknown FC report:  (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0102" : // Retrigger interval (duration)
-            def value = Integer.parseInt(it.value, 16)
+            value = Integer.parseInt(it.value, 16)
             device.updateSetting( "motionRetriggerInterval",  [value:value.toString(), type:"number"] )
-            if (txtEnable) log.info "${device.displayName} <b>received motion retrigger interval report: ${value} s</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logDebug "<b>received motion retrigger interval report: ${value} s</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0106" : // PIR sensitivity RTCGQ13LM RTCGQ14LM RTCZCGQ11LM
-        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM
-            def value = safeToInt(it.value)
+        case "010C" : // (268) PIR sensitivity RTCGQ13LM RTCGQ14LM (P1) RTCZCGQ11LM; TODO: check if applicable for FP1 ?
             device.updateSetting( "motionSensitivity",  [value:value.toString(), type:"enum"] )
-            logInfo "${device.displayName} (${it.attrId}) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logDebug "(0x010C) <b>received PIR sensitivity report: ${sensitivityOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0112" : // Aqara P1 PIR motion Illuminance
             if (!isRTCGQ13LM()) { // filter for High Preceision sensor - no illuminance sensor!
@@ -351,31 +353,41 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             }
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
-            def value = safeToInt(it.value)
-            if (txtEnable) log.info "${device.displayName} (attr. 0x0142) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
+            logDebug "(attr. 0x0142) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
             presenceEvent( fp1PresenceEventOptions[value.toString()] )
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
-            def value = safeToInt(it.value)
             presenceTypeEvent( fp1PresenceEventTypeOptions[value.toString()] )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
-            def value = safeToInt(it.value)
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
-            if (txtEnable) log.info "${device.displayName} <b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logDebug "<b>received monitoring_mode report: ${monitoringModeOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0146" : // (326) FP1 RTCZCGQ11LM approach_distance 
-            def value = safeToInt(it.value)
             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} (0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"
+            logDebug "(0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
-        case "0152" : // LED configuration
-            def value = safeToInt(it.value)
+        case "0151" : // (337) FP1 region event
+            logDebug "(0x0151) <b>received region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0152" : // (338) LED configuration
             device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
-            if (txtEnable) log.info "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=${it.cluster} attrId=${it.attrId} value=${it.value})"    //P1_LED_MODE_VALUE
-            break        
+            logDebug "${device.displayName} <b>received LED configuration report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"    //P1_LED_MODE_VALUE
+            break
+        case "0153" : // (339) FP1 set exit region event
+            logDebug "(0x0153) <b>received set exit region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0154" : // (340) FP1 set interference region event
+            logDebug "(0x0154) <b>received set interference region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0156" : // (342) FP1 set edge region event
+            logDebug "(0x0156) <b>received set edge region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
+        case "0157" : // (343) FP1 reset presence event
+            logWarn "(0x0157) <b>received reset presence report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
         default :
-            if (logEnable) log.debug "${device.displayName} Unprocessed <b>FCC0</b> attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+            logDebug "Unprocessed <b>FCC0</b> attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
         break
     }
     
@@ -1249,6 +1261,46 @@ def activeEndpoints() {
     return cmds    
 }
 
+// credits @thebearmay
+String getModel(){
+    try{
+        String model = getHubVersion() // requires >=2.2.8.141
+    } catch (ignore){
+        try{
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
+                model = res.data.device.modelName
+            return model
+            }        
+        } catch(ignore_again) {
+            return ""
+        }
+    }
+}
+
+// credits @thebearmay
+void checkZigStack(){
+//    if(!beta)
+//        return
+    try{
+        httpGet("http://127.0.0.1:8080/hub/currentZigbeeStack") { resp ->
+            if(resp.data.toString().indexOf('standard') > -1) {
+                // 'Hub is set to use standard Zigbee stack'
+                logDebug "zigbeeStack is standard"
+            }
+            else
+                logDebug "zigbeeStack is NEW"
+            }       
+       } catch(ignore) { }
+}
+
+// credits @thebearmay
+boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 )
+    String model = getModel()            // <modelName>Rev C-7</modelName>
+    String[] tokens = model.split('-')
+    String revision = tokens.last()
+    return (Integer.parseInt(revision) >= minLevel)
+}
+
 def logDebug(msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
@@ -1287,6 +1339,8 @@ def test( description ) {
     
 
     //setDeviceName()
+    
+    log.trace "${device.properties.inspect()}"
 }
 
 
