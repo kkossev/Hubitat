@@ -30,7 +30,7 @@
  * ver. 1.2.1  2023-01-15 kkossev - _TZE200_locansqn fixes;_TZ3000_bguser20 correct model;
  * ver. 1.3.0  2023-02-02 kkossev - healthStatus; added capability 'Health Check'
  * ver. 1.3.1  2023-02-10 kkossev - added RH3052 TUYATEC-gqhxixyk
- * ver. 1.3.2  2023-02-26 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj
+ * ver. 1.3.2  2023-03-04 kkossev - (dev. branch) added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
  * 
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
  *                                  TODO: add Battery minimum reporting time default 8 hours?
@@ -38,7 +38,7 @@
 */
 
 def version() { "1.3.2" }
-def timeStamp() {"2023/02/26 9:04 AM"}
+def timeStamp() {"2023/03/04 9:57 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -105,13 +105,15 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_xr3htd96", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_yd2e749y", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor" // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0402,0405", outClusters:"0003,0402,0405", model:"RH3052", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3052 Motion Sensor"        // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_yd2e749y", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_dowj6gyi", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_8ybe88nf", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/262?u=kkossev
+        //        
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0402,0405", outClusters:"0003,0402,0405", model:"RH3052", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3052 Motion Sensor"                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
-
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -211,6 +213,8 @@ metadata {
     '_TZ3000_fllyghyj'  : 'TS0201',
     '_TZ3000_yd2e749y'  : 'TS0201',
     '_TZ3000_6uzkisv2'  : 'TS0201',
+    '_TZ3000_dowj6gyi'  : 'TS0201',
+    '_TZ3000_8ybe88nf'  : 'TS0201',
     'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
