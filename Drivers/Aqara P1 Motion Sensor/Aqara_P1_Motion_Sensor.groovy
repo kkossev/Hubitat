@@ -33,11 +33,12 @@
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
- * ver. 1.2.6 2023-03-03 kkossev  - (dev.branch)
+ * ver. 1.2.6 2023-03-03 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; 
  *
+ *                                 TODO: Hub model (C-7 C-8) decoding
  *                                 TODO: ping
+ *                                 TODO: reporting time configuration for the Lux sensor
  *                                 TODO: RTT measurement 
- *                                 TODO: send  Reset presence commands if isFP1() on setMotion (inactive) command'; 
  *                                 TODO: Regions            
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) were changed from the previous value
@@ -45,7 +46,7 @@
 */
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/03/03 9:08 PM"}
+def timeStamp() {"2023/03/03 10:47 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -367,8 +368,14 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             device.updateSetting( "approachDistance",  [value:value.toString(), type:"enum"] )
             logDebug "(0x0146) <b>received approach_distance report: ${approachDistanceOptions[value.toString()]}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
+        case "0150" : // (336) FP1 set region event
+            logDebug "(0x0150) <b>received set region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            break
         case "0151" : // (337) FP1 region event
-            logDebug "(0x0151) <b>received region report: (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1])
+            value = HexUtils.hexStringToInt(descMap.value[2..3])        
+            logDebug "(0x0151) <b>received region report:  regionId=${regionId} value=${value} (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
+            sendRegionEvent( regionId, value)
             break
         case "0152" : // (338) LED configuration
             device.updateSetting( "motionLED",  [value:value.toString(), type:"enum"] )
@@ -390,7 +397,28 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             logDebug "Unprocessed <b>FCC0</b> attribute report: cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value} status=${it.status} data=${descMap.data}"
         break
     }
-    
+}
+
+// Set of Region Actions
+@Field static final Map<Integer, String> REGION_ACTIONS = [
+    1: 'enter',
+    2: 'leave',
+    4: 'occupied',
+    8: 'unoccupied'
+]
+
+def sendRegionEvent( regionId, value) {
+    String regionEventName = "region_" + REGION_ACTIONS.get(value)
+    def event = [
+        name: regionEventName,
+        value: regionId.toString(),
+        //data: [buttonNumber: regionId], 
+        descriptionText: "region $regionId state is ${REGION_ACTIONS.get(value)}",
+        type:'physical'
+    ]
+    logInfo "${event.descriptionText}"
+    sendEvent(event)
+
 }
 
 def decodeAqaraStruct( description )
@@ -684,10 +712,10 @@ def parseZHAcommand( Map descMap) {
             }
             break
         case "04" : //write attribute response
-            if (logEnable==true) log.info "${device.displayName} Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            logDebug "Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         case "07" : // Configure Reporting Response
-            if (txtEnable==true) log.info "${device.displayName} Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            logDebug "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             // Status: Unreportable Attribute (0x8c)
             break
         case "09" : // Command: Read Reporting Configuration Response (0x09)
@@ -697,10 +725,10 @@ def parseZHAcommand( Map descMap) {
                 def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
                 def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
                 def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
-                if (logEnable==true) log.info "${device.displayName} Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max}"
+                logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max}"
             }
             else {
-                if (logEnable==true) log.info "${device.displayName} <b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+                logDebug "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             }
             break
         case "0B" : // ZCL Default Response
@@ -715,13 +743,14 @@ def parseZHAcommand( Map descMap) {
                     case "0500" :
                     case "FFFF" :
                     default :
-                        if (logEnable==true) log.info "${device.displayName} Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+                        logDebug "Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
                         break
                 }
             }
             break
         default :
-            if (logEnable==true) log.debug "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            logDebug "Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            break
     }
 }
 
@@ -1130,6 +1159,11 @@ void sendZigbeeCommands(List<String> cmds) {
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
+List<String> resetPresence() {
+    logInfo 'reset presence'
+    return zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [:], 0)
+}
+
 // device Web UI command
 def setMotion( mode ) {
     switch (mode) {
@@ -1145,6 +1179,7 @@ def setMotion( mode ) {
             if (isFP1()) {
                 presenceEvent("not present", isDigital=true)
                 presenceTypeEvent("leave", isDigital=true)
+                resetPresence()
             }
             break
         default :
