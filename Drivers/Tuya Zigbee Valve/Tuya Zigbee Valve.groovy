@@ -20,13 +20,15 @@
  *  ver. 1.0.4 2022-11-28 kkossev - added Power-On Behaviour preference setting
  *  ver. 1.0.5 2023-01-21 kkossev - added _TZE200_81isopgh (SASWELL) battery, timer_state, timer_time_left, last_valve_open_duration, weather_delay; added _TZE200_2wg5qrjy _TZE200_htnnfasr (LIDL); 
  *  ver. 1.1.0 2023-01-29 kkossev - added healthStatus
- *  ver. 1.2.0 2023-02-28 kkossev - (dev. branch) added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
+ *  ver. 1.2.0 2023-02-28 kkossev - added deviceProfiles; stats; Advanced Option to manually select device profile; dynamically generated fingerptints; added autOffTimer;
  *                                  added irrigationStartTime, irrigationEndTime, lastIrrigationDuration, waterConsumed; removed the doubled open/close commands for _TZE200_sh1btabb; 
  *                                  renamed timer_time_left to timerTimeLeft, renamed last_valve_open_duration to lastValveOpenDuration; autoOffTimer value is sent as an attribute; 
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
+ *  ver. 1.2.1 2023-03-06 kkossev - (dev. branch) bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL);  
  * 
+ *                                  TODO: clear the old states on update
  *                                  TODO: duration in minutes ? 
  *                                  
  *
@@ -36,8 +38,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.0" }
-def timeStamp() {"2023/02/28 11:55 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2023/03/06 9:43 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -97,6 +99,7 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "autoSendTimer", type: "bool", title: "<b>Send the timeout timer automatically</b>", description: "<i>Send the configured timeout value on every open and close command <b>(GiEX)</b></i>", defaultValue: true)
         }
     }
 }
@@ -533,11 +536,13 @@ def parseZHAcommand( Map descMap) {
                                     sendEvent(name: 'waterMode', value: str, type: "physical")
                                 }
                                 else { // switch 
-                                    switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
-                                    // There is no way to disable the "Auto off" timer for when the valve is turned on manually
-                                    // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
-                                    logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                    runIn( 5, "sendIrrigationDuration")
+                                    if (settings?.autoSendTimer == true) {
+                                        switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
+                                        // There is no way to disable the "Auto off" timer for when the valve is turned on manually
+                                        // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
+                                        logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                        runIn( 5, "sendIrrigationDuration")
+                                    }
                                 }
                                 break
                             case "02" : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
@@ -545,8 +550,7 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 switchEvent(value==0 ? "off" : "on")
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
-                                // TODO - for isGIEX() only? (skip it for SASWELL!)
-                                if (true) {
+                                if (settings?.autoSendTimer == true) {
                                     logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
                                     runIn( 5, "sendIrrigationDuration")
                                 }
@@ -594,8 +598,14 @@ def parseZHAcommand( Map descMap) {
                                 sendEvent(name: 'weatherDelay', value: valueString, type: "physical")
                                 break
                             case "0B" : // (11) SASWELL countdown timeLeft in seconds timer_time_left "irrigation_time" (0..86400, seconds)
-                                logInfo "timer time left (${cmd}) is: ${value} seconds"
-                                sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
+                                if (isLIDL()) {
+                                    logInfo "LIDL battery (${cmd}) is: ${value} %"
+                                    sendBatteryEvent(value)                                    
+                                }
+                                else {
+                                    logInfo "timer time left (${cmd}) is: ${value} seconds"
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
+                                }
                                 break
                             case "0C" : // (12) SASWELL ("work_state") state 0-disabled 1-active on (open) 2-enabled off (closed) ? or auto/manual/idle ?
                                 def valueString = timerStateOptions[safeToInt(value).toString()]
@@ -890,7 +900,7 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
  
-    if (settings?.autoOffTimer != null ) {
+    if (settings?.autoOffTimer != null && settings?.autoSendTimer != false) {
         sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: "digital")
     }
 
@@ -998,12 +1008,13 @@ void initializeVars( boolean fullInit = true ) {
     if (state.states == null) { state.states = [:] }
     if (fullInit == true || state.states["lastSwitch"] == null) state.states["lastSwitch"] = "unknown"
     if (fullInit == true || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
     if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])                // toggle
     if (fullInit == true || settings?.autoOffTimer == null) device.updateSetting("autoOffTimer", [value: DEFAULT_AUTOOFF_TIMER, type: "number"])
+    if (fullInit == true || settings?.autoSendTimer == null) device.updateSetting("autoSendTimer", (isGIEX() ? true : false))
     
     if (isBatteryPowered()) {
         if (state.states["lastBattery"] == null) state.states["lastBattery"] = "100"

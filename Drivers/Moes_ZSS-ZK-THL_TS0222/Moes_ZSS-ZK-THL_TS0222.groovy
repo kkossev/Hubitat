@@ -26,6 +26,7 @@
 * 1.2.2  2021-09-08 kkossev    Reporting interval changed to 3600, 28800 
 * 1.2.3  2021-10-02 kkossev    Removed any clusters bindings and reporting configurations!
 * 1.3.0  2022-01-24 kkossev    A la Tuya GW pairing initialization
+* 1.3.1  2023-03-06 kkossev    all parameters were reset to their default values after each version update
 *
 */
 def version() { "1.3.0" }
@@ -220,11 +221,11 @@ void initializeVars( boolean fullInit = true ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", false)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || device.getDataValue("tempOffset") == null) device.updateSetting("tempOffset", 0)
-    if (fullInit == true || device.getDataValue("humidityOffset") == null) device.updateSetting("humidityOffset", 0)
-    if (fullInit == true || device.getDataValue("filterZero") == null) device.updateSetting("tempOffset", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.tempOffset == null) device.updateSetting("tempOffset", 0)
+    if (fullInit == true || settings?.humidityOffset == null) device.updateSetting("humidityOffset", 0)
+    if (fullInit == true || settings?.filterZero == null) device.updateSetting("tempOffset", true)
 }
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}

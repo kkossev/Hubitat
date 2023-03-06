@@ -16,7 +16,7 @@
  *  ver. 1.0.0 2022-10-29 kkossev - inital version for _TZE200_ntcy3xu1
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
  *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
- *  ver. 1.0.3 2022-12-15 kkossev - (dev. branch) added _TZE200_e2bedvo9
+ *  ver. 1.0.3 2023-03-06 kkossev - added _TZE200_e2bedvo9; bugfix: debug/info logs were enabled after each version update;
  *
  *
  */
@@ -492,8 +492,8 @@ void initializeVars( boolean fullInit = true ) {
     
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.isDigital == null) state.isDigital = true
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
 
 
     def mm = device.getDataValue("model")
