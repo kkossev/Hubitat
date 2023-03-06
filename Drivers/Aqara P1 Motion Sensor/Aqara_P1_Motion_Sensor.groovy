@@ -33,7 +33,7 @@
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
- * ver. 1.2.6 2023-03-05 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests
+ * ver. 1.2.6 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; 
  *
  *                                 TODO: Hub model (C-7 C-8) decoding
  *                                 TODO: ping
@@ -48,7 +48,7 @@
 */
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/03/05 8:48 PM"}
+def timeStamp() {"2023/03/06 11:14 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -1131,9 +1131,9 @@ void initializeVars( boolean fullInit = false ) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
-    
     if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
-
+    
+    updateAqaraVersion()
 }
 
 def installed() {
@@ -1345,6 +1345,21 @@ boolean isCompatible(Integer minLevel) { //check to see if the hub version meets
     return (Integer.parseInt(revision) >= minLevel)
 }
 
+def updateAqaraVersion() {
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application));
+        if (device.getDataValue("aqaraVersion") != str) {
+            device.updateDataValue("aqaraVersion", str)
+            logInfo "aqaraVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
+}
+
+
 def logDebug(msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
@@ -1383,8 +1398,8 @@ def test( description ) {
     
 
     //setDeviceName()
-    
-    log.trace "${device.properties.inspect()}"
+    log.trace "ver = ${updateAqaraVersion()}"
+    //log.trace "${device.properties.inspect()}"
 }
 
 
