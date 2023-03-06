@@ -26,7 +26,7 @@
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
- *  ver. 1.2.1 2023-03-06 kkossev - (dev. branch) bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL);  
+ *  ver. 1.2.1 2023-03-06 kkossev - (dev. branch) bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion
  * 
  *                                  TODO: clear the old states on update
  *                                  TODO: duration in minutes ? 
@@ -39,7 +39,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.1" }
-def timeStamp() {"2023/03/06 9:43 PM"}
+def timeStamp() {"2023/03/06 10:36 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1021,6 +1021,8 @@ void initializeVars( boolean fullInit = true ) {
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
+    updateTuyaVersion()
+    
     def mm = device.getDataValue("model")
     if ( mm != null) {
         if (logEnable==true) log.trace " model = ${mm}"
@@ -1154,7 +1156,7 @@ def logsOff(){
 
 boolean isTuyaE00xCluster( String description )
 {
-    if(!(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
+    if(description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
         return false 
     }
     // try to parse ...
@@ -1303,12 +1305,24 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
     log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
-}    
- 
+}
+
+def updateTuyaVersion() {
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def ver = zigbee.convertHexToInt(application)
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
+        if (device.getDataValue("tuyaVersion") != str) {
+            device.updateDataValue("tuyaVersion", str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
+}
 
 def test( description ) {
-    
     log.warn "testing <b>${description}</b>"
     parse(description)
-    
 }
