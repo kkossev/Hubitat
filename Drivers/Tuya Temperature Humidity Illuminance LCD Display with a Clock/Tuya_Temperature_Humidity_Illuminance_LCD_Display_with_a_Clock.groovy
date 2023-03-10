@@ -30,15 +30,17 @@
  * ver. 1.2.1  2023-01-15 kkossev - _TZE200_locansqn fixes;_TZ3000_bguser20 correct model;
  * ver. 1.3.0  2023-02-02 kkossev - healthStatus; added capability 'Health Check'
  * ver. 1.3.1  2023-02-10 kkossev - added RH3052 TUYATEC-gqhxixyk
- * ver. 1.3.2  2023-03-04 kkossev - (dev. branch) added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
+ * ver. 1.3.2  2023-03-04 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
+ * ver. 1.3.3  2023-03-10 kkossev - (dev.branch)
  * 
+ *                                  TODO:  add Sonoff SNZB-02D (CR2450 battery, C/F)
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
  *                                  TODO: add Battery minimum reporting time default 8 hours?
  *
 */
 
-def version() { "1.3.2" }
-def timeStamp() {"2023/03/04 9:57 AM"}
+def version() { "1.3.3" }
+def timeStamp() {"2023/03/10 1:18 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -114,6 +116,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0402,0405", outClusters:"0003,0402,0405", model:"RH3052", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3052 Motion Sensor"                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -223,12 +228,34 @@ metadata {
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
-    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02
+    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
+    'SONOFF '           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
 
 ]
+
+@Field static final Map deviceProfilesV3 = [
+    "SONOFF_TEMP_HUMI"  : [
+            models        : ["TH01", "SNZB-02D"],
+            manufacturers : ["eWeLink",  "SONOFF"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02"], 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"] 
+            ],
+            deviceJoinName: "Sonoff Temperature and Humidity Sensor",
+            capabilities  : ["battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            configuration : ["battery": false],
+            preferences   : [
+                "powerOnBehaviour" : [ name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ]
+]
+
 
 def isConfigurable()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 
