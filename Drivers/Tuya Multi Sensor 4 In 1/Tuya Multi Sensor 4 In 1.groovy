@@ -32,13 +32,15 @@
  * ver. 1.1.0  2022-12-25 kkossev  - SetPar() command;  added 'Send Event when parameters change' option; code cleanup; added _TZE200_holel4dk; added 4-in-1 _TZ3210_rxqls8v0, _TZ3210_wuhzzfqg
  * ver. 1.1.1  2023-01-08 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters; _TZ3000_6ygjfyll bug fix;
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
- * ver. 1.2.1  2023-02-10 kkossev  - (dev. branch) reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
+ * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
+ * ver. 1.2.2  2023-03-10 kkossev  - (dev. branch) typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device;
  *
- *                                   TODO: check the bindings commans in configure()
+ *                                   TODO: check _TZE200_3towulqd
+ *                                   TODO: check the bindings commands in configure()
 */
 
-def version() { "1.2.1" }
-def timeStamp() {"2023/02/10 11:57 PM"}
+def version() { "1.2.2" }
+def timeStamp() {"2023/03/10 7:51 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -102,7 +104,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
         
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1" // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"                 // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Neo NAS-PD07  3 In 1 Motion Sensor"      // 3in1 ? https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/418?u=kkossev
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"          // https://www.aliexpress.com/item/1005004095233195.html
         
@@ -143,7 +146,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_2b8f6cio", deviceJoinName: "Tuya TS0202 Motion Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Tuya TS0202 Motion Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_qjqgmqxr", deviceJoinName: "Tuya TS0202 Motion Sensor"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Tuya TS0202 Motion Sensor"    // 3in1 ?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_zwvaj5wy", deviceJoinName: "Tuya TS0202 Motion Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_bsvqrxru", deviceJoinName: "Tuya TS0202 Motion Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_tv3wxhcz", deviceJoinName: "Tuya TS0202 Motion Sensor"
@@ -169,6 +171,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500",                                    model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"ms01",   manufacturer:"eWeLink"         // for testL 60 seconds re-triggering period!
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"msO1",   manufacturer:"eWeLink"         // second variant
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003",                model:"MS01",   manufacturer:"eWeLink"         // third variant
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406",      outClusters:"0003",                model:"OCP305", manufacturer:"OWON"            // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05,FCC0", outClusters:"0019,FCC0", model:"TY0202", manufacturer:"_TZ3000_4ggd8ezp", deviceJoinName: "Bond motion sensor ZX-BS-J11W"            // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
     }
@@ -257,7 +261,7 @@ metadata {
 @Field static final Integer defaultPollingInterval = 3600
 
 def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5', '_TZ3210_rxqls8v0', '_TZ3210_wuhzzfqg'] }
-def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5'] }
+def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZ3000_kmh5qpmb'] }
 def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }
 def isIAS()  { return (((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) && (!(device.getDataValue('manufacturer') in ['_TZE200_3towulqd'])))  }
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
@@ -1689,7 +1693,7 @@ def setRadarFadingTime( val ) {
 def setRadarMinimumDistance( val ) {
     if (isRadar()) { 
         int value = ((val as double) * 100.0) as int
-        logInfo "changing radar minimum distance to ${val} (${value})"                
+        logInfo "changing radar minimum distance to ${val} m (${value})"                
         return sendTuyaCommand("03", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
     }
 }
@@ -1697,7 +1701,7 @@ def setRadarMinimumDistance( val ) {
 def setRadarMaximumDistance( val ) {
     if (isRadar()) { 
         int value = ((val as double) * 100.0) as int
-        logInfo "$changing radar maximum distance to : ${val} (${value})"                
+        logInfo "changing radar maximum distance to : ${val} m (${value})"                
         return sendTuyaCommand("04", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
     }
 }     
