@@ -40,10 +40,8 @@
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
- * ver. 2.6.3 2023-03-11 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{RxCtr,TxCtr,ReJoinCtr}
+ * ver. 2.6.3 2023-03-11 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{RxCtr,TxCtr,ReJoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
  *
- *                                   - TODO: add Advanced options
- *                                   - TODO: add '*Works with ' state comment
  *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
  *                                   - TODO: Debug logs off after 24 hours
@@ -60,9 +58,9 @@
  */
 
 def version() { "2.6.3" }
-def timeStamp() {"2023/03/11 5:59 PM"}
+def timeStamp() {"2023/03/11 8:17 PM"}
 
-@Field static final Boolean debug = false
+@Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
@@ -176,10 +174,14 @@ metadata {
             
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true)
-        input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
-        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: DEFAULT_LOG_ENABLE)
-        // input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
+        input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", defaultValue: true)
+        input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", defaultValue: true)
+        input (name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: DEFAULT_LOG_ENABLE)
+        input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
+        if (advancedOptions == true) {
+        input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
+             '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'        
+        }
     }
 }
 
@@ -188,6 +190,12 @@ metadata {
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1000
 @Field static final Boolean DEFAULT_LOG_ENABLE = true
+
+@Field static final Map batteryReportingOptions = [
+    defaultValue: 00,
+    options     : [00: 'Default', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
+]
+
 
 def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046", "TS0215", "TS0215A"]}
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
@@ -199,8 +207,7 @@ def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043",
 // Parse incoming device messages to generate events
 def parse(String description) {
     checkDriverVersion()
-    state.stats["RxCtr"] = (state.stats["RxCtr"] ?: 0) + 1
-    
+    if (state.stats != null) {state.stats["rxCtr"] = (state.stats["rxCtr"] ?: 0) + 1}
     setHealthStatusOnline()
     if (logEnable) log.debug "${device.displayName} description is $description"
 	def event = null
@@ -323,7 +330,7 @@ def parse(String description) {
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
             if (logEnable) log.debug "${device.displayName} received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
-            state.stats["reJoinCtr"] = (state.stats["reJoinCtr"] ?: 0) + 1
+            state.stats["rejoinCtr"] = (state.stats["rejoinCtr"] ?: 0) + 1
             return null
         }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
@@ -520,6 +527,7 @@ void initializeVars(boolean fullInit = false ) {
         state.stats = [:]
     }
     if (state.stats == null) { state.stats = [:] }
+    state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke"
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", DEFAULT_LOG_ENABLE)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
@@ -665,9 +673,17 @@ def tuyaMagic() {
         cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
         cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
     }
-    // binding for battery reporting IS neccessery!         // changed 2023/01/04
-    cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)
-    cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)        // 0x21 is NOT supported by all devices?
+    // binding for battery reporting was added on 2023/01/04 (ver 2.5.0), but thee are doubts that it may cause device re-joins and depletes the battery!
+    int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
+    if (batteryReportinginterval > 0) {
+        logInfo "setting the battery reporting interval to ${(batteryReportinginterval/3600) as int} hours"
+        cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay=150)
+        cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, batteryReportinginterval, 0x01, [:], delay=150)        // 0x21 is NOT supported by all devices?
+    }
+    else {
+        logInfo "battery reporting interval not changed."
+    }
+    
     sendZigbeeCommands(cmd)
 }
 
@@ -677,7 +693,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
-    if (state.stats != null) {state.stats["TxCtr"] = (state.stats["TxCtr"] ?: 0)  + 1 }
+    if (state.stats != null) {state.stats["txCtr"] = (state.stats["txCtr"] ?: 0)  + 1 }
     sendHubCommand(allActions)
 }
 
