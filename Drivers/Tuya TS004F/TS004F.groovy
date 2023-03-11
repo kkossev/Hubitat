@@ -1,5 +1,9 @@
 /**
- *  Scene switch TS004F driver for Hubitat Elevation hub.
+ *  Tuya Scene Switch TS004F w/ healthStatus driver for Hubitat Elevation hub.
+ *
+ *  Supports Tuya (Moes, Zemismart, LoraTap, .....) buttons and scene switches and remotes (1,2,3,4,5,6 buttons), smart knobs, Konke, icasa
+ *
+ *  https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -36,19 +40,18 @@
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
- * ver. 2.6.3 2023-02-25 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv
+ * ver. 2.6.3 2023-03-11 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{RxCtr,TxCtr,ReJoinCtr}
  *
- *                                   - TODO: Add state.stats[:] 
+ *                                   - TODO: add Advanced options
+ *                                   - TODO: add '*Works with ' state comment
  *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
  *                                   - TODO: Debug logs off after 24 hours
  *                                   - TODO: simulate double-click for the 4-button knobs
  *                                   - TODO: Remove battery percentage reporting configuration for TS0041 and TS0046 : https://github.com/Koenkk/zigbee2mqtt/issues/6313#issuecomment-780746430 // https://github.com/Koenkk/zigbee2mqtt/issues/15340
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
- *                                   - TODO: add Advanced options
  *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
  *                                   - TODO: calculate battery % from Voltage event for Konke button!
- *                                   - TODO: add '*Works with ' state comment
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); add 'auto revert to scene mode' option
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
@@ -57,7 +60,7 @@
  */
 
 def version() { "2.6.3" }
-def timeStamp() {"2023/02/25 12:02 AM"}
+def timeStamp() {"2023/03/11 5:59 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -173,9 +176,9 @@ metadata {
             
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: false)
+        input (name: "logEnable", type: "bool", title: "Enable debug logging", defaultValue: true)
         input (name: "txtEnable", type: "bool", title: "Enable description text logging", defaultValue: true)
-        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: true)
+        input (name: "reverseButton", type: "bool", title: "Reverse button order", defaultValue: DEFAULT_LOG_ENABLE)
         // input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
     }
 }
@@ -184,12 +187,14 @@ metadata {
 @Field static final Integer DIMMER_MODE = 0
 @Field static final Integer SCENE_MODE  = 1
 @Field static final Integer DEBOUNCE_TIME = 1000
+@Field static final Boolean DEFAULT_LOG_ENABLE = true
 
-def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041"]}
+def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046", "TS0215", "TS0215A"]}
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
 def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
+def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -318,6 +323,7 @@ def parse(String description) {
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
             if (logEnable) log.debug "${device.displayName} received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
+            state.stats["reJoinCtr"] = (state.stats["reJoinCtr"] ?: 0) + 1
             return null
         }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
@@ -499,14 +505,14 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${(state.driverVersion ?: 'UNKNOWN')} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         scheduleDeviceHealthCheck()
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
-void initializeVars(boolean fullInit = true ) {
+void initializeVars(boolean fullInit = false ) {
     if (settings?.txtEnable) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
@@ -514,7 +520,7 @@ void initializeVars(boolean fullInit = true ) {
         state.stats = [:]
     }
     if (state.stats == null) { state.stats = [:] }
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", DEFAULT_LOG_ENABLE)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
@@ -522,17 +528,19 @@ void initializeVars(boolean fullInit = true ) {
 }
 
 def configure() {
-	if (logEnable) log.debug "${device.displayName} Configuring device ${device.getDataValue("model")} in Scene Switch mode..."
+	if (logEnable) log.debug "${device.displayName} Configuring device model ${device.getDataValue("model")} manufacturer ${device.getDataValue('manufacturer')} ..."
     initialize()
 }
 
 def installed() 
 {
+    logInfo "installed()..."
+    initializeVars( fullInit = true ) 
   	initialize()
 }
 
 def initialize() {
-    if (true /*isTuya()*/) {
+    if (/*true*/ isTuya()) {
         tuyaMagic()
     } else {
     	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
@@ -644,15 +652,19 @@ def switchMode( mode ) {
 
 def tuyaMagic() {
     ArrayList<String> cmd = []
-    //cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
+    cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
+    /*
     cmd +=  "raw 0x0000  {10 00 00 04 00 00 00 01 00 05 00 07 00 FE FF}"
     cmd +=  "send 0x${device.deviceNetworkId} 1 255"
     cmd += "delay 200"
-    cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)                      // success / 0x00
-    cmd += zigbee.readAttribute(0xE001, 0xD011, [:], delay=50)                      // Unsupported attribute (0x86)
-    cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [:], delay=50)            // Battery voltage + Battery Percentage Remaining
-    cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
-    cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
+    */
+    if (needsMagic()) {
+        cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)                      // success / 0x00
+        cmd += zigbee.readAttribute(0xE001, 0xD011, [:], delay=50)                      // Unsupported attribute (0x86)
+        cmd += zigbee.readAttribute(0x0001, [0x0020, 0x0021], [:], delay=50)            // Battery voltage + Battery Percentage Remaining
+        cmd += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay=50)         // switch into Scene Mode !
+        cmd += zigbee.readAttribute(0x0006, 0x8004, [:], delay=50)
+    }
     // binding for battery reporting IS neccessery!         // changed 2023/01/04
     cmd += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)
     cmd += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 600, 28800, 0x01, [:], delay=150)        // 0x21 is NOT supported by all devices?
@@ -665,7 +677,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
     }
-    state.stats["TxCtr"] = state.stats["TxCtr"] != null ? state.stats["TxCtr"] + 1 : 1
+    if (state.stats != null) {state.stats["TxCtr"] = (state.stats["TxCtr"] ?: 0)  + 1 }
     sendHubCommand(allActions)
 }
 
