@@ -27,7 +27,7 @@
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
- *  ver. 1.2.2 2023-03-12 kkossev - (dev. branch) _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure()
+ *  ver. 1.2.2 2023-03-12 kkossev - (dev. branch) _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  * 
  *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
@@ -40,7 +40,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.2" }
-def timeStamp() {"2023/03/12 9:38 PM"}
+def timeStamp() {"2023/03/12 10:41 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -461,7 +461,8 @@ def parseZDOcommand( Map descMap ) {
             if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
             break
         case "0013" : // device announcement
-            if (logEnable) log.info "${device.displayName} Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            logInfo "Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            state.stats["rejoinCtr"] = (state.stats["rejoinCtr"] ?: 0) + 1
             break
         case "8001" :  // Device and Service Discovery - IEEE_addr_rsp
             if (logEnable) log.info "${device.displayName} Received Device and Service Discovery - IEEE_addr_rsp, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2]+descMap.data[1]}, Capability Information: ${descMap.data[11]})"
@@ -542,8 +543,10 @@ def parseZHAcommand( Map descMap) {
                                         switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
                                         // There is no way to disable the "Auto off" timer for when the valve is turned on manually
                                         // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
-                                        logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                        runIn( 5, "sendIrrigationDuration")
+                                        if (isGIEX() || isLIDL()) {
+                                            logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                            runIn( 5, "sendIrrigationDuration")
+                                        }
                                     }
                                 }
                                 break
@@ -840,11 +843,9 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
     }
 }
 
-
 def clearIsDigital() { state.states["isDigital"] = false }
 def switchDebouncingClear() { state.states["debounce"] = false }
 def isRefreshRequestClear() { state.states["isRefresh"] = false }
-
 
 // * PING is used by Device-Watch in attempt to reach the Device
 def ping() {
@@ -903,7 +904,6 @@ def configure() {
     if (settings?.autoOffTimer != null && settings?.autoSendTimer != false) {
         sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: "digital")
     }
-
     
     if (settings?.forcedProfile != null) {
         if (settings?.forcedProfile != state.deviceProfile) {
@@ -969,7 +969,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
 // This method is called when the preferences of a device are updated.
 def updated(){
     checkDriverVersion()
-    if (txtEnable==true) log.info "Updating ${device.getLabel()} (${device.getName()}) model ${getModelGroup()} "
+    if (txtEnable==true) log.info "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) model ${getModelGroup()}"
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
@@ -1241,9 +1241,8 @@ def setIrrigationTimer( timer ) {
 
 def sendIrrigationDuration() {
     ArrayList<String> cmds = []
-    def dpValHex
+    def dpValHex = zigbee.convertToHexString((settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER) as Integer, 8)
     if (isSASWELL()) {
-        dpValHex = zigbee.convertToHexString((settings?.autoOffTimer) as Integer, 8)
         String autoOffTime = "00010B020004" + dpValHex
         cmds = zigbee.command(0xEF00, 0x0, autoOffTime)
     } else if (isGIEX()) {
@@ -1253,7 +1252,7 @@ def sendIrrigationDuration() {
         logWarn "sendIrrigationDuration is avaiable for GiEX or SASWELL valves only"
         return
     }
-    logDebug "sendIrrigationDuration = ${settings?.autoOffTimer} : ${cmds}"
+    logDebug "sendIrrigationDuration = ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER} : ${cmds}"
     sendZigbeeCommands(cmds) 
 }
 
