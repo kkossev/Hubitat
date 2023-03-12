@@ -26,9 +26,10 @@
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
- *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts
+ *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
+ *  ver. 1.2.2 2023-03-12 kkossev - (dev. branch) _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure()
  * 
- *                                  TODO: clear the old states on update
+ *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
  *                                  
  *
@@ -38,8 +39,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.1" }
-def timeStamp() {"2023/03/12 8:24 AM"}
+def version() { "1.2.2" }
+def timeStamp() {"2023/03/12 9:38 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -116,7 +117,7 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],    // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"],    // clusters verified
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001",      outClusters:"0019",          model:"TS0011", manufacturer:"_TZ3000_5ucujjts"]     // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/85?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001",      outClusters:"0019",          model:"TS0001", manufacturer:"_TZ3000_5ucujjts"]     // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/85?u=kkossev
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
             capabilities  : ["valve": true, "battery": false],
@@ -333,7 +334,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        log.warn "exception caught while parsing description:  ${description}"
+        logDebug "exception caught while parsing description:  ${description}"
         //return null
     }
     if (event) {
@@ -353,7 +354,7 @@ def parse(String description) {
             descMap = zigbee.parseDescriptionAsMap(description)
         }
         catch ( e ) {
-            log.warn "${device.displayName} exception caught while parsing descMap:  ${descMap}"
+            logDebug "exception caught while parsing descMap: ${descMap}"
             //return null
         }
         if (logEnable==true) {log.debug "${device.displayName} Desc Map: $descMap"}
@@ -898,9 +899,7 @@ def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
     List<String> cmds = []
     cmds += tuyaBlackMagic()
-    cmds += refresh()
-    cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
- 
+    // changed in version 1.2.2 - refresh() is not called here! (executes instantly, returns null)
     if (settings?.autoOffTimer != null && settings?.autoSendTimer != false) {
         sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: "digital")
     }
@@ -928,6 +927,9 @@ def configure() {
         // TODO - configure battery reporting
         logDebug "settings.batteryReporting = ${settings?.batteryReporting}"
     }
+    //
+    runIn( 3, 'refresh')    // ver. 1.2.2
+    //
     sendZigbeeCommands(cmds)
 }
 
@@ -1167,7 +1169,7 @@ boolean isTuyaE00xCluster( String description )
         descMap = zigbee.parseDescriptionAsMap(description)
     }
     catch ( e ) {
-        logWarn "<b>exception</b> caught while parsing description:  ${description}"
+        logDebug "<b>exception</b> caught while parsing description:  ${description}"
         logDebug "TuyaE00xCluster Desc Map: ${descMap}"
         // cluster E001 is the one that is generating exceptions...
         return true
