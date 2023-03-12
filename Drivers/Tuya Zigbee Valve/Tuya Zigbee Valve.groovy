@@ -26,7 +26,9 @@
  *                                  added new _TZE200_a7sghmms GiEX manufacturer; sending the timeout 5 seconds both after the start and after the stop commands are received (both SASWELL and GiEX)
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
+ *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts
  * 
+ *                                  TODO: clear the old states on update
  *                                  TODO: duration in minutes ? 
  *                                  
  *
@@ -36,8 +38,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.0" }
-def timeStamp() {"2023/02/28 11:55 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2023/03/12 8:24 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -97,6 +99,7 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "autoSendTimer", type: "bool", title: "<b>Send the timeout timer automatically</b>", description: "<i>Send the configured timeout value on every open and close command <b>(GiEX)</b></i>", defaultValue: true)
         }
     }
 }
@@ -112,7 +115,8 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],    // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"]     // clusters verified
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"],    // clusters verified
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001",      outClusters:"0019",          model:"TS0011", manufacturer:"_TZ3000_5ucujjts"]     // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/85?u=kkossev
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
             capabilities  : ["valve": true, "battery": false],
@@ -533,11 +537,13 @@ def parseZHAcommand( Map descMap) {
                                     sendEvent(name: 'waterMode', value: str, type: "physical")
                                 }
                                 else { // switch 
-                                    switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
-                                    // There is no way to disable the "Auto off" timer for when the valve is turned on manually
-                                    // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
-                                    logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                    runIn( 5, "sendIrrigationDuration")
+                                    if (settings?.autoSendTimer == true) {
+                                        switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
+                                        // There is no way to disable the "Auto off" timer for when the valve is turned on manually
+                                        // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
+                                        logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                        runIn( 5, "sendIrrigationDuration")
+                                    }
                                 }
                                 break
                             case "02" : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
@@ -545,8 +551,7 @@ def parseZHAcommand( Map descMap) {
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 switchEvent(value==0 ? "off" : "on")
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
-                                // TODO - for isGIEX() only? (skip it for SASWELL!)
-                                if (true) {
+                                if (settings?.autoSendTimer == true) {
                                     logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
                                     runIn( 5, "sendIrrigationDuration")
                                 }
@@ -594,8 +599,14 @@ def parseZHAcommand( Map descMap) {
                                 sendEvent(name: 'weatherDelay', value: valueString, type: "physical")
                                 break
                             case "0B" : // (11) SASWELL countdown timeLeft in seconds timer_time_left "irrigation_time" (0..86400, seconds)
-                                logInfo "timer time left (${cmd}) is: ${value} seconds"
-                                sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
+                                if (isLIDL()) {
+                                    logInfo "LIDL battery (${cmd}) is: ${value} %"
+                                    sendBatteryEvent(value)                                    
+                                }
+                                else {
+                                    logInfo "timer time left (${cmd}) is: ${value} seconds"
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
+                                }
                                 break
                             case "0C" : // (12) SASWELL ("work_state") state 0-disabled 1-active on (open) 2-enabled off (closed) ? or auto/manual/idle ?
                                 def valueString = timerStateOptions[safeToInt(value).toString()]
@@ -890,7 +901,7 @@ def configure() {
     cmds += refresh()
     cmds += zigbee.onOffConfig()    // TODO - skip for TS0601 device types !
  
-    if (settings?.autoOffTimer != null ) {
+    if (settings?.autoOffTimer != null && settings?.autoSendTimer != false) {
         sendEvent(name: 'irrigationDuration', value: settings?.autoOffTimer, type: "digital")
     }
 
@@ -998,18 +1009,21 @@ void initializeVars( boolean fullInit = true ) {
     if (state.states == null) { state.states = [:] }
     if (fullInit == true || state.states["lastSwitch"] == null) state.states["lastSwitch"] = "unknown"
     if (fullInit == true || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
-    if (fullInit == true || device.getDataValue("logEnable") == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || device.getDataValue("txtEnable") == null) device.updateSetting("txtEnable", true)
+    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting("powerOnBehaviour", [value:"2", type:"enum"])    // last state
     if (fullInit == true || settings?.switchType == null) device.updateSetting("switchType", [value:"0", type:"enum"])                // toggle
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])                // toggle
     if (fullInit == true || settings?.autoOffTimer == null) device.updateSetting("autoOffTimer", [value: DEFAULT_AUTOOFF_TIMER, type: "number"])
+    if (fullInit == true || settings?.autoSendTimer == null) device.updateSetting("autoSendTimer", (isGIEX() ? true : false))
     
     if (isBatteryPowered()) {
         if (state.states["lastBattery"] == null) state.states["lastBattery"] = "100"
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
+    updateTuyaVersion()
+    
     def mm = device.getDataValue("model")
     if ( mm != null) {
         if (logEnable==true) log.trace " model = ${mm}"
@@ -1143,7 +1157,7 @@ def logsOff(){
 
 boolean isTuyaE00xCluster( String description )
 {
-    if(!(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
+    if(description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
         return false 
     }
     // try to parse ...
@@ -1294,8 +1308,22 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
     log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
-}    
- 
+}
+
+def updateTuyaVersion() {
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def ver = zigbee.convertHexToInt(application)
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
+        if (device.getDataValue("tuyaVersion") != str) {
+            device.updateDataValue("tuyaVersion", str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
+}
 
 def test( description ) {
     log.warn "testing <b>${description}</b>"
