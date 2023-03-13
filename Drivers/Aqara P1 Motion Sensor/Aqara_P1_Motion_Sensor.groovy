@@ -34,14 +34,13 @@
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
  * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
- * ver. 1.3.1 2023-03-13 kkossev  - (dev.branch) RTCGQ01LM lumi.sensor_motion battery % and voltage; 
+ * ver. 1.3.1 2023-03-13 kkossev  - (dev.branch) RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery
  *
  *                                 TODO: 
  *                                 TODO: replace presence_type w/ roomActivity ; replace presence w/ roomState
  *                                 TODO: ping
  *                                 TODO: reporting time configuration for the Lux sensor
  *                                 TODO: RTT measurement 
- *                                 TODO: remove sendBatteryEventsForDCdevices option
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) were changed from the previous value
  *                                 TODO: state motionStarted in human readable form
@@ -52,7 +51,7 @@
 */
 
 def version() { "1.3.1" }
-def timeStamp() {"2023/03/13 10:55 PM"}
+def timeStamp() {"2023/03/13 11:27 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -148,9 +147,6 @@ metadata {
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
             }
-            if (aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices) {
-                input (name: "sendBatteryEventsForDCdevices",  type: "bool", title: "<b>Send Battery Events For DC Devices</b>",  description: "Send Battery Events For FP1 DC-powered device (used for online/offline alerts)", defaultValue: false)
-            }
         }
     }
 }
@@ -165,7 +161,7 @@ metadata {
         attributes: ["presence", "presence_type"],
         preferences: [
             "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
-            "approachDistance":true, "monitoringMode":true, "sendBatteryEventsForDCdevices":true
+            "approachDistance":true, "monitoringMode":true
         ],
         motionRetriggerInterval: [ min: 2, scale: 0, max: 200, step: 1, type: 'number' ],    // TODO - check!
     ],
@@ -666,7 +662,6 @@ def voltageAndBatteryEvents( rawVolts, isDigital=false  )
     if (txtEnable) log.info "${device.displayName} ${descText}"
     sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText2, isStateChange: true )
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
-    state.lastBattery = roundedPct.toString()
 }
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
@@ -953,13 +948,6 @@ def setPresent() {
     powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
         if (settings?.txtEnable) log.info "${device.displayName} is present"
-        if (safeToInt(device.currentValue('battery', true)) == 0 ) {
-            if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                if ((!isFP1()) || (isFP1() && settings?.sendBatteryEventsForDCdevices == true)) {
-                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
-                }
-            }
-        }
     }    
     state.notPresentCounter = 0    
 }
@@ -976,12 +964,6 @@ def checkIfNotPresent() {
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
                 handleMotion(false, isDigital=true)
                 logWarn "forced motion to <b>inactive</b>"
-            }
-            if ((!isFP1()) || (isFP1() && settings?.sendBatteryEventsForDCdevices == true)) {
-                if (safeToInt(device.currentValue('battery', true)) != 0) {
-                    logWarn "${device.displayName} forced battery to '<b>0 %</b>"
-                    sendBatteryEvent( 0, isDigital=true )
-                }
             }
         }
     }
@@ -1002,17 +984,9 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable==true) log.info "${device.displayName} Hubitat hub model is ${getModel()}.Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        if (state.lastBattery != null) state.remove("lastBattery")
         initializeVars( fullInit = false ) 
         state.motionStarted = now()
-        // added 12/04/2022
-        if (isFP1()) {
-            if (device.currentValue('battery', true) == null && settings?.sendBatteryEventsForDCdevices == true) {
-                sendBatteryEvent( 100, isDigital=true )
-            }
-            if (state.lastBattery == null || safeToInt(state.lastBattery) == 0) {
-                state.lastBattery = "100"
-            }
-        }
         if(device.getDataValue('aqaraModel') == null) {
             setDeviceName()
         }
@@ -1080,12 +1054,7 @@ def updated() {
             if (settings?.logEnable) log.debug "${device.displayName} setting monitoringMode to ${monitoringModeOptions[value.toString()]} (${value})"
             cmds += zigbee.writeAttribute(0xFCC0, 0x0144, 0x20, value, [mfgCode: 0x115F], delay=200)
         }
-        if (settings?.sendBatteryEventsForDCdevices == false) {
-            device.deleteCurrentState("battery")
-        }
-        else if (device.currentValue('battery', true) == null) {
-            sendBatteryEvent( 100, isDigital=true )
-        }
+        device.deleteCurrentState("battery")
     }
     //
     if ( cmds != null ) {
@@ -1138,13 +1107,11 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.txCounter == null) state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || state.motionStarted == null) state.motionStarted = now()
-    if (state.lastBattery == null) state.lastBattery = "100"
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
-    if (fullInit == true || settings?.sendBatteryEventsForDCdevices == null) device.updateSetting("sendBatteryEventsForDCdevices", false)
     
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
@@ -1401,13 +1368,7 @@ def test( description ) {
     description = "read attr - raw: DE060100003002FF4C0600100121AA0B21A813242000000000212D002055, dni: DE06, endpoint: 01, cluster: 0000, size: 30, attrId: FF02, encoding: 4C, command: 0A, value: 0600100121AA0B21A813242000000000212D002055"
     logWarn "test parsing ${description}"
     parse(description)
-/*    
-        List<String> cmds = []
-            value = safeToInt( description )
-            if (settings?.logEnable) log.debug "${device.displayName} setting approachDistance to ${approachDistanceOptions[value.toString()]} (${value})"
-            cmds += zigbee.writeAttribute(0xFCC0, 0x0146, 0x20, value, [mfgCode: 0x115F], delay=200)
 
-*/
     /*
     def map = aqaraModels
     map.each{ k, v -> log.trace "${k}:${v}" }
