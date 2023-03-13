@@ -33,9 +33,11 @@
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
- * ver. 1.2.6 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; 
+ * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
+ * ver. 1.3.1 2023-03-13 kkossev  - (dev.branch) RTCGQ01LM lumi.sensor_motion battery % and voltage; 
  *
- *                                 TODO: Hub model (C-7 C-8) decoding
+ *                                 TODO: 
+ *                                 TODO: replace presence_type w/ roomActivity ; replace presence w/ roomState
  *                                 TODO: ping
  *                                 TODO: reporting time configuration for the Lux sensor
  *                                 TODO: RTT measurement 
@@ -44,11 +46,13 @@
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) were changed from the previous value
  *                                 TODO: state motionStarted in human readable form
  *                                 TODO: add 'remove FP1 regions' command
+ *                                 TODO: fill in the aqaraVersion from SWBUILD_TAG_ID, not from HE application version !
+ *                                 TODO: check why the logsoff was not scheduled on fresh install (version 1.2.4 )
  *
 */
 
-def version() { "1.2.6" }
-def timeStamp() {"2023/03/06 11:14 PM"}
+def version() { "1.3.1" }
+def timeStamp() {"2023/03/13 10:55 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -184,6 +188,9 @@ metadata {
     'RTCGQ11LM': [
         model: "lumi.sensor_motion.aq2", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ11LM"
     ],
+    'RTCGQ01LM': [
+        model: "lumi.sensor_motion", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ01LM"
+    ],
     // experimental
     'MCCGQ14LM': [
         model: "lumi.magnet.acn001", manufacturer: "LUMI", deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"
@@ -217,17 +224,24 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
 def parse(String description) {
-    if (logEnable == true) log.debug "${device.displayName} parse: description is $description"
+    if (logEnable == true) log.debug "${device.displayName} parse: description is ${description}"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
 
     def descMap = [:]
+    
+    if (description.contains("cluster: 0000") && description.contains("attrId: FF02")) {
+        log.trace "parsing Xiaomi cluster 0xFF02"
+        parseAqaraAttributeFF02( description )
+        return null
+    }
+    
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
     catch ( e ) {
-        logWarn "parse: exception caught while parsing descMap:  ${descMap}"
+        logWarn "parse: exception ${e} caught while parsing description: ${description} (descMap:  ${descMap})"
         return null
     }
     if (logEnable) {log.debug "${device.displayName} parse: Desc Map: $descMap"}
@@ -293,13 +307,15 @@ def parse(String description) {
 }
 
 def parseAqaraAttributeFF01 ( description ) {
-    Map result = [:]
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
-    result = parseBatteryFF01( valueHex )    
-    sendEvent( result )
+    parseBatteryFF01( valueHex )    
 }
-                     
-                     
+
+def parseAqaraAttributeFF02 ( description ) {
+    def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
+    parseBatteryFF02( valueHex )    
+}
+
 def parseAqaraClusterFCC0 ( description, descMap, it  ) {
     def valueHex = description.split(",").find {it.split(":")[0].trim() == "value"}?.split(":")[1].trim()
     def value = safeToInt(it.value)
@@ -438,7 +454,7 @@ def decodeAqaraStruct( description )
     if (logEnable) log.debug "decodeAqaraStruct len = ${MsgLength} valueHex = ${valueHex}"
    	for (int i = 2; i < (MsgLength-3); ) {
         def dataType = Integer.parseInt(valueHex[(i+2)..(i+3)], 16)
-        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)                            
+        def tag = Integer.parseInt(valueHex[(i+0)..(i+1)], 16)
         def rawValue = 0
         //
         switch (dataType) {
@@ -485,7 +501,7 @@ def decodeAqaraStruct( description )
                         break
                     case 0x67 : // (103) FP1 monitoring_mode
                         if (isFP1()) {
-                            logDebug "monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue} )"
+                            logDebug "monitoring_mode is <b> ${monitoringModeOptions[rawValue.toString()]}</b> (${rawValue})"
                             device.updateSetting( "monitoringMode",  [value:rawValue.toString(), type:"enum"] )
                         }
                         else {
@@ -606,6 +622,22 @@ def decodeAqaraStruct( description )
 	} // for all tags in valueHex 
 }
 
+private parseBatteryFF02( valueHex ) {
+	def MsgLength = valueHex.size()
+   	for (int i = 0; i < (MsgLength-3); i+=2) {
+		if (valueHex[i..(i+1)] == "21") { // Search for byte preceeding battery voltage bytes
+			rawValue = Integer.parseInt((valueHex[(i+4)..(i+5)] + valueHex[(i+2)..(i+3)] ),16)
+			break
+		}
+	}
+    if (rawValue == 0) {
+        return
+    }
+	def rawVolts = rawValue / 1000
+    
+    voltageAndBatteryEvents(rawVolts)
+}
+
 // called by parseAqaraAttributeFF01 (cluster "0000")
 private parseBatteryFF01( valueHex ) {
 	def MsgLength = valueHex.size()
@@ -619,22 +651,8 @@ private parseBatteryFF01( valueHex ) {
         return
     }
 	def rawVolts = rawValue / 100
-	def minVolts = 2.5
-	def maxVolts = 3.0
-	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
-	def roundedPct = Math.min(100, Math.round(pct * 100))
-	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
-    if (txtEnable) log.info "${device.displayName} ${descText}"
-	def result = [
-		name: 'battery',
-		value: roundedPct,
-		unit: "%",
-        type:  isDigital == true ? "digital" : "physical",
-		isStateChange: true,
-		descriptionText: descText
-	]
-    state.lastBattery = roundedPct.toString()
-	return result
+    
+    voltageAndBatteryEvents(rawVolts)
 }
 
 def voltageAndBatteryEvents( rawVolts, isDigital=false  )
@@ -643,10 +661,11 @@ def voltageAndBatteryEvents( rawVolts, isDigital=false  )
 	def maxVolts = 3.0
 	def pct = (rawVolts - minVolts) / (maxVolts - minVolts)
 	def roundedPct = Math.min(100, Math.round(pct * 100))
-	def descText = "Battery level is ${roundedPct}% (${rawVolts} Volts)"
+	def descText  = "Battery level is ${roundedPct} %"
+	def descText2 = "Battery voltage is ${rawVolts} V"
     if (txtEnable) log.info "${device.displayName} ${descText}"
-    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", isStateChange: true )
-    sendBatteryEvent( roundedPct, isDigital )
+    sendEvent(name: 'batteryVoltage', value: rawVolts, unit: "V", type: "physical", descriptionText: descText2, isStateChange: true )
+    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", descriptionText: descText, isStateChange: true )    
     state.lastBattery = roundedPct.toString()
 }
 
@@ -982,7 +1001,7 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        if (txtEnable==true) log.info "${device.displayName} updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        if (txtEnable==true) log.info "${device.displayName} Hubitat hub model is ${getModel()}.Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         state.motionStarted = now()
         // added 12/04/2022
@@ -1379,6 +1398,9 @@ def logWarn(msg) {
 }
 
 def test( description ) {
+    description = "read attr - raw: DE060100003002FF4C0600100121AA0B21A813242000000000212D002055, dni: DE06, endpoint: 01, cluster: 0000, size: 30, attrId: FF02, encoding: 4C, command: 0A, value: 0600100121AA0B21A813242000000000212D002055"
+    logWarn "test parsing ${description}"
+    parse(description)
 /*    
         List<String> cmds = []
             value = safeToInt( description )
@@ -1393,13 +1415,15 @@ def test( description ) {
     */
     
     // RTCZCGQ11LM:[model:lumi.motion.ac01, manufacturer:LUMI, deviceJoinName:Aqara FP1 Human Presence Detector RTCZCGQ11LM, capabilities:[motionSensor, temperatureMeasurement, battery, powerSource, signalStrength], attributes:[presence, presence_type], preferences:[motionSensitivity, approachDistance, monitoringMode, sendBatteryEventsForDCdevices], isSleepy:true, motionRetriggerInterval:[min:1, scale:0, max:200, step:1, type:Integer], motionSensitivity:[min:1, scale:0, max:3, step:1, type:Integer, options:[1:low, 2:medium, 3:high]]]
-    def ptr = aqaraModels['RTCZCGQ11LM']
-    log.trace "aqaraModel=${device.getDataValue('aqaraModel')} sendBatteryEventsForDCdevices=${aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices} "
+    
+//    def ptr = aqaraModels['RTCZCGQ11LM']
+//    log.trace "aqaraModel=${device.getDataValue('aqaraModel')} sendBatteryEventsForDCdevices=${aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices} "
     
 
     //setDeviceName()
-    log.trace "ver = ${updateAqaraVersion()}"
+    //log.trace "ver = ${updateAqaraVersion()}"
     //log.trace "${device.properties.inspect()}"
+//    log.trace "getModel() = ${getModel()}"
 }
 
 
