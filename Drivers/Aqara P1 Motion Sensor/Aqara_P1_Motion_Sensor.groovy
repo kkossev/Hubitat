@@ -34,15 +34,13 @@
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
  * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
- * ver. 1.3.1 2023-03-13 kkossev  - (dev.branch) RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery
- *
+ * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
+ * ver. 1.4.0 2023-03-16 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added add 'Works with ...'; added ping() and RTT
+ * 
  *                                 TODO: 
- *                                 TODO: replace presence_type w/ roomActivity ; replace presence w/ roomState
- *                                 TODO: ping
  *                                 TODO: reporting time configuration for the Lux sensor
- *                                 TODO: RTT measurement 
  *                                 TODO: configure to clear the current states and events
- *                                 TODO: Info logs only when parameters (sensitivity, etc..) were changed from the previous value
+ *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
  *                                 TODO: state motionStarted in human readable form
  *                                 TODO: add 'remove FP1 regions' command
  *                                 TODO: fill in the aqaraVersion from SWBUILD_TAG_ID, not from HE application version !
@@ -50,8 +48,8 @@
  *
 */
 
-def version() { "1.3.1" }
-def timeStamp() {"2023/03/13 11:27 PM"}
+def version() { "1.4.0" }
+def timeStamp() {"2023/03/16 11:43 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -59,10 +57,10 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 
-
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
+@Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, Aqara/Xiaomi/Mija other motion and illuminance sensors'
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
@@ -72,21 +70,23 @@ metadata {
 		capability "TemperatureMeasurement"        
 		capability "Battery"
         capability "PowerSource"
+        capability "Health Check"
         //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
         attribute "batteryVoltage", "string"
-        attribute "presence", "enum", [
-            "present",
-            "not present"
+        attribute "rtt", "number" 
+        attribute "roomState", "enum", [
+            "unoccupied",
+            "occupied"
         ]
-        attribute "presence_type", "enum", [
+        attribute "roomActivity", "enum", [
             "enter",
             "leave",
-            "left_enter",
-            "right_leave",
-            "right_enter",
-            "left_leave",
-            "approach",
+            "enter (right)",
+            "leave (left)",
+            "enter (left)",
+            "leave (right)",
+            "towards",
             "away"
         ]
         
@@ -122,43 +122,45 @@ metadata {
 
     preferences {
         if (logEnable == true || logEnable == false) { // Groovy ... :) 
-            input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "Debug information, useful for troubleshooting. Recommended value is <b>false</b>", defaultValue: true)
-            input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "Show motion activity in HE log page. Recommended value is <b>true</b>", defaultValue: true)
-            input (title: "<b>Information on Pairing and Configuration:</b>", description: "Pair the P1 and FP1 devices at least 2 times, very close to the HE hub. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences", type: "paragraph", element: "paragraph")        
+            input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Show motion activity in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+            input (title: "<b>Information on Pairing and Configuration:</b>", description: "<i>Pair the P1 and FP1 devices <b>at least 2 times, very close to the HE hub</b>. For the battery-powered sensors, press shortly the pairing button on the device at the same time when clicking on Save Preferences</i>", type: "paragraph", element: "paragraph")        
             if (!isFP1() && !isLightSensor()) {
-                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds", range: "0..7200", defaultValue: 30)
+                input (name: "motionResetTimer", type: "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 30 seconds</i>", range: "0..7200", defaultValue: 30)
             }    
             if (isRTCGQ13LM() || isP1() || isT1()) {
-                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "Motion Retrigger Interval, seconds (2..200)", range: "2..202", defaultValue: 30)
+                input (name: "motionRetriggerInterval", type: "number", title: "<b>Motion Retrigger Interval</b>", description: "<i>Motion Retrigger Interval, seconds (2..200)</i>", range: "2..202", defaultValue: 30)
             }
             if (isRTCGQ13LM() || isP1() || isFP1()) {
-                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "Sensor motion sensitivity", defaultValue: 0, options: getSensitivityOptions())
+                input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "<i>Sensor motion sensitivity</i>", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
-                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "Enable/disable LED blinking on motion detection", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "<i>Enable/disable LED blinking on motion detection<i>", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
-                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "Approach distance", defaultValue: "1", options: approachDistanceOptions)
+                input (name: "approachDistance", type: "enum", title: "<b>Approach distance</b>", description: "<i>Approach distance</i>", defaultValue: "1", options: approachDistanceOptions)
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
-                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "monitoring mode", defaultValue: 0, options: monitoringModeOptions)
+                input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "<i>monitoring mode</i>", defaultValue: 0, options: monitoringModeOptions)
             }
-            input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b>", defaultValue: false)
+            input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
-                input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "Select how many degrees to adjust the temperature.", range: "-100..100", defaultValue: 0)
+                input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100..100", defaultValue: 0)
             }
         }
     }
 }
 
+@Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
 @Field static final Integer presenceCountTreshold = 3
-@Field static final Integer defaultPollingInterval = 3600
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600
+
 
 @Field static final Map aqaraModels = [
     'RTCZCGQ11LM': [
         model: "lumi.motion.ac01", manufacturer: "aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
         capabilities: ["motionSensor":true, "temperatureMeasurement":true, "battery":true, "powerSource":true, "signalStrength":true],
-        attributes: ["presence", "presence_type"],
+        attributes: ["roomState", "roomActivity"],
         preferences: [
             "motionSensitivity": [ min: 1, scale: 0, max: 3, step: 1, type: 'number', options:  [ "1":"low", "2":"medium", "3":"high" ] ],
             "approachDistance":true, "monitoringMode":true
@@ -212,10 +214,10 @@ def isLightSensor() { if (deviceSimulation) return false else return (device.get
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
 @Field static final Map sensitivityOptions =          [ "1":"low", "2":"medium", "3":"high" ]
-@Field static final Map fp1PresenceEventOptions =     [ "0":"not present", "1":"present" ]
-@Field static final Map fp1PresenceEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"left_enter" , "3":"right_leave" , "4":"right_enter" , "5":"left_leave" , "6":"approach", "7":"away" ]
-@Field static final Map approachDistanceOptions =     [ "0":"far", "1":"medium", "2":"near" ]
-@Field static final Map monitoringModeOptions =       [ "0":"undirected", "1":"left_right" ]
+@Field static final Map fp1RoomStateEventOptions =        [ "0":"unoccupied", "1":"occupied" ]
+@Field static final Map fp1RoomActivityEventTypeOptions = [ "0":"enter", "1":"leave" , "2":"enter (right)" , "3":"leave (left)" , "4":"enter (left)" , "5":"leave (right)" , "6":"towards", "7":"away" ]
+@Field static final Map approachDistanceOptions =         [ "0":"far", "1":"medium", "2":"near" ]
+@Field static final Map monitoringModeOptions =           [ "0":"undirected", "1":"left_right" ]
 
 def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
@@ -264,7 +266,12 @@ def parse(String description) {
                 map = handleMotion( Integer.parseInt(it.value,16) as Boolean )
             }
             else if (it.cluster == "0000" && it.attrId == "0001") {
-                if (logEnable) log.info "${device.displayName} Applicaiton version is ${it.value}"
+                if (true) {    // TODO: check if this is a ping() response
+                    sendRttEvent()
+                }
+                else {
+                    logDebug "Applicaiton version is ${it.value}"
+                }
             }
             else if (it.cluster == "0000" && it.attrId == "0004") {    // device model
                 if (txtEnable) log.info "${device.displayName} (parse) device model is ${it.value}"
@@ -323,9 +330,9 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             logWarn "<b>received unknown report: ${P1_LED_MODE_NAME(value)}</b> (cluster=0x${it.cluster} attrId=0x${it.attrId} value=0x${it.value})"
             break
         case "0065" :
-            if (isFP1()) { // FP1    'not present':'present'
-                logDebug "(attr 0x065) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
-                presenceEvent( fp1PresenceEventOptions[value.toString()] )
+            if (isFP1()) { // FP1    'unoccupied':'occupied'
+                logDebug "(attr 0x065) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+                roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             }
             else {     // illuminance only? for RTCGQ12LM RTCGQ14LM
                 illuminanceEventLux( value )
@@ -375,11 +382,11 @@ def parseAqaraClusterFCC0 ( description, descMap, it  ) {
             }
             break
         case "0142" : // (322) FP1 RTCZCGQ11LM presence
-            logDebug "(attr. 0x0142) presence is  ${fp1PresenceEventOptions[value.toString()]} (${value})"
-            presenceEvent( fp1PresenceEventOptions[value.toString()] )
+            logDebug "(attr. 0x0142) roomState (presence) is  ${fp1RoomStateEventOptions[value.toString()]} (${value})"
+            roomStateEvent( fp1RoomStateEventOptions[value.toString()] )
             break
         case "0143" : // (323) FP1 RTCZCGQ11LM presence_event {0: 'enter', 1: 'leave', 2: 'left_enter', 3: 'right_leave', 4: 'right_enter', 5: 'left_leave', 6: 'approach', 7: 'away'}[value];
-            presenceTypeEvent( fp1PresenceEventTypeOptions[value.toString()] )
+            presenceTypeEvent( fp1RoomActivityEventTypeOptions[value.toString()] )
             break
         case "0144" : // (324) FP1 RTCZCGQ11LM monitoring_mode
             device.updateSetting( "monitoringMode",  [value:value.toString(), type:"enum"] )    // monitoring_mode = {0: 'undirected', 1: 'left_right'}[value]
@@ -474,10 +481,10 @@ def decodeAqaraStruct( description )
                     case 0x64 :    // curtain lift or smoke/gas density; also battery percentage for Aqara curtain motor 
                         logDebug "lift % or gas density is ${rawValue}"
                         break
-                    case 0x65 :    // (101) FP1 presence
-                        if (isFP1()) { // FP1 'not present':'present'
-                            logDebug "(0x65) presence is  ${fp1PresenceEventOptions[rawValue.toString()]} (${rawValue})"
-                            presenceEvent( fp1PresenceEventOptions[rawValue.toString()] )  
+                    case 0x65 :    // (101) FP1 roomState (presence)
+                        if (isFP1()) { // FP1 'unoccupied':'occupied'
+                            logDebug "(0x65) roomState (presence) is  ${fp1RoomStateEventOptions[rawValue.toString()]} (${rawValue})"
+                            roomStateEvent( fp1RoomStateEventOptions[rawValue.toString()] )  
                         }
                         else {
                             logDebug "on/off EP 2 or battery percentage is ${rawValue}"
@@ -487,7 +494,7 @@ def decodeAqaraStruct( description )
                         if (isFP1()) {
                             if (/* FP1 firmware version  < 50) */ false ) {
                                 logWarn "RTCZCGQ11LM tag 0x66 (${rawValue} )"
-                                presenceTypeEvent( fp1PresenceEventTypeOptions[rawValue.toString()] )
+                                presenceTypeEvent( fp1RoomActivityEventTypeOptions[rawValue.toString()] )
                             }
                             else {
                                 device.updateSetting( "motionSensitivity",  [value:rawValue.toString(), type:"enum"] )
@@ -838,12 +845,12 @@ def temperatureEvent( temperature ) {
     sendEvent(map)
 }
 
-def presenceEvent( String status, isDigital=false ) {
+def roomStateEvent( String status, isDigital=false ) {
     if (status != null) {
         def type = isDigital == true ? "digital" : "physical"
-        sendEvent("name": "presence", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
-        if (settings?.txtEnable) log.info "${device.displayName} presence is <b>${status}</b>"
-        if (status == "present") {
+        sendEvent("name": "roomState", "value": status, "type": type)                    // isStateChange" true removed ver 1.2.0
+        if (settings?.txtEnable) log.info "${device.displayName} roomState (presence) is <b>${status}</b>"
+        if (status == "occupied") {
             handleMotion(true, isDigital=true)
         }
         else {
@@ -855,7 +862,7 @@ def presenceEvent( String status, isDigital=false ) {
 def presenceTypeEvent( String presenceTypeEvent, isDigital=false ) {
     if (presenceTypeEvent != null) {
         def type = isDigital == true ? "digital" : "physical"
-        sendEvent("name": "presence_type", "value": presenceTypeEvent, "type": type)                // isStateChange" true removed ver 1.2.0
+        sendEvent("name": "roomActivity", "value": presenceTypeEvent, "type": type)                // isStateChange" true removed ver 1.2.0
         if (settings?.txtEnable) log.info "${device.displayName} presence type is <b>${presenceTypeEvent}</b>"
         if (presenceTypeEvent in ["enter", "left_enter", "right_enter"] ) {
             handleMotion(true, isDigital=true)
@@ -947,9 +954,10 @@ def setPresent() {
     }
     powerSourceEvent()
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
-        if (settings?.txtEnable) log.info "${device.displayName} is present"
+        if (settings?.txtEnable) log.info "${device.displayName} is occupied"
     }    
-    state.notPresentCounter = 0    
+    state.notPresentCounter = 0
+    unschedule('deviceCommandTimeout')
 }
 
 // called every 60 minutes from pollPresence()
@@ -976,14 +984,64 @@ def checkIfNotPresent() {
 def pollPresence() {
     if (logEnable) log.debug "${device.displayName} pollPresence()"
     checkIfNotPresent()
-    runIn( defaultPollingInterval, "pollPresence", [overwrite: true, misfire: "ignore"])
+    runIn( DEFAULT_POLLING_INTERVAL, "pollPresence", [overwrite: true, misfire: "ignore"])
 }
+
+def ping() {
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+}
+
+def sendRttEvent() {
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - state.pingTime.toInteger()
+    logInfo "RTT is ${timeRunning} (ms)"    
+    sendEvent(name: "rtt", value: timeRunning, unit: "ms", isDigital: true)    
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+private void scheduleDeviceHealthCheck(int intervalMins) {
+    Random rnd = new Random()
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+}
+
+void deviceCommandTimeout() {
+    if (isFP1()) {
+        logWarn 'no response received (device offline?)'
+        updateAttribute('healthStatus', 'offline')
+        resetState()
+    }
+    else {
+        logDebug 'no response received (sleepy debice)'
+    }
+}
+
+def resetPresence() {
+    logInfo 'reset presence'
+    //resetRegions()
+    sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
+}
+
+void setWatchdogTimer() {
+    boolean watchdogEnabled = (settings.stateResetInterval as Integer) > 0
+    if (watchdogEnabled) {
+        int seconds = (settings.stateResetInterval as int) * 60 * 60
+        runIn(seconds, 'resetState')
+    }
+}
+
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        if (txtEnable==true) log.info "${device.displayName} Hubitat hub model is ${getModel()}.Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        logInfo "Hubitat hub model is ${getModel()}. Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
+        state.comment = COMMENT_WORKS_WITH
         if (state.lastBattery != null) state.remove("lastBattery")
         initializeVars( fullInit = false ) 
         state.motionStarted = now()
@@ -1131,7 +1189,7 @@ def configure(boolean fullInit = true ) {
     log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
     unschedule()
     initializeVars( fullInit )
-    runIn( defaultPollingInterval, "pollPresence", [overwrite: true, misfire: "ignore"])
+    runIn( DEFAULT_POLLING_INTERVAL, "pollPresence", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     runIn( 30, "aqaraReadAttributes", [overwrite: true])
 }
@@ -1154,25 +1212,20 @@ void sendZigbeeCommands(List<String> cmds) {
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
-List<String> resetPresence() {
-    logInfo 'reset presence'
-    return zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [:], 0)
-}
-
 // device Web UI command
 def setMotion( mode ) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
             if (isFP1()) {
-                presenceEvent("present", isDigital=true)
+                roomStateEvent("occupied", isDigital=true)
                 presenceTypeEvent("enter", isDigital=true)
             }
             break
         case "inactive" :
             handleMotion(false, isDigital=true)
             if (isFP1()) {
-                presenceEvent("not present", isDigital=true)
+                roomStateEvent("unoccupied", isDigital=true)
                 presenceTypeEvent("leave", isDigital=true)
                 resetPresence()
             }
