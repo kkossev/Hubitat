@@ -34,13 +34,20 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
+ * ver. 1.3.0  2023-03-18 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; 
  *
+ *
+ *                                   TODO: 4-in-1 'keep_time' : ['0', '30', '60', '120', '240', '480']
  *                                   TODO: check _TZE200_3towulqd
+ *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
+ *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
+ *                                   TODO: present state 'motionStarted' in a human-readable form.
+ *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
 */
 
-def version() { "1.2.2" }
-def timeStamp() {"2023/03/18 10:54 AM"}
+def version() { "1.3.0" }
+def timeStamp() {"2023/03/18 7:11 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,27 +93,28 @@ metadata {
                 [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List/* ["STRING"]*/],
                 [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
         ]
-        if (debug == true) {
+        if (_DEBUG == true) {
             command "test", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
             ]
         }
-        if (debug == true) {
+        if (_DEBUG == true) {
             command "testX", [[name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]]
         }
         //command "ping"
-        
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"
+        // TS0202 4in1
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // pairing: double click!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
-        
+        // TS0601 3in1 Neo Coolcam NAS-PD07
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"                 // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+        // TS0202 3in1
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Neo NAS-PD07  3 In 1 Motion Sensor"      // 3in1 ? https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/418?u=kkossev
-
+        // TS0601 2in1
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"          // https://www.aliexpress.com/item/1005004095233195.html
         
         // Human presence sensor AIR (PIR sensor!) - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
@@ -180,10 +188,10 @@ metadata {
     
     preferences {
         if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
-            input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
-            input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+            input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display sensor states in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
             if (!(isRadar() || isBlackSquareRadar() || isOWONRadar())) {
-                input (name: "motionReset", type: "bool", title: "Reset Motion to Inactive", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
+                input (name: "motionReset", type: "bool", title: "<b>Reset Motion to Inactive</b>", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
                 if (motionReset.value == true) {
     		        input ("motionResetTimer", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
                 }
@@ -194,21 +202,27 @@ metadata {
                 input ("luxOffset", "decimal", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
             }
             if (isLuxMeter()) {
-		        input ("luxThreshold", "number", title: "Lux threshold", description: "Minimum change in the illuminocity which will trigger an event", range: "0..999", defaultValue: 1)   
+		        input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the illuminocity which will trigger an event", range: "0..999", defaultValue: 1)   
             }
+        }
+        if (is4in1()) {
+            input (name: "ledEnable", type: "bool", title: "</b>Enable LED</b>", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
-            if (is4in1()) {
-                input (name: "ledEnable", type: "bool", title: "Enable LED", description: "<i>enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
-            }
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
             if (is3in1() || is2in1() || isConfigurable() ) {
                 input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sennsitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
             }
             if ( is2in1()) {
                 input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
             }
-            if (isConfigurable() || is3in1()) {
+            /*
+            else if (is4in1()) {
+                input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", options: keepTime4in1Opts.options, defaultValue: keepTime4in1Opts.defaultValue)
+            }
+            */
+            else if (isConfigurable() || is3in1()) {
                 input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
             }
             if (isRadar()) {
@@ -257,13 +271,29 @@ metadata {
 @Field static final Map blackSensorMotionTypeOptions =   [ "0":"None", "1":"Presence", "2":"Peacefull", "3":"Small Move", "4":"Large Move"]    // BlackSensor - not working!
 @Field static final Map blackRadarLedOptions =      [ "0" : "Off", "1" : "On" ]      // HumanPresenceSensorAIR
 @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
+@Field static final Map keepTime4in1Opts = [ defaultValue: 1, options: [0: '0 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
+@Field static final Map keepTime2in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds']]
+@Field static final Map keepTime3in1Opts = [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
+@Field static final Map keepTimeIASOpts =  [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
+@Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
+
+def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
+def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
+def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
+def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
+def readSensitivityIAS()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
+def readKeepTimeIAS()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
+
 
 @Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
 
-def is4in1() { return device.getDataValue('manufacturer') in ['_TZ3210_zmy9hjay', '_TYST11_i5j6ifxj', '_TYST11_7hfcudw5', '_TZ3210_rxqls8v0', '_TZ3210_wuhzzfqg'] }
-def is3in1() { return device.getDataValue('manufacturer') in ['_TZE200_7hfcudw5', '_TZ3000_kmh5qpmb'] }
-def is2in1() { return device.getDataValue('manufacturer') in ['_TZE200_3towulqd'] }
+def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
+def getDeviceProfiles()      { deviceProfilesV2.keySet() }
+def is4in1() { return getModelGroup().contains("TS0202_4IN1") }
+def is3in1() { return getModelGroup().contains("TS0202_3IN1") }
+def is2in1() { return getModelGroup().contains("TS0202_2IN1") }
+
 def isIAS()  { return (((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) && (!(device.getDataValue('manufacturer') in ['_TZE200_3towulqd'])))  }
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
@@ -280,6 +310,67 @@ def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
+
+// TODO : change 'model' to 'models' list;
+@Field static final Map deviceProfilesV2 = [
+    "TS0202_4IN1"  : [
+            model         : "TS0202",
+            manufacturers : ["_TZ3210_zmy9hjay",  "_TYST11_i5j6ifxj", "_TYST11_7hfcudw5", "_TZ3210_rxqls8v0","_TZ3210_wuhzzfqg"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // pairing: double click!
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"],       
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"]        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
+            ],
+            deviceJoinName: "Tuya Multi Sensor 4 In 1",
+            capabilities  : ["motion": true, "temperature": true, "humidity": true, "illuminance": true, "tamper": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],
+    
+    "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+            model         : "TS0601",
+            manufacturers : ["_TZE200_7hfcudw5"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
+            ],
+            deviceJoinName: "Tuya Multi Sensor 3 In 1",
+            capabilities  : ["motion": true, "temperature": true, "humidity": true, "tamper": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],
+
+    "TS0601_2IN1"  : [
+            model         : "TS0601",
+            manufacturers : ["_TZE200_3towulqd"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"]          // https://www.aliexpress.com/item/1005004095233195.html
+            ],
+            deviceJoinName: "Tuya Multi Sensor 2 In 1",
+            capabilities  : ["motion": true, "temperature": true, "illuminance": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],
+    
+    "UNKNOWN"         : [
+        model         : "UNKNOWN",
+        manufacturers : [],
+        deviceJoinName: "Unknown device",
+        capabilities  : ["motion": true],
+        configuration : ["battery": true],
+        attributes    : [],
+        batteries     : "unknown"
+    ]
+    
+]    
+
 
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -359,11 +450,15 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
-            def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
-            if (settings?.logEnable) log.info "${device.displayName} reported Power source ${descMap?.value}"
-            if (!(isRadar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor() )) {     // for radars force powerSource 'dc'
-                powerSourceEvent( value )
+            //def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
+            def powerSourceReported = powerSourceOpts.options[descMap?.value as int]
+            logInfo "reported Power source <b>${powerSourceReported}</b> (${descMap?.value})"
+            if (is4in1() || isRadar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor())  {     // for radars force powerSource 'dc'
+                log.trace "powerSourceOpts.options = ${powerSourceOpts.options}"
+                powerSourceReported = powerSourceOpts.options[04]    // force it to dc !
+                logDebug "forcing the powerSource to <b>${powerSourceReported}</b>"
             }
+            powerSourceEvent( powerSourceReported )
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
@@ -1221,7 +1316,7 @@ def ping() {
 def refresh() {
     ArrayList<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)     // Power Source, attributeReportingStatus
-    if (isIAS()) {
+    if (isIAS() || is4in1()) {
         // TODO - optimize!
         cmds += readSensitivityIAS()
         cmds += readKeepTimeIAS()
@@ -1267,9 +1362,10 @@ def logInitializeRezults() {
 
 // called by initialize() button
 void initializeVars( boolean fullInit = false ) {
-    if (settings?.txtEnable) log.info "${device.displayName} InitializeVars( fullInit = ${fullInit} )..."
-    if (fullInit == true ) {
+    logInfo "${device.displayName} InitializeVars( fullInit = ${fullInit} )..."
+    if (fullInit == true) {
         state.clear()
+        setDeviceNameAndProfile()
         state.driverVersion = driverVersionAndTimeStamp()
         state.motionStarted = now()
     }
@@ -1482,17 +1578,6 @@ String generateMD5(String s) {
         return "null"
     }
 }
-
-
-
-def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
-def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
-
-def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
-def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
-
-def readSensitivityIAS()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
-def readKeepTimeIAS()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
 
 def sendSensitivityIAS( String mode ) {
     if (mode == null) {
@@ -1747,6 +1832,55 @@ def setPar( par=null, val=null )
     logWarn "executed <b>$func</b>(<b>$val</b>)"
     sendZigbeeCommands( cmds )
 }
+
+def updateTuyaVersion() {
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def ver = zigbee.convertHexToInt(application)
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
+        if (device.getDataValue("tuyaVersion") != str) {
+            device.updateDataValue("tuyaVersion", str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
+}
+
+// called from  initializeVars( fullInit = true)
+def setDeviceNameAndProfile( model=null, manufacturer=null) {
+    String deviceName
+    def currentModelMap = null
+    def deviceModel        = model != null ? model : device.getDataValue('model')
+    def deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
+    deviceProfilesV2.each { profileName, profileMap ->
+        if ((profileMap.model?.value as String) == (deviceModel as String)) {
+            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String))
+            {
+                currentModelMap = profileName
+                state.deviceProfile = currentModelMap
+                deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
+                logDebug "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+            }
+        }
+    }
+
+    if (currentModelMap == null) {
+        logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        // don't change the device name when unknown
+        state.deviceProfile = 'UNKNOWN'
+    }
+    if (deviceName != NULL) {
+        device.setName(deviceName)
+        logInfo "device model ${deviceModel} manufacturer ${deviceManufacturer} deviceName was set to ${deviceName}"
+    } else {
+        logWarn "device model ${deviceModel} manufacturer ${deviceManufacturer} was not found!"
+    }
+    return [deviceName, currentModelMap]
+}
+
+
 
 def testX( val ) {
     temperatureEvent( val as Double )
