@@ -34,7 +34,7 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-18 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; 
+ * ver. 1.3.0  2023-03-18 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; 
  *
  *
  *                                   TODO: 4-in-1 'keep_time' : ['0', '30', '60', '120', '240', '480']
@@ -47,7 +47,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/18 9:12 PM"}
+def timeStamp() {"2023/03/18 11:15 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -72,6 +72,7 @@ metadata {
         capability "HealthCheck"
         capability "Refresh"
 
+        attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
         attribute "distance", "number"              // Tuya Radar
         attribute "unacknowledgedTime", "number"    // AIR models
@@ -290,9 +291,6 @@ def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "me
 def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
 def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
 def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
-def readSensitivityIAS()  { return zigbee.readAttribute(0x0500, 0x0013, [:], delay=200) }
-def readKeepTimeIAS()     { return zigbee.readAttribute(0x0500, 0xF001, [:], delay=200) }
-
 
 @Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
@@ -319,6 +317,43 @@ def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
+
+@Field static final Map<Integer, String> IAS_ATTRIBUTES = [
+//  Zone Information
+    0x0000: 'zone state',
+    0x0001: 'zone type',
+    0x0002: 'zone status',
+//  Zone Settings
+    0x0010: 'CIE addr',    // EUI64
+    0x0011: 'Zone Id',     // uint8
+    0x0012: 'Num zone sensitivity levels supported',     // uint8
+    0x0013: 'Current zone sensitivity level',            // uint8
+    0xF001: 'Current zone keep time'                     // enum8 ?
+]
+
+@Field static final Map<Integer, String> ZONE_TYPE = [
+    0x0000: 'Standard CIE',
+    0x000D: 'Motion Sensor',
+    0x0015: 'Contact Switch',
+    0x0028: 'Fire Sensor',
+    0x002A: 'Water Sensor',
+    0x002B: 'Carbon Monoxide Sensor',
+    0x002C: 'Personal Emergency Device',
+    0x002D: 'Vibration Movement Sensor',
+    0x010F: 'Remote Control',
+    0x0115: 'Key Fob',
+    0x021D: 'Key Pad',
+    0x0225: 'Standard Warning Device',
+    0x0226: 'Glass Break Sensor',
+    0x0229: 'Security Repeater',
+    0xFFFF: 'Invalid Zone Type'
+]
+
+@Field static final Map<Integer, String> ZONE_STATE = [
+    0x00: 'Not Enrolled',
+    0x01: 'Enrolled'
+]
+
 
 // TODO : change 'model' to 'models' list;
 @Field static final Map deviceProfilesV2 = [
@@ -424,7 +459,7 @@ def parse(String description) {
             if (descMap.attrInt == 0x0021) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value,16))
             } else if (descMap.attrInt == 0x0020){
-                getBatteryResult(Integer.parseInt(descMap.value, 16))
+                sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16))
             }
             else {
                 if (settings?.logEnable) log.warn "${device.displayName} power cluster not parsed attrint $descMap.attrInt"
@@ -463,39 +498,44 @@ def parse(String description) {
             def powerSourceReported = powerSourceOpts.options[descMap?.value as int]
             logInfo "reported Power source <b>${powerSourceReported}</b> (${descMap?.value})"
             if (is4in1() || isRadar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor())  {     // for radars force powerSource 'dc'
-                log.trace "powerSourceOpts.options = ${powerSourceOpts.options}"
                 powerSourceReported = powerSourceOpts.options[04]    // force it to dc !
                 logDebug "forcing the powerSource to <b>${powerSourceReported}</b>"
             }
             powerSourceEvent( powerSourceReported )
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFDF") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya check-in"
+            logDebug "Tuya check-in (cluster revision=${descMap?.value})"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE2") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya AppVersion is ${descMap?.value}"
+            logDebug "Tuya AppVersion is ${descMap?.value}"
         } 
-        else if (descMap?.cluster == "0000" && descMap?.attrId == "FFE4") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFE4 value is ${descMap?.value}"
+        else if (descMap?.cluster == "0000" && (descMap?.attrId in ["FFE0", "FFE1", "FFE3", "FFE4"])) {
+            logDebug "Tuya unknown attribute ${descMap?.attrId} value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "FFFE") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya UNKNOWN attribute FFFE value is ${descMap?.value}"
+            logDebug "Tuya attributeReportingStatus (attribute FFFE) value is ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"] ) {    //IAS read attribute response
             //if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
             if (descMap?.attrId == "0000") {
-                if (settings?.logEnable) log.debug "${device.displayName} Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
-            }
-            else if (descMap?.attrId == "0002") {
-                if (settings?.logEnable) log.debug "${device.displayName} Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
+                def value = Integer.parseInt(descMap?.value, 16)
+                logInfo "IAS Zone State repot is '${ZONE_STATE[value]}' (${value})"
+            } else if (descMap?.attrId == "0001") {
+                def value = Integer.parseInt(descMap?.value, 16)
+                logInfo "IAS Zone Type repot is '${ZONE_TYPE[value]}' (${value})"
+            } else if (descMap?.attrId == "0002") {
+                logDebug "IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
                 handleMotion(Integer.parseInt(descMap?.value, 16))
-            } else if (descMap?.attrId == "000B") {
-                if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}" 
-            }
-            else if (descMap?.attrId == "0013") {    // [raw:7CC50105000813002002, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:0013, encoding:20, command:0A, value:02, clusterInt:1280, attrInt:19]
+            } else if (descMap?.attrId == "0010") {
+                logDebug "IAS Zone Address received (bitmap = ${descMap?.value})"
+            } else if (descMap?.attrId == "0011") {
+                logDebug "IAS Zone ID: ${descMap.value}" 
+            } else if (descMap?.attrId == "0012") {
+                logDebug "IAS Num zone sensitivity levels supported: ${descMap.value}" 
+            } else if (descMap?.attrId == "0013") {
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getSensitivityString(value)
-                if (settings?.txtEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
+                logInfo "IAS Current Zone Sensitivity Level = ${str} (${value})"
                 device.updateSetting("sensitivity", [value:str, type:"enum"])                
             }
             else if (descMap?.attrId == "F001") {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
@@ -1333,14 +1373,16 @@ def ping() {
 }
 
 def refresh() {
+    logInfo "refresh()..."
     ArrayList<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)     // Power Source, attributeReportingStatus
-    if (isIAS() || is4in1()) {
-        // TODO - optimize!
-        cmds += readSensitivityIAS()
-        cmds += readKeepTimeIAS()
+    cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)   // Power Source, attributeReportingStatus
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)             // batteryPercentageRemaining
+    if (isIAS() ||is4in1()) {
+        IAS_ATTRIBUTES.each { key, value ->
+            cmds += zigbee.readAttribute(0x0500, key, [:], delay=200)
+        }
     }
-    if (settings?.logEnable)  {log.debug "${device.displayName} refresh()..."}
     sendZigbeeCommands( cmds ) 
 }
 
@@ -1535,6 +1577,7 @@ def getBatteryPercentageResult(rawValue) {
         result.descriptionText = "${device.displayName} battery is ${result.value}%"
         result.isStateChange = true
         result.unit  = '%'
+        result.type = 'physical'
         sendEvent(result)
         state.lastBattery = result.value
         if (settings?.txtEnable) log.info "${result.descriptionText}"
@@ -1544,7 +1587,7 @@ def getBatteryPercentageResult(rawValue) {
     }
 }
 
-def getBatteryResult(rawValue) {
+def sendBatteryVoltageEvent(rawValue) {
     if (settings?.logEnable) log.debug "${device.displayName} batteryVoltage = ${(double)rawValue / 10.0} V"
     def result = [:]
     def volts = rawValue / 10
@@ -1554,10 +1597,19 @@ def getBatteryResult(rawValue) {
         def pct = (volts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.round(pct * 100)
         if (roundedPct <= 0) roundedPct = 1
-        result.value = Math.min(100, roundedPct)
-        result.descriptionText = "${device.displayName} battery is ${result.value}% (${volts} V)"
-        result.name = 'battery'
-        result.unit  = '%'
+        if (false) {
+            result.value = Math.min(100, roundedPct)
+            result.name = 'battery'
+            result.unit  = '%'
+            result.descriptionText = "${device.displayName} battery is ${roundedPct} %"
+        }
+        else {
+            result.value = volts
+            result.name = 'batteryVoltage'
+            result.unit  = 'V'
+            result.descriptionText = "${device.displayName} battery is ${volts} Volts"
+        }
+        result.type = 'physical'
         result.isStateChange = true
         if (settings?.txtEnable) log.info "${result.descriptionText}"
         sendEvent(result)
@@ -1635,7 +1687,7 @@ def sendKeepTimeIAS( String mode ) {
     value = mode == "30" ? 0: mode == "60" ? 1 : mode == "120" ? 02 : null
     if (value != null) {
         cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger(), [:], delay=200) 
-        if (settings?.logEnable) log.debug "${device.displayName} sending IAS sensitivity : ${mode} (${value.toInteger()})"     // only prepare the cmds here!
+        if (settings?.logEnable) log.debug "${device.displayName} sending IAS IAS Keep Time : ${mode} (${value.toInteger()})"     // only prepare the cmds here!
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} IAS Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
@@ -1880,7 +1932,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
                 currentModelMap = profileName
                 state.deviceProfile = currentModelMap
                 deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
-                logDebug "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+                logInfo "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
             }
         }
     }
