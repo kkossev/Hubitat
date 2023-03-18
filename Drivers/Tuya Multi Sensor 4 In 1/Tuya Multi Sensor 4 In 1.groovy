@@ -47,7 +47,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/18 11:15 PM"}
+def timeStamp() {"2023/03/18 11:22 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -111,20 +111,6 @@ metadata {
                 }
             }
         }      
-        /*
-        // TS0202 4in1
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // pairing: double click!
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"       
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
-        // TS0601 3in1 Neo Coolcam NAS-PD07
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"                 // KK // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
-        // TS0202 3in1
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_kmh5qpmb", deviceJoinName: "Neo NAS-PD07  3 In 1 Motion Sensor"      // 3in1 ? https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/418?u=kkossev
-        // TS0601 2in1
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"          // https://www.aliexpress.com/item/1005004095233195.html
-        */
         
         // Human presence sensor AIR (PIR sensor!) - o_sensitivity, v_sensitivity, led_status, vacancy_delay, light_on_luminance_prefer, light_off_luminance_prefer, mode, luminance_level, reference_luminance, vacant_confirm_time
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Human presence sensor AIR"        // Tuya LY-TAD-K616S-ZB
@@ -218,12 +204,12 @@ metadata {
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
             input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: keepTime4in1Opts.options, defaultValue: keepTime4in1Opts.defaultValue)
         }
+        if (isConfigurable() || is4in1() || is3in1() || is2in1()) {
+            input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
+        }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
-            if ((is3in1() || is2in1() || isConfigurable()) && (!is4in1()) ) {
-                input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sensitivity", defaultValue: 0, options:  ["low":"low", "medium":"medium", "high":"high"])
-            }
             if ( is2in1()) {
                 input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
             }
@@ -281,13 +267,15 @@ metadata {
 @Field static final Map blackSensorMotionTypeOptions =   [ "0":"None", "1":"Presence", "2":"Peacefull", "3":"Small Move", "4":"Large Move"]    // BlackSensor - not working!
 @Field static final Map blackRadarLedOptions =      [ "0" : "Off", "1" : "On" ]      // HumanPresenceSensorAIR
 @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
+
+@Field static final Map sensitivityOpts =  [ defaultValue: 1, options: [0: 'low', 1: 'medium', 2: 'high']]
 @Field static final Map keepTime4in1Opts = [ defaultValue: 1, options: [0: '0 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
 @Field static final Map keepTime2in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds']]
 @Field static final Map keepTime3in1Opts = [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map keepTimeIASOpts =  [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
 
-def getSensitivityString( value ) { return value == 0 ? "low" : value == 1 ? "medium" : value == 2 ? "high" : null }
+def getSensitivityString( value ) { return sensitivityOpts.options[value]}
 def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
 def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
 def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
@@ -304,7 +292,7 @@ def is2in1() { return getModelGroup().contains("TS0202_2IN1") }
 def isIAS()  { return (((device.getDataValue('model') in ['TS0202']) || ('0500' in device.getDataValue('inClusters'))) && (!(device.getDataValue('manufacturer') in ['_TZE200_3towulqd'])))  }
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
-def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
+def isConfigurable() { return true /*isIAS()*/ }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
 def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
@@ -534,9 +522,8 @@ def parse(String description) {
                 logDebug "IAS Num zone sensitivity levels supported: ${descMap.value}" 
             } else if (descMap?.attrId == "0013") {
                 def value = Integer.parseInt(descMap?.value, 16)
-                def str = getSensitivityString(value)
-                logInfo "IAS Current Zone Sensitivity Level = ${str} (${value})"
-                device.updateSetting("sensitivity", [value:str, type:"enum"])                
+                logInfo "IAS Current Zone Sensitivity Level = ${sensitivityOpts.options[value]} (${value})"
+                device.updateSetting("settings.sensitivity", [value:value.toString(), type:"enum"])                
             }
             else if (descMap?.attrId == "F001") {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
                 def value = Integer.parseInt(descMap?.value, 16)
@@ -558,13 +545,18 @@ def parse(String description) {
             }
         } // if IAS read attribute response
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
-            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "<b>FAILURE</b>"}"
+            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
         } 
-        else if (descMap?.command == "04") {    //write attribute response (other)
-            if (settings?.logEnable) log.debug "${device.displayName} write attribute response is ${descMap?.data[0] == "00" ? "success" : "<b>FAILURE</b>"}"
+        else if (descMap?.command == "04") {    // write attribute response (other)
+            if (settings?.logEnable) log.debug "${device.displayName} write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
+        } 
+        else if (descMap?.command == "0B") {    // default command response
+            String commandId = descMap.data[0]
+            String status = "0x${descMap.data[1]}"
+            logDebug "zigbee default command response cluster: ${clusterLookup(descMap.clusterInt)} command: 0x${commandId} status: ${descMap.data[1]== '00' ? 'success' : '<b>FAILURE</b>'} (${status})"
         } 
         else if (descMap?.command == "00" && descMap?.clusterId == "8021" ) {    // bind response
-            if (settings?.logEnable) log.debug "${device.displayName }bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>FAILURE</b>'})"
+            if (settings?.logEnable) log.debug "${device.displayName }bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'success' : '<b>FAILURE</b>'})"
         } 
         else {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
@@ -1272,7 +1264,7 @@ def updated() {
             }
             else if (isIAS()) {
                 cmds += sendSensitivityIAS( settings?.sensitivity )
-                if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${settings?.sensitivity }"                
+                if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
             }
         }
         // keep time
@@ -1650,26 +1642,17 @@ String generateMD5(String s) {
     }
 }
 
-def sendSensitivityIAS( String mode ) {
-    if (mode == null) {
-        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity is not set for ${device.getDataValue('manufacturer')}"
+def sendSensitivityIAS( lvl ) {
+    def sensitivityLevel = safeToInt(lvl, -1)
+    if (sensitivityLevel < 0 || sensitivityLevel > 2) {
+        logWarn "IAS sensitivity is not set for ${device.getDataValue('manufacturer')}, invalid value ${sensitivityLevel}"
         return null
     }
     ArrayList<String> cmds = []
-    String value = null
-    if (!(is2in1() || isConfigurable()))  {
-        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity configuration may not work for ${device.getDataValue('manufacturer')}"
-        // continue anyway ..
-    }
-    value = mode == "low" ? 0: mode == "medium" ? 1 : mode == "high" ? 02 : null
-    if (value != null) {
-        cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, value.toInteger(), [:], delay=200)
-        if (settings?.logEnable) log.debug "${device.displayName} sending IAS sensitivity : ${mode} (${value.toInteger()})"
-        //sendZigbeeCommands( cmds )         // only prepare the cmds here!
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} IAS sensitivity ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
-    }
+    String str = sensitivityOpts.options[sensitivityLevel]
+    cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, sensitivityLevel, [:], delay=200)
+    logDebug "${device.displayName} sending IAS sensitivity : ${str} (${sensitivityLevel})"
+    // only prepare the cmds here!
     return cmds
 }
 
@@ -1951,6 +1934,15 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
     return [deviceName, currentModelMap]
 }
 
+private String clusterLookup(Object cluster) {
+    if (cluster) {
+        int clusterInt = cluster in String ? hexStrToUnsignedInt(cluster) : cluster.toInteger()
+        String label = zigbee.clusterLookup(clusterInt)?.clusterLabel
+        String hex = "0x${intToHexStr(clusterInt, 2)}"
+        return label ? "${label} (${hex}) cluster" : "cluster ${hex}"
+    }
+    return 'unknown cluster'
+}
 
 def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     ArrayList<String> cmds = []
@@ -1963,10 +1955,8 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
 
 
 def test( val ) {
-    def value = 1
-                    def str   = keepTime4in1Opts.options[value]
-                    logInfo "Current Zone Keep-Time (4in1) =  ${str} (${value})"
-                    log.trace "str = ${str}"
-                    device.updateSetting("keepTime", [value: value.toString(), type: 'enum'])  
+    ArrayList<String> cmds = []
+    //cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, val.toInteger(), [:], delay=200)
+    sendZigbeeCommands( sendSensitivityIAS( val.toInteger() ) )
 }
 
