@@ -202,25 +202,16 @@ metadata {
         }
         if (is4in1()) {
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
-            input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: keepTime4in1Opts.options, defaultValue: keepTime4in1Opts.defaultValue)
         }
         if (isConfigurable() || is4in1() || is3in1() || is2in1()) {
-            input (name: "sensitivity", type: "enum", title: "Motion Sensitivity", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
+            input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: getKeepTimeOpts().options, defaultValue: getKeepTimeOpts().defaultValue)
+        }
+        if (isConfigurable() || is4in1() || is3in1() || is2in1()) {
+            input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
-            if ( is2in1()) {
-                input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['10':'10', '30':'30', '60':'60', '120':'120'])
-            }
-            /*
-            else if (is4in1()) {
-                input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", options: keepTime4in1Opts.options, defaultValue: keepTime4in1Opts.defaultValue)
-            }
-            */
-            else if ((isConfigurable() || is3in1()) && (!is4in1())) {
-                input (name: "keepTime", type: "enum", title: "Motion Keep Time", description:"Select PIR sensor keep time (s)", defaultValue: 0, options:  ['30':'30', '60':'60', '120':'120'])
-            }
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 		        input ("radarSensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
@@ -269,15 +260,16 @@ metadata {
 @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
 
 @Field static final Map sensitivityOpts =  [ defaultValue: 1, options: [0: 'low', 1: 'medium', 2: 'high']]
-@Field static final Map keepTime4in1Opts = [ defaultValue: 1, options: [0: '0 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
+@Field static final Map keepTime4in1Opts = [ defaultValue: 1, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
 @Field static final Map keepTime2in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds']]
 @Field static final Map keepTime3in1Opts = [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map keepTimeIASOpts =  [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
 
+def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime3in1Opts : is2in1() ? keepTime2in1Opts : keepTimeIASOpts}
 def getSensitivityString( value ) { return sensitivityOpts.options[value]}
 def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
-def getKeepTimeString( value )    { return value == 0 ? "30" : value == 1 ? "60" : value == 2 ? "120" : null }
+def getKeepTimeString( value )    { return keepTimeIASOpts.options[value]}
 def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
 
 @Field static final Integer presenceCountTreshold = 4
@@ -537,7 +529,7 @@ def parse(String description) {
                     def str = getKeepTimeString(value)
                     logInfo "Current Zone Keep-Time =  ${str} (${value})"
                     //log.trace "str = ${str}"
-                    device.updateSetting("keepTime", [value:str, type:"enum"])                
+                    device.updateSetting("keepTime", [value:str.toString(), type:"enum"])                
                 }
             }
             else {
@@ -701,7 +693,7 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x0A : // (10) keep time for TS0202 and 2in1 _TZE200_3towulqd
                 def str = getKeepTimeString(fncmd)
-                if (settings?.txtEnable) log.info "${device.displayName} Keep Time is ${str} (${fncmd})"
+                logInfo "Keep Time (dp=0x0A) is ${str} (${fncmd})"
                 device.updateSetting("keepTime", [value:str, type:"enum"])                
                 break
             case 0x0C : // (12)
@@ -1263,8 +1255,10 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
             }
             else if (isIAS()) {
-                cmds += sendSensitivityIAS( settings?.sensitivity )
-                if (settings?.logEnable) log.debug "${device.displayName} changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
+                if (settings?.sensitivity != null) {
+                    cmds += sendSensitivityIAS( settings?.sensitivity )
+                    logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
+                }
             }
         }
         // keep time
@@ -1279,8 +1273,11 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
             }
             else if (isIAS()) {
-                cmds += sendKeepTimeIAS( settings?.keepTime )
-                if (settings?.logEnable) log.debug "${device.displayName} changing IAS Keep Time to : ${settings?.keepTime }"                
+                if (settings?.keepTime != null) {
+                    log.trace "settings?.keepTime = ${settings.keepTime as int}"
+                    cmds += sendKeepTimeIAS( settings?.keepTime.value )
+                    logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+                }
             }
         }
         // 
@@ -1445,7 +1442,7 @@ void initializeVars( boolean fullInit = false ) {
         }
     }
     if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"medium", type:"enum"])
-    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"30", type:"enum"])
+    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:1, type:"enum"])
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("temperatureOffset",[value:0.0, type:"decimal"])
@@ -1656,25 +1653,17 @@ def sendSensitivityIAS( lvl ) {
     return cmds
 }
 
-def sendKeepTimeIAS( String mode ) {
-    if (mode == null) {
-        if (settings?.logEnable) log.warn "${device.displayName} Keep Time is not set for ${device.getDataValue('manufacturer')}"
+def sendKeepTimeIAS( lvl ) {
+    def keepTimeVal = safeToInt(lvl, -1)
+    if (keepTimeVal < 0 || keepTimeVal > 5) {
+        logWarn "IAS Keep Time  is not set for ${device.getDataValue('manufacturer')}, invalid value ${keepTimeVal}"
         return null
     }
     ArrayList<String> cmds = []
-    String value = null
-    if (!(is2in1() || isConfigurable()))  {
-        if (settings?.logEnable) log.warn "${device.displayName} IAS Keep Time configuration may not work for ${device.getDataValue('manufacturer')}"
-        // continue anyway .. //['30':'30', '60':'60', '120':'120']
-    }
-    value = mode == "30" ? 0: mode == "60" ? 1 : mode == "120" ? 02 : null
-    if (value != null) {
-        cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, value.toInteger(), [:], delay=200) 
-        if (settings?.logEnable) log.debug "${device.displayName} sending IAS IAS Keep Time : ${mode} (${value.toInteger()})"     // only prepare the cmds here!
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} IAS Keep Time ${mode} is not supported for your model:${device.getDataValue('model') } manufacturer:${device.getDataValue('manufacturer')}"
-    }
+    String str = keepTime4in1Opts.options[keepTimeVal]
+    cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, keepTimeVal, [:], delay=200)
+    logDebug "${device.displayName} sending IAS Keep Time : ${str} (${keepTimeVal})"
+    // only prepare the cmds here!
     return cmds
 }
 
@@ -1956,7 +1945,6 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
 
 def test( val ) {
     ArrayList<String> cmds = []
-    //cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, val.toInteger(), [:], delay=200)
-    sendZigbeeCommands( sendSensitivityIAS( val.toInteger() ) )
+    sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 }
 
