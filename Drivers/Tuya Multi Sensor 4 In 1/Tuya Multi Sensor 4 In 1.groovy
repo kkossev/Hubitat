@@ -33,14 +33,14 @@
  * ver. 1.1.1  2023-01-08 kkossev  - illuminance event bug fix; fadingTime minimum value 0.5; SetPar command shows in the UI the list of all possible parameters; _TZ3000_6ygjfyll bug fix;
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
- * ver. 1.2.2  2023-03-17 kkossev  - (dev. branch) typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar;
+ * ver. 1.2.2  2023-03-18 kkossev  - (dev. branch) typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
  *
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: check the bindings commands in configure()
 */
 
 def version() { "1.2.2" }
-def timeStamp() {"2023/03/17 7:46 AM"}
+def timeStamp() {"2023/03/17 10:40 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -934,11 +934,11 @@ def parseIasMessage(String description) {
     }
 }
 
-private handleMotion( motionActive, isDigital=false ) {    
+private handleMotion( motionActive, isDigital=false ) {
     if (motionActive) {
         def timeout = motionResetTimer ?: 0
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
-        if (motionReset == true && timeout != 0) {
+        if (settings.motionReset == true && timeout != 0) {
             runIn(timeout, resetToMotionInactive, [overwrite: true])
         }
         if (device.currentState('motion')?.value != "active") {
@@ -951,10 +951,10 @@ private handleMotion( motionActive, isDigital=false ) {
             return [:]   // do not process a second motion inactive event!
         }
     }
-	return getMotionResult(motionActive, isDigital)
+    sendMotionEvent(motionActive, isDigital)
 }
 
-def getMotionResult( motionActive, isDigital=false ) {
+def sendMotionEvent( motionActive, isDigital=false ) {
 	def descriptionText = "Detected motion"
     if (!motionActive) {
 		descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
@@ -1463,10 +1463,10 @@ def sendBatteryEvent( roundedPct, isDigital=false ) {
 def setMotion( mode ) {
     switch (mode) {
         case "active" : 
-            sendEvent(handleMotion(motionActive=true))
+            handleMotion(motionActive=true, isDigital=true)
             break
         case "inactive" :
-            sendEvent(handleMotion(motionActive=false))
+            handleMotion(motionActive=false, isDigital=true)
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} please select motion action)"
