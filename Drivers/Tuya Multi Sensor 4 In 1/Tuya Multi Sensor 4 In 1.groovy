@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 12:35 PM"}
+def timeStamp() {"2023/03/19 1:43 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -56,7 +56,7 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import java.util.ArrayList
 
-@Field static final Boolean debug = false
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
