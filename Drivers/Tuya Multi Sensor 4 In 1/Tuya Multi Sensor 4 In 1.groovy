@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 11:50 PM"}
+def timeStamp() {"2023/03/19 11:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1305,7 +1305,7 @@ def updated() {
             else if (isIAS()) {
                 if (settings?.keepTime != null) {
                     //log.trace "settings?.keepTime = ${settings.keepTime as int}"
-                    cmds += sendKeepTimeIAS( settings?.keepTime.value )
+                    cmds += sendKeepTimeIAS( settings?.keepTime )
                     logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
                 }
             }
