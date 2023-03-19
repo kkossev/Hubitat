@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 12:11 AM"}
+def timeStamp() {"2023/03/19 12:35 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -232,18 +232,14 @@ metadata {
 @Field static final Map blackRadarLedOptions =      [ "0" : "Off", "1" : "On" ]      // HumanPresenceSensorAIR
 @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
 
-@Field static final Map sensitivityOpts =  [ defaultValue: 1, options: [0: 'low', 1: 'medium', 2: 'high']]
-@Field static final Map keepTime4in1Opts = [ defaultValue: 1, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
+@Field static final Map sensitivityOpts =  [ defaultValue: 2, options: [0: 'low', 1: 'medium', 2: 'high']]
+@Field static final Map keepTime4in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
 @Field static final Map keepTime2in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds']]
 @Field static final Map keepTime3in1Opts = [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map keepTimeIASOpts =  [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
 
 def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime3in1Opts : is2in1() ? keepTime2in1Opts : keepTimeIASOpts}
-def getSensitivityString( value ) { return sensitivityOpts.options[value]}
-def getSensitivityValue( str )    { return str == "low" ? 0: str == "medium" ? 1 : str == "high" ? 02 : null }
-def getKeepTimeString( value )    { return keepTimeIASOpts.options[value]}
-def getKeepTimeValue( str )       { return  str == "30" ? 0: str == "60" ? 1 : str == "120" ? 02 : str == "240" ? 03 : null }
 
 @Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
@@ -705,15 +701,13 @@ def processTuyaCluster( descMap ) {
                 }
                 else {
                     // sensitivity for TS0202 and 2in1 _TZE200_3towulqd 
-                    def str = getSensitivityString(fncmd)
-                    logInfo "received sensitivity : ${str} (${fncmd})"
-                    device.updateSetting("sensitivity", [value:str, type:"enum"])                
+                    logInfo "received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
+                    device.updateSetting("sensitivity", [value:fncmd.toString(), type:"enum"])                
                 }
                 break
             case 0x0A : // (10) keep time for TS0202 and 2in1 _TZE200_3towulqd
-                def str = getKeepTimeString(fncmd)
-                logInfo "Keep Time (dp=0x0A) is ${str} (${fncmd})"
-                device.updateSetting("keepTime", [value:str, type:"enum"])                
+                logInfo "Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
+                device.updateSetting("keepTime", [value:fncmd.toString(), type:"enum"])                
                 break
             case 0x0C : // (12)
                 illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
@@ -1284,6 +1278,7 @@ def updated() {
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
             }
             else if (isIAS()) {
+                //log.trace "settings?.sensitivity = ${settings?.sensitivity}"
                 if (settings?.sensitivity != null) {
                     cmds += sendSensitivityIAS( settings?.sensitivity as Integer)
                     logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
@@ -1393,7 +1388,7 @@ def ping() {
 def refresh() {
     logInfo "refresh()..."
     ArrayList<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0007, 0xfffe], [:], delay=200)   // Power Source, attributeReportingStatus
+    cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
     cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)             // batteryPercentageRemaining
     if (isIAS() ||is4in1()) {
@@ -1466,14 +1461,13 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.advancedOptions == null) {
         if (isRadar() || isHumanPresenceSensorAIR()) {
             device.updateSetting("advancedOptions", true)
-            //log.trace "device.updateSetting('advancedOptions', true)"
         }
         else {
             device.updateSetting("advancedOptions", false)
         }
     }
-    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"1", type:"enum"])
-    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"1", type:"enum"])
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"2", type:"enum"])
+    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"0", type:"enum"])
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("temperatureOffset",[value:0.0, type:"decimal"])
@@ -1538,10 +1532,10 @@ def initialize( boolean fullInit = true ) {
     log.info "${device.displayName} Initialize( fullInit = ${fullInit} )..."
     unschedule()
     initializeVars( fullInit )
-    //installed() // removed in ver 1.3.0
     configure()
-    runIn( 1, updated, [overwrite: true])
-    runIn( 3, logInitializeRezults, [overwrite: true])
+    runIn( 1, 'updated', [overwrite: true])
+    runIn( 3, 'logInitializeRezults', [overwrite: true])
+    runIn( 4, 'refresh', [overwrite: true])
 }
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
