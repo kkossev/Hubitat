@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 9:57 AM"}
+def timeStamp() {"2023/03/19 12:11 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -546,25 +546,17 @@ def parse(String description) {
             }
             else if (descMap?.attrId == "F001") {    // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
                 def value = Integer.parseInt(descMap?.value, 16)
-                if (is4in1())  {
-                    def str   = keepTime4in1Opts.options[value]
-                    logInfo "Current Zone Keep-Time (4in1) =  ${str} (${value})"
-                    //log.trace "str = ${str}"
-                    device.updateSetting("keepTime", [value: value.toString(), type: 'enum'])                
-                }
-                else {
-                    def str = getKeepTimeString(value)
-                    logInfo "Current Zone Keep-Time =  ${str} (${value})"
-                    //log.trace "str = ${str}"
-                    device.updateSetting("keepTime", [value:str.toString(), type:"enum"])                
-                }
+                def str   = getKeepTimeOpts().options[value]
+                logInfo "Current IAS Zone Keep-Time =  ${str} (${value})"
+                //log.trace "str = ${str}"
+                device.updateSetting("keepTime", [value: value.toString(), type: 'enum'])                
             }
             else {
-                if (settings?.logEnable) log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}" 
+                if (settings?.logEnable) log.warn "${device.displayName} Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}" 
             }
         } // if IAS read attribute response
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
-            if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
+            if (settings?.logEnable) log.debug "${device.displayName} IAS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
         } 
         else if (descMap?.command == "04") {    // write attribute response (other)
             if (settings?.logEnable) log.debug "${device.displayName} write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
@@ -1293,7 +1285,7 @@ def updated() {
             }
             else if (isIAS()) {
                 if (settings?.sensitivity != null) {
-                    cmds += sendSensitivityIAS( settings?.sensitivity )
+                    cmds += sendSensitivityIAS( settings?.sensitivity as Integer)
                     logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
                 }
             }
@@ -1305,13 +1297,13 @@ def updated() {
             }
             else if (isTS0601_PIR()) {
                 def val = settings?.keepTime as int
-                log.trace "keepTime=${keepTime} val=${val}"
+                //log.trace "keepTime=${keepTime} val=${val}"
                 cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
             }
             else if (isIAS()) {
                 if (settings?.keepTime != null) {
-                    log.trace "settings?.keepTime = ${settings.keepTime as int}"
+                    //log.trace "settings?.keepTime = ${settings.keepTime as int}"
                     cmds += sendKeepTimeIAS( settings?.keepTime.value )
                     logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
                 }
@@ -1452,9 +1444,11 @@ void initializeVars( boolean fullInit = false ) {
     logInfo "${device.displayName} InitializeVars( fullInit = ${fullInit} )..."
     if (fullInit == true) {
         state.clear()
-        setDeviceNameAndProfile()
         state.driverVersion = driverVersionAndTimeStamp()
         state.motionStarted = now()
+    }
+    if (fullInit == true || state.deviceProfile == null) {
+        setDeviceNameAndProfile()
     }
     //
     state.packetID = 0
@@ -1478,8 +1472,8 @@ void initializeVars( boolean fullInit = false ) {
             device.updateSetting("advancedOptions", false)
         }
     }
-    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"medium", type:"enum"])
-    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:1, type:"enum"])
+    if (fullInit == true || settings.sensitivity == null) device.updateSetting("sensitivity", [value:"1", type:"enum"])
+    if (fullInit == true || settings.keepTime == null) device.updateSetting("keepTime", [value:"1", type:"enum"])
     if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", true)
     if (fullInit == true || settings.ledEnable == null) device.updateSetting("ledEnable", true)
     if (fullInit == true || settings.temperatureOffset == null) device.updateSetting("temperatureOffset",[value:0.0, type:"decimal"])
