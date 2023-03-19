@@ -34,7 +34,7 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-19 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK;
+ * ver. 1.3.0  2023-03-19 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
  *
  *
  *                                   TODO: check _TZE200_3towulqd
@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 1:43 PM"}
+def timeStamp() {"2023/03/19 11:50 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -185,6 +185,7 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 		        input ("radarSensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
@@ -238,6 +239,7 @@ metadata {
 @Field static final Map keepTime3in1Opts = [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map keepTimeIASOpts =  [ defaultValue: 0, options: [0: '30 seconds', 1: '60 seconds', 2: '120 seconds']]
 @Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
+@Field static final Map delayBatteryOpts = [ defaultValue: 0, options: [0: 'No delay', 30: '30 seconds', 3600: '1 hour', 14400: '4 hours', 28800: '8 hours', 43200: '12 hours']]
 
 def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime3in1Opts : is2in1() ? keepTime2in1Opts : keepTimeIASOpts}
 
@@ -247,9 +249,9 @@ def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
 def is4in1() { return getModelGroup().contains("TS0202_4IN1") }
-def is3in1() { return getModelGroup().contains("TS0202_3IN1") }
-def is2in1() { return getModelGroup().contains("TS0202_2IN1") }
-def isIAS()  { return getModelGroup().contains("TS0202_MOTION_IAS") }
+def is3in1() { return getModelGroup().contains("TS0601_3IN1") }
+def is2in1() { return getModelGroup().contains("TS0601_2IN1") }
+def isIAS()  { return getModelGroup().contains("TS0202_MOTION_IAS") || getModelGroup().contains("TS0202_4IN1") || getModelGroup().contains("TS0601_2IN1") }
 
 def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
@@ -1160,8 +1162,10 @@ def temperatureEvent( temperature ) {
     map.unit = "\u00B0"+"${location.temperatureScale}"
     String tempConverted = convertTemperatureIfNeeded(temperature, "C", precision=1)
     map.value = tempConverted
+    map.type = "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     map.isStateChange = true
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${map.value} ${map.unit}"}
+    logInfo "${map.descriptionText}"
     sendEvent(map)
 }
 
@@ -1170,8 +1174,10 @@ def humidityEvent( humidity ) {
     map.name = "humidity"
     map.value = humidity as int
     map.unit = "% RH"
+    map.type = "physical"
     map.isStateChange = true
-    if (settings?.txtEnable) {log.info "${device.displayName} ${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"}
+    map.descriptionText = "${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"
+    logInfo "${map.descriptionText}"
     sendEvent(map)
 }
 
@@ -1406,6 +1412,7 @@ def checkDriverVersion() {
         if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         unschedule('pollPresence')    // now replaced with deviceHealthCheck
         scheduleDeviceHealthCheck()
+        updateTuyaVersion()
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
         if (state.lastPresenceState != null) state.remove('lastPresenceState')    // removed in version 1.0.6 
@@ -1581,23 +1588,14 @@ def logsOff(){
 }
 
 def getBatteryPercentageResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
-    def result = [:]
-
-    if (0 <= rawValue && rawValue <= 200) {
-        result.name = 'battery'
-        result.translatable = true
-        result.value = Math.round(rawValue / 2)
-        result.descriptionText = "${device.displayName} battery is ${result.value}%"
-        result.isStateChange = true
-        result.unit  = '%'
-        result.type = 'physical'
-        sendEvent(result)
-        state.lastBattery = result.value
-        if (settings?.txtEnable) log.info "${result.descriptionText}"
+    def value = Math.round(rawValue / 2)
+    //logDebug "getBatteryPercentageResult: rawValue = ${rawValue} -> ${value} %"
+    if (value >= 0 && value <= 100) {
+        sendBatteryEvent(value)
+        state.lastBattery = value
     }
     else {
-        if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
+        if (settings?.logEnable) log.warn "${device.displayName} ignoring getBatteryPercentageResult (${rawValue})"
     }
 }
 
@@ -1634,10 +1632,37 @@ def sendBatteryVoltageEvent(rawValue) {
     }    
 }
 
-def sendBatteryEvent( roundedPct, isDigital=false ) {
-    if (roundedPct > 100) roundedPct = 100
-    if (roundedPct < 0)   roundedPct = 0
-    sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
+def sendBatteryEvent( batteryPercent, isDigital=false ) {
+    def map = [:]
+    map.name = 'battery'
+    map.timeStamp = now()
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int)
+    map.unit  = '%'
+    map.type = isDigital ? 'digital' : 'physical'    
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.isStateChange = true
+    // 
+    def latestBatteryEvent = device.latestState('battery', skipCache=true)
+    def latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now()
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}"
+    def timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
+        // send it now!
+        sendDelayedBatteryEvent(map)
+    }
+    else {
+        def delayedTime = (settings?.batteryDelay as int) - timeDiff
+        map.delayed = delayedTime
+        map.descriptionText += " [delayed ${map.delayed} seconds]"
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
+        runIn( delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
+    }
+}
+
+private void sendDelayedBatteryEvent(Map map) {
+    logInfo "${map.descriptionText}"
+    //map.each {log.trace "$it"}
+    sendEvent(map)
 }
 
 
@@ -1966,7 +1991,7 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }    
 
-
+import com.hubitat.app.DeviceWrapper
 
 def test( val ) {
     ArrayList<String> cmds = []
