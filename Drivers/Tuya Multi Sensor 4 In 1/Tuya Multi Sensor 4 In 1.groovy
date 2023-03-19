@@ -34,10 +34,9 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-18 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; 
+ * ver. 1.3.0  2023-03-19 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK;
  *
  *
- *                                   TODO: 4-in-1 'keep_time' : ['0', '30', '60', '120', '240', '480']
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
@@ -47,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/18 11:22 PM"}
+def timeStamp() {"2023/03/19 8:57 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -55,6 +54,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
+import java.util.ArrayList
 
 @Field static final Boolean debug = false
 
@@ -196,9 +196,6 @@ metadata {
                 input ("humidityOffset", "decimal", title: "Humidity offset", description: "Enter a percentage to adjust the humidity.", range: "-50..50",  defaultValue: 0.0)
                 input ("luxOffset", "decimal", title: "Illuminance coefficient", description: "Enter a coefficient to multiply the illuminance.", range: "0.1..2.0",  defaultValue: 1.0)
             }
-            if (isLuxMeter()) {
-		        input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 1)   
-            }
         }
         if (is4in1()) {
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
@@ -208,6 +205,11 @@ metadata {
         }
         if (isConfigurable() || is4in1() || is3in1() || is2in1()) {
             input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
+        }
+        if (advancedOptions == true || advancedOptions == false) { 
+            if (isLuxMeter()) {
+                input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 1)   
+            }
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
@@ -421,7 +423,7 @@ def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
-    if (settings?.logEnable) log.debug "${device.displayName} parse(${device.getDataValue('manufacturer')}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    if (settings?.logEnable) log.debug "${device.displayName} parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
         parseIasMessage(description)    // TS0202 Motion sensor
@@ -1236,6 +1238,16 @@ def updated() {
         device.deleteCurrentState('maximumDistance')
     }
     
+    if (settings?.forcedProfile != null) {
+        if (settings?.forcedProfile != state.deviceProfile) {
+            logWarn "changing the device profile from ${state.deviceProfile} to ${settings?.forcedProfile}"
+            state.deviceProfile = settings?.forcedProfile
+            logInfo "press F5 to refresh the page"
+        }
+    }
+        
+    
+    
     if (true) {    // an configurable device parameter was changed
         //    LED enable
         if (true) {
@@ -1250,7 +1262,7 @@ def updated() {
                 cmds += setRadarSensitivity( settings?.radarSensitivity )
             }
             else if (isTS0601_PIR()) {
-                def val = getSensitivityValue( sensitivity.toString() )
+                def val = settings?.sensitivity as int
                 cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
             }
@@ -1267,8 +1279,8 @@ def updated() {
                 // do nothing
             }
             else if (isTS0601_PIR()) {
-                def val = getKeepTimeValue( keepTime.toString() )
-                //log.trace "keepTime=${keepTime} val=${val}"
+                def val = settings?.keepTime as int
+                log.trace "keepTime=${keepTime} val=${val}"
                 cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
                 if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
             }
