@@ -38,7 +38,6 @@
  *                                   removed state.lastBattery; 
  *
  *
- *                                   TODO: manufactuer is not recognized sometimes!
  *                                   TODO: sensitivity preference exceptions!
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
@@ -49,7 +48,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/21 9:33 AM"}
+def timeStamp() {"2023/03/21 1:18 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -58,6 +57,7 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import java.util.ArrayList
+import java.util.concurrent.ConcurrentHashMap
 
 @Field static final Boolean _DEBUG = false
 
@@ -132,6 +132,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lu01t0zl", deviceJoinName: "Tuya Human presence sensor with fall function"
         
         // Smart Human presence sensors - illuminance, presence, target_distance; radar_sensitivity; minimum_range; maximum_range; detection_delay; fading_time; CLI; self_test (checking, check_success, check_failure, others, comm_fault, radar_fault)
+        /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"              // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"              // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ikvncluo", deviceJoinName: "Moes TuyaHuman Presence Detector Radar 2 in 1"           // jw970065
@@ -143,6 +144,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sfiy5tfs", deviceJoinName: "Tuya Human Presence Detector"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_holel4dk", deviceJoinName: "Tuya Human Presence Detector"         // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"         // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
+*/
        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"1000,0006,0019,000A", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo", deviceJoinName: "Tuya TS0210 Motion/Vibration Sensor"
 
@@ -187,7 +189,8 @@ metadata {
        }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
-            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfiles())
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>", 
+                   options: getDeviceProfilesMap() /*getDeviceProfiles()*/)
             input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
@@ -273,17 +276,16 @@ def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
 
 
-
-// TODO : change 'model' to 'models' list;
 @Field static final Map deviceProfilesV2 = [
     "TS0202_4IN1"  : [
+            description   : "Tuya 4in1 (motion/temp/humi/lux) sensor",
             models        : ["TS0202"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // pairing: double click!
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"],       
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya Multi Sensor 4 In 1"],
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // not tested
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya Multi Sensor 4 In 1"]        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // pairing: double click!
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],       
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"]        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
             ],
             deviceJoinName: "Tuya Multi Sensor 4 In 1",
             capabilities  : ["motion": true, "temperature": true, "humidity": true, "illuminance": true, "tamper": true, "battery": true],
@@ -294,6 +296,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
+            description   : "Tuya 3in1 (Motion/Temp/Humi) sensor",
             models        : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
@@ -307,6 +310,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
 
     "TS0601_2IN1"  : [
+            description   : "Tuya 2in1 (Motion and Illuminance) sensor",
             models         : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"]          // https://www.aliexpress.com/item/1005004095233195.html
@@ -320,7 +324,8 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "TS0202_MOTION_IAS"   : [
-            models        : ["TS0202"],
+            description   : "Tuya Motion sensor (IAS)",
+            models        : ["TS0202","RH3040"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr        
@@ -339,8 +344,15 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_hqbdru35", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_tiwq83wk", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_ykwcwxmz", deviceJoinName: "Tuya TS0202 Motion Sensor"],
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"WHD02",  manufacturer:"_TZ3000_hktqahrq", deviceJoinName: "Tuya TS0202 Motion Sensor"],
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"]        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-53o41joc", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],                                            // 60 seconds reset period        
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b5g40alm", deviceJoinName: "TUYATEC RH3040 Motion Sensor"], 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-deetibst", deviceJoinName: "TUYATEC RH3040 Motion Sensor"], 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-bd5faf9p", deviceJoinName: "Nedis/Samotech RH3040 Motion Sensor"], 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-zn9wyqtr", deviceJoinName: "Samotech RH3040 Motion Sensor"],                                           // vendor: 'Samotech', model: 'SM301Z'
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b3ov3nor", deviceJoinName: "Zemismart RH3040 Motion Sensor"],                                          // vendor: 'Nedis', model: 'ZBSM10WT'
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"]
             ],
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             capabilities  : ["motion": true, "battery": true],
@@ -350,32 +362,38 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
             ]
     ],
     
-    "TUYATEC_RH3040"      : [
-            models        : ["RH3040"],
+    "TS0601_TUYA_RADAR"   : [
+            description   : "Tuya Human Presence Detector",
+            models        : ["TS0601"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-53o41joc", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],           // 60 seconds reset period        
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b5g40alm", deviceJoinName: "TUYATEC RH3040 Motion Sensor"], 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-deetibst", deviceJoinName: "TUYATEC RH3040 Motion Sensor"], 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-bd5faf9p", deviceJoinName: "Nedis/Samotech RH3040 Motion Sensor"], 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-zn9wyqtr", deviceJoinName: "Samotech RH3040 Motion Sensor"],         // vendor: 'Samotech', model: 'SM301Z'
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b3ov3nor", deviceJoinName: "Zemismart RH3040 Motion Sensor"],        // vendor: 'Nedis', model: 'ZBSM10WT'
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"]
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"],       // KK
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"],       // KK
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ikvncluo", deviceJoinName: "Moes TuyaHuman Presence Detector Radar 2 in 1"],    // jw970065
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lyetpprm", deviceJoinName: "Tuya ZigBee Breath Presence Sensor"],   
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_wukb7rhc", deviceJoinName: "Moes Smart Human Presence Detector"],               // https://www.moeshouse.com/collections/smart-sensor-security/products/smart-zigbee-human-presence-detector-pir-mmwave-radar-detection-sensor-ceiling-mount
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_jva8ink8", deviceJoinName: "AUBESS Human Presence Detector"],                   // https://www.aliexpress.com/item/1005004262109070.html 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mrf6vtua", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ar0slwnd", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sfiy5tfs", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_holel4dk", deviceJoinName: "Tuya Human Presence Detector"],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"]                      // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
             ],
-            deviceJoinName: "TUYATEC RH3040 Motion Sensor",
+            deviceJoinName: "Tuya Human Presence Detector",
             capabilities  : ["motion": true, "battery": true],
-            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
             configuration : ["battery": false],
             preferences   : [
             ]
     ],
     
-    "UNKNOWN"         : [
-        models        : ["UNKNOWN"],
-        deviceJoinName: "Unknown device",
-        capabilities  : ["motion": true],
-        configuration : ["battery": true],
-        attributes    : [],
-        batteries     : "unknown"
+    "UNKNOWN"             : [
+            description   : "Unknown device",
+            models        : ["UNKNOWN"],
+            deviceJoinName: "Unknown device",
+            capabilities  : ["motion": true],
+            configuration : ["battery": true],
+            attributes    : [],
+            batteries     : "unknown"
     ]
     
 ]    
@@ -1253,9 +1271,9 @@ def updated() {
     }
     
     if (settings?.forcedProfile != null) {
-        if (settings?.forcedProfile != state.deviceProfile) {
-            logWarn "changing the device profile from ${state.deviceProfile} to ${settings?.forcedProfile}"
-            state.deviceProfile = settings?.forcedProfile
+        if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
+            logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
+            state.deviceProfile = getProfileKey(settings?.forcedProfile)
             logInfo "press F5 to refresh the page"
         }
     }
@@ -1275,16 +1293,27 @@ def updated() {
             if (isRadar()) { 
                 cmds += setRadarSensitivity( settings?.radarSensitivity )
             }
-            else if (isTS0601_PIR()) {
-                def val = settings?.sensitivity as int
-                cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-                if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
-            }
-            else if (isIAS()) {
-                //log.trace "settings?.sensitivity = ${settings?.sensitivity}"
-                if (settings?.sensitivity != null) {
-                    cmds += sendSensitivityIAS( settings?.sensitivity as Integer)
-                    logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[settings?.sensitivity as int]} (${settings?.sensitivity })"
+            else {
+                // settings?.sensitivity was changed in version 1.3.0
+                def sensitivityNew 
+                try {
+                    sensitivityNew = settings?.sensitivity as Integer
+                }
+                catch (e) {
+                    logWarn "sensitivity was reset to the default value!"
+                    sensitivityNew = sensitivityOpts.defaultValue
+                }
+                if (isTS0601_PIR()) {
+                    def val = sensitivityNew
+                    cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
+                    if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
+                }
+                else if (isIAS()) {
+                    def val = sensitivityNew
+                    if (val != null) {
+                        logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
+                        cmds += sendSensitivityIAS(val)
+                    }
                 }
             }
         }
@@ -1992,7 +2021,15 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }    
 
-import com.hubitat.app.DeviceWrapper
+def getProfileKey(String valueStr) {
+    def key = null
+    deviceProfilesV2.each {  profileName, profileMap ->
+        if (profileMap.description.equals(valueStr)) {
+            key = profileName
+        }
+    }
+    return key
+}
 
 def test( val ) {
 /*    
@@ -2000,12 +2037,28 @@ def test( val ) {
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 */
 
-    setDeviceNameAndProfile(model = null, manufacturer = "_TZ3210_wuhzzfqg")
-    
 }
+
+def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>}
 
 def testResults()
 {
-
+//    def lastEvent = device.currentValue('battery') as Map
+    log.warn "===== currentState ===== "
+    def obj = device.currentState('battery', skipCache=true)
+    log.debug "currentState=${obj}"        // currentState=com.hubitat.hub.domain.State@50b168[dataType=NUMBER,date=Sun Mar 19 21:06:29 EET 2023,deviceId=3813,id=,name=battery,unit=%,value=98]
+    obj.each {log.trace "$it"}
+    log.trace "date = ${obj.getDate()}"
+    
+    log.warn "===== latestState ====="
+    def latest = device.latestState('battery', skipCache=true)
+    log.debug "latestState=${latest}"        // latestState=com.hubitat.hub.domain.State@c59764[dataType=NUMBER,date=Sun Mar 19 21:09:49 EET 2023,deviceId=3813,id=,name=battery,unit=%,value=98]
+    latest.each {log.trace "$it"}
+    log.trace "date = ${latest.getDate()}"
+    def unix = latest.getDate().getTime()
+    log.trace "unix=${unix}"
+    
+    log.info "battery latest state timeStamp is ${device.latestState('battery', skipCache=true).getDate().getTime()}"
+    log.info "battery current state timeStamp is ${device.currentState('battery', skipCache=true).getDate().getTime()}"
 }
 
