@@ -34,9 +34,12 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-19 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
+ * ver. 1.3.0  2023-03-21 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
+ *                                   removed state.lastBattery; 
  *
  *
+ *                                   TODO: manufactuer is not recognized sometimes!
+ *                                   TODO: sensitivity preference exceptions!
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
@@ -46,7 +49,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/19 11:58 PM"}
+def timeStamp() {"2023/03/21 9:33 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -274,8 +277,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
 // TODO : change 'model' to 'models' list;
 @Field static final Map deviceProfilesV2 = [
     "TS0202_4IN1"  : [
-            model         : "TS0202",
-            manufacturers : ["_TZ3210_zmy9hjay",  "_TYST11_i5j6ifxj", "_TYST11_7hfcudw5", "_TZ3210_rxqls8v0","_TZ3210_wuhzzfqg"],
+            models        : ["TS0202"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // pairing: double click!
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"],       
@@ -292,8 +294,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
-            model         : "TS0601",
-            manufacturers : ["_TZE200_7hfcudw5"],
+            models        : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
             ],
@@ -306,8 +307,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
 
     "TS0601_2IN1"  : [
-            model         : "TS0601",
-            manufacturers : ["_TZE200_3towulqd"],
+            models         : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"]          // https://www.aliexpress.com/item/1005004095233195.html
             ],
@@ -320,8 +320,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "TS0202_MOTION_IAS"   : [
-            model         : "TS0202",
-            manufacturers : ["_TZ3000_mcxw5ehu", "_TZ3000_msl6wxk9", "_TYZB01_dl7cejts", "_TZ3000_mmtwjmaq", "_TZ3000_otvn3lne", "_TYZB01_jytabjkb", "_TYZB01_ef5xlc9q", "_TYZB01_vwqnz1sn", "_TYZB01_2b8f6cio", "_TZE200_bq5c8xfe", "_TYZB01_qjqgmqxr", "_TYZB01_zwvaj5wy", "_TZ3000_bsvqrxru", "_TYZB01_tv3wxhcz", "_TYZB01_hqbdru35", "_TZ3000_tiwq83wk", "_TZ3000_ykwcwxmz", "_TZ3000_hktqahrq", "_TZ3000_6ygjfyll"],
+            models        : ["TS0202"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr        
@@ -352,8 +351,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "TUYATEC_RH3040"      : [
-            model         : "RH3040",
-            manufacturers : ["TUYATEC-53o41joc", "TUYATEC-b5g40alm", "TUYATEC-deetibst", "TUYATEC-bd5faf9p", "TUYATEC-zn9wyqtr", "TUYATEC-b3ov3nor", "TUYATEC-2gn2zf9e"],
+            models        : ["RH3040"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-53o41joc", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],           // 60 seconds reset period        
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b5g40alm", deviceJoinName: "TUYATEC RH3040 Motion Sensor"], 
@@ -372,8 +370,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
     ],
     
     "UNKNOWN"         : [
-        model         : "UNKNOWN",
-        manufacturers : [],
+        models        : ["UNKNOWN"],
         deviceJoinName: "Unknown device",
         capabilities  : ["motion": true],
         configuration : ["battery": true],
@@ -1415,13 +1412,15 @@ def checkDriverVersion() {
         updateTuyaVersion()
         initializeVars( fullInit = false ) 
         state.driverVersion = driverVersionAndTimeStamp()
+        
         if (state.lastPresenceState != null) state.remove('lastPresenceState')    // removed in version 1.0.6 
         if (state.hashStringPars != null)    state.remove('hashStringPars')       // removed in version 1.1.0
+        if (state.lastBattery != null)       state.remove('lastBattery')          // removed in version 1.3.0
+        
         if (isRadar() || isHumanPresenceSensorAIR()) {
             if (settings?.ignoreDistance == true ) {
                 device.deleteCurrentState('distance')
             }
-            state.remove('lastBattery')        // removed in version 1.0.7 for DC powered radars
             device.deleteCurrentState('battery')
             device.deleteCurrentState('tamper')
             device.deleteCurrentState('temperature')
@@ -1457,9 +1456,6 @@ void initializeVars( boolean fullInit = false ) {
     state.rxCounter = 0
     state.txCounter = 0
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (!isRadar()) {
-        if (state.lastBattery == null) state.lastBattery = "0"
-    }
     //
     if (fullInit == true || settings.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit == true || settings.txtEnable == null) device.updateSetting("txtEnable", true)
@@ -1592,7 +1588,6 @@ def getBatteryPercentageResult(rawValue) {
     //logDebug "getBatteryPercentageResult: rawValue = ${rawValue} -> ${value} %"
     if (value >= 0 && value <= 100) {
         sendBatteryEvent(value)
-        state.lastBattery = value
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring getBatteryPercentageResult (${rawValue})"
@@ -1625,7 +1620,6 @@ def sendBatteryVoltageEvent(rawValue) {
         result.isStateChange = true
         if (settings?.txtEnable) log.info "${result.descriptionText}"
         sendEvent(result)
-        state.lastBattery = result.value
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
@@ -1723,14 +1717,7 @@ def setPresent() {
     if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent ony once now - 2023-01-31
-        if (settings?.txtEnable) log.info "${device.displayName} is present"
-        if (!isRadar()) {
-            if (device.currentValue('battery', true) == 0 ) {
-                if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
-                }
-            }
-        }
+        logInfo "is present"
     }    
     state.notPresentCounter = 0    
 }
@@ -1941,37 +1928,51 @@ def updateTuyaVersion() {
     }
 }
 
-// called from  initializeVars( fullInit = true)
-def setDeviceNameAndProfile( model=null, manufacturer=null) {
-    String deviceName
-    def currentModelMap = null
-    def deviceModel        = model != null ? model : device.getDataValue('model')
-    def deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer')
+@Field static final String UNKNOWN =  'UNKNOWN'
+/*
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya Multi Sensor 4 In 1"],        // pairing: double click!
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya Multi Sensor 4 In 1"],       
+ 
+*/
+
+def getDeviceNameAndProfile( model=null, manufacturer=null) {
+    def deviceName         = UNKNOWN
+    def deviceProfile      = UNKNOWN
+    String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
+    String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     deviceProfilesV2.each { profileName, profileMap ->
-        if ((profileMap.model?.value as String) == (deviceModel as String)) {
-            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String))
-            {
-                currentModelMap = profileName
-                state.deviceProfile = currentModelMap
-                deviceName = deviceProfilesV2[currentModelMap].deviceJoinName
-                logInfo "FOUND exact match!  deviceName =${deviceName} profileName=${currentModelMap} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+        profileMap.fingerprints.each { fingerprint ->
+            if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
+                deviceProfile = profileName
+                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile].deviceJoinName ?: UNKNOWN
+                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : profileName=${deviceProfile} deviceName =${deviceName}"
+                return [deviceName, deviceProfile]
             }
         }
     }
+    if (deviceProfile == UNKNOWN) {
+        logWarn "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+    }
+    return [deviceName, deviceProfile]
+}
 
-    if (currentModelMap == null) {
+// called from  initializeVars( fullInit = true)
+def setDeviceNameAndProfile( model=null, manufacturer=null) {
+    def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
+    if (deviceProfile == null) {
         logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
-        state.deviceProfile = 'UNKNOWN'
+        state.deviceProfile = UNKNOWN
     }
-    if (deviceName != NULL) {
+    if (deviceName != NULL && deviceName != UNKNOWN  ) {
         device.setName(deviceName)
-        logInfo "device model ${deviceModel} manufacturer ${deviceManufacturer} deviceName was set to ${deviceName}"
+        logInfo "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} : was set <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
-        logWarn "device model ${deviceModel} manufacturer ${deviceManufacturer} was not found!"
-    }
-    return [deviceName, currentModelMap]
+        logWarn "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} was not found!"
+    }    
 }
+
 
 private String clusterLookup(Object cluster) {
     if (cluster) {
@@ -1994,7 +1995,17 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
 import com.hubitat.app.DeviceWrapper
 
 def test( val ) {
+/*    
     ArrayList<String> cmds = []
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
+*/
+
+    setDeviceNameAndProfile(model = null, manufacturer = "_TZ3210_wuhzzfqg")
+    
+}
+
+def testResults()
+{
+
 }
 
