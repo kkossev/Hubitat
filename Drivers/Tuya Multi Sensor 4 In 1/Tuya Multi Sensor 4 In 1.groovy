@@ -37,7 +37,7 @@
  * ver. 1.3.0  2023-03-21 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; catched sensitivity par exception; 
  *
- *
+ *                                   TODO: the automatic productProfile setting is not working when upgrading from 1.2.2 to 1.3.0 !!!
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
@@ -47,7 +47,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/21 11:58 PM"}
+def timeStamp() {"2023/03/21 11:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -95,7 +95,7 @@ metadata {
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["No selection", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         command "setPar", [
-                [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List/* ["STRING"]*/],
+                [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List],
                 [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
         ]
         if (_DEBUG == true) {
@@ -146,19 +146,19 @@ metadata {
             if (isLuxMeter()) {
                 input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 1)   
             }
-       }
+        }
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>", 
                    options: getDeviceProfilesMap() /*getDeviceProfiles()*/)
             input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             if (isRadar()) {
-                input (name: "ignoreDistance", type: "bool", title: "Ignore distance reports", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
-		        input ("radarSensitivity", "number", title: "Radar sensitivity (1..9)", description: "", range: "0..9", defaultValue: 7)   
-		        input ("detectionDelay", "decimal", title: "Detection delay, seconds", description: "", range: "0.0..120.0", defaultValue: 0.2)   
-		        input ("fadingTime", "decimal", title: "Fading time, seconds", description: "", range: "0.5..500.0", defaultValue: 60.0)   
-		        input ("minimumDistance", "decimal", title: "Minimum detection distance, meters", description: "", range: "0.0..9.5", defaultValue: 0.25)   
-		        input ("maximumDistance", "decimal", title: "Maximum detection distance, meters", description: "", range: "0.0..9.5", defaultValue: 8.0)   
+                input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
+		        input ("radarSensitivity", "number", title: "<b>Radar sensitivity (1..9)</b>", description: "", range: "0..9", defaultValue: 7)   
+		        input ("detectionDelay", "decimal", title: "<b>Detection delay, seconds</b>", description: "", range: "0.0..120.0", defaultValue: 0.2)   
+		        input ("fadingTime", "decimal", title: "<b>Fading time, seconds</b>", description: "", range: "0.5..500.0", defaultValue: 60.0)   
+		        input ("minimumDistance", "decimal", title: "<b>Minimum detection distance, meters</b>", description: "", range: "0.0..9.5", defaultValue: 0.25)   
+		        input ("maximumDistance", "decimal", title: "<b>Maximum detection distance, meters</b>", description: "", range: "0.0..9.5", defaultValue: 8.0)   
             }
             if (isHumanPresenceSensorAIR()) {
 		        input (name: "vacancyDelay", type: "number", title: "Vacancy Delay", description: "Select vacancy delay (0..1000), seconds", range: "0..1000", defaultValue: 10)   
