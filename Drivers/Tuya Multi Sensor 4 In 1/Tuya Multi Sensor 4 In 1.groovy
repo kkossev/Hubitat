@@ -34,19 +34,18 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-21 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
+ * ver. 1.3.0  2023-03-22 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; catched sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  *
- *                                   TODO: check _TZE200_3towulqd
- *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
  *                                   TODO: present state 'motionStarted' in a human-readable form.
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
+ *                                   TODO: implement ping() for TS0601 sensors (rtt)
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/22 12:24 PM"}
+def timeStamp() {"2023/03/22 2:45 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -534,7 +533,7 @@ def parse(String description) {
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
-    if (settings?.logEnable) log.debug "${device.displayName} parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         if (settings?.logEnable) log.debug "${device.displayName} Zone status: $description"
         parseIasMessage(description)    // TS0202 Motion sensor
@@ -728,11 +727,11 @@ def processTuyaCluster( descMap ) {
         def dp = zigbee.convertHexToInt(descMap?.data[2])                // "dp" field describes the action/message of a command frame
         def dp_id = zigbee.convertHexToInt(descMap?.data[3])             // "dp_identifier" is device dependant
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
-        if (settings?.logEnable) log.debug "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+        logDebug "Tuya cluster: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
             case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR and BlackSquareRadar
-                if (settings?.logEnable) log.debug "${device.displayName} (DP=0x01) motion event fncmd = ${fncmd}"
-                if (device.getDataValue('manufacturer') in ['_TZE200_3towulqd']) {    // 2-in-1 TS0601 motion flag is inverted!
+                logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
+                if (is2in1()) {    // 2-in-1 TS0601 motion flag is inverted!
                     handleMotion(motionActive = !fncmd)
                 }
                 else {
@@ -1281,9 +1280,12 @@ def illuminanceEvent( rawLux ) {
 }
 
 def illuminanceEventLux( lux ) {
-    if (device.currentValue("illuminance", true) == null ||  Math.abs(safeToInt(device.currentValue("illuminance")) - (lux as int)) >= settings?.luxThreshold) {
+    if (device.currentValue("illuminance", true) == null ||  Math.abs(safeToInt(device.currentValue("illuminance")) - (lux as int)) >= safeToInt(settings?.luxThreshold)) {
         sendEvent("name": "illuminance", "value": lux, "unit": "lx", "type": "physical", "descriptionText": "Illuminance is ${lux} Lux")
-        if (settings?.txtEnable) log.info "$device.displayName Illuminance is ${lux} Lux"
+        logInfo "Illuminance is ${lux} Lux"
+    }
+    else {
+        logDebug "Ignored illuminance event ${lux} % - change is less than ${safeToInt(settings?.luxThreshold)} threshold!"
     }
 }
 
@@ -2118,6 +2120,7 @@ def test( val ) {
     ArrayList<String> cmds = []
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 */
-    log.warn "state.deviceProfile = ${state.deviceProfile}"
+    log.warn "parse(${val})"
+    parse(val)
 }
 
