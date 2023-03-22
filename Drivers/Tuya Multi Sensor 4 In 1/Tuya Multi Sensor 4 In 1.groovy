@@ -35,7 +35,7 @@
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
  * ver. 1.3.0  2023-03-21 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
- *                                   removed state.lastBattery; catched sensitivity par exception; 
+ *                                   removed state.lastBattery; catched sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  *
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
@@ -46,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/22 11:19 AM"}
+def timeStamp() {"2023/03/22 12:24 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -214,6 +214,7 @@ def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 
 def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
+def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>}
 def is4in1() { return getModelGroup().contains("TS0202_4IN1") }
 def is3in1() { return getModelGroup().contains("TS0601_3IN1") }
 def is2in1() { return getModelGroup().contains("TS0601_2IN1") }
@@ -1356,6 +1357,9 @@ def updated() {
             logInfo "press F5 to refresh the page"
         }
     }
+    else {
+        logDebug "forcedProfile is not set"
+    }
         
     
     
@@ -2065,12 +2069,18 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
+    def dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN
+    def dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
     if (deviceName != NULL && deviceName != UNKNOWN  ) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
-        logInfo "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} : was set <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
+        //logDebug "before: forcedProfile = ${settings.forcedProfile} to be set to ${deviceProfilesV2[deviceProfile].description}"
+        device.updateSetting("forcedProfile", [value:deviceProfilesV2[deviceProfile].description, type:"enum"])
+        //pause(1)
+        //logDebug "after : forcedProfile = ${settings.forcedProfile}"
+        logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
-        logWarn "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} was not found!"
+        logWarn "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
     }    
 }
 
@@ -2109,28 +2119,5 @@ def test( val ) {
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 */
     log.warn "state.deviceProfile = ${state.deviceProfile}"
-}
-
-def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>}
-
-def testResults()
-{
-//    def lastEvent = device.currentValue('battery') as Map
-    log.warn "===== currentState ===== "
-    def obj = device.currentState('battery', skipCache=true)
-    log.debug "currentState=${obj}"        // currentState=com.hubitat.hub.domain.State@50b168[dataType=NUMBER,date=Sun Mar 19 21:06:29 EET 2023,deviceId=3813,id=,name=battery,unit=%,value=98]
-    obj.each {log.trace "$it"}
-    log.trace "date = ${obj.getDate()}"
-    
-    log.warn "===== latestState ====="
-    def latest = device.latestState('battery', skipCache=true)
-    log.debug "latestState=${latest}"        // latestState=com.hubitat.hub.domain.State@c59764[dataType=NUMBER,date=Sun Mar 19 21:09:49 EET 2023,deviceId=3813,id=,name=battery,unit=%,value=98]
-    latest.each {log.trace "$it"}
-    log.trace "date = ${latest.getDate()}"
-    def unix = latest.getDate().getTime()
-    log.trace "unix=${unix}"
-    
-    log.info "battery latest state timeStamp is ${device.latestState('battery', skipCache=true).getDate().getTime()}"
-    log.info "battery current state timeStamp is ${device.currentState('battery', skipCache=true).getDate().getTime()}"
 }
 
