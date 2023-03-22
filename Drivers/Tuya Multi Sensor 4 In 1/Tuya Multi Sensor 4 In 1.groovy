@@ -37,7 +37,6 @@
  * ver. 1.3.0  2023-03-21 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; catched sensitivity par exception; 
  *
- *                                   TODO: the automatic productProfile setting is not working when upgrading from 1.2.2 to 1.3.0 !!!
  *                                   TODO: check _TZE200_3towulqd
  *                                   TODO: add support for _TZE200_3towulqd 2-in-1 sensor new App firmware version
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
@@ -47,7 +46,7 @@
 */
 
 def version() { "1.3.0" }
-def timeStamp() {"2023/03/21 11:59 PM"}
+def timeStamp() {"2023/03/22 11:19 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -584,7 +583,7 @@ def parse(String description) {
             if (settings?.logEnable) log.info "${device.displayName} Tuya check-in (application version is ${descMap?.value})"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0004") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya device manufacturer is ${descMap?.value}"
+            if (settings?.logEnable) log.info "${device.displayName} received device manufacturer ${descMap?.value}"
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0007") {
             //def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
@@ -946,8 +945,11 @@ def processTuyaCluster( descMap ) {
                 else if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in °C
                     temperatureEvent( fncmd / 10.0 )
                 }
-                else { // 3in1
-                    if (settings?.logEnable) log.info "${device.displayName} Min Temp is: ${fncmd} (DP=0x6B)"  
+                else if (is3in1()) { // 3in1
+                    logDebug "Min Temp is: ${fncmd} (DP=0x6B)"  
+                }
+                else {
+                    logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6B)"  
                 }
                 break            
             case 0x6C : //  108 Tuya 4 in 1 -> humidity in %
@@ -957,8 +959,11 @@ def processTuyaCluster( descMap ) {
                 else if (is4in1()) {
                     humidityEvent (fncmd)
                 }
-                else { // 3in1
-                    if (settings?.logEnable) log.info "${device.displayName} Max Temp is: ${fncmd} (DP=0x6C)"  
+                else if (is3in1()) { // 3in1
+                    logDebug "(3in1) Max Temp is: ${fncmd} (DP=0x6C)"  
+                }
+                else {
+                    logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6C)"  
                 }
                 break
             case 0x6D :    // 109
@@ -1326,11 +1331,11 @@ def updated() {
     checkDriverVersion()
     ArrayList<String> cmds = []
     
-    if (settings?.txtEnable) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer <b>${device.getDataValue('manufacturer')}</b>"
-    if (settings?.txtEnable) log.info "${device.displayName} Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
+    logInfo "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>deviceProfile=${state.deviceProfile}</b>"
+    logInfo "Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
-        if (settings?.txtEnable) log.info "${device.displayName} Debug logging is will be turned off after 24 hours"
+        logInfo "Debug logging is will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
@@ -1342,8 +1347,9 @@ def updated() {
         device.deleteCurrentState('minimumDistance')
         device.deleteCurrentState('maximumDistance')
     }
-    
+
     if (settings?.forcedProfile != null) {
+        logDebug "state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
         if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
             logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
             state.deviceProfile = getProfileKey(settings?.forcedProfile)
@@ -2040,7 +2046,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
             if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                 deviceProfile = profileName
                 deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile].deviceJoinName ?: UNKNOWN
-                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : profileName=${deviceProfile} deviceName =${deviceName}"
+                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                 return [deviceName, deviceProfile]
             }
         }
@@ -2061,6 +2067,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
     }
     if (deviceName != NULL && deviceName != UNKNOWN  ) {
         device.setName(deviceName)
+        state.deviceProfile = deviceProfile
         logInfo "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} : was set <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
         logWarn "device model ${(model != null ? model : device.getDataValue('model') ?: UNKNOWN)} manufacturer ${(manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN)} was not found!"
@@ -2101,7 +2108,7 @@ def test( val ) {
     ArrayList<String> cmds = []
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 */
-
+    log.warn "state.deviceProfile = ${state.deviceProfile}"
 }
 
 def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>}
