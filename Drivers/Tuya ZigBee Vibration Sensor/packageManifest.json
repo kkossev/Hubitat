@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya ZigBee Vibration Sensor",
   "author": "Krassimir Kossev",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "minimumHEVersion": "2.1.9",
-  "dateReleased": "2022-03-02",
-  "releaseNotes": "ver 1.0.3 2022-02-28 - inital version\nver 1.0.4 2022-03-02  - 'acceleration' misspelled bug fix\nver 1.0.5 2022-03-03  - battery reporting\nver 1.0.6 2022-03-03 - Vibration Sensitivity",
+  "dateReleased": "2023-03-25",
+  "releaseNotes": "1.1.0 2023-03-07 - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj; IAS is initialized on configure();\n1.0.8 2022-11-08 - TS0210 _TZ3000_bmfw9ykl\n1.0.7 2022-05-12 - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS \n1.0.6 2022-03-03 - Vibration Sensitivity\n1.0.5 2022-03-03  - battery reporting\n1.0.4 2022-03-02  - 'acceleration' misspelled bug fix\n1.0.3 2022-02-28 - inital version",
   "drivers": [
     {
       "id": "7aa89d9c-bafd-487e-9eed-ade6c948e320",
