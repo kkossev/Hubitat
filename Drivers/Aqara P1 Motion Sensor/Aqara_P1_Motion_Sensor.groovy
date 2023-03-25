@@ -35,7 +35,8 @@
  * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
  * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
- * ver. 1.4.0 2023-03-16 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added add 'Works with ...'; added ping() and RTT
+ * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
+ * ver. 1.4.1 2023-03-25 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; 
  * 
  *                                 TODO: 
  *                                 TODO: reporting time configuration for the Lux sensor
@@ -48,8 +49,8 @@
  *
 */
 
-def version() { "1.4.0" }
-def timeStamp() {"2023/03/16 11:43 PM"}
+def version() { "1.4.1" }
+def timeStamp() {"2023/03/25 1:53 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -73,6 +74,7 @@ metadata {
         capability "Health Check"
         //capability "SignalStrength"    //lqi - NUMBER; rssi - NUMBER (not supported yet)
         
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "batteryVoltage", "string"
         attribute "rtt", "number" 
         attribute "roomState", "enum", [
@@ -135,7 +137,7 @@ metadata {
                 input (name: "motionSensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description: "<i>Sensor motion sensitivity</i>", defaultValue: 0, options: getSensitivityOptions())
             }
             if (isP1()) {
-                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "<i>Enable/disable LED blinking on motion detection<i>", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
+                input (name: "motionLED",  type: "enum", title: "<b>Enable/Disable LED</b>",  description: "<i>Enable/disable LED blinking on motion detection</i>", defaultValue: -1, options: ["0":"Disabled", "1":"Enabled" ])
             }
             if (isFP1()) {
                 // "Approaching induction" distance : far, medium, near            // https://www.reddit.com/r/Aqara/comments/scht7o/aqara_presence_detector_fp1_rtczcgq11lm/
@@ -952,9 +954,11 @@ def setPresent() {
     if ((state.rxCounter != null) && state.rxCounter <= 2) {
         return                    // do not count the first device announcement or binding ack packet as an online presence!
     }
-    powerSourceEvent()
+    //powerSourceEvent()
+    sendHealthStatusEvent("online")
+    // TODO - remove the powerSource manipulation below...
     if (device.currentValue('powerSource', true) in ['unknown', '?']) {
-        if (settings?.txtEnable) log.info "${device.displayName} is occupied"
+        if (settings?.txtEnable) log.info "${device.displayName} is online"
     }    
     state.notPresentCounter = 0
     unschedule('deviceCommandTimeout')
@@ -965,6 +969,8 @@ def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter >= presenceCountTreshold) {
+            sendHealthStatusEvent("offline")
+            // TODO  remove the powerSource manipulation below...
             if (!(device.currentValue('powerSource', true) in ['unknown'])) {
     	        powerSourceEvent("unknown")
                 logWarn "is not present!"
@@ -1013,12 +1019,17 @@ private void scheduleDeviceHealthCheck(int intervalMins) {
 void deviceCommandTimeout() {
     if (isFP1()) {
         logWarn 'no response received (device offline?)'
-        updateAttribute('healthStatus', 'offline')
+        sendHealthStatusEvent("offline")
         resetState()
     }
     else {
         logDebug 'no response received (sleepy debice)'
     }
+}
+
+def sendHealthStatusEvent(value) {
+    log.trace "healthStatus ${value}"
+    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
 def resetPresence() {
@@ -1175,13 +1186,14 @@ void initializeVars( boolean fullInit = false ) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
-    if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+    //if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
     
     updateAqaraVersion()
 }
 
 def installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
+    sendHealthStatusEvent("unknown")
     aqaraBlackMagic()
 }
 
@@ -1387,7 +1399,7 @@ boolean isCompatible(Integer minLevel) { //check to see if the hub version meets
 def updateAqaraVersion() {
     def application = device.getDataValue("application") 
     if (application != null) {
-        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application));
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));
         if (device.getDataValue("aqaraVersion") != str) {
             device.updateDataValue("aqaraVersion", str)
             logInfo "aqaraVersion set to $str"
