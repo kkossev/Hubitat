@@ -27,8 +27,11 @@
  *                                  added setIrrigationCapacity, setIrrigationMode; irrigationCapacity; irrigationDuration; 
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
- *  ver. 1.2.2 2023-03-12 kkossev - (dev. branch) _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
+ *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
+ *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'
  * 
+ *                                  TODO: 
+ *                                  TODO: scheduleDeviceHealthCheck() on preference change
  *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
  *                                  
@@ -39,8 +42,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.2" }
-def timeStamp() {"2023/03/12 10:41 PM"}
+def version() { "1.2.3" }
+def timeStamp() {"2023/03/26 9:24 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -237,6 +240,15 @@ metadata {
     ]
 ]    
 
+def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
+def getDeviceProfiles()      { deviceProfilesV2.keySet() }
+def isConfigurable(model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
+def getPowerSource(profile=null) { def ps = deviceProfilesV2["${profile ?: getModelGroup()}"]?.attributes?.powerSource; return ps != null && ps != [] ? ps : 'unknown' }
+def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
+def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
+def isSASWELL()              { return getModelGroup().contains("SASWELL") }
+def isBatteryPowered()       { return isGIEX() || isSASWELL()}
+
 // Constants
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 15
@@ -310,15 +322,6 @@ private getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ]
 private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
-
-def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
-def getDeviceProfiles()      { deviceProfilesV2.keySet() }
-def isConfigurable(model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
-def getPowerSource(profile=null) { def ps = deviceProfilesV2["${profile ?: getModelGroup()}"]?.attributes?.powerSource; return ps != null && ps != [] ? ps : null }
-def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
-def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
-def isSASWELL()              { return getModelGroup().contains("SASWELL") }
-def isBatteryPowered()       { return isGIEX() || isSASWELL()}
 
 def parse(String description) {
     checkDriverVersion()
@@ -912,6 +915,9 @@ def configure() {
             logInfo "press F5 to refresh the page"
         }
     }
+    if (getPowerSource() != (device.currentValue('powerSource') ?: 'unknown')) {
+        sendEvent(name: "powerSource", value: getPowerSource(), type: "digital") 
+    }
     
     if (settings?.powerOnBehaviour != null) {
         def modeName =  powerOnBehaviourOptions.find{it.key==settings?.powerOnBehaviour}
@@ -1093,9 +1099,7 @@ def setHealthStatusOnline() {
     state.states["notPresentCtr"]  = 0
     if (!((device.currentValue('healthStatus', true) ?: "unknown") in ['online'])) {   
         sendHealthStatusEvent('online')
-        if (getPowerSource() != null) {
-        	sendEvent(name: "powerSource", value: getPowerSource(), type: "digital") 
-        }
+      	sendEvent(name: "powerSource", value: getPowerSource(), type: "digital") 
         logInfo "is online"
     }
 }
@@ -1104,11 +1108,9 @@ def deviceHealthCheck() {
     def ctr = state.states["notPresentCtr"] ?: 0
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
+            logWarn "not present!"
             sendHealthStatusEvent("offline")
-            if (logEnable==true) log.warn "${device.displayName} not present!"
-            if (getPowerSource() != null) {
-    	        sendEvent(name: "powerSource", value: "unknown", type: "digital")
-            }
+   	        sendEvent(name: "powerSource", value: "unknown", type: "digital")
             if (isBatteryPowered()) {
                 if (safeToInt(device.currentValue('battery', true)) != 0) {
                     logWarn "${device.displayName} forced battery to '<b>0 %</b>"
@@ -1118,7 +1120,7 @@ def deviceHealthCheck() {
         }
     }
     else {
-        logDebug "${device.displayName} deviceHealthCheck - online (notPresentCounter=${ctr})"
+        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})"
     }
     state.states["notPresentCtr"] = ctr + 1
 }
