@@ -28,7 +28,7 @@
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
- *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn
+ *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  * 
  *                                  TODO: set device name from fingerprint 
  *                                  TODO: scheduleDeviceHealthCheck() on preference change
@@ -43,7 +43,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.3" }
-def timeStamp() {"2023/03/26 7:13 PM"}
+def timeStamp() {"2023/03/26 7:50 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -249,6 +249,7 @@ def getPowerSource(profile=null) { def ps = deviceProfilesV2["${profile ?: getMo
 def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
 def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
 def isSASWELL()              { return getModelGroup().contains("SASWELL") }
+def isLIDL()                 { return getModelGroup().contains("LIDL") }
 def isBatteryPowered()       { return isGIEX() || isSASWELL()}
 
 // Constants
@@ -345,7 +346,7 @@ def parse(String description) {
     if (event) {
         if (event.name ==  "switch" ) {
             if (logEnable==true) log.debug "${device.displayName} event ${event}"
-            switchEvent( event.value )
+            sendSwitchEvent( event.value )
         }
         else {
             if (txtEnable) {log.warn "${device.displayName} received <b>unhandled event</b> ${event.name} = $event.value"} 
@@ -414,7 +415,7 @@ def parse(String description) {
     } // descMap
 }
 
-def switchEvent( switchValue ) {
+def sendSwitchEvent( switchValue ) {
     def value = (switchValue == null) ? 'unknown' : (switchValue == 'on') ? 'open' : (switchValue == 'off') ? 'closed' : 'unknown'
     def map = [:] 
     boolean bWasChange = false
@@ -543,22 +544,23 @@ def parseZHAcommand( Map descMap) {
                                     logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                     sendEvent(name: 'waterMode', value: str, type: "physical")
                                 }
-                                else { // switch 
+                                else if (isGIEX() || isLIDL()) { // switch 
+                                    sendSwitchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
                                     if (settings?.autoSendTimer == true) {
-                                        switchEvent(value==0 ? "off" : "on")    // also SASWELL and LIDL
                                         // There is no way to disable the "Auto off" timer for when the valve is turned on manually
                                         // https://github.com/Koenkk/zigbee2mqtt/issues/13199#issuecomment-1239914073 
-                                        if (isGIEX() || isLIDL()) {
-                                            logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
-                                            runIn( 5, "sendIrrigationDuration")
-                                        }
+                                        logDebug "scheduled again to set the SASWELL autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
+                                        runIn( 5, "sendIrrigationDuration")
                                     }
+                                }
+                                else {
+                                    sendSwitchEvent(value==0 ? "off" : "on")    // TS0601
                                 }
                                 break
                             case "02" : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
                                 def timerState = timerStateOptions[value.toString()]
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
-                                switchEvent(value==0 ? "off" : "on")
+                                sendSwitchEvent(value==0 ? "off" : "on")
                                 sendEvent(name: 'timerState', value: timerState, type: "physical")
                                 if (settings?.autoSendTimer == true) {
                                     logDebug "scheduled again to set the GiEX autoOff (irrigation duration) timer to ${settings?.autoOffTimer} after 5 seconds"
@@ -1346,8 +1348,9 @@ def updateTuyaVersion() {
 }
 
 def test( description ) {
-   
+   // catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
     log.warn "testing <b>${description}</b>"
     parse(description)
 //    log.trace "getPowerSource()=${getPowerSource()}"
+    
 }
