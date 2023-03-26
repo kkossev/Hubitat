@@ -28,9 +28,9 @@
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
- *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'
+ *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs;
  * 
- *                                  TODO: 
+ *                                  TODO: set device name from fingerprint 
  *                                  TODO: scheduleDeviceHealthCheck() on preference change
  *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
@@ -43,7 +43,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.3" }
-def timeStamp() {"2023/03/26 9:24 AM"}
+def timeStamp() {"2023/03/26 10:29 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -162,11 +162,12 @@ metadata {
             ]
     ],
             
-    "TS0601_VALVE_ONOFF"  : [
+    "TS0601_VALVE_ONOFF"  : [            // model 'PM02D-TYZ' model: 'PF-PM02D-TYZ', vendor: 'IOTPerfect',
             model         : "TS0601",
-            manufacturers : ["_TZE200_vrjkcam9"],
+            manufacturers : ["_TZE200_vrjkcam9", "_TZE200_yxcgyjf1"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"]     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"],     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_yxcgyjf1"]
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0601",
             capabilities  : ["valve": true, "battery": false],
@@ -701,13 +702,30 @@ def parseZHAcommand( Map descMap) {
                                 if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
                                 if (logEnable==true) log.warn "map= ${descMap}"
                                 break
-                        }
+                        } // EF00 command swotch
                         break
+                    
+                    case 'EF01' :
+                        logInfo "EF01 timer time left /* (${cmd}) is: ${value} seconds */"
+                        //sendEvent(name: 'timerTimeLeft', value: value, type: "physical")
+                        break
+                    case 'EF02' :
+                        logInfo "EF02 timer_state (work state) /* (${cmd}) is: ${valueString} (${value}) */"
+                        //sendEvent(name: 'timerState', value: valueString, type: "physical")
+                        break
+                    case 'EF03' :
+                        logInfo "EF03 last valve open duration /* (${cmd}) is: ${value} seconds */"
+                        //sendEvent(name: 'lastValveOpenDuration', value: value, type: "physical")
+                        break
+                    case 'EF04' :
+                        logInfo "EF04 unknown (dp4?) /*(${cmd}) is: ${value} seconds*/"
+                        break
+                    
                     default :
                         if (logEnable==true) log.warn "${device.displayName} Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
                         break
                 } // switch (descMap.clusterId)
-            }  //command is read attribute response 01 or 02 (Tuya)
+            }  //command is read attribute response 01 or 02 (supported)
             break
         
         case "04" : //write attribute response
