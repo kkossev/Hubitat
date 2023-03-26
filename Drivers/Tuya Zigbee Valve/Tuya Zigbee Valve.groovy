@@ -28,7 +28,7 @@
  *                                  added extraTuyaMagic for Lidl TS0601 _TZE200_htnnfasr 'Parkside smart watering timer'
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
- *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs;
+ *  ver. 1.2.3 2023-03-26 kkossev - (dev.branch) TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn
  * 
  *                                  TODO: set device name from fingerprint 
  *                                  TODO: scheduleDeviceHealthCheck() on preference change
@@ -43,7 +43,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.3" }
-def timeStamp() {"2023/03/26 10:29 AM"}
+def timeStamp() {"2023/03/26 7:13 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -162,12 +162,13 @@ metadata {
             ]
     ],
             
-    "TS0601_VALVE_ONOFF"  : [            // model 'PM02D-TYZ' model: 'PF-PM02D-TYZ', vendor: 'IOTPerfect',
+    "TS0601_VALVE_ONOFF"  : [            // model 'PM02D-TYZ' model: 'PF-PM02D-TYZ', vendor: 'IOTPerfect', IOTPerfect PF-PM02D-TYZ   https://www.aliexpress.com/item/1005002822008845.html 
             model         : "TS0601",
-            manufacturers : ["_TZE200_vrjkcam9", "_TZE200_yxcgyjf1"],
+            manufacturers : ["_TZE200_vrjkcam9", "_TZE200_yxcgyjf1", "_TZE200_d0ypnbvn"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vrjkcam9"],     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_yxcgyjf1"]
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrjkcam9"],     // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yxcgyjf1"],     // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_d0ypnbvn"]      // Model: PF-PM02D-TYZ https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/113?u=kkossev
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0601",
             capabilities  : ["valve": true, "battery": false],
@@ -1345,6 +1346,8 @@ def updateTuyaVersion() {
 }
 
 def test( description ) {
+   
     log.warn "testing <b>${description}</b>"
     parse(description)
+//    log.trace "getPowerSource()=${getPowerSource()}"
 }
