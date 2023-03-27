@@ -49,7 +49,7 @@
  *  ver. 1.7.0 2023-01-29 kkossev - added healthStatus;
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
- *  ver. 1.7.3 2023-03-37 kkossev - (dev.branch) Third Reality current divisor fix; added frequency polling; removed presence capability'; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline
+ *  ver. 1.7.3 2023-03-27 kkossev - (dev.branch) Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline
  *
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
  *                                 TODO: 
