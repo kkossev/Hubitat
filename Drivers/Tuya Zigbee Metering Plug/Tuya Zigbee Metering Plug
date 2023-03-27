@@ -48,7 +48,8 @@
  *  ver. 1.6.6 2023-01-20 kkossev - Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
  *  ver. 1.7.0 2023-01-29 kkossev - added healthStatus;
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
- *  ver. 1.7.2 2023-02-16 kkossev - (dev.branch) InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
+ *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
+ *  ver. 1.7.3 2023-03-37 kkossev - (dev.branch) Third Reality current divisor fix; added frequency polling; removed presence capability'; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline
  *
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
  *                                 TODO: 
@@ -58,8 +59,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.2" }
-def timeStamp() {"2023/02/16 6:01 PM"}
+def version() { "1.7.3" }
+def timeStamp() {"2023/03/27 11:55 PM"}
 
 @Field static final Boolean debug = false
 
@@ -74,7 +75,6 @@ metadata {
         capability "Outlet"
         capability "Refresh"
         capability "Sensor"
-        capability "PresenceSensor"
         capability "Health Check"
         
         
@@ -84,7 +84,7 @@ metadata {
         attribute "html", "string"
         attribute "hourlyEnergy", "NUMBER"
         //attribute "dailyEnergy", "string"
-        attribute "healthStatus", "enum", ["offline", "online"]
+        attribute "healthStatus", "enum", ["unknown", "offline", "online"]
         
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
@@ -178,6 +178,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"E1C-NB7", manufacturer:"Jasco Products", deviceJoinName: "Jasco Outlet"       // Check - cluster 0x0B05 ???
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43132", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43132
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B05", outClusters:"000A,0019", model:"43078", manufacturer:"Jasco Products", deviceJoinName: "Enbrighten Outlet"    //Enbrighten In-Wall Smart Outlet With Energy Monitoring 43078
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,0702", outClusters:"0003,000A,0019", manufacturer:"Jasco", model: "45853", deviceJoinName: "GE ZigBee Plug-In Switch"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,0702", outClusters:"000A,0019", manufacturer:"Jasco", model: "45856", deviceJoinName: "GE ZigBee In-Wall Switch"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0005,0006,0B04,0B05,0702", outClusters:"0003,000A,0B05,0019", model:"SZ-ESW01-AU", manufacturer:"Sercomm Corp.", deviceJoinName: "Telstra Outlet"      // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0005,0006,0B04,0B05,0702", outClusters:"0003,000A,0B05,0019", model:"SZ-ESW01", manufacturer:"Sercomm Corp.", deviceJoinName: "Sercomm SZ-ESW01"      // 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0002,0003,0004,0005,0006,0009,0B04,0702", outClusters:"0019,000A,0003,0406", model:"SmartPlug51AU", manufacturer:"Aurora", deviceJoinName: "Aurora SmartPlug"
@@ -260,14 +262,16 @@ metadata {
 @Field static final String ENERGY = "Energy"
 @Field static final String VOLTAGE = "Voltage"
 @Field static final String AMPERAGE = "Amperage"
+@Field static final String FREQUENCY = "Frequency"
+@Field static final String POWER_FACTOR = "PowerFactor"
 
 // "energyMode"
 @Field static final Map energyModeOptions = [     
     "DISABLED":    "Disabled (Energy and costs will not be reported)", 
     "POLLED":      "Enabled  (Energy is reported by polling the plug [most of Tuya's models])",
-    "REPORTED":    "Enabled  (Energy is reported automatically by smart plugs  that do not require polling)"//,
-/*    "3":"Enabled  (Energy is calculated from the Power reading multiplied by the time)", */
-/*    "FIXED":"Enabled  (Energy is calculated from the fixed Power consumption multiplied by the time)" */
+    "REPORTED":    "Enabled  (Energy is reported automatically by smart plugs  that do not require polling)"//',
+//  "3":           "Enabled  (Energy is calculated from the Power reading multiplied by the time)", 
+//  "FIXED":       "Enabled  (Energy is calculated from the fixed Power consumption multiplied by the time)"
 ]
 
 @Field static final Map develcoInterfaceMode = [   
@@ -307,9 +311,9 @@ private boolean isThirdReality() { device.getDataValue("manufacturer") == "Third
 
 private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }    // Tuya :  energyDiv = 100
-private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || isThirdReality() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
+private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
-private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : 10 }
+private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : isThirdReality() ? 1 : 10 }
 private int getPowerFactorDiv() { isDinRail() ? 1000 : 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -593,6 +597,10 @@ def switchEvent( value ) {
 }
 
 def voltageEvent( voltage, isDigital=false ) {
+    if (settings.reportVoltage != true) {
+        logDebug "ignored voltageEvent (${voltage}) - reportVoltage is disabled"
+        return
+    }    
     def map = [:] 
     map.name = "voltage"
     map.value = (voltage + 0.05) as int
@@ -602,7 +610,7 @@ def voltageEvent( voltage, isDigital=false ) {
     if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastVoltage = device.currentValue("voltage", true) ?: 0
     if ((Math.abs((voltage as int) - (lastVoltage as int)) >= (voltageThreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
-        if (settings?.reportVoltage == true) {
+        if (settings.reportVoltage == true) {
             logInfo "${map.descriptionText}"
             sendEvent(map)
             runIn( 1, formatAttrib, [overwrite: true])    
@@ -614,6 +622,10 @@ def voltageEvent( voltage, isDigital=false ) {
 }
 
 def frequencyEvent( frequency, isDigital=false ) {
+    if (settings.reportAmperage != true) {
+        logDebug "ignored frequencyEvent (${frequency}) - reportAmperage is disabled"
+        return
+    }
     def map = [:] 
     map.name = "frequency"
     map.value = frequency
@@ -633,6 +645,10 @@ def frequencyEvent( frequency, isDigital=false ) {
 }
 
 def powerFactorEvent( pf, isDigital=false ) {
+    if (settings.reportAmperage != true) {
+        logDebug "ignored powerFactorEvent (${pf}) - reportAmperage is disabled"
+        return
+    }    
     def map = [:] 
     map.name = "powerFactor"
     map.value = pf
@@ -652,6 +668,10 @@ def powerFactorEvent( pf, isDigital=false ) {
 }
 
 def powerEvent( power, isDigital=false ) {
+    if (settings.reportPower != true) {
+        logDebug "ignored powerEvent (${power}) - reportPower is disabled"
+        return
+    }
     def map = [:] 
     map.name = "power"
     map.value = power
@@ -677,6 +697,10 @@ def powerEvent( power, isDigital=false ) {
 }
 
 def amperageEvent( amperage, isDigital=false ) {
+    if (settings.reportAmperage == true) {
+        logDebug "ignored amperageEvent (${amperage}) - reportAmperage is disabled"
+        return
+    }
     def map = [:] 
     map.name = "amperage"
     map.value = amperage
@@ -698,6 +722,10 @@ def amperageEvent( amperage, isDigital=false ) {
 }
 
 def energyEvent( energy_total, isDigital=false ) {
+    if (! isEnergyEnabled()) {
+        logDebug "ignored energyEvent (${energy_total}) - isEnergyEnabled is ${isEnergyEnabled()}"
+        return
+    }
     def map = [:] 
     if (isDigital == false) {
         state.lastEnergyRaw = energy_total
@@ -772,8 +800,18 @@ def hourlyEnergyEvent( hourlyEnergy=null, isDigital=true ) {
     map.type = isDigital == true ? "digital" : "physical"
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    logInfo "${map.descriptionText}"     // sent in the energy event
-    sendEvent(map)
+    if (! isEnergyEnabled()) {
+        logDebug "ignored hourlyEnergyEvent (${map.value}) - isEnergyEnabled is ${isEnergyEnabled()}"
+        return
+    }
+    else if ((device.currentValue('healthStatus') != 'online')) {
+        logDebug "ignored hourlyEnergyEvent (${map.value}) - healthStatus is ${device.currentValue('healthStatus')}"
+        return
+    }
+    else {
+        logInfo "${map.descriptionText}"     // sent in the energy event
+        sendEvent(map)
+    }
 }
 
 
@@ -1090,7 +1128,7 @@ def parseZHAcommand( Map descMap) {
                             case "75" : // hochTotalReverseActivePower: 117
                             case "76" : // hochHistoricalVoltage: 118
                             case "77" : // hochHistoricalCurrent: 119
-                                log.trace "${device.displayName} cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8)}"
+                                logDebug "cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8)}"
                                 break
                             default :
                                 if (logEnable==true) log.warn "${device.displayName} Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
@@ -1332,7 +1370,7 @@ def poll( refreshAll = false ) {
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
             logDebug "polling all 0x0B04 attributes"
-            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :ep], delay=200)    // Power, Voltage and Amperage at once.
+            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508, 0x0300], [destEndpoint :ep], delay=200)    // Power, Voltage and Amperage at once. Frequency added 03/27/2023
         }
     }
     else {
@@ -1340,8 +1378,11 @@ def poll( refreshAll = false ) {
             cmds += zigbee.electricMeasurementPowerRefresh()    // Power ( cluster 0B04, attr. 050B )
         if (state.voltagePollingSupported == true && settings?.reportVoltage == true)
             cmds += zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint :ep], delay=200)        // voltage
-        if (state.currentPollingSupported == true  && settings?.reportAmperage == true)
-            cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :ep], delay=200)        // current
+        if (state.currentPollingSupported == true  && settings?.reportAmperage == true) {
+            cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :ep], delay=100)        // current
+            cmds += zigbee.readAttribute(0x0B04, 0x0300, [destEndpoint :ep], delay=200)        // frequency
+            cmds += zigbee.readAttribute(0x0B04, 0x0510, [destEndpoint :ep], delay=200)        // powerFactor
+        }
     }    
     if (state.energyPollingSupported == true && refreshAll == true ) {
         cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint :ep], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
@@ -1393,10 +1434,13 @@ def fixOtherTuyaOddities() {
         cmds +=   ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
         cmds +=  ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0B04 {${device.zigbeeId}} {}", "delay 252", ]
         //int intMinTime = 60; int intMaxTime = 3600; 
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1285 33 60 3600 {0500} {}", "delay 253", ]        // zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, 5)    // voltage
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1288 33 60 3600 {3200} {}", "delay 254", ]        // zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, 50)    // amperage
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1291 41 60 3600 {0A00} {}", "delay 255", ]        // zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, 10)    // power
-        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 1794 0 37 60 3600 {010000000000} {}", "delay 256", ]    //zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, 1)    // energy
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1285 33 60 3600 {0500} {}", "delay 253", ]        // voltage //zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, 5)    // voltage
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1288 33 60 3600 {3200} {}", "delay 254", ]        // current //zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, 50)    // amperage
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1291 41 60 3600 {0A00} {}", "delay 255", ]        // power //zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, 10)    // power
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 1794 0 37 60 3600 {010000000000} {}", "delay 256", ]   // energy //zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, 1)    // energy
+        if (!isTuyaSpecificCluster()) {
+            cmds += zigbee.configureReporting(0x0B04, 0x0300, DataType.UINT16, 5, 3600, 1, [destEndpoint :0x01 ], delay=257)
+        }
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
         cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
         cmds += zigbee.readAttribute(0x0000, 0x0001, [destEndpoint : 0x01], delay=200)    // App version
@@ -1443,16 +1487,23 @@ def configure() {
         device.deleteCurrentState("energyDuration")
         device.deleteCurrentState("hourlyEnergy")
     }
-    if (reportPower == false) {
+    if (settings.reportPower == false) {
         device.deleteCurrentState("power")
     }
-    if (reportVoltage == false) {
+    if (settings.reportVoltage == false) {
         device.deleteCurrentState("voltage")
     }
-    if (reportAmperage == false) {
+    if (settings.reportAmperage == false) {
         device.deleteCurrentState("amperage")
+        device.deleteCurrentState("frequency")
+        device.deleteCurrentState("powerFactor")
     }
-
+    if (settings.attribEnable == false) {
+        log.warn "deleteCurrentState html"
+        device.deleteCurrentState("html")
+    }
+    
+    
     if (autoReportingEnabled == true ) {
         if (isEnergyEnabled()) {    // TODO - only when automatic reporting option is selected! // TODO: research on how to disable automatic reporting
             cmds += configureReporting("Write", ENERGY,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), energyThreshold.toString(), sendNow=false)
@@ -1465,10 +1516,13 @@ def configure() {
         }
         if (reportAmperage == true) {
             cmds += configureReporting("Write", AMPERAGE,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), amperageThreshold.toString(), sendNow=false)
+            cmds += configureReporting("Write", FREQUENCY, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
+            cmds += configureReporting("Write", POWER_FACTOR, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
         }
     }
     else {
-        if (logEnable==true) log.info "${device.displayName} Automatic reporting is disabled!"
+        if (logEnable==true) log.info "${device.displayName} Automatic reporting configuration is skipped!"
+        // TODO - actually disable the automatic reporting !
     }
     //
     if (isFrientEnergyMonitor() == true) {
@@ -1540,9 +1594,11 @@ def updated(){
     if (attribEnable == true ) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
+    /* changed in ver 1.7.3. 03/27/2023 - do not send empty html attribute - will this break anything?
     else {
         sendEvent(name: "html", value: "<table></table>", isChanged: true)
     }
+    */
     formatAttrib()
     configure()
 }
@@ -1668,7 +1724,7 @@ def checkDriverVersion() {
         if (state.lastEnergy != null) state.remove("lastEnergy")
         if (state.lastPower != null) state.remove("lastPower")
         if (state.lastPresenceState != null) state.remove("lastPresenceState")
-        
+        device.deleteCurrentState("presence")    // completely removed in ver 1.7.3
         state.driverVersion = driverVersionAndTimeStamp()
         
         runIn(1, 'initializeVars',  [overwrite: true])
@@ -1720,8 +1776,7 @@ def powerRefresh() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if (device.currentValue("presence", true) != "present" || device.currentValue("healthStatus", true) != "online") {
-    	sendEvent(name: "presence", value: "present") 
+    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
         runIn( 1, formatAttrib, [overwrite: true])    
     }
@@ -1733,8 +1788,7 @@ def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter > presenceCountThreshold) {
-            if (device.currentValue("presence", true) != "not present" || device.currentValue("healthStatus", true) != "offline" ) {
-    	        sendEvent(name: "presence", value: "not present")
+            if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
                 sendHealthStatusEvent("offline")
                 if (logEnable==true) log.warn "${device.displayName} not present!"
                 runIn( 1, formatAttrib, [overwrite: true])    
@@ -1995,7 +2049,7 @@ def configureReporting(String operation, String measurement,  String minTime, St
             if (operation == "Write") {
                 if (isHeiman()) {intDelta = intDelta * 100}          // Heiman "SmartPlug"
                 else if (isSercomm()) {intDelta = intDelta * 125}    // Telstra smart plug 1v = 125
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
+                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, intDelta)
             }
             cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :ep], 250)
             break
@@ -2003,9 +2057,21 @@ def configureReporting(String operation, String measurement,  String minTime, St
             if (operation == "Write") {
                 if (isHeiman() || isDevelco()) {intDelta = (intDelta / 10) as int}  
                 if (intDelta < 1) {intDelta = 1}
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, intDelta)    // bug fixes in ver 1.6.0 - thanks @guyee
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, intDelta)
             }
             cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :ep], 250)
+            break
+        case FREQUENCY :    // added 03/27/2023
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, intMinTime, intMaxTime, intDelta)
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0300, [destEndpoint :ep], 250)
+            break
+        case POWER_FACTOR : // added 03/27/2023
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0510,  DataType.UINT16, intMinTime, intMaxTime, intDelta)
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0510, [destEndpoint :ep], 250)
             break
         default :
             break
@@ -2113,7 +2179,9 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
 
 void formatAttrib() {
     if (attribEnable == false) {
-        sendEvent(name: "html", value: "<table></table>", isChanged: false)        
+        /* changed in ver 1.7.3. 03/27/2023 - do not send empty html attribute - will this break anything?
+        sendEvent(name: "html", value: "<table></table>", isChanged: false)     
+        */
         return
     }
     if (settings?.logEnable) log.debug "formatAttrib"
