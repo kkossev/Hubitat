@@ -50,6 +50,7 @@
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - (dev.branch) Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
+ *                                  Frient freq. divisor fix; added  Instantaneous Demand (power) configuration;
  *
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
  *                                 TODO: 
@@ -60,7 +61,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.3" }
-def timeStamp() {"2023/03/28 7:42 AM"}
+def timeStamp() {"2023/03/28 12:59 PM"}
 
 @Field static final Boolean debug = false
 
@@ -99,7 +100,7 @@ metadata {
             command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for my OSRAM plug only? :( 
             command "configureReporting", [ 
                 [name: "operation*",   type: "ENUM", constraints: ["--- Select ---", "Read", "Write"]],
-                [name: "measurement*", type: "ENUM", constraints: ["--- Select ---", ONOFF, ENERGY, POWER, VOLTAGE, AMPERAGE], description: "Select measurement to configure"],
+                [name: "measurement*", type: "ENUM", constraints: ["--- Select ---", ONOFF, ENERGY, POWER, INST_POWER, VOLTAGE, AMPERAGE, FREQUENCY, POWER_FACTOR], description: "Select measurement to configure"],
                 [name: "Minimum Reporting Interval (seconds)", type: "STRING", defaultValue : "30", description: "Select Minimum reporting time (in seconds)"],
                 [name: "Maximum Reporting Interval (seconds)", type: "STRING", defaultValue : "900", description: "Select Maximum reporting time (in seconds)"],
                 [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
@@ -259,6 +260,7 @@ metadata {
 @Field static final String UNKNOWN = "UNKNOWN"
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
+@Field static final String INST_POWER = "InstPower"
 @Field static final String ENERGY = "Energy"
 @Field static final String VOLTAGE = "Voltage"
 @Field static final String AMPERAGE = "Amperage"
@@ -313,7 +315,7 @@ private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoPr
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }    // Tuya :  energyDiv = 100
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { isFrientOutlet()? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
-private int getFrequencyDiv() { isTuyaSpecificCluster() ? 100 : isThirdReality() ? 1 : 10 }
+private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdReality() ? 1F : 10F }
 private int getPowerFactorDiv() { isDinRail() ? 1000 : 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -697,7 +699,7 @@ def powerEvent( power, isDigital=false ) {
 }
 
 def amperageEvent( amperage, isDigital=false ) {
-    if (settings.reportAmperage == true) {
+    if (settings.reportAmperage != true) {
         logDebug "ignored amperageEvent (${amperage}) - reportAmperage is disabled"
         return
     }
@@ -1503,7 +1505,6 @@ def configure() {
         device.deleteCurrentState("powerFactor")
     }
     if (settings.attribEnable == false) {
-        log.warn "deleteCurrentState html"
         device.deleteCurrentState("html")
     }
     
@@ -1570,7 +1571,7 @@ def autoCron( timeInSeconds ) {
 
 // This method is called when the preferences of a device are updated.
 def updated(){
-    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model} presence: ${device.currentValue("presence", true)} AlwaysOn is <b>${alwaysOn}</b> "
+    if (txtEnable==true) log.info "${device.displayName} Updating ${device.getLabel()} (${device.getName()}) model ${state.model}"
     if (txtEnable==true) log.info "${device.displayName} Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff, [overwrite: true, misfire: "ignore"])    // turn off debug logging after 24 hours
@@ -2012,7 +2013,11 @@ def identify() {
 	return cmds;
 }
 
-def configureReporting(String operation, String measurement,  String minTime, String maxTime, String delta, Boolean sendNow=true ) {
+def disableReporting(String measurement, Boolean sendNow=true) {
+    
+}
+
+def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
     int intMinTime = safeToInt(minTime)
     int intMaxTime = safeToInt(maxTime)
     int intDelta = safeToInt(delta)
@@ -2040,6 +2045,14 @@ def configureReporting(String operation, String measurement,  String minTime, St
                 // TODO !!!!!!!
             }
             cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :ep], 250)
+            break
+        case INST_POWER :        // 0x702:0x400
+            if (operation == "Write") {
+                if (isHeiman()) {intDelta = intDelta * 10}    // Heiman "SmartPlug"
+                // TODO - check if DataType 0x29 is used for power configuration for Samsung and CentraLite plugs ... 
+                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, intMinTime, intMaxTime, intDelta)
+            }
+            cmds += zigbee.reportingConfiguration(0x0702, 0x0400, [destEndpoint :ep], 250)
             break
         case POWER :        // Active power default delta = 1
             if (operation == "Write") {
