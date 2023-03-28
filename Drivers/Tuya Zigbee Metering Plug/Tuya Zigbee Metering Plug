@@ -61,7 +61,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.3" }
-def timeStamp() {"2023/03/28 12:59 PM"}
+def timeStamp() {"2023/03/28 7:08 PM"}
 
 @Field static final Boolean debug = false
 
@@ -2014,13 +2014,7 @@ def identify() {
 }
 
 def disableReporting(String measurement, Boolean sendNow=true) {
-}
-
-// Example usage
-def myDevice = zigbee.getDevice('my-device-id')
-disablePowerAndEnergyReporting(myDevice)
-
-*/
+    // TODO
 }
 
 def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
