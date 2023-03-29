@@ -15,7 +15,7 @@
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
  * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
- * ver. 1.0.3  2023-02-25 kkossev  - (dev. branch) added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
+ * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  *
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contactif not supported by the device profile
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
