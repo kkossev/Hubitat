@@ -34,18 +34,22 @@
  * ver. 1.2.0  2023-02-07 kkossev  - healthStatus; supressed repetative Radar detection delay and Radar fading time Info messages in the logs; logsOff missed when hub is restarted bug fix; capability 'Health Check'; _TZE200_3towulqd (2in1) new firmware versions fix for motion; 
  * ver. 1.2.1  2023-02-10 kkossev  - reverted the unsuccessful changes made in the latest 1.2.0 version for _TZE200_3towulqd (2in1); added _TZE200_v6ossqfy as BlackSquareRadar; removed the wrongly added TUYATEC T/H sensor...
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
- * ver. 1.3.0  2023-03-22 kkossev  - (dev.branch)  '_TYST11_7hfcudw5' moved to 3-in-1 group'; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; IAS sensitivity setting OK; IAS keep time settings OK; added tuyaVersion; added delayed battery event; 
- *                                   removed state.lastBattery; catched sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
+ * ver. 1.3.0  2023-03-22 kkossev  -'_TYST11_7hfcudw5' moved to 3-in-1 group; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; added tuyaVersion; added delayed battery event; 
+ *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
+ * ver. 1.3.1  2023-03-29 kkossev  - (dev. branch) added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; 
  *
+ *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
+ *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
  *                                   TODO: present state 'motionStarted' in a human-readable form.
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
  *                                   TODO: implement ping() for TS0601 sensors (rtt)
+ *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.0" }
-def timeStamp() {"2023/03/22 2:45 PM"}
+def version() { "1.3.1" }
+def timeStamp() {"2023/03/29 12:43 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -175,6 +179,9 @@ metadata {
             if (isRadar()) {
                 input (name: "parEvents", type: "bool", title: "Send Event when parameters change", description: "<i>Enable only when the SetPar() custom command is used in RM or webCoRE</i>", defaultValue: false)
             }
+            input (name: "invertMotion", type: "bool", title: "<b>Invert Motion Active/Not Active</b>", description: "<i>Some Tuya motion sensors may report the motion active/inactive inverted...</i>", defaultValue: false)
+
+            
         }
     }
 }
@@ -731,12 +738,8 @@ def processTuyaCluster( descMap ) {
         switch (dp) {
             case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR and BlackSquareRadar
                 logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
-                if (is2in1()) {    // 2-in-1 TS0601 motion flag is inverted!
-                    handleMotion(motionActive = !fncmd)
-                }
-                else {
-                    handleMotion(motionActive = fncmd)
-                }
+                // 03/29/2023 settings.invertMotion handles the 2-in-1 TS0601 wierness ..
+                handleMotion(motionActive = fncmd)
                 break
             case 0x02 :
                 if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
@@ -764,22 +767,34 @@ def processTuyaCluster( descMap ) {
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
                     if (settings?.parEvents == true) sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
-                else {        // also battery level for TS0202 
+                else {        // also battery level for TS0202 ; battery1 for Fantem 4-in-1 (100% or 0% )
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )                    
                 }
                 break
             
-            // case 0x05 : tamper alarm for TS0202 ?
+            case 0x05 :     // tamper alarm for TS0202 4-in-1
+                def value = fncmd==0 ? 'clear' : 'detected'
+                logInfo "${device.displayName} tamper alarm is ${value} (dp=05,fncmd=${fncmd})"
+             	sendEvent(name : "tamper",	value : value, isStateChange : true)
+                break
             
             case 0x06 :
                 if (isRadar()) {
                     if (settings?.logEnable == true || (settings?.parEvents == true && radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
                     if (settings?.parEvents == true) sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
                 }
-                else {
+                else {    // TODO liminance for 4-in-1 !!!
                     logWarn "non-radar event ${dp} fncmd = ${fncmd}"
                 }
+                break
+            case 0x07 : // temperature for 4-in-1 (no data)
+                logDebug "4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
+                temperatureEvent( fncmd / 10.0 )
+                break
+            case 0x08 : // humidity for 4-in-1 (no data)
+                logDebug "4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
+                humidityEvent( fncmd )
                 break
             case 0x09 :
                 if (isRadar()) {
@@ -789,12 +804,12 @@ def processTuyaCluster( descMap ) {
                     }
                 }
                 else {
-                    // sensitivity for TS0202 and 2in1 _TZE200_3towulqd 
+                    // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd 
                     logInfo "received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
                     device.updateSetting("sensitivity", [value:fncmd.toString(), type:"enum"])                
                 }
                 break
-            case 0x0A : // (10) keep time for TS0202 and 2in1 _TZE200_3towulqd
+            case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
                 logInfo "Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
                 device.updateSetting("keepTime", [value:fncmd.toString(), type:"enum"])                
                 break
@@ -848,8 +863,8 @@ def processTuyaCluster( descMap ) {
                 else if (isBlackSquareRadar()) {    // non-presence time in minutes
                     leaveTimeEvent(fncmd)
                 }
-                else if (is4in1()) {    // // case 102 //reporting time for 4 in 1 
-                    if (settings?.txtEnable) log.info "${device.displayName} reporting time is ${fncmd}"
+                else if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1 
+                    logInfo "4-in-1 reporting time interval is ${fncmd}"
                 }
                 else {     // battery level for 3 in 1;  
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -888,11 +903,11 @@ def processTuyaCluster( descMap ) {
                 else if (isHumanPresenceSensorScene()) { // detection data  for TuYa Radar Sensor with scene
                     if (settings?.logEnable) log.info "${device.displayName} radar detection data is ${fncmd}"
                 }
-                else if (is4in1()) {    // case 104: // 0x68 temperature calibration
+                else if (is4in1()) {    // case 104: // 0x68 temperature compensation
                     def val = fncmd;
                     // for negative values produce complimentary hex (equivalent to negative values)
                     if (val > 4294967295) val = val - 4294967295;                    
-                    if (settings?.txtEnable) log.info "${device.displayName} temperature calibration is ${val / 10.0}"
+                    logInfo "4-in-1 temperature calibration is ${val / 10.0}"
                 }
                 else {    //  Tuya 3 in 1 (104) -> temperature in °C
                     temperatureEvent( fncmd / 10.0 )
@@ -911,10 +926,10 @@ def processTuyaCluster( descMap ) {
                     // trsfTumbleSwitch for TuYa Radar Sensor with fall function
                     if (settings?.txtEnable) log.info "${device.displayName} Tumble Switch (dp=69) is ${fncmd}"
                 }
-                else if (is4in1()) {    // case 105:// 0x69 humidity calibration
+                else if (is4in1()) {    // case 105:// 0x69 humidity calibration (compensation)
                     def val = fncmd;
                     if (val > 4294967295) val = val - 4294967295;                    
-                    if (settings?.txtEnable) log.info "${device.displayName} humidity calibration is ${val}"                
+                    logInfo "4-in-1 humidity calibration is ${val}"                
                 }
                 else {    //  Tuya 3 in 1 (105) -> humidity in %
                     humidityEvent (fncmd)
@@ -929,10 +944,10 @@ def processTuyaCluster( descMap ) {
                     // trsfTumbleAlarmTime
                     if (settings?.txtEnable) log.info "${device.displayName} Tumble Alarm Time (dp=6A) is ${fncmd}"
                 }
-                else if (is4in1()) {    // case 106: // 0x6a lux calibration
+                else if (is4in1()) {    // case 106: // 0x6a lux calibration (compensation)
                     def val = fncmd;
                     if (val > 4294967295) val = val - 4294967295;                    
-                    if (settings?.txtEnable) log.info "${device.displayName} lux calibration is ${val}"                
+                    logInfo "4-in-1 lux calibration is ${val}"                
                 }
                 else {    //  Tuya 3 in 1 temperature scale Celsius/Fahrenheit
                     if (settings?.logEnable) log.info "${device.displayName} Temperature Scale is: ${fncmd == 0 ? 'Celsius' : 'Fahrenheit'} (DP=0x6A fncmd = ${fncmd})"  
@@ -970,8 +985,8 @@ def processTuyaCluster( descMap ) {
                 if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Luminance Level ${fncmd}" // Ligter, Medium, ... ?
                 }
-                else if (is4in1()) {   // case 109: 0x6d PIR enable
-                    if (settings?.txtEnable) log.info "${device.displayName} PIR enable is ${fncmd}"                
+                else if (is4in1()) {   // case 109: 0x6d PIR enable (PIR power)
+                    logInfo "4-in-1 enable is ${fncmd}"                
                 }
                 else { // 3in1
                     if (settings?.logEnable) log.info "${device.displayName} Min Humidity is: ${fncmd} (DP=0x6D)"  
@@ -995,7 +1010,7 @@ def processTuyaCluster( descMap ) {
                 break 
             case 0x6F : // (111) Tuya 4 in 1: // 0x6f led enable
                 if (is4in1()) { 
-                    if (settings?.txtEnable) log.info "${device.displayName} LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
+                    logInfo "4-in-1 LED is: ${fncmd == 1 ? 'enabled' :'disabled'}"
                     device.updateSetting("ledEnable", [value:fncmd as boolean, type:"boolean"])
                 }
                 else { // 3in1 - temperature alarm switch
@@ -1179,6 +1194,9 @@ def parseIasMessage(String description) {
 }
 
 private handleMotion( motionActive, isDigital=false ) {
+    if (settings.invertMotion == true) {
+        motionActive = ! motionActive
+    }
     if (motionActive) {
         def timeout = motionResetTimer ?: 0
         // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
@@ -1513,6 +1531,9 @@ def refresh() {
             cmds += zigbee.readAttribute(0x0500, key, [:], delay=200)
         }
     }
+    if (is4in1()) {
+        zigbee.command(0xEF00, 0x07, "00")    // Fantem Tuya Magic
+    }
     sendZigbeeCommands( cmds ) 
 }
 
@@ -1597,6 +1618,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance",[value:8.0, type:"decimal"])
     if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:1, type:"number"])
     if (fullInit == true || settings.parEvents == null) device.updateSetting("parEvents", false)
+    if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", false)
+    
     
     //
     if (fullInit == true) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
@@ -1657,7 +1680,8 @@ def initialize( boolean fullInit = true ) {
 
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    int tuyaCmd = is4in1() ? 0x04 : SETDATA
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd/*SETDATA 0x04*/, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.debug "${device.displayName} <b>sendTuyaCommand</b> = ${cmds}"
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
@@ -2120,7 +2144,10 @@ def test( val ) {
     ArrayList<String> cmds = []
     sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
 */
+/*
     log.warn "parse(${val})"
     parse(val)
+*/
+    zigbee.command(0xEF00, 0x07, "00")
 }
 
