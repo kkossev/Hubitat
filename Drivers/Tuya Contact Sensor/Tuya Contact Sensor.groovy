@@ -15,25 +15,26 @@
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
  * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
+ * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  *
- *                                   TODO: when offlineThreshold = 0 (disabled), delete the healthStatus property. When enabled, set it to uknown 1
- *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact;
+ *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contactif not supported by the device profile
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
-static def version() { "1.0.2" }
+static def version() { "1.0.3" }
 
-static def timeStamp() { "2023/02/17 7:58 AM" }
+static def timeStamp() { "2023/02/25 9:06 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.device.HubAction
 import hubitat.device.Protocol
+import hubitat.zigbee.clusters.iaszone.ZoneStatus
 
-@Field static final Boolean debug = false
+@Field static final Boolean DEBUG = false
 @Field static final Integer defaultMinReportingTime = 10
 
 
@@ -49,7 +50,7 @@ metadata {
         capability "Health Check"
 
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
-        if (debug == true) {
+        if (DEBUG == true) {
             command "zTest", [
                     [name: "dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                     [name: "dpValue", type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -125,19 +126,19 @@ metadata {
 
 @Field static final Map deviceProfiles = [
         "TS0203_CONTACT_BATT"          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
-                model         : "TS0203",      // default battery reporting period = 4 hours
-                manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr", 
-                                 "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
-                deviceJoinName: "Tuya Zigbee Contact Sensor",
-                inClusters    : "0001,0003,0500,0000",
-                outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
-                capabilities  : ["contactSensor": true, "battery": true],
-                configuration : ["battery": true],
-                attributes    : ["healthStatus"],
-                preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12] //,
-                ],
-                batteries     : "unknown"
+                                               model         : "TS0203",      // default battery reporting period = 4 hours
+                                               manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr",
+                                                                "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
+                                               deviceJoinName: "Tuya Zigbee Contact Sensor",
+                                               inClusters    : "0001,0003,0500,0000",
+                                               outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
+                                               capabilities  : ["contactSensor": true, "battery": true],
+                                               configuration : ["battery": true],
+                                               attributes    : ["healthStatus"],
+                                               preferences   : [
+                                                       "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12] //,
+                                               ],
+                                               batteries     : "unknown"
         ],
         "TS0203_UNKNOWN"      : [
                 model         : "TS0203",
@@ -155,30 +156,25 @@ metadata {
                 capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
                 configuration : ["battery": false],
                 attributes    : ["healthStatus"],
-            /*
-                preferences   : [
-                        "illuminanceSensitivity": [min: 1, scale: 0, max: 100, step: 1, type: 'number', defaultValue: 1]
-                ],
-            */
                 batteries     : "unknown"
         ],
         'TS0601_CONTACT_TEMP_HUMI_BATT': [     // https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357        @Pr0z4k
-                // https://www.aliexpress.com/item/1005004878609097.html
-                model         : "TS0601",
-                manufacturers : ["_TZE200_nvups4nh"],
-                deviceJoinName: "Tuya Zigbee Contact Sensor w/ Temperature&Humidity",
-                inClusters    : "0000,0001,0500,EF00",
-                outClusters   : "0019,000A",
-                capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
-                configuration : ["battery": false],
-                attributes    : ["healthStatus"],
-            /*
-                preferences   : [
-                       "temperatureOffset": [min: -10, scale: 0, max: 10, step: 1, type: 'number', defaultValue: 0],
-                       "humidityOffset"   : [min: -50, scale: 0, max: 50, step: 1, type: 'number', defaultValue: 0]
-                ],
-            */
-                batteries     : "2xAAA"
+                                               // https://www.aliexpress.com/item/1005004878609097.html
+                                               model         : "TS0601",
+                                               manufacturers : ["_TZE200_nvups4nh"],
+                                               deviceJoinName: "Tuya Zigbee Contact Sensor w/ Temperature&Humidity",
+                                               inClusters    : "0000,0001,0500,EF00",
+                                               outClusters   : "0019,000A",
+                                               capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
+                                               configuration : ["battery": false],
+                                               attributes    : ["healthStatus"],
+                                               /*
+                                                   preferences   : [
+                                                          "temperatureOffset": [min: -10, scale: 0, max: 10, step: 1, type: 'number', defaultValue: 0],
+                                                          "humidityOffset"   : [min: -50, scale: 0, max: 50, step: 1, type: 'number', defaultValue: 0]
+                                                   ],
+                                               */
+                                               batteries     : "2xAAA"
         ],
         'TS0601_UNKNOWN'      : [
                 model         : "TS0601",
@@ -274,8 +270,11 @@ def parse(String description) {
     checkDriverVersion()
     setHealthStatusOnline()
     Map statsMap = stringToJsonMap(state.stats)
+    Map descMap = [:]
     try { statsMap['rxCtr']++ } catch (e) { statsMap['rxCtr'] = 0 }; state.stats = mapToJsonString(statsMap)
-    logDebug "parse() descMap = ${zigbee.parseDescriptionAsMap(description)} (description=$description)"
+    descMap = zigbee.parseDescriptionAsMap(description)
+//    /*try{*/ logDebug "parse() description=$description /*descMap = ${zigbee.parseDescriptionAsMap(description)}*/ " // } catch (e) {logWarn "exception catched when procesing description ${description}"}
+    
     if (description?.startsWith('zone status') || description?.startsWith('zone report')) {
         logDebug "Zone status: $description"
         parseIasMessage(description)    // TS0203 contact sensors
@@ -286,10 +285,15 @@ def parse(String description) {
         logDebug "sending enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
     } else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
-        Map descMap = zigbee.parseDescriptionAsMap(description)
+        try {
+            descMap = zigbee.parseDescriptionAsMap(description)
+        }
+        catch (e) {
+            logWarn "exception ${e} catched when procesing description ${description}"
+        }
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
-                getBatteryPercentageResult(Integer.parseInt(descMap.value, 16))
+                sendBatteryPercentageEvent(Integer.parseInt(descMap.value, 16))
             } else if (descMap.attrInt == 0x0020) {
                 //log.trace "descMap.attrInt == 0x0020"
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
@@ -302,7 +306,7 @@ def parse(String description) {
                 if (settings?.logEnable) log.debug "${device.displayName} Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
             } else if (descMap?.attrId == "0002") {
                 if (settings?.logEnable) log.debug "${device.displayName} Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
-                getContactResult(Integer.parseInt(descMap?.value, 16))
+                sendContactEvent(Integer.parseInt(descMap?.value, 16))
             } else if (descMap?.attrId == "000B") {
                 if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}"
             } else if (descMap?.attrId == "0013") {
@@ -363,7 +367,9 @@ def parse(String description) {
         } else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
             parseZHAcommand(descMap)
         } else {
-            logDebug "<b> NOT PARSED </b> :  ${descMap}"
+            if (descMap != [:]) {
+                logDebug "<b> NOT PARSED </b> :  ${descMap}"
+            }
         }
     } // if 'catchall:' or 'read attr -'
     else {
@@ -429,7 +435,7 @@ def parseZHAcommand(Map descMap) {
                     lastRxMap.battCfg = min.toString() + "," + max.toString() + "," + delta.toString()
                     if (lastRxMap.battCfg == lastTxMap.battCfg) {
                         lastTxMap.battCfgOK = true
-                    }                
+                    }
                 } else {
                     attributeName = descMap.clusterId
                 }
@@ -527,7 +533,7 @@ def processTuyaCluster(descMap) {
             // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             def fncmd = getTuyaAttributeValue(descMap?.data, i)                //
-            if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
             //log.warn "next index is : ${i}"
@@ -539,30 +545,36 @@ def processTuyaCluster(descMap) {
 
 def processTuyaDP(descMap, dp, dp_id, fncmd) {
     switch (dp) {
-        case 0x01: // contact open/close 
-            if (true) {
-                def value = fncmd == 0 ? "open" : "closed"
-                sendEvent("name": "contact", "value": value)
-                if (settings?.txtEnable) log.info "${device.displayName} Contact is ${value}"
-            }
+        case 0x01: // contact 1=open 0=closed
+            logDebug "(dp=$dp) contact event fncmd = ${fncmd}"
+            sendContactEvent(contactActive = fncmd)
             break
         case 0x02: // 'TS0601_Contact' battery %
-            if (true) {
-                logInfo "battery is $fncmd %"
-                getBatteryPercentageResult(fncmd * 2)
-            }
+            logDebug "(dp=$dp) battery event fncmd = ${fncmd}"
+            sendBatteryPercentageEvent(fncmd * 2)
             break
         case 0x07: // Temperature
+            logDebug "(dp=$dp) temperature event fncmd = ${fncmd}"
             if (fncmd > 32767) {
                 fncmd = fncmd - 65536
             }
             temperatureEvent(fncmd / 10.0)
             break
         case 0x08: // humidity
-            if (true) {
-                logDebug "humidity raw = ${fncmd}"
-                humidityEvent(fncmd)
-            }
+            logDebug "(dp=$dp) humidity event fncmd = ${fncmd}"
+            humidityEvent(fncmd)
+            break
+        case 0x0C : // (12)
+            logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
+            illuminanceEventLux( fncmd )
+            break
+        case 0x65 :    // (101)
+            logDebug "(dp=$dp) illuminance event fncmd = ${fncmd}"
+            illuminanceEventLux(fncmd) // illuminance for TS0601 ContactSensor with LUX
+            break
+        case 0x66 :     // (102)
+            logDebug "(dp=$dp) battery event fncmd = ${fncmd}"
+            handleTuyaBatteryLevel( fncmd )
             break
         default:
             if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
@@ -590,9 +602,9 @@ def parseIasMessage(String description) {
         Map zs = zigbee.parseZoneStatusChange(description)
         //if (settings?.logEnable) log.trace "zs = $zs"
         if (zs.alarm1Set == true) {
-            getContactResult(contactActive = true)
+            sendContactEvent(contactActive = true)
         } else {
-            getContactResult(contactActive = false)
+            sendContactEvent(contactActive = false)
         }
     }
     catch (e) {
@@ -601,11 +613,8 @@ def parseIasMessage(String description) {
     }
 }
 
-def getContactResult(contactActive, isDigital = false) {
-    def descriptionText = "contact is open"
-    if (!contactActive) {
-        descriptionText = "contact is closed"
-    }
+def sendContactEvent(contactActive, isDigital = false) {
+    def descriptionText = "contact is " + (contactActive  ? "open" : "closed")
     if (txtEnable) log.info "${device.displayName} ${descriptionText}"
     sendEvent(
             name: 'contact',
@@ -754,7 +763,7 @@ def updated() {
         unschedule("logsOff")
     }
     scheduleDeviceHealthCheck()
-    
+
     if (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) {
         //
         // try to configure some parameters and see what happens ..temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
@@ -784,8 +793,8 @@ def updated() {
         if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
             lastTxMap.battCfg = newBattCfg
             log.warn "lastTxMap.battCfg = ${lastTxMap.battCfg}"
-   		    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-   		    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+            cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+            cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
             cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
             cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
             log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
@@ -797,11 +806,11 @@ def updated() {
     } // SONOFF
 
     state.lastTx = mapToJsonString(lastTxMap)
-    
+
     def pendingConfig = 0
     pendingConfig += lastTxMap.tempCfgOK != null ? (lastTxMap.tempCfgOK == true ?  0 : 1) : 0
     pendingConfig += lastTxMap.humiCfgOK != null ? (lastTxMap.humiCfgOK == true ?  0 : 1) : 0
-    pendingConfig += lastTxMap.battCfgOK != null ? (lastTxMap.battCfgOK == true ?  0 : 1) : 0  
+    pendingConfig += lastTxMap.battCfgOK != null ? (lastTxMap.battCfgOK == true ?  0 : 1) : 0
     if (isConfigurable()) {
         logInfo "pending ${pendingConfig} reporting configurations"
         if (pendingConfig != 0) {
@@ -942,18 +951,18 @@ def resetStats() {
     ]
 
     Map lastTx = [
-                  /*
-                      tempCfg : '-1,-1,-1',
-                      humiCfg : '-1,-1,-1',
-          */
-        /*
-                      tempCfgOK : true,
-                      humiCfgOK : true,
-                      battCfgOK : true,
-          */
-                      cfgTimer : 0
+            /*
+                tempCfg : '-1,-1,-1',
+                humiCfg : '-1,-1,-1',
+    */
+            /*
+                          tempCfgOK : true,
+                          humiCfgOK : true,
+                          battCfgOK : true,
+              */
+            cfgTimer : 0
     ]
-    
+
     state.stats = mapToJsonString(stats)
     state.lastRx = mapToJsonString(lastRx)
     state.lastTx = mapToJsonString(lastTx)
@@ -974,16 +983,16 @@ void setDeviceName() {
     def deviceManufacturer = device.getDataValue('manufacturer')
     deviceProfiles.each { profileName, profileMap ->
         if ((profileMap.model?.value as String) == (deviceModel as String)) {
-            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String)) 
+            if ((profileMap.manufacturers.value as String).contains(deviceManufacturer as String))
             {
                 currentModelMap = profileName
                 state.deviceProfile = currentModelMap
-                deviceName = deviceProfiles[currentModelMap].deviceJoinName                
+                deviceName = deviceProfiles[currentModelMap].deviceJoinName
                 //log.debug "FOUND! currentModelMap=${currentModelMap}, deviceName =${deviceName}"
             }
         }
     }
-    
+
     if (currentModelMap == null) {
         logWarn "unknown model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}"
         // don't change the device name when unknown
@@ -1022,7 +1031,7 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value: 3600, type: "number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || settings?.offlineThreshold == null) device.updateSetting("offlineThreshold", [value: presenceCountDefaultThreshold, type: "number"])
-    
+
 
 }
 
@@ -1085,8 +1094,8 @@ def logsOff() {
     device.updateSetting("logEnable", [value: "false", type: "bool"])
 }
 
-def getBatteryPercentageResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+def sendBatteryPercentageEvent(rawValue) {
+    //if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
 
     if (0 <= rawValue && rawValue <= 200) {
@@ -1101,6 +1110,17 @@ def getBatteryPercentageResult(rawValue) {
     } else {
         if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
     }
+}
+
+def handleTuyaBatteryLevel( fncmd ) {
+    def rawValue = 0
+    if (fncmd == 0) rawValue = 100           // Battery Full
+    else if (fncmd == 1) rawValue = 75       // Battery High
+    else if (fncmd == 2) rawValue = 50       // Battery Medium
+    else if (fncmd == 3) rawValue = 25       // Battery Low
+    else if (fncmd == 4) rawValue = 100      // Tuya 3 in 1 -> USB powered
+    else rawValue = fncmd
+    sendBatteryPercentageEvent(rawValue*2)
 }
 
 private Map getBatteryResult(rawValue) {
@@ -1161,7 +1181,7 @@ void scheduleDeviceHealthCheck() {
     if (safeToInt(settings?.offlineThreshold, presenceCountDefaultThreshold) != 0) {
         schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/1 * * ? *", "deviceHealthCheck")
         if (device.currentValue('healthStatus') == null) {
-            sendHealthStatusEvent('unknown')    
+            sendHealthStatusEvent('unknown')
         }
     } else {
         logDebug "unscheduling the healthCheck..."
@@ -1232,12 +1252,9 @@ def zTest(dpCommand, dpValue, dpTypeString) {
 
 
 def test(String description) {
-    /*
-    log.warn "parsing : ${description}"
+    log.warn "test parsing : ${description}"
     parse( description)
-    */
 
-    
     /*
     def map = deviceProfiles
     map.each { k, v -> log.trace "${k}:${v}" }
@@ -1268,8 +1285,8 @@ def test(String description) {
         }
     //settings.remove("batteryReporting")
     log.warn "batteryReporting = ${settings.batteryReporting}"
-*/    
-    
+*/
+/*
     def model = getModelGroup()
     def modelProperties = deviceProfiles["$model"] as Map
 
@@ -1277,5 +1294,5 @@ def test(String description) {
     log.trace "b = ${deviceProfiles['SONOFF_CONTACT_BATT'].configuration.battery.value}"
     log.trace "c = ${deviceProfiles[state.deviceProfile].configuration.battery.value}"
     log.trace "d = ${deviceProfiles[getModelGroup()]?.configuration?.battery?.value}"
-
+*/
 }
