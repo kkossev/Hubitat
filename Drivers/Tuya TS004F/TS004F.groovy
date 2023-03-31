@@ -40,7 +40,8 @@
  * ver. 2.6.0 2023-01-28 kkossev     - added healthStatus; Initialize button is disabled;
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
- * ver. 2.6.3 2023-03-11 kkossev     - (dev. branch) added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
+ * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
+ * ver. 2.6.4 2023-03-31 kkossev     - (dev. branch) added Sonoff SNZB-01;
  *
  *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
@@ -57,8 +58,8 @@
  *
  */
 
-def version() { "2.6.3" }
-def timeStamp() {"2023/03/11 8:17 PM"}
+def version() { "2.6.4" }
+def timeStamp() {"2023/03/31 8:56 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -154,6 +155,7 @@ metadata {
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
+    fingerprint profileId: "0104", endpointId: "01", inClusters:"0000,0003,0001", outClusters: "0006,0003", model: "WB01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
     // 4 button        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "4 Button Smart Remote Controller"     // https://www.aliexpress.com/item/4001062612446.html
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_fsiepnrh", deviceJoinName: "4 Button Smart Remote Controller"
@@ -201,6 +203,7 @@ def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "T
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
 def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
+def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 
@@ -281,6 +284,11 @@ def parse(String description) {
                 return null 
             }
         } // command == "FD"
+        else if (descMap.clusterInt == 0x0006 && (descMap.command in ["00","01","02" ])) {
+            // Sonoff SNZB-01
+            buttonNumber = 1
+            buttonState = descMap.command == "02" ? "pushed" : descMap.command == "01" ? "doubleTapped" : descMap.command == "00" ? "held" : "unknown"
+        }
         else if (descMap.clusterInt == 0x0501) { 
             // TODO: Make the button numbers compatible with Muxa's driver : 1 - Arm Away (left); 2 - Disarm (right); 3 - Arm Home (top); 4 - Panic (bottom) // https://community.hubitat.com/t/release-heiman-zigbee-key-fob-driver/27002 
             if (descMap.command == "02" && descMap.data.size() == 0)  {
@@ -329,8 +337,12 @@ def parse(String description) {
             return null
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
-            if (logEnable) log.debug "${device.displayName} received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
+            logInfo "received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
             state.stats["rejoinCtr"] = (state.stats["rejoinCtr"] ?: 0) + 1
+            return null
+        }
+        else if (descMap?.profileId == '0000' && descMap?.clusterId == '8021') { // bind response
+            logInfo "received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
             return null
         }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
@@ -527,7 +539,7 @@ void initializeVars(boolean fullInit = false ) {
         state.stats = [:]
     }
     if (state.stats == null) { state.stats = [:] }
-    state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke"
+    state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke, Sonoff"
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", DEFAULT_LOG_ENABLE)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
@@ -550,12 +562,18 @@ def installed()
 def initialize() {
     if (/*true*/ isTuya()) {
         tuyaMagic()
-    } else {
+    } 
+    else if (isSonoff()) {
+        //def endpoint = 0x01
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0001 0x0021 {}", "delay 200", ])
+    }    
+    else {
     	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
     }
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
-    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || device.getDataValue("manufacturer") == "_TZ3000_ja5osu5g") {
+    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || (device.getDataValue("manufacturer") in ["_TZ3000_ja5osu5g", "eWeLink"])) {
     	numberOfButtons = 1
     } 
     else if (device.getDataValue("model") == "TS0042") {
