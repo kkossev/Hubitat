@@ -41,7 +41,7 @@
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
- * ver. 2.6.4 2023-03-31 kkossev     - (dev. branch) added Sonoff SNZB-01;
+ * ver. 2.6.4 2023-03-31 kkossev     - (dev. branch) added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; 
  *
  *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
@@ -59,7 +59,7 @@
  */
 
 def version() { "2.6.4" }
-def timeStamp() {"2023/03/31 8:56 PM"}
+def timeStamp() {"2023/03/31 9:43 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -155,7 +155,9 @@ metadata {
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
-    fingerprint profileId: "0104", endpointId: "01", inClusters:"0000,0003,0001", outClusters: "0006,0003", model: "WB01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0001", outClusters: "0006,0003", model: "WB01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
+        
     // 4 button        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "4 Button Smart Remote Controller"     // https://www.aliexpress.com/item/4001062612446.html
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_fsiepnrh", deviceJoinName: "4 Button Smart Remote Controller"
@@ -204,6 +206,7 @@ def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
 def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
+def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 
@@ -284,10 +287,18 @@ def parse(String description) {
                 return null 
             }
         } // command == "FD"
-        else if (descMap.clusterInt == 0x0006 && (descMap.command in ["00","01","02" ])) {
+        else if (isSonoff() && (descMap.clusterInt == 0x0006 && (descMap.command in ["00","01","02" ]))) {
             // Sonoff SNZB-01
             buttonNumber = 1
             buttonState = descMap.command == "02" ? "pushed" : descMap.command == "01" ? "doubleTapped" : descMap.command == "00" ? "held" : "unknown"
+        }
+        else if (isIkea() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) {
+            // IKEA Tradfri Shortcut Button E1812
+            buttonNumber = 1
+            if (descMap.clusterInt == 0x0006 && descMap.command == "01") buttonState = "pushed"    
+            else if (descMap.clusterInt == 0x0008 && descMap.command == "05") buttonState = "held"  
+            else if (descMap.clusterInt == 0x0008 && descMap.command == "07") buttonState = "released"
+            else buttonState = "unknown"
         }
         else if (descMap.clusterInt == 0x0501) { 
             // TODO: Make the button numbers compatible with Muxa's driver : 1 - Arm Away (left); 2 - Disarm (right); 3 - Arm Home (top); 4 - Panic (bottom) // https://community.hubitat.com/t/release-heiman-zigbee-key-fob-driver/27002 
@@ -323,7 +334,7 @@ def parse(String description) {
             }
             buttonState = "pushed"
         }
-        else if (descMap.clusterId in ['0000', '0006', 'E001'] && descMap.command == "01") { // read attribute response
+        else if (descMap.clusterId in ['0000', '0006', 'E001'] && descMap.command == "01" && descMap.data?.size() >=3) { // read attribute response
             if (descMap.data[2] == '86') {
                 if (logEnable) log.debug "${device.displayName} readAttributeResponse cluster: ${descMap.clusterId} unsupported attribute ${descMap.data[1]+descMap.data[0]} status:${descMap.data[2]}"
             }
@@ -343,6 +354,10 @@ def parse(String description) {
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '8021') { // bind response
             logInfo "received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            return null
+        }
+        else if (descMap?.profileId == '0000' && descMap?.clusterId == '8034') { // leave response
+            logInfo "leave response cluster: ${descMap.clusterId}"
             return null
         }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
@@ -606,6 +621,10 @@ def initialize() {
     } 
     else if (isIcasa()) {
         numberOfButtons = 8
+        supportedValues = ["pushed", "held", "released"]
+    } 
+    else if (isIkea()) {
+        numberOfButtons = 1
         supportedValues = ["pushed", "held", "released"]
     } 
     else {
