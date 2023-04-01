@@ -36,7 +36,7 @@
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
  * ver. 1.3.0  2023-03-22 kkossev  -'_TYST11_7hfcudw5' moved to 3-in-1 group; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
- * ver. 1.3.1  2023-03-29 kkossev  - (dev. branch) added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; 
+ * ver. 1.3.1  2023-03-29 kkossev  - (dev. branch) added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
  *
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
@@ -49,7 +49,7 @@
 */
 
 def version() { "1.3.1" }
-def timeStamp() {"2023/03/29 12:43 PM"}
+def timeStamp() {"2023/04/01 8:05 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1618,7 +1618,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance",[value:8.0, type:"decimal"])
     if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:1, type:"number"])
     if (fullInit == true || settings.parEvents == null) device.updateSetting("parEvents", false)
-    if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", false)
+    if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", is2in1() ? true : false)
     
     
     //
