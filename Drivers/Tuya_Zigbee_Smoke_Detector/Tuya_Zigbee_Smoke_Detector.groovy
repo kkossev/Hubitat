@@ -17,25 +17,22 @@
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
  *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
  *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
- *  ver. 1.0.4 2023-04-07 kkossev - (dev.branch) extended tuyaMagic(); added capability 'Health Check'; added ping()
+ *  ver. 1.1.0 2023-04-07 kkossev - (dev.branch) extended tuyaMagic(); added capability 'Health Check'; added ping() command and rtt measurement;
  *
- *            TODO: tuyaMagic - add the additional magic commands from the Tuya GW sniff
+ *            TODO: tuyaMagic - add the additional magic commands from the Tuya GW sniff ?
  *            TODO: process Report Attributes Cluster 0, attr 1 (app version- 0x48), FFE2 (0x38), FFE4 (0x00) - every 4 hours?
- *            TODO: add 'Silence' command for _TZE200_ntcy3xu1
+ *            TODO: add 'Silence' / Clear command for _TZE200_ntcy3xu1
  *            TODO: _TZE200_uebojraa does not report battery?
- *            TODO: add healthCheck
- *            TODO: add rtt
- *            TODO: add Refresh command
  *            TODO: add [digital] in the logs
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.4" }
-def timeStamp() {"2023/04/07 7:07 PM"}
+def version() { "1.1.0" }
+def timeStamp() {"2022/04/07 10:21 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition (name: "Tuya Zigbee Smoke Detector", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy", singleThreaded: true ) {
@@ -47,6 +44,7 @@ metadata {
 		capability "Battery"            //  ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
         capability "PowerSource"        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
         capability "Health Check"
+        //capability "Refresh"
         
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "rtt", "number" 
@@ -85,9 +83,9 @@ metadata {
 
 // Constants
 @Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
-@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
-@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600
-@Field static final Integer MAX_PING_MILISECONDS = 10000
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 13   // 3 x 4 hours + 1
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600 // 1 hour
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = "UNKNOWN"
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -459,6 +457,16 @@ def tested() {
     sendSmokeAlarmEvent( 2, isDigital=true )
 }
 
+def refresh() {
+    logInfo("refresh()...")
+    List<String> cmds = []
+    checkDriverVersion()
+    cmds += zigbee.command(0xEF00, 0x10, "0002")
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands(cmds)
+}
+
 def ping() {
     logInfo 'ping...'
     scheduleCommandTimeoutCheck()
@@ -597,7 +605,7 @@ def installed() {
     initializeVars()
     def descText = 'driver just installed'
     sendEvent(name: 'smoke', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )    
-    sendEvent(name: "presence", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )
+    sendEvent(name: "healthStatus", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )
     sendEvent(name: "powerSource", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )    
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
@@ -612,7 +620,7 @@ void uninstalled() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if ((device.currentValue("healthCheck", true) ?: "") != "present") {
+    if ((device.currentValue("healthStatus", true) ?: "") != "online") {
         sendHealthStatusEvent("online")
     	sendEvent(name: "powerSource", value: "battery") 
     }
@@ -626,11 +634,10 @@ def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
-            if (device.currentValue("presence", true) != "not present") {
-    	        sendEvent(name: "presence", value: "not present")
-    	        sendEvent(name: "powerSource", value: "unknown")
-                if (logEnable==true) log.warn "${device.displayName} not present!"
+            if ((device.currentValue("healthStatus", true) ?: "") != "offline") {
+                sendHealthStatusEvent("offline")
             }
+            logWarn "is not present!"
         }
     }
     else {
@@ -640,14 +647,16 @@ def checkIfNotPresent() {
 
 // check for device offline every 60 minutes
 def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
+    logDebug "pollPresence()..."
     checkIfNotPresent()
     runIn( DEFAULT_POLLING_INTERVAL, pollPresence, [overwrite: true])
 }
 
 def sendHealthStatusEvent(value) {
     //log.trace "healthStatus ${value}"
-    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+    def descriptionText = "healthStatus set to ${value}"
+    logInfo "${descriptionText}"
+    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText)
 }
 
 
