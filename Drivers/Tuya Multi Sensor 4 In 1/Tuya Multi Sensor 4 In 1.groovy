@@ -36,7 +36,8 @@
  * ver. 1.2.2  2023-03-18 kkossev  - typo in a log transaction fixed; added TS0202 _TZ3000_kmh5qpmb as a 3-in-1 type device'; added _TZE200_xpq2rzhq radar; bug fix in setMotion()
  * ver. 1.3.0  2023-03-22 kkossev  -'_TYST11_7hfcudw5' moved to 3-in-1 group; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
- * ver. 1.3.1  2023-03-29 kkossev  - (dev. branch) added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
+ * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
+ * ver. 1.3.2  2023-04-08 kkossev  - (dev. branch) 4-in-1 parameter for adjusting the reporting time;
  *
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
@@ -48,8 +49,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.1" }
-def timeStamp() {"2023/04/01 8:05 PM"}
+def version() { "1.3.2" }
+def timeStamp() {"2023/04/08 7:38 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -179,6 +180,9 @@ metadata {
             if (isRadar()) {
                 input (name: "parEvents", type: "bool", title: "Send Event when parameters change", description: "<i>Enable only when the SetPar() custom command is used in RM or webCoRE</i>", defaultValue: false)
             }
+            if (is4in1()) {
+  		        input ("reportingTime4in1", "number", title: "<b>4-in-1 Reporting Time</b>", description: "<i>4-in-1 Reporting Time configuration, minutes.<br>0 will enable real-time (10 seconds) reporting!</i>", range: "0..7200", defaultValue: DEFAULT_REPORTING_4IN1)
+            }
             input (name: "invertMotion", type: "bool", title: "<b>Invert Motion Active/Not Active</b>", description: "<i>Some Tuya motion sensors may report the motion active/inactive inverted...</i>", defaultValue: false)
 
             
@@ -217,6 +221,7 @@ def getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 
 @Field static final Integer presenceCountTreshold = 4
 @Field static final Integer defaultPollingInterval = 3600
+@Field static final Integer DEFAULT_REPORTING_4IN1 = 5    // time in minutes
 
 def getModelGroup()          { return state.deviceProfile ?: "UNKNOWN" }
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
@@ -864,7 +869,8 @@ def processTuyaCluster( descMap ) {
                     leaveTimeEvent(fncmd)
                 }
                 else if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1 
-                    logInfo "4-in-1 reporting time interval is ${fncmd}"
+                    logInfo "4-in-1 reporting time interval is ${fncmd} minutes"
+                    device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])
                 }
                 else {     // battery level for 3 in 1;  
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -1387,8 +1393,10 @@ def updated() {
         //    LED enable
         if (true) {
             if (is4in1()) {
+                logDebug "4-in-1: changing ledEnable to : ${settings?.ledEnable }"                
                 cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
-                if (settings?.logEnable) log.warn "${device.displayName} changing ledEnable to : ${settings?.ledEnable }"                
+                logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
+                cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
             }
         }
         // sensitivity
@@ -1506,7 +1514,6 @@ def updated() {
                 if (settings?.logEnable) log.debug "${device.displayName} setting indicator light to : ${blackRadarLedOptions[value.toString()]} (${value})"  
             }
         }
-
     }
     //    
     if (cmds != null) {
@@ -1532,7 +1539,7 @@ def refresh() {
         }
     }
     if (is4in1()) {
-        zigbee.command(0xEF00, 0x07, "00")    // Fantem Tuya Magic
+        cmds += zigbee.command(0xEF00, 0x07, "00")    // Fantem Tuya Magic
     }
     sendZigbeeCommands( cmds ) 
 }
@@ -1619,6 +1626,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:1, type:"number"])
     if (fullInit == true || settings.parEvents == null) device.updateSetting("parEvents", false)
     if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", is2in1() ? true : false)
+    if (fullInit == true || settings.reportingTime4in1 == null) device.updateSetting("reportingTime4in1", [value:DEFAULT_REPORTING_4IN1, type:"number"])
+    
     
     
     //
@@ -1681,7 +1690,7 @@ def initialize( boolean fullInit = true ) {
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     int tuyaCmd = is4in1() ? 0x04 : SETDATA
-    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd/*SETDATA 0x04*/, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.debug "${device.displayName} <b>sendTuyaCommand</b> = ${cmds}"
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
     return cmds
