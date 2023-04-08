@@ -17,17 +17,21 @@
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
  *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
  *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
+ *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *
+ *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
+ *            TODO: send the check-in messages as an event / show as Info log
+ *            TODO: add 'Silence' / Clear command for _TZE200_ntcy3xu1
  *            TODO: add [digital] in the logs
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.0.3" }
-def timeStamp() {"2022/12/15 7:00 AM"}
+def version() { "1.1.0" }
+def timeStamp() {"2022/04/07 10:21 PM"}
 
-@Field static final Boolean debug = false
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition (name: "Tuya Zigbee Smoke Detector", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_Smoke_Detector/Tuya_Zigbee_Smoke_Detector.groovy", singleThreaded: true ) {
@@ -38,7 +42,11 @@ metadata {
 		capability "TestCapability"
 		capability "Battery"            //  ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
         capability "PowerSource"        //powerSource - ENUM ["battery", "dc", "mains", "unknown"]
-        capability "PresenceSensor"
+        capability "Health Check"
+        //capability "Refresh"
+        
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute "rtt", "number" 
 
         command "clear"
         command "detected"
@@ -47,7 +55,7 @@ metadata {
         //command "silenceSiren", [[name:"Silence Siren", type: "ENUM", description: "Silence the Siren", constraints: ["--- Select ---", "true", "false" ]]]        // 'Silence the siren' ea.STATE_SET, true, false)    HE->Tuya  dp=16, BOOL
         //command "enableAlarm",  [[name:"Enable Alarm",  type: "ENUM", description: "Enable the Alarm",  constraints: ["--- Select ---", "true", "false" ]]]          //'Enable the alarm' ea.STATE_SET, true, false     HE->Tuya  dp=20, ENUM, true: 0, false: 1
         
-        if (debug == true) {        
+        if (_DEBUG == true) {        
             command "test", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
@@ -55,7 +63,7 @@ metadata {
             ]
         }
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ntcy3xu1"    // https:www.aliexpress.com/item/1005003951429372.html
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_uebojraa"    // https://community.hubitat.com/t/tuya-zigbee-smart-smoke-detector-support/102471
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_uebojraa"    // KK CR2 battery // https://community.hubitat.com/t/tuya-zigbee-smart-smoke-detector-support/102471
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_t5p1vj8r"    // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_e2bedvo9"    // https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159/16?u=kkossev
         //
@@ -73,8 +81,10 @@ metadata {
 }
 
 // Constants
-@Field static final Integer presenceCountTreshold = 12
-@Field static final Integer defaultPollingInterval = 3600
+@Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 13   // 3 x 4 hours + 1
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600 // 1 hour
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = "UNKNOWN"
 
 private getCLUSTER_TUYA()       { 0xEF00 }
@@ -143,6 +153,11 @@ def parse(String description) {
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
                     if (it.attrId == "0001") {
                         if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
+                        def now = new Date().getTime()
+                        def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
+                        if (timeRunning < MAX_PING_MILISECONDS) {
+                            sendRttEvent()
+                        }
                     }
                     else {
                         if (logEnable) log.debug "${device.displayName} Tuya specific attribute ${it.attrId} reported: ${it.value}"    // not tested
@@ -441,9 +456,51 @@ def tested() {
     sendSmokeAlarmEvent( 2, isDigital=true )
 }
 
+def refresh() {
+    logInfo("refresh()...")
+    List<String> cmds = []
+    checkDriverVersion()
+    cmds += zigbee.command(0xEF00, 0x10, "0002")
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands(cmds)
+}
+
+def ping() {
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+}
+
+def sendRttEvent() {
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - state.pingTime.toInteger()
+    def descriptionText = "Round-trip time is ${timeRunning} (ms)"
+    logInfo "${descriptionText}"
+    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+private void scheduleDeviceHealthCheck(int intervalMins) {
+    Random rnd = new Random()
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+}
+
+
 
 def tuyaBlackMagic() {
-    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
+    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [:], delay=50)
+    return cmds    
 }
 
 /*
@@ -454,7 +511,7 @@ def tuyaBlackMagic() {
 */
 def configure() {
     if (txtEnable==true) log.info "${device.displayName} configure().."
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    runIn( DEFAULT_POLLING_INTERVAL, pollPresence, [overwrite: true])
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     sendZigbeeCommands(cmds)
@@ -547,7 +604,7 @@ def installed() {
     initializeVars()
     def descText = 'driver just installed'
     sendEvent(name: 'smoke', value: 'unknown', descriptionText: descText, type:  'digital' , isStateChange: true )    
-    sendEvent(name: "presence", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )
+    sendEvent(name: "healthStatus", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )
     sendEvent(name: "powerSource", value: "unknown", descriptionText: descText, type:  'digital' , isStateChange: true )    
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
@@ -562,23 +619,24 @@ void uninstalled() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if (device.currentValue("presence", true) != "present") {
-    	sendEvent(name: "presence", value: "present") 
+    if ((device.currentValue("healthStatus", true) ?: "") != "online") {
+        sendHealthStatusEvent("online")
     	sendEvent(name: "powerSource", value: "battery") 
     }
     state.notPresentCounter = 0
+    unschedule('deviceCommandTimeout')
+    
 }
 
 // called from pollPresence()
 def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
-        if (state.notPresentCounter >= presenceCountTreshold) {
-            if (device.currentValue("presence", true) != "not present") {
-    	        sendEvent(name: "presence", value: "not present")
-    	        sendEvent(name: "powerSource", value: "unknown")
-                if (logEnable==true) log.warn "${device.displayName} not present!"
+        if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
+            if ((device.currentValue("healthStatus", true) ?: "") != "offline") {
+                sendHealthStatusEvent("offline")
             }
+            logWarn "is not present!"
         }
     }
     else {
@@ -588,11 +646,17 @@ def checkIfNotPresent() {
 
 // check for device offline every 60 minutes
 def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
+    logDebug "pollPresence()..."
     checkIfNotPresent()
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
+    runIn( DEFAULT_POLLING_INTERVAL, pollPresence, [overwrite: true])
 }
 
+def sendHealthStatusEvent(value) {
+    //log.trace "healthStatus ${value}"
+    def descriptionText = "healthStatus set to ${value}"
+    logInfo "${descriptionText}"
+    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText)
+}
 
 
 private getPACKET_ID() {
@@ -650,6 +714,24 @@ boolean isTuyaE00xCluster( String description )
 boolean otherTuyaOddities( String description )
 {
     return false
+}
+
+def logDebug(msg) {
+    if (settings?.logEnable) {
+        log.debug "${device.displayName} " + msg
+    }
+}
+
+def logInfo(msg) {
+    if (settings?.txtEnable) {
+        log.info "${device.displayName} " + msg
+    }
+}
+
+def logWarn(msg) {
+    if (settings?.logEnable) {
+        log.warn "${device.displayName} " + msg
+    }
 }
 
 def test( dpCommand, dpValue, dpTypeString ) {
