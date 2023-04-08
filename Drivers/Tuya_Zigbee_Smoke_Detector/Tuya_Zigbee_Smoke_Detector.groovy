@@ -17,12 +17,11 @@
  *  ver. 1.0.1 2022-10-31 kkossev - added _TZE200_uebojraa
  *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
  *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
- *  ver. 1.1.0 2023-04-07 kkossev - (dev.branch) extended tuyaMagic(); added capability 'Health Check'; added ping() command and rtt measurement;
+ *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *
- *            TODO: tuyaMagic - add the additional magic commands from the Tuya GW sniff ?
- *            TODO: process Report Attributes Cluster 0, attr 1 (app version- 0x48), FFE2 (0x38), FFE4 (0x00) - every 4 hours?
+ *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
+ *            TODO: send the check-in messages as an event / show as Info log
  *            TODO: add 'Silence' / Clear command for _TZE200_ntcy3xu1
- *            TODO: _TZE200_uebojraa does not report battery?
  *            TODO: add [digital] in the logs
  */
 import groovy.json.*
