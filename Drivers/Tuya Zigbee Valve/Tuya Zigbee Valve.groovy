@@ -29,7 +29,7 @@
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
- *  ver. 1.2.4 2023-04-09 kkossev - (dev.branch) _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping()
+ *  ver. 1.2.4 2023-04-09 kkossev - (dev.branch) _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  * 
  *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.4" }
-def timeStamp() {"2023/04/09 9:43 PM"}
+def timeStamp() {"2023/04/09 10:55 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -335,6 +335,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     state.stats["RxCtr"] = (state.stats["RxCtr"] ?: 0) + 1
+    state.lastRx["parseTime"] = new Date().getTime()
     setHealthStatusOnline()
     logDebug "parse: description is $description"
     
@@ -385,7 +386,7 @@ def parse(String description) {
                     if (it.attrId == "0001") {
                         if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
                         def now = new Date().getTime()
-                        def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
+                        def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
                         if (timeRunning < MAX_PING_MILISECONDS) {
                             sendRttEvent()
                         }
@@ -406,6 +407,23 @@ def parse(String description) {
                     }
                     else {
                         if (logEnable) log.debug "${device.displayName} Cluster 0000 attribute ${it.attrId} reported: ${it.value}"
+                    }
+                }
+                else if ( it.cluster == "0006" ) {
+                    if (it.attrId == "4001") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} OnTime is ${it.value}"
+                    }
+                    else if (it.attrId == "4002") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} OffWaitTime is ${it.value}"
+                    }
+                    else if (it.attrId == "8001") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} IndicatorMode is ${it.value}"
+                    }
+                    else if (it.attrId == "8002") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} RestartStatus is ${it.value}"
+                    }
+                    else {
+                        logDebug "cluster 0006 attribute ${it.attrId} reported: ${it.value}"
                     }
                 }
                 else {
@@ -894,13 +912,13 @@ def isRefreshRequestClear() { state.states["isRefresh"] = false }
 def ping() {
     logInfo 'ping...'
     scheduleCommandTimeoutCheck()
-    state.pingTime = new Date().getTime()
+    state.lastTx["pingTime"] = new Date().getTime()
     sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
 
 def sendRttEvent() {
     def now = new Date().getTime()
-    def timeRunning = now.toInteger() - state.pingTime.toInteger()
+    def timeRunning = now.toInteger() - state.lastTx["pingTime"].toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
     sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
@@ -1051,6 +1069,8 @@ def updated(){
 def resetStats() {
     state.stats = [:]
     state.states = [:]
+    state.lastRx = [:]
+    state.lastTx = [:]
     state.stats["RxCtr"] = 0
     state.stats["TxCtr"] = 0
     state.states["isDigital"] = false
@@ -1059,6 +1079,7 @@ def resetStats() {
     state.states["lastSwitch"] = "unknown"
     if (isBatteryPowered()) { state.states["lastBattery"] = "100" }
     state.states["notPresentCtr"] = 0
+    state.lastTx["pingTime"] = new Date().getTime()
 }
 
 
@@ -1076,6 +1097,9 @@ void initializeVars( boolean fullInit = true ) {
     
     if (state.stats == null)  { state.stats  = [:] }
     if (state.states == null) { state.states = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    
     if (fullInit == true || state.states["lastSwitch"] == null) state.states["lastSwitch"] = "unknown"
     if (fullInit == true || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
@@ -1227,10 +1251,11 @@ boolean isTuyaE00xCluster( String description )
         return false 
     }
     // try to parse ...
-    logDebug "Tuya cluster: E000 or E001 - try to parse it..."
+    //logDebug "Tuya cluster: E000 or E001 - try to parse it..."
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}"
     }
     catch ( e ) {
         logDebug "<b>exception</b> caught while parsing description:  ${description}"
@@ -1238,8 +1263,11 @@ boolean isTuyaE00xCluster( String description )
         // cluster E001 is the one that is generating exceptions...
         return true
     }
-    if (descMap.cluster == "E001" && descMap.attrId == "D010") {
-        
+
+    if (descMap.cluster == "E000" && descMap.attrId in ["D001", "D002", "D003"]) {
+        logInfo "Tuya Specific cluster ${descMap.cluster} attribute ${descMap.attrId} value is ${descMap.value}"
+    }
+    else if (descMap.cluster == "E001" && descMap.attrId == "D010") {
         logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})"
     }
     else if (descMap.cluster == "E001" && descMap.attrId == "D030") {
@@ -1247,11 +1275,9 @@ boolean isTuyaE00xCluster( String description )
     }
     else {
         logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap"
+        return false 
     }
-    
-    
-    //
-    return true
+    return true    // processed
 }
 
 boolean otherTuyaOddities( String description )
