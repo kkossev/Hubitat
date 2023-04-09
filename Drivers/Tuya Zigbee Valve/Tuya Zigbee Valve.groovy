@@ -29,8 +29,10 @@
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
+ *  ver. 1.2.4 2023-04-09 kkossev - (dev.branch) _TZ3000_5ucujjts deviceProfile bug fix; 
  * 
- *                                  TODO: set device name from fingerprint 
+ *                                  TODO: add Refresh and Poll + rtt
+ *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
  *                                  TODO: scheduleDeviceHealthCheck() on preference change
  *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
@@ -42,8 +44,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.3" }
-def timeStamp() {"2023/03/26 7:50 PM"}
+def version() { "1.2.4" }
+def timeStamp() {"2023/04/09 8:02 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -112,14 +114,12 @@ metadata {
 @Field static final Map deviceProfilesV2 = [
     "TS0001_VALVE_ONOFF"  : [
             model         : "TS0001",
-            manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TZ3000_oxslv1c9", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5"],
+            manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5", "_TZ3000_5ucujjts"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_iedbgyxt"],    // https://community.hubitat.com/t/generic-zigbee-3-0-valve-not-getting-fingerprint/92614
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"],    // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"],    // clusters verified
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],    // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001",      outClusters:"0019",          model:"TS0001", manufacturer:"_TZ3000_5ucujjts"]     // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/85?u=kkossev
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
@@ -899,7 +899,7 @@ def poll() {
 
 }
 
-
+//
 def refresh() {
     if (logEnable) {log.debug "${device.displayName} sending refresh() command..."}
     poll()
@@ -996,10 +996,10 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
 // This method is called when the preferences of a device are updated.
 def updated(){
     checkDriverVersion()
-    if (txtEnable==true) log.info "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) model ${getModelGroup()}"
+    if (txtEnable==true) log.info "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) device model ${deviceModel} manufacturer ${deviceManufacturer} deviceProfile ${getModelGroup()} (driver version ${driverVersionAndTimeStamp()}) "
     if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
+        runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
         if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
     }
     else {
@@ -1097,7 +1097,7 @@ def initialize() {
 
 // This method is called when the device is first created.
 def installed() {
-    if (txtEnable==true) log.info "${device.displayName} Installed()..."
+    log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     initializeVars()
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."

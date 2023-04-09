@@ -37,7 +37,7 @@
  * ver. 1.3.0  2023-03-22 kkossev  -'_TYST11_7hfcudw5' moved to 3-in-1 group; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
- * ver. 1.3.2  2023-04-08 kkossev  - (dev. branch) 4-in-1 parameter for adjusting the reporting time;
+ * ver. 1.3.2  2023-04-09 kkossev  - (dev. branch) 4-in-1 parameter for adjusting the reporting time;
  *
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
@@ -50,7 +50,7 @@
 */
 
 def version() { "1.3.2" }
-def timeStamp() {"2023/04/08 7:38 PM"}
+def timeStamp() {"2023/04/09 9:52 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1533,7 +1533,7 @@ def refresh() {
     cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
     cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)             // batteryPercentageRemaining
-    if (isIAS() ||is4in1()) {
+    if (isIAS() || is4in1()) {
         IAS_ATTRIBUTES.each { key, value ->
             cmds += zigbee.readAttribute(0x0500, key, [:], delay=200)
         }
