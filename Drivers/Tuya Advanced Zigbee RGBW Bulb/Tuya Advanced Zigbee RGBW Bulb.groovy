@@ -14,13 +14,13 @@
  *
  * This driver is based on @bradsjm code https://github.com/bradsjm/hubitat-public/blob/development/PhilipsHue/Philips-Hue-Zigbee-Bulb-RGBW.groovy
  *
- * ver. 1.0.0  2023-04-14 kkossev  - Initial test version
+ * ver. 1.0.0  2023-04-14 kkossev  - Initial test version : Hubitat 'F2 bug' workaround; commented out Philips Hue specific commands.
  *
  *                                   TODO: 
  */
 
 def version() { "1.0.0" }
-def timeStamp() {"2023/04/14 11:34 AM"}
+def timeStamp() {"2023/04/14 12:02 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -43,12 +43,12 @@ metadata {
         capability 'Health Check'
         capability 'Light'
         capability 'Level Preset'
-        capability 'Light Effects'
+        //capability 'Light Effects'
         capability 'Refresh'
         capability 'Switch Level'
         capability 'Switch'
 
-        attribute 'effectName', 'string'
+        //attribute 'effectName', 'string'
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
 
         command 'identify', [[name: 'Effect type*', type: 'ENUM', description: 'Effect Type', constraints: IdentifyEffectNames.values()*.toLowerCase()]]
@@ -60,7 +60,7 @@ metadata {
             [name: 'Transition time', type: 'NUMBER', description: 'Transition duration in seconds']
         ]
         command 'setEnhancedHue', [[name: 'Hue*', type: 'NUMBER', description: 'Color Hue (0-360)']]
-        command 'setScene', [[name: 'Scene name*', type: 'ENUM', description: 'Philips Hue defined scene', constraints: HueColorScenes.keySet().sort()]]
+        //command 'setScene', [[name: 'Scene name*', type: 'ENUM', description: 'Philips Hue defined scene', constraints: HueColorScenes.keySet().sort()]]
 
         command 'stepColorTemperature', [
             [name: 'Direction*', type: 'ENUM', description: 'Direction for step change request', constraints: ['up', 'down']],
@@ -154,12 +154,12 @@ List<String> configure() {
 
     // Attempt to enable cluster reporting, if it fails we fall back to polling after commands
     if (settings.enableReporting == false) {
-        cmds += zigbee.configureReporting(PHILIPS_PRIVATE_CLUSTER, HUE_PRIVATE_STATE_ID, DataType.STRING_OCTET, 0, 0xFFFF, null, [mfgCode: PHILIPS_VENDOR], DELAY_MS)
+        //cmds += zigbee.configureReporting(PHILIPS_PRIVATE_CLUSTER, HUE_PRIVATE_STATE_ID, DataType.STRING_OCTET, 0, 0xFFFF, null, [mfgCode: PHILIPS_VENDOR], DELAY_MS)
         cmds += zigbee.configureReporting(zigbee.COLOR_CONTROL_CLUSTER, 0x00, DataType.UINT8, 0, 0xFFFF, 0, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
         cmds += zigbee.configureReporting(zigbee.COLOR_CONTROL_CLUSTER, 0x01, DataType.UINT8, 0, 0xFFFF, 1, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
     } else {
         log.info 'configure: attempting to enable state reporting'
-        cmds += zigbee.configureReporting(PHILIPS_PRIVATE_CLUSTER, HUE_PRIVATE_STATE_ID, DataType.STRING_OCTET, 1, REPORTING_MAX, null, [mfgCode: PHILIPS_VENDOR], DELAY_MS)
+        //cmds += zigbee.configureReporting(PHILIPS_PRIVATE_CLUSTER, HUE_PRIVATE_STATE_ID, DataType.STRING_OCTET, 1, REPORTING_MAX, null, [mfgCode: PHILIPS_VENDOR], DELAY_MS)
         cmds += zigbee.configureReporting(zigbee.COLOR_CONTROL_CLUSTER, 0x00, DataType.UINT8, 1, REPORTING_MAX, 1, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
         cmds += zigbee.configureReporting(zigbee.COLOR_CONTROL_CLUSTER, 0x01, DataType.UINT8, 1, REPORTING_MAX, 1, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
     }
@@ -254,7 +254,7 @@ void installed() {
     // populate some default values for attributes
     sendEvent(name: 'colorMode', value: 'CT')
     sendEvent(name: 'colorTemperature', value: 2700)
-    sendEvent(name: 'effectName', value: 'none')
+    //sendEvent(name: 'effectName', value: 'none')
     sendEvent(name: 'hue', value: 0, unit: '%')
     sendEvent(name: 'level', value: 0, unit: '%')
     sendEvent(name: 'saturation', value: 0)
@@ -458,6 +458,8 @@ List<String> setColorXy(final BigDecimal colorX, final BigDecimal colorY, final 
  * @return List of zigbee commands
  */
 List<String> setEffect(final BigDecimal number) {
+    logDebug "setEfect not supported (yet)!"
+    return ''
     final List<String> effectNames = parseJson(device.currentValue('lightEffects') ?: '[]')
     final Integer effectNumber = constrain(number, 0, effectNames.size())
     if (settings.txtEnable) {
