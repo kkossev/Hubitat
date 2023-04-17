@@ -50,8 +50,9 @@
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
- *                                  Frient freq. divisor fix; added  Instantaneous Demand (power) configuration;
+ *  ver. 1.7.4 2023-04-17 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; 
  *
+ *                                 TODO: energyDuration events have 'Days' in the value field!event type should be digital!
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
  *                                 TODO: 
  *
@@ -60,8 +61,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.3" }
-def timeStamp() {"2023/03/28 12:59 PM"}
+def version() { "1.7.4" }
+def timeStamp() {"2023/04/17 10:27 PM"}
 
 @Field static final Boolean debug = false
 
@@ -127,6 +128,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lsanae15", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.aliexpress.com/item/1005004399475951.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_1hwjutgo", deviceJoinName: "Tuya RC-MCB Circuit Breaker 2P"            // https://www.aliexpress.com/item/1005003725997370.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_lnggrqqi", deviceJoinName: "Tuya RC-MCB Circuit Breaker 2P"            // vendor: 'Mumubiz', model: 'ZJSB9-80Z' https://www.aliexpress.com/item/1005002605097816.html not tested  (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cjbofhxw", deviceJoinName: "MatSee Smart Meter with CT"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
@@ -2014,7 +2017,7 @@ def identify() {
 }
 
 def disableReporting(String measurement, Boolean sendNow=true) {
-    
+    // TODO
 }
 
 def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
