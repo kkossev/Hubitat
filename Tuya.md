@@ -54,7 +54,8 @@
  | DIN rail metering switch <br> ![image](https://user-images.githubusercontent.com/6189950/189324623-fed488ca-2c3c-42a4-9dd9-0fb979e937dc.png) | AliExpress: https://www.aliexpress.com/item/1005002983983361.html |
 |  Energy Meters  ![image](https://user-images.githubusercontent.com/6189950/147771140-a29c2401-9cd8-4e80-a777-93e0c5e183be.png)  | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://www.aliexpress.com/item/1005002409588154.html |
 |  Circuit Breakers ![image](https://user-images.githubusercontent.com/6189950/154424284-7cd1eea2-b0b9-4a89-9634-9876e4445005.png) | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://fr.aliexpress.com/item/1005003726599840.html  |
-| |
+| Tuya RC-MCB Circuit Breaker 2P <br> ![image](https://user-images.githubusercontent.com/6189950/232598234-b4a8515d-0610-4203-9efd-4489fde005ac.png)| Model:TS0601<br>Manufacturer: TZ3000_1hwjutgo TZ3000_lnggrqqi<br><br>https://www.aliexpress.com/item/1005003725997370.html |
+
 
 ----------------------------
 
