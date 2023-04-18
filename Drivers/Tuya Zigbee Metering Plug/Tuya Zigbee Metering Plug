@@ -50,7 +50,7 @@
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
- *  ver. 1.7.4 2023-04-17 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy monitoring bug fixes
+ *  ver. 1.7.4 2023-04-18 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy monitoring bug fixes.
  *
  *                                 TODO: energyDuration events have 'Days' in the value field!event type should be digital!
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
@@ -62,7 +62,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.4" }
-def timeStamp() {"2023/04/17 11:51 PM"}
+def timeStamp() {"2023/04/18 10:03 PM"}
 
 @Field static final Boolean debug = false
 
@@ -76,6 +76,7 @@ metadata {
         capability "Switch"
         capability "Outlet"
         capability "Refresh"
+        //capability "Configuration"
         capability "Sensor"
         capability "Health Check"
         
@@ -1002,6 +1003,7 @@ def parseZHAcommand( Map descMap) {
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
                             case "01" : // switch state on/of for all models except the DinRail
                                 if (!isDinRail())  {
+                                    logDebug "Tuya switch event cmd=(01) value=${value}"
                                     switchEvent(value==0 ? "off" : "on")
                                 }
                                 else {    //  Forward Energy Total _TZE200_eaac7dkw
@@ -1089,12 +1091,12 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
                                 break
                             case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101 // Total Energy ?
-                                logInfo "(101) Total  Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                 if ((device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) || isDinRail()) {
+                                    logInfo "(101) Total  Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                     energyEvent(value/getEnergyDiv())
                                 }
                                 else if (isHoch()) {
-                                    logDebug "isHoch() cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) | zigbee.convertHexToInt(descMap.data[6]) << 8)}"
+                                    logDebug "isHoch() cmd = ${cmd}  value = ${(zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) << 8)}"
                                     voltageEvent((zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) *256) / (getVoltageDiv() as Float))
                                 }
                                 else {
@@ -1103,22 +1105,25 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "66" : // (102) Amperage HOCH or Produced Energy
                                 if (isHoch()) {
-                                    amperageEvent(value/getCurrentDiv())
+                                    value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) *256) 
+                                    logInfo "(102)  Amperage HOCH : ${value/1000.0F} A (raw ${value})"
+                                    amperageEvent((value as Float)/1000.0F)
                                 }
                                 else {
-                                    logInfo "(102) Produced Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
+                                    logInfo "(102) Produced Energy : ${value} kWh  (raw ${value} )"
                                 }
                                 break
                             case "67" : // (103) hochActivePower: 103 Real Active Power [W]
-                                logInfo "(103) Real Active Power : ${value} raw (${value/getPowerDiv()} W)"
-                                powerEvent(value/getPowerDiv())
+                                value = (zigbee.convertHexToInt(descMap.data[8]) + zigbee.convertHexToInt(descMap.data[7]) *256) 
+                                logInfo "(103) Real Active Power : ${value/10.0} W (raw ${value})"
+                                powerEvent(value/10.0F)
                                 break
                             case "68" : // (104) hochLeakageCurrent: 104
-                                logInfo "(105) Hoch Leakage Current is : ${value/getCurrentDiv()} raw (${value}) A"
+                                logInfo "(104) Hoch Leakage Current is : ${value/getCurrentDiv()} raw (${value}) A"
                                 break
                             case "69" : // (105) temperatue for Hoch, frequency for others?
                                 if (isHoch()) {
-                                    logInfo "(105) Hoch temperature is : ${value} raw (${value}) C"
+                                    logInfo "(105) Hoch temperature is : ${value} C  (raw ${value}) "
                                     sendEvent(name:'temperature', value:value, unit:'C')
                                 }
                                 else 
@@ -1151,10 +1156,11 @@ def parseZHAcommand( Map descMap) {
                                 }
                                 break
                             case "71" : // (113) hochTotalActivePower: 113
-                                logInfo "(113) Hoch Total Active Power is : ${value/getPowerDiv()} raw (${value}) W"
+                                logInfo "(113) Hoch Total Active Power (energy) is : ${value/getEnergyDiv()} (raw ${value}) kWh"
+                                energyEvent(value/getEnergyDiv())    // should be 100
                                 break
                             case "75" : // (117) hochTotalReverseActivePower: 117
-                                logInfo "(113) Hoch Total Reverse Active Power is : ${value/getPowerDiv()} raw (${value}) W"
+                                logInfo "(117) Hoch Total Reverse Active Power is : ${value/getPowerDiv()} raw (${value}) W"
                                 break
                             
                             
