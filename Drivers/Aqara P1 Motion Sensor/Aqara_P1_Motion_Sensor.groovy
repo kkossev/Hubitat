@@ -36,7 +36,7 @@
  * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
- * ver. 1.4.1 2023-03-25 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; 
+ * ver. 1.4.1 2023-04-20 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 bug fix; light sensor delta = 5 lux
  * 
  *                                 TODO: 
  *                                 TODO: reporting time configuration for the Lux sensor
@@ -50,7 +50,7 @@
 */
 
 def version() { "1.4.1" }
-def timeStamp() {"2023/03/25 1:53 PM"}
+def timeStamp() {"2023/04/20 9:47 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -211,7 +211,7 @@ def isP1()        { if (deviceSimulation) return false else return (device.getDa
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
 def isE1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.magnet.acn001'] ) }   // Aqara E1 contact sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
-def isLightSensor() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor
+def isLightSensor() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sen_ill.mgl01', 'lumi.sen_ill.agl01'] ) } // Mi Light Detection Sensor; T1 light intensity sensor
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -1326,7 +1326,7 @@ def aqaraBlackMagic() {
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
 		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
         int secondsMinLux = 10
-        int variance = 1
+        int variance = 5
         logDebug "Minimum Update Time: ${(secondsMinLux == null ? 10 : secondsMinLux).intValue()}"
         cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, (secondsMinLux == null ? 10 : secondsMinLux).intValue(), 3600, variance, [:], delay=200)
         cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=200)
