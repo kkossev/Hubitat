@@ -29,8 +29,10 @@
  *  ver. 1.2.1 2023-03-12 kkossev - bugfix: debug/info logs were enabled after each version update; autoSendTimer is made optional (default:enabled for GiEX, disabled for SASWELL); added tuyaVersion; added _TZ3000_5ucujjts + fingerprint bug fix; 
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
+ *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  * 
- *                                  TODO: set device name from fingerprint 
+ *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
+ *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
  *                                  TODO: scheduleDeviceHealthCheck() on preference change
  *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
  *                                  TODO: duration in minutes ? 
@@ -42,8 +44,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.3" }
-def timeStamp() {"2023/03/26 7:50 PM"}
+def version() { "1.2.4" }
+def timeStamp() {"2023/04/09 10:55 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -58,6 +60,7 @@ metadata {
         capability "Battery"
         
         attribute "healthStatus", "enum", ["offline", "online"]
+        attribute "rtt", "number" 
         attribute "timerState", "enum", ["disabled", "active (on)", "enabled (off)"]
         attribute "timerTimeLeft", "number"
         attribute "lastValveOpenDuration", "number"
@@ -81,6 +84,7 @@ metadata {
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
             ]
             command "test", [[name:"description", type: "STRING", description: "description", constraints: ["STRING"]]]
+            command "testX"
         }
 
         deviceProfilesV2.each { profileName, profileMap ->
@@ -112,14 +116,12 @@ metadata {
 @Field static final Map deviceProfilesV2 = [
     "TS0001_VALVE_ONOFF"  : [
             model         : "TS0001",
-            manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TZ3000_oxslv1c9", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5"],
+            manufacturers : ["_TZ3000_iedbgyxt",  "_TZ3000_o4cjetlm", "_TYZB01_4tlksk8a","_TZ3000_h3noz0a5", "_TZ3000_5ucujjts"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_iedbgyxt"],    // https://community.hubitat.com/t/generic-zigbee-3-0-valve-not-getting-fingerprint/92614
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,E000,E001", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_o4cjetlm"],    // https://community.hubitat.com/t/water-shutoff-valve-that-works-with-hubitat/32454/59?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006",                     outClusters:"0003,0006,0004",model:"TS0001", manufacturer:"_TYZB01_4tlksk8a"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A",     model:"TS0001", manufacturer:"_TZ3000_h3noz0a5"],    // clusters verified
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006",                outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_rifa0wlb"],    // https://community.hubitat.com/t/tuya-zigbee-water-gas-valve/78412 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04", outClusters:"0019",          model:"TS0011", manufacturer:"_TYZB01_ymcdbl3u"],    // clusters verified
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001",      outClusters:"0019",          model:"TS0001", manufacturer:"_TZ3000_5ucujjts"]     // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/85?u=kkossev
             ],
             deviceJoinName: "Tuya Zigbee Valve TS0001",
@@ -250,6 +252,8 @@ def isConfigurable()         { def model = getModelGroup(); return isConfigurabl
 def isGIEX()                 { return getModelGroup().contains("GIEX") }    // GiEX valve device
 def isSASWELL()              { return getModelGroup().contains("SASWELL") }
 def isLIDL()                 { return getModelGroup().contains("LIDL") }
+def isTS0001()                { return getModelGroup().contains("TS0001") }
+def isTS0011()                { return getModelGroup().contains("TS0011") }
 def isBatteryPowered()       { return isGIEX() || isSASWELL()}
 
 // Constants
@@ -262,6 +266,8 @@ def isBatteryPowered()       { return isGIEX() || isSASWELL()}
 @Field static final Integer DEBOUNCING_TIMER = 300
 @Field static final Integer DIGITAL_TIMER = 3000
 @Field static final Integer REFRESH_TIMER = 3000
+@Field static final Integer COMMAND_TIMEOUT = 10
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
 @Field static String UNKNOWN = "UNKNOWN"
 
 
@@ -329,6 +335,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 def parse(String description) {
     checkDriverVersion()
     state.stats["RxCtr"] = (state.stats["RxCtr"] ?: 0) + 1
+    state.lastRx["parseTime"] = new Date().getTime()
     setHealthStatusOnline()
     logDebug "parse: description is $description"
     
@@ -378,6 +385,11 @@ def parse(String description) {
                 else if ( it.cluster == "0000" && it.attrId in ["0001", "FFE0", "FFE1", "FFE2", "FFE4", "FFFE", "FFDF"]) {
                     if (it.attrId == "0001") {
                         if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
+                        def now = new Date().getTime()
+                        def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+                        if (timeRunning < MAX_PING_MILISECONDS) {
+                            sendRttEvent()
+                        }
                     }
                     else {
                         if (logEnable) log.debug "${device.displayName} Tuya specific attribute ${it.attrId} reported: ${it.value}"    // not tested
@@ -395,6 +407,23 @@ def parse(String description) {
                     }
                     else {
                         if (logEnable) log.debug "${device.displayName} Cluster 0000 attribute ${it.attrId} reported: ${it.value}"
+                    }
+                }
+                else if ( it.cluster == "0006" ) {
+                    if (it.attrId == "4001") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} OnTime is ${it.value}"
+                    }
+                    else if (it.attrId == "4002") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} OffWaitTime is ${it.value}"
+                    }
+                    else if (it.attrId == "8001") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} IndicatorMode is ${it.value}"
+                    }
+                    else if (it.attrId == "8002") {
+                        logDebug "cluster ${it.cluster} attribute ${it.attrId} RestartStatus is ${it.value}"
+                    }
+                    else {
+                        logDebug "cluster 0006 attribute ${it.attrId} reported: ${it.value}"
                     }
                 }
                 else {
@@ -497,26 +526,35 @@ def parseSimpleDescriptorResponse(Map descMap) {
     if (logEnable==true) log.info "${device.displayName} Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
     def inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
     def inputClusterList = ""
-    for (int i in 1..inputClusterCount) {
-        inputClusterList += descMap.data[13+(i-1)*2] + descMap.data[12+(i-1)*2] + ","
-    }
-    inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
-    if (logEnable==true) log.info "${device.displayName} Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
-    if (getDataValue("inClusters") != inputClusterList)  {
-        if (logEnable==true) log.warn "${device.displayName} inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
-        updateDataValue("inClusters", inputClusterList)
+    if (inputClusterCount != 0) {
+        for (int i in 1..inputClusterCount) {
+            inputClusterList += descMap.data[13+(i-1)*2] + descMap.data[12+(i-1)*2] + ","
+        }
+        inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
+        if (logEnable==true) log.info "${device.displayName} endpoint ${descMap.data[5]} Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
+        if (descMap.data[5] == device.endpointId) {
+            if (getDataValue("inClusters") != inputClusterList)  {
+                if (logEnable==true) log.warn "${device.displayName} inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
+                updateDataValue("inClusters", inputClusterList)
+            }
+        }
     }
     
     def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12+inputClusterCount*2])
-    def outputClusterList = ""
-    for (int i in 1..outputClusterCount) {
-        outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
-    }
-    outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
-    if (logEnable==true) log.info "${device.displayName} Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
-    if (getDataValue("outClusters") != outputClusterList)  {
-        if (logEnable==true) log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
-        updateDataValue("outClusters", outputClusterList)
+    String outputClusterList = ""
+    if (outputClusterCount != 0) {
+        for (int i in 1..outputClusterCount) {
+            outputClusterList += descMap.data[14+inputClusterCount*2+(i-1)*2] + descMap.data[13+inputClusterCount*2+(i-1)*2] + ","
+        }
+        outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
+        if (logEnable==true) log.info "${device.displayName} endpoint ${descMap.data[5]} Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
+        if (descMap.data[5] == device.endpointId) {
+            if (getDataValue("outClusters") != outputClusterList)  {
+                if (logEnable==true) log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
+                updateDataValue("outClusters", outputClusterList)
+            }
+            else {log.warn "device.outClusters = ${device.outClusters} outputClusterList = ${outputClusterList}"}
+        }
     }
 }
 
@@ -871,14 +909,32 @@ def clearIsDigital() { state.states["isDigital"] = false }
 def switchDebouncingClear() { state.states["debounce"] = false }
 def isRefreshRequestClear() { state.states["isRefresh"] = false }
 
-// * PING is used by Device-Watch in attempt to reach the Device
 def ping() {
-    return refresh()
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    state.lastTx["pingTime"] = new Date().getTime()
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
 
-// Sends refresh / readAttribute commands to the device
-def poll() {
-    if (logEnable) {log.trace "${device.displayName} polling.."}
+def sendRttEvent() {
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - state.lastTx["pingTime"].toInteger()
+    def descriptionText = "Round-trip time is ${timeRunning} (ms)"
+    logInfo "${descriptionText}"
+    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+}
+
+// refresh() 
+def refresh() {
+    logDebug "refresh()..."
     checkDriverVersion()
     List<String> cmds = []
     state.states["isRefresh"] = true
@@ -892,17 +948,21 @@ def poll() {
     if (isSASWELL() || isGIEX()) {
         cmds += zigbee.command(0xEF00, 0x0, "00020100")
     }
+    if (isTS0001() || isTS0011()) {
+        cmds += zigbee.readAttribute(0xE000, 0xD001, [:], delay = 200)    // encoding:42, value:AAAA; attrId: D001, encoding: 48, value: 020006
+        cmds += zigbee.readAttribute(0xE000, 0xD002, [:], delay = 200)    // encoding: 48, value: 02000A
+        cmds += zigbee.readAttribute(0xE000, 0xD003, [:], delay = 200)
+        cmds += zigbee.readAttribute(0xE001, 0xD010, [:], delay = 200)    // powerOnBehavior: {ID: 0xD010, type: DataType.enum8},
+        cmds += zigbee.readAttribute(0xE001, 0xD030, [:], delay = 200)    // switchType: {ID: 0xD030, type: DataType.enum8},
+        cmds += zigbee.readAttribute(0x0006, 0x4001, [:], delay = 200)    // OnTime
+        cmds += zigbee.readAttribute(0x0006, 0x4002, [:], delay = 200)    // OffWaitTime
+        cmds += zigbee.readAttribute(0x0006, 0x8001, [:], delay = 200)    // IndicatorMode: 1
+        cmds += zigbee.readAttribute(0x0006, 0x8002, [:], delay = 200)    // RestartStatus: 2 
+    }
     runInMillis( REFRESH_TIMER, isRefreshRequestClear, [overwrite: true])           // 3 seconds
     if (cmds != null && cmds != [] ) {
         sendZigbeeCommands(cmds)
     }
-
-}
-
-
-def refresh() {
-    if (logEnable) {log.debug "${device.displayName} sending refresh() command..."}
-    poll()
 }
 
 
@@ -946,7 +1006,6 @@ def configure() {
             // TODO - skip it for the battery powered irrigation timers? (Response cluster: E001 status:86)
             logDebug "setting powerOnBehaviour to ${modeName.value} (${settings?.powerOnBehaviour})"
             cmds += zigbee.writeAttribute(0xE001, 0xD010, DataType.ENUM8, (byte) safeToInt(settings?.powerOnBehaviour), [:], delay=251)
-            //cmds += zigbee.readAttribute(0xE001, 0xD010, [:], delay=101)
         }
     }
     
@@ -996,11 +1055,11 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
 // This method is called when the preferences of a device are updated.
 def updated(){
     checkDriverVersion()
-    if (txtEnable==true) log.info "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) model ${getModelGroup()}"
-    if (txtEnable==true) log.info "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
+    logInfo "Updating ${(device.getLabel() ?: '[no lablel]')} (${device.getName()}) device model ${deviceModel} manufacturer ${deviceManufacturer} deviceProfile ${getModelGroup()} (driver version ${driverVersionAndTimeStamp()}) "
+    logInfo "Debug logging is <b>${logEnable}</b> Description text logging is  <b>${txtEnable}</b>"
     if (logEnable==true) {
-        runIn(/*1800*/86400, logsOff, [overwrite: true])    // turn off debug logging after /*30 minutes*/24 hours
-        if (txtEnable==true) log.info "Debug logging will be automatically switched off after 24 hours"
+        runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
+        logInfo "Debug logging will be automatically switched off after 24 hours"
     }
     else {
         unschedule(logsOff)
@@ -1011,6 +1070,8 @@ def updated(){
 def resetStats() {
     state.stats = [:]
     state.states = [:]
+    state.lastRx = [:]
+    state.lastTx = [:]
     state.stats["RxCtr"] = 0
     state.stats["TxCtr"] = 0
     state.states["isDigital"] = false
@@ -1019,6 +1080,7 @@ def resetStats() {
     state.states["lastSwitch"] = "unknown"
     if (isBatteryPowered()) { state.states["lastBattery"] = "100" }
     state.states["notPresentCtr"] = 0
+    state.lastTx["pingTime"] = new Date().getTime()
 }
 
 
@@ -1036,6 +1098,9 @@ void initializeVars( boolean fullInit = true ) {
     
     if (state.stats == null)  { state.stats  = [:] }
     if (state.states == null) { state.states = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    
     if (fullInit == true || state.states["lastSwitch"] == null) state.states["lastSwitch"] = "unknown"
     if (fullInit == true || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
@@ -1097,7 +1162,7 @@ def initialize() {
 
 // This method is called when the device is first created.
 def installed() {
-    if (txtEnable==true) log.info "${device.displayName} Installed()..."
+    log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     initializeVars()
     runIn( 5, initialize, [overwrite: true])
     if (logEnable==true) log.debug "calling initialize() after 5 seconds..."
@@ -1110,6 +1175,7 @@ void uninstalled() {
 }
 
 void scheduleDeviceHealthCheck() {
+    logDebug "scheduleDeviceHealthCheck()..."
     Random rnd = new Random()
     //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
     schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
@@ -1186,10 +1252,11 @@ boolean isTuyaE00xCluster( String description )
         return false 
     }
     // try to parse ...
-    logDebug "Tuya cluster: E000 or E001 - try to parse it..."
+    //logDebug "Tuya cluster: E000 or E001 - try to parse it..."
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}"
     }
     catch ( e ) {
         logDebug "<b>exception</b> caught while parsing description:  ${description}"
@@ -1197,8 +1264,11 @@ boolean isTuyaE00xCluster( String description )
         // cluster E001 is the one that is generating exceptions...
         return true
     }
-    if (descMap.cluster == "E001" && descMap.attrId == "D010") {
-        
+
+    if (descMap.cluster == "E000" && descMap.attrId in ["D001", "D002", "D003"]) {
+        logInfo "Tuya Specific cluster ${descMap.cluster} attribute ${descMap.attrId} value is ${descMap.value}"
+    }
+    else if (descMap.cluster == "E001" && descMap.attrId == "D010") {
         logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})"
     }
     else if (descMap.cluster == "E001" && descMap.attrId == "D030") {
@@ -1206,11 +1276,9 @@ boolean isTuyaE00xCluster( String description )
     }
     else {
         logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap"
+        return false 
     }
-    
-    
-    //
-    return true
+    return true    // processed
 }
 
 boolean otherTuyaOddities( String description )
@@ -1263,23 +1331,6 @@ def logWarn(msg) {
             0xEF04: ("dp_6", t.uint32_t, True),
         }
     )
-
-
-https://github.com/sprut/Hub/issues/1068
-0006_OnOff
-    0000_OnOff: true
-    4001_OnTime: 0
-    4002_OffWaitTime: 0
-    8001_IndicatorMode: 1
-    8002_RestartStatus: 2
-
-E000_ManufacturerSpecific
-    D001_Custom: ByteArray [value=00 06]
-    D002_Custom: ByteArray [value=00 0A]
-    D003_Custom: AAAA
-
-E001_ManufacturerSpecific
-    D030_Custom: 2
 
 */
 
@@ -1417,3 +1468,18 @@ def test( description ) {
 //    log.trace "getPowerSource()=${getPowerSource()}"
     
 }
+
+def testX()
+{
+    logWarn "sending Active Endpoints and Simple Descriptor Requests"
+    List<String> cmds = []
+    def endpointIdTemp
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] // ZDO(x0000) Active Endpoints Request (cluster 0x0005)
+    endpointIdTemp = "01"
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
+    endpointIdTemp = "F2"
+    cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
+    sendZigbeeCommands(cmds)
+}
+
+
