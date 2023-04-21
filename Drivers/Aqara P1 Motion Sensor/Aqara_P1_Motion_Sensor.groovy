@@ -36,7 +36,7 @@
  * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
- * ver. 1.4.1 2023-04-20 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 bug fix; light sensor delta = 5 lux
+ * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
  * 
  *                                 TODO: 
  *                                 TODO: reporting time configuration for the Lux sensor
@@ -50,7 +50,7 @@
 */
 
 def version() { "1.4.1" }
-def timeStamp() {"2023/04/20 9:47 PM"}
+def timeStamp() {"2023/04/21 9:54 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -110,14 +110,15 @@ metadata {
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019,FCC0", model:"lumi.motion.ac02",  manufacturer:"LUMI",  deviceJoinName: "Aqara P1 Motion Sensor RTCGQ14LM"                     // Aqara P1 presence sensor RTCGQ14LM {manufacturerCode: 0x115f}
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl04", manufacturer:"LUMI",  deviceJoinName: "Aqara High Precision Motion Sensor RTCGQ13LM"         // Aqara precision motion sensor
-        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"        // RTCZCGQ11LM ( FP1 )
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FCC0",      outClusters:"0003,0019",      model:"lumi.motion.ac01",  manufacturer:"aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM"        // RTCZCGQ11LM ( FP1 )
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0406,0003,0001", outClusters:"0003,0019",      model:"lumi.motion.agl02", manufacturer:"LUMI",  deviceJoinName: "Aqara T1 Motion Sensor RTCGQ12LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0", outClusters:"0003,0019",     model:"lumi.motion.acn001", manufacturer:"LUMI",  deviceJoinName: "Aqara E1 Motion Sensor RTCGQ15LM"                     // https://zigbee.blakadder.com/Aqara_RTCGQ12LM.html RTCGQ12LM T1 motion sensor 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FFFF,0406,0400,0500,0001,0003", outClusters:"0000,0019", model:"lumi.sensor_motion.aq2", manufacturer:"LUMI", deviceJoinName: "Aqara Motion Sensor RTCGQ11LM"          // https://zigbee.blakadder.com/Aqara_RTCGQ11LM.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FFFF,0019", outClusters:"0000,0004,0003,0006,0008,0005,0019", model:"lumi.sensor_motion", manufacturer:"LUMI", deviceJoinName: "Xiaomi/Mijia Motion Sensor RTCGQ01LM"   // https://zigbee.blakadder.com/Xiaomi_RTCGQ01LM.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // Mi Light Detection Sensor GZCGQ01LM
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
         // experimental
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: aqaraModels['MCCGQ14LM'].deviceJoinName               // tests only : "Aqara Contact Sensor MCCGQ14LM"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // tests only : "Mi Light Detection Sensor GZCGQ01LM"
+        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: aqaraModels['MCCGQ14LM'].deviceJoinName               // tests only : "Aqara Contact Sensor MCCGQ14LM"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         
     }
@@ -191,13 +192,11 @@ metadata {
     'RTCGQ01LM': [
         model: "lumi.sensor_motion", manufacturer: "LUMI", deviceJoinName: "Xiaomi Motion Sensor RTCGQ01LM"
     ],
-    // experimental
-    'MCCGQ14LM': [
-        model: "lumi.magnet.acn001", manufacturer: "LUMI", deviceJoinName: "Aqara Contact Sensor MCCGQ14LM"
-    ],
     'GZCGQ01LM': [
-        model: "lumi.sen_ill.mgl01", manufacturer: "LUMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"
+        model: "lumi.sen_ill.mgl01", manufacturer: "LUMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM"    // aka vendor: 'Xiaomi', model: 'YTC4043GL'
+        // also model: "lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
     ],
+    // experimental
     'GZCGQ11LM': [
         model: "lumi.sen_ill.agl01", manufacturer: "LUMI", deviceJoinName: "Aqara T1 light intensity sensor GZCGQ11LM"
     ]
@@ -211,7 +210,9 @@ def isP1()        { if (deviceSimulation) return false else return (device.getDa
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
 def isE1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.magnet.acn001'] ) }   // Aqara E1 contact sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
-def isLightSensor() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.sen_ill.mgl01', 'lumi.sen_ill.agl01'] ) } // Mi Light Detection Sensor; T1 light intensity sensor
+def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor; T1 light intensity sensor
+def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
+def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara()) }
 
 private P1_LED_MODE_VALUE(mode) { mode == "Disabled" ? 0 : mode == "Enabled" ? 1 : null }
 private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled" : null }
@@ -257,7 +258,7 @@ def parse(String description) {
             }
 		    else if (it.cluster == "0400" && it.attrId == "0000") {    // lumi.sensor_motion.aq2
                 def rawLux = Integer.parseInt(it.value,16)
-                if (device.getDataValue('model') in ['lumi.sen_ill.mgl01', 'lumi.sen_ill.agl01']) {
+                if (isLightSensorAqara() || isLightSensorXiaomi()) {
                     illuminanceEvent( rawLux )
                 }
                 else {
@@ -1285,7 +1286,10 @@ def aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    //  battery voltage
         cmds += zigbee.readAttribute(0x0002, 0x0500, [mfgCode: 0x115F], delay=200)    //  open/close IAS Zone 2
     }
-    else if (isLightSensor()) {  // 
+    else if (isLightSensorAqara()) {
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
+    }
+    else if (isLightSensorXiaomi()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)
     }
     else {
@@ -1320,7 +1324,7 @@ def aqaraBlackMagic() {
         //cmds += activeEndpoints()         
         logDebug "aqaraBlackMagic() for FP1"
     }
-    else if (isLightSensor()) {
+    else if (isLightSensorXiaomi()) {
 		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
@@ -1332,6 +1336,11 @@ def aqaraBlackMagic() {
         cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=200)
 	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
+    }
+    else if (isLightSensorAqara()) {    // 'lumi.sen_ill.agl01' Aqara Light Sensor T1
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0009, DataType.UINT8, 0x01, [mfgCode: 0x115F], delay=50)      // mode UINT8
+        cmds += zigbee.readAttribute(0xFCC0, 0x0000, [mfgCode: 0x115F], delay=200)    //  detection period ??? range 1..59 (seconds). Also Write ?
+        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    //  illuminance UINT32
     }
     else {
         //logWarn "aqaraBlackMagic() = NOT E1 !!!!!!"
