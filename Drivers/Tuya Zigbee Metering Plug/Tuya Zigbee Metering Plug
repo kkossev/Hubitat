@@ -50,7 +50,7 @@
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
- *  ver. 1.7.4 2023-04-19 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage are OK!
+ *  ver. 1.7.4 2023-04-22 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type.
  *
  *                                 TODO: RCBO: send temperature event only when changed; raname Hoch to RCBO; revise configure/initialize sequence; 
  *                                 TODO: energyDuration events have 'Days' in the value field!event type should be digital!
@@ -63,7 +63,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.4" }
-def timeStamp() {"2023/04/19 7:14 AM"}
+def timeStamp() {"2023/04/22 10:30 AM"}
 
 @Field static final Boolean debug = false
 
@@ -98,7 +98,7 @@ metadata {
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
         command "resetEnergy", [[name: "Reset the accumulated Energy value" ]]
         
-        if (debug == true) {
+        if (_DEBUG == true) {
             command "activeEndpoints"
             command "identify", [[name: "Identify the plug for 30 seconds"]]    // works for my OSRAM plug only? :( 
             command "configureReporting", [ 
@@ -207,7 +207,7 @@ metadata {
     preferences {
         input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended setting is <b>off</b></i>", defaultValue: false)
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended setting is <b>on</b></i>", defaultValue: true)
-        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>", defaultValue: false)
+        input (name: "autoReportingEnabled", type: "bool", title: "<b>Automatic reporting configuration</b>", description: "<i>Enable the configuration of outlet automatic reporting, if supported by the device. Default setting is <b>off</b></i>", defaultValue: false)
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value == true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>", 
@@ -316,6 +316,7 @@ private boolean isDevelco() { device.getDataValue("model") == "EMIZB-132" }
 private boolean isOsramPlug01() {(device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM')}
 private boolean isSiHAS() { device.getDataValue("manufacturer") == "ShinaSystem" }
 private boolean isThirdReality() { device.getDataValue("manufacturer") == "Third Reality, Inc" }
+private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdReality() }
 
 private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }    // Tuya :  energyDiv = 100
@@ -1496,7 +1497,7 @@ def fixOtherTuyaOddities() {
         cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 2820 1291 41 60 3600 {0A00} {}", "delay 255", ]        // power //zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, 10)    // power
         cmds += ["he cr 0x${device.deviceNetworkId} 0x${endpoint} 1794 0 37 60 3600 {010000000000} {}", "delay 256", ]   // energy //zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, 1)    // energy
         if (!isTuyaSpecificCluster()) {
-            cmds += zigbee.configureReporting(0x0B04, 0x0300, DataType.UINT16, 5, 3600, 1, [destEndpoint :0x01 ], delay=257)
+            cmds += zigbee.configureReporting(0x0B04, 0x0300, DataType.UINT16, 5, 3600, 1, [destEndpoint :0x01 ], delay=257)    // TODO: check why is always enabled?
         }
         cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
         cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint : 0x01], delay=200)    // Power, Voltage and Amperage at once!
@@ -1672,6 +1673,7 @@ void initializeVars( boolean fullInit = false ) {
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
+    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
     
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -1683,10 +1685,8 @@ void initializeVars( boolean fullInit = false ) {
         state.model = UNKNOWN
     }
     
-    
     state.rxCounter = 0
     state.txCounter = 0
-    //if (fullInit == true || state.lastPower == null) state.lastPower = 0.0
     if (state.lastEnergyRaw == null) state.lastEnergyRaw = 0.0
     if (state.lastEnergyCost == null) state.lastEnergyCost = 0.0
     if (state.lastSwitchState == null) state.lastSwitchState = "unknown"
@@ -1702,16 +1702,16 @@ void initializeVars( boolean fullInit = false ) {
         state.lastHourlyEnergy = preservedLastHourlyEnergy
     }
     if (state.lastResetDate == null) state.lastResetDate = FormattedDateTimeFromUnix( now() )    // do not reset on Initialize!
-    if (debug == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
-    else                { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
+    if (_DEBUG == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
+    else                 { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.autoPollingEnabled == null) device.updateSetting("autoPollingEnabled", true)
-    if (fullInit == true || settings?.autoReportingEnabled == null) device.updateSetting("autoReportingEnabled", false)
+    if (fullInit == true || settings?.autoPollingEnabled == null) { device.updateSetting("autoPollingEnabled", isReportingConfigurable() ? false : true) }
+    if (fullInit == true || settings?.autoReportingEnabled == null) { device.updateSetting("autoReportingEnabled", isReportingConfigurable() ? true : false) }
     if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
-    if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"POLLED", type:"enum"])
+    if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value: (isReportingConfigurable() ? "REPORTED" : "POLLED"), type:"enum"])
     if (fullInit == true || settings?.fixedPower == null) device.updateSetting("fixedPower", [value:100, type:"number"])
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
     if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", [value:900, type:"number"])
@@ -1723,7 +1723,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
     if (fullInit == true || settings?.pulseConfiguration == null) device.updateSetting("pulseConfiguration", [value:1000, type:"number"])
     if (fullInit == true || settings?.frientEnergyMeterMode == null) device.updateSetting("frientEnergyMeterMode", [value:"0", type:"enum"])    // electricity
-    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
@@ -1752,7 +1751,6 @@ void initializeVars( boolean fullInit = false ) {
     }
     if (fullInit == true || state.energyPollingSupported == null) state.energyPollingSupported = true
     if (fullInit == true || state.rejoinCounter == null) state.rejoinCounter = 0
-    
     
     def ep = device.getEndpointId()
     if ( ep  != null && ep != 'F2') {
@@ -2075,7 +2073,7 @@ def configureReporting(String operation, String measurement,  String minTime="0"
     def ep = safeToInt(state.destinationEP)
     if (ep==null || ep==0) ep = 1
     
-    if (settings?.logEnable) log.trace "${device.displayName} configureReporting operation=${operation}, measurement=${measurement}  minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
+    logDebug "configureReporting operation=${operation}, measurement=${measurement}, minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
 
     List<String> cmds = []      
     
@@ -2159,15 +2157,6 @@ def setEnergyPrice( price )
     if (price != null) {
         def priceDouble = safeToDouble( price ).round(6)
         if (priceDouble >= 0.001) {
-            /*
-            if (settings?.logEnable) log.debug "${device.displayName} updating energyPrice to ${priceDouble} after 3 seconds ..."
-            def energyTotal = safeToDouble(device.currentValue("energy", true)) + safeToDouble(state.lastResetEnergy))
-            def hourlyTotal = safeToDouble(device.currentValue("hourlyEnergy", true)) + safeToDouble(state.lastResetEnergy))
-            energyEvent( energyTotal, isDigital=true )
-            hourlyEnergyEvent( device.currentValue("hourlyEnergy", true), isDigital=true )
-*/
-            //energyCostEvent( 0, isDigital=true ) 
-            //energyDurationEvent( 0, isDigital=true  )               //
             refresh()        //  poll(true)
             runIn(3, 'setEnergyPriceDelayed',  [overwrite: true, data: priceDouble])
         }
