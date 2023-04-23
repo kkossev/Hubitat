@@ -31,16 +31,19 @@
  * ver. 1.3.0  2023-02-02 kkossev - healthStatus; added capability 'Health Check'
  * ver. 1.3.1  2023-02-10 kkossev - added RH3052 TUYATEC-gqhxixyk
  * ver. 1.3.2  2023-03-04 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
- * ver. 1.3.3  2023-03-10 kkossev - (dev.branch)
+ * ver. 1.3.3  2023-04-23 kkossev - (dev.branch) _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
  * 
+ *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
+ *                                  TODO: add individual stat.stats counters for t/H/I/battery
+ *                                  TODO: healthStatus check periodic job is not started sometimes?
  *                                  TODO:  add Sonoff SNZB-02D (CR2450 battery, C/F)
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
- *                                  TODO: add Battery minimum reporting time default 8 hours?
+ *                                  TODO: add Batteryreporting time configuration (like in TS004F driver)
  *
 */
 
 def version() { "1.3.3" }
-def timeStamp() {"2023/03/10 1:18 PM"}
+def timeStamp() {"2023/04/23 9:06 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -49,8 +52,6 @@ import hubitat.device.HubAction
 import hubitat.device.Protocol
 
 @Field static final Boolean debug = false
-@Field static final Integer defaultMinReportingTime = 10
-
 
 metadata {
     definition (name: "Tuya Temperature Humidity Illuminance LCD Display with a Clock", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Temperature%20Humidity%20Illuminance%20LCD%20Display%20with%20a%20Clock/Tuya_Temperature_Humidity_Illuminance_LCD_Display_with_a_Clock.groovy", singleThreaded: true ) {
@@ -76,7 +77,8 @@ metadata {
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****" ]]
         
         attribute   "_info", "string"        // when defined as attributes, will be shown on top of the 'Current States' list ...
-        attribute "healthStatus", "enum", ["offline", "online"]
+        attribute "healthStatus", "enum", ["unknown", "offline", "online"]
+        attribute "rtt", "number" 
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lve3dvpy", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock"
@@ -102,7 +104,7 @@ metadata {
         // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                  // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
@@ -117,8 +119,8 @@ metadata {
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -229,7 +231,8 @@ metadata {
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
-    'SONOFF '           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
+    'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
+    'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -262,6 +265,11 @@ def isConfigurable()  { getModelGroup() in ['Zigbee NON-Tuya', 'TS0201_TH'] }
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
 @Field static final Integer presenceCountTreshold = 4
+@Field static final Integer defaultMinReportingTime = 10
+@Field static final Integer REFRESH_TIMER = 3000
+@Field static final Integer COMMAND_TIMEOUT = 10
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
+@Field static String UNKNOWN = "UNKNOWN"
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -343,6 +351,16 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             motionEvent( raw & 0x01 )
 		}
+        else if (descMap.cluster == "0000" && descMap.attrId == "0001") {    // ping    
+            // descMap = [raw:0D310100000A01002004, dni:0D31, endpoint:01, cluster:0000, size:0A, attrId:0001, encoding:20, command:01, value:04, clusterInt:0, attrInt:1]
+            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap?.value})"
+            def now = new Date().getTime()
+            Map lastTxMap = stringToJsonMap(state.lastTx)
+            def timeRunning = now.toInteger() - (lastTxMap.pingTime ?: '0').toInteger()
+            if (timeRunning < MAX_PING_MILISECONDS) {
+                sendRttEvent()
+            }
+        }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         }
@@ -791,8 +809,11 @@ private void sendDelayedEventTemp(Map map) {
 
 def humidityEvent( humidity, isDigital=false ) {
     def map = [:]
-    def humidityAsDouble = safeToDouble(humidity) +safeToDouble(settings?.humidityOffset)
-    humidityAsDouble = humidityAsDouble < 0.0 ? 0.0 : humidityAsDouble > 100.0 ? 100.0 : humidityAsDouble
+    double humidityAsDouble = safeToDouble(humidity) + safeToDouble(settings?.humidityOffset)
+    if (humidityAsDouble <= 0.0 || humidityAsDouble > 100.0) {
+        logWarn "ignored invalid humidity ${humidity} (${humidityAsDouble})"
+        return
+    }
     map.value = Math.round(humidityAsDouble)
     map.name = "humidity"
     map.unit = "% RH"
@@ -800,7 +821,6 @@ def humidityEvent( humidity, isDigital=false ) {
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
     Map lastRxMap = stringToJsonMap(state.lastRx)
-    //if (state.lastHumi == null ) state.lastHumi = now() - (minReportingTimeHumidity * 2000)
     def timeElapsed = Math.round((now() - lastRxMap['humiTime'])/1000)
     Integer timeRamaining = (minReportingTimeHumidity - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeHumidity) {
@@ -1109,7 +1129,7 @@ def refresh() {
     if (getModelGroup() == 'TS0222') {
         pollTS0222()
     }
-    else if (getModelGroup() in ['TS0201_TH']) {
+    else if (true /*getModelGroup() in ['TS0201_TH']*/) {
         List<String> cmds = []
         cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200) 
 	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)
@@ -1120,6 +1140,33 @@ def refresh() {
         logInfo "refresh() is not implemented for this sleepy Zigbee device"
     }
 }
+
+def ping() {
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    Map lastTxMap = stringToJsonMap(state.lastTx)
+    lastTxMap.pingTime = new Date().getTime()
+    state.lastTx = mapToJsonString(lastTxMap)
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+}
+
+def sendRttEvent() {
+    def now = new Date().getTime()
+    Map lastTxMap = stringToJsonMap(state.lastTx)
+    def timeRunning = now.toInteger() - lastTxMap.pingTime.toInteger()
+    def descriptionText = "Round-trip time is ${timeRunning} (ms)"
+    logInfo "${descriptionText}"
+    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+}
+
 
 def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
