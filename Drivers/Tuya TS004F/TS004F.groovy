@@ -1,5 +1,9 @@
 /**
- *  Scene switch TS004F driver for Hubitat Elevation hub.
+ *  Tuya Scene Switch TS004F w/ healthStatus driver for Hubitat Elevation hub.
+ *
+ *  Supports Tuya (Moes, Zemismart, LoraTap, .....) buttons and scene switches and remotes (1,2,3,4,5,6 buttons), smart knobs, Konke, icasa
+ *
+ *  https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823
  *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
@@ -37,7 +41,10 @@
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
+ * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added "AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
  *
+ *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
+ *                                   - TODO: Sonoff button - battery reporting to be enabled by default; Refresh to read battery level/voltage';
  *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
  *                                   - TODO: Debug logs off after 24 hours
@@ -53,8 +60,8 @@
  *
  */
 
-def version() { "2.6.3" }
-def timeStamp() {"2023/03/11 8:17 PM"}
+def version() { "2.6.4" }
+def timeStamp() {"2023/04/27 5:29 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -76,6 +83,8 @@ metadata {
     capability "PowerSource"
     capability "Configuration"
     capability "Health Check"
+    //capability "SwitchLevel"
+    //capability "Switch"
 
     attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
@@ -104,6 +113,8 @@ metadata {
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_adkvzooy", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button" // not tested
     fingerprint inClusters: "0000,000A,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3000_peszejy7", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019", manufacturer: "_TYZB02_key8kk7r", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
+    fingerprint profileId: "0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0041", manufacturer:"_TZ3000_fa9mlvja"    // https://www.aliexpress.com/item/1005005363529624.html         
+        
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0006,0008,1000", manufacturer: "_TZ3000_ja5osu5g", model: "TS004F", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_rco1yzb1", model: "TS004F", deviceJoinName: "LIDL Smart Button SSBM A1"
         
@@ -150,6 +161,10 @@ metadata {
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0B05,1000", outClusters: "0003,0004,0005,0006,0008,0019,0300,1000", model:"ICZB-KPD18S", manufacturer:"icasa", deviceJoinName: "Icasa 8 button Scene Switch"    //https://community.hubitat.com/t/beginners-question-fantastic-button-controller-not-working/103914
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0001", outClusters: "0006,0003", model: "WB01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
+    // OSRAM Lightify - use HE inbuilt driver to pair first !   
+    //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0020,1000,FD00", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"Lightify Switch Mini", manufacturer:"OSRAM", deviceJoinName: "Lightify Switch Mini"        
     // 4 button        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "4 Button Smart Remote Controller"     // https://www.aliexpress.com/item/4001062612446.html
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_fsiepnrh", deviceJoinName: "4 Button Smart Remote Controller"
@@ -165,7 +180,7 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_wr2ucaj9", deviceJoinName: "Tuya SOS button"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_zsh6uat3", deviceJoinName: "Tuya SOS button"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_tj4pwzzm", deviceJoinName: "Tuya SOS button"
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_2izubafb", deviceJoinName: "Tuya SOS button"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_2izubafb", deviceJoinName: "Tuya SOS button"    // @abraham
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_pkfazisv", deviceJoinName: "Tuya SOS button"
             
     }
@@ -197,6 +212,9 @@ def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "T
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
 def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
+def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
+def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
+def isOsram() {device.getDataValue("manufacturer") == "OSRAM"}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 
@@ -277,6 +295,29 @@ def parse(String description) {
                 return null 
             }
         } // command == "FD"
+        else if (isSonoff() && (descMap.clusterInt == 0x0006 && (descMap.command in ["00","01","02" ]))) {
+            // Sonoff SNZB-01
+            buttonNumber = 1
+            buttonState = descMap.command == "02" ? "pushed" : descMap.command == "01" ? "doubleTapped" : descMap.command == "00" ? "held" : "unknown"
+        }
+        else if (isIkea() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) {
+            // IKEA Tradfri Shortcut Button E1812
+            buttonNumber = 1
+            if (descMap.clusterInt == 0x0006 && descMap.command == "01") buttonState = "pushed"    
+            else if (descMap.clusterInt == 0x0008 && descMap.command == "05") buttonState = "held"  
+            else if (descMap.clusterInt == 0x0008 && descMap.command == "07") buttonState = "released"
+            else buttonState = "unknown"
+        }
+        else if (isOsram() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","03","05","04","00" ]))) {
+            // OSRAM Lightify Mini
+            buttonNumber = safeToInt(descMap.sourceEndpoint)
+            if (descMap.command == "01") buttonState = "pushed"
+            else if (descMap.command == "04") buttonState = "pushed" 
+            else if (descMap.command == "00") buttonState = "pushed" 
+            else if (descMap.command == "05") buttonState = "held"  
+            else if (descMap.command == "03") buttonState = "released"
+            else buttonState = "unknown"
+        }        
         else if (descMap.clusterInt == 0x0501) { 
             // TODO: Make the button numbers compatible with Muxa's driver : 1 - Arm Away (left); 2 - Disarm (right); 3 - Arm Home (top); 4 - Panic (bottom) // https://community.hubitat.com/t/release-heiman-zigbee-key-fob-driver/27002 
             if (descMap.command == "02" && descMap.data.size() == 0)  {
@@ -311,7 +352,7 @@ def parse(String description) {
             }
             buttonState = "pushed"
         }
-        else if (descMap.clusterId in ['0000', '0006', 'E001'] && descMap.command == "01") { // read attribute response
+        else if (descMap.clusterId in ['0000', '0006', 'E001'] && descMap.command == "01" && descMap.data?.size() >=3) { // read attribute response
             if (descMap.data[2] == '86') {
                 if (logEnable) log.debug "${device.displayName} readAttributeResponse cluster: ${descMap.clusterId} unsupported attribute ${descMap.data[1]+descMap.data[0]} status:${descMap.data[2]}"
             }
@@ -325,8 +366,16 @@ def parse(String description) {
             return null
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
-            if (logEnable) log.debug "${device.displayName} received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
+            logInfo "received device announcement, Device network ID: ${descMap.data[2]+descMap.data[1]}"
             state.stats["rejoinCtr"] = (state.stats["rejoinCtr"] ?: 0) + 1
+            return null
+        }
+        else if (descMap?.profileId == '0000' && descMap?.clusterId == '8021') { // bind response
+            logInfo "received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'Success' : '<b>Failure</b>'})"
+            return null
+        }
+        else if (descMap?.profileId == '0000' && descMap?.clusterId == '8034') { // leave response
+            logInfo "leave response cluster: ${descMap.clusterId}"
             return null
         }
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
@@ -523,7 +572,7 @@ void initializeVars(boolean fullInit = false ) {
         state.stats = [:]
     }
     if (state.stats == null) { state.stats = [:] }
-    state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke"
+    state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke, Sonoff"
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", DEFAULT_LOG_ENABLE)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
@@ -543,15 +592,39 @@ def installed()
   	initialize()
 }
 
+@Field static final Integer[][] Lightify = [
+    [0x0a,0x20,0x01],
+    [0x0b,0x20,0x00]
+]
+
 def initialize() {
     if (/*true*/ isTuya()) {
         tuyaMagic()
-    } else {
+    } 
+    else if (isSonoff()) {
+        //def endpoint = 0x01
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0001 0x0021 {}", "delay 200", ])
+    }    
+    else if (isOsram()) {
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0300 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x02 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x02 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x02 0x01 0x0300 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
+        sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x03 0x01 0x0300 {${device.zigbeeId}} {}", "delay 50", ])
+        //sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x04 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
+        //sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x04 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
+    }    
+    else {
     	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
     }
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
-    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || device.getDataValue("manufacturer") == "_TZ3000_ja5osu5g") {
+    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || (device.getDataValue("manufacturer") in ["_TZ3000_ja5osu5g", "eWeLink"])) {
     	numberOfButtons = 1
     } 
     else if (device.getDataValue("model") == "TS0042") {
@@ -586,6 +659,14 @@ def initialize() {
         numberOfButtons = 8
         supportedValues = ["pushed", "held", "released"]
     } 
+    else if (isIkea()) {
+        numberOfButtons = 1
+        supportedValues = ["pushed", "held", "released"]
+    } 
+    else if (isOsram()) {    // mini
+        numberOfButtons = 3
+        supportedValues = ["pushed", "held", "released"]
+    }
     else {
     	numberOfButtons = 4	// unknown
         supportedValues = ["pushed", "double", "held", "released"]
@@ -652,6 +733,14 @@ def switchMode( mode ) {
     else if (mode == "scene") {
         switchToSceneMode()
     }
+}
+
+Integer safeToInt(val, Integer defaultVal=0) {
+	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+Double safeToDouble(val, Double defaultVal=0.0) {
+	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 def tuyaMagic() {
@@ -750,5 +839,8 @@ def logWarn(msg) {
 def test(String description) {
     log.warn "test: ${description}"
     parse(description)
-    
+    // TODO: add Centralite / Iris buttons : https://raw.githubusercontent.com/chalford-st/SmartThingsPublic/master/devicetypes/smartthings/zigbee-button.src/zigbee-button.groovy
+    // TODO: Check Osrma mini driver: https://raw.githubusercontent.com/chalford-st/SmartThingsPublic/master/devicetypes/chalford/osram-lightify-switch-mini.src/osram-lightify-switch-mini.groovy
+    // TODO: Check Aqara driver : https://raw.githubusercontent.com/jsconstantelos/SmartThings/master/devicetypes/jsconstantelos/my-aqara-double-rocker-switch-no-neutral.src/my-aqara-double-rocker-switch-no-neutral.groovy 
+    // TODO: Check Ikea quirk : https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py
 }
