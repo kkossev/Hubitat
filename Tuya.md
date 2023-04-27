@@ -95,6 +95,9 @@
 | ZigBee Scene Switch, 3 Buttons ![image](https://user-images.githubusercontent.com/6189950/155200952-c6d8dc64-ffc4-4581-96ed-661d41fbba9f.png)  | Amazon: https://www.amazon.de/-/en/ZigBee-Wireless-Buttons-Control-Batteries/dp/B0977KK7ZP  |
 | LoraTap 6 Button Gang Scene Switch ![image](https://user-images.githubusercontent.com/6189950/166911477-960eddc5-b750-4bd1-a93e-25796ac1cb8d.png) | AliExpres: [(link)](https://www.aliexpress.com/item/1005003731082631.html) | 
 | icasa Zigbee 3.0 wireless wall controller ![image](https://user-images.githubusercontent.com/6189950/198963909-f8d10968-166b-446c-86f3-fffb296d1e03.png)| https://www.amazon.co.uk/wireless-controller-Dimming-Compatible-Gateway/dp/B07L2SLY29?ref_=ast_sto_dp |
+|Tuya 4 Key Arm Disarm Home SOS Button <br> ![image](https://user-images.githubusercontent.com/6189950/234899429-d24e6e2b-574b-4be2-aa49-256eae5acfef.png) | Model: TS0215<br>Manufacturers: _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv <br>AliExpress: [link](https://www.aliexpress.com/item/4001062612446.html)<br> | 
+| Nedis Remote Control 4 Button<br> ![image](https://user-images.githubusercontent.com/6189950/234907606-99b2bd06-bb4b-41ec-9699-421d60716d54.png) | Model: TS0215A <br>Manufacturer: _TZ3000_fsiepnrh<br><br>Amazon. co. uk. [link](https://www.amazon.co.uk/dp/B087QSD3VC)<br>Nedis. com [link](https://nedis.com/en-us/product/smart-home/control/remote-control/550735173/smartlife-remote-control-zigbee-30-number-of-buttons-4-android-ios-white)| 
+|Tuya ZigBee SOS Button<br> ![image](https://user-images.githubusercontent.com/6189950/234906596-32301d3f-c7ed-4ef5-8d17-d047079c2bf7.png) | Model: TS0215A<br>Manufacturers: _TZ3000_ug1vtuzn _TZ3000_0zrccfgx _TZ3000_p6ju8myv _TZ3000_4fsgukof _TZ3000_wr2ucaj9 _TZ3000_zsh6uat3 _TZ3000_tj4pwzzm _TZ3000_2izubafb _TZ3000_pkfazisv <br><br> AliExpress: [link](https://www.aliexpress.com/item/1005004126181157.html) | 
 
 ------------------------------
 
