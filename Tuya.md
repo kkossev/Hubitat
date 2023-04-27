@@ -104,6 +104,8 @@
 | Loratap 1-2-3-4 Portable Remote Control Scene Switch<br>![image](https://user-images.githubusercontent.com/6189950/234920744-2c627745-3418-4878-a96e-63cf39187d4c.png)| Model: TS0041 TS0042 TS0043 TS0044  <br>Manufacturer: _TZ3000_t8hzpgnd _TZ3000_ee8nrt2l _TZ3000_ufhtxr59<br><br>AliExpress: [link](https://www.aliexpress.com/item/1005003040683765.html)| 
 | Tuya Smart Button <br> ![image](https://user-images.githubusercontent.com/6189950/234927721-31133787-0c07-4831-b31e-420bd486855c.png) | The shape, look and feel is like Aqara button!<br>Model: TS0041<br> Manufacturer: _TZ3000_fa9mlvja<br><br>AliExpress:[link](https://www.aliexpress.com/item/1005005363529624.html)|
 | Tuya Multi-scene Switch Button<br> ![image](https://user-images.githubusercontent.com/6189950/234929898-a1b65f99-4eea-49bd-b25e-0047663daf5f.png)| Model: TS004F<br>Manufacturer: _TZ3000_ja5osu5g<br><br>AliExpress: [link](https://www.aliexpress.com/item/1005005274700227.html)|
+| Tuya ZigBee SOS Button <br>![image](https://user-images.githubusercontent.com/6189950/234952936-c69f4e1a-6035-422d-a70c-05c1922f49bb.png)|Model: <br> Manufacturer: <br><br>AliExpress: [link](https://www.aliexpress.com/item/1005003347316228.html) | 
+| Tuya Zigbee Smart Switch Button <br> ![image](https://user-images.githubusercontent.com/6189950/234956515-12848bf3-d2a3-4d55-8b67-7a49bf941b49.png)|Model: <br>Manufacturer: <br>Battery: rechargable 3.7V, capacity:  450mAh<br><br> AliExpress: [link](https://www.aliexpress.com/item/1005002283147125.html) |
 ------------------------------
 
 ### Tuya Bulbs and LED strips
