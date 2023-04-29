@@ -18,7 +18,9 @@
  *  ver. 1.0.2 2022-11-17 kkossev - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button
  *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
  *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
+ *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
  *
+ *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
  *            TODO: send the check-in messages as an event / show as Info log
  *            TODO: add 'Silence' / Clear command for _TZE200_ntcy3xu1
@@ -28,8 +30,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.1.0" }
-def timeStamp() {"2022/04/07 10:21 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2022/04/29 10:56 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -475,7 +477,7 @@ def ping() {
 
 def sendRttEvent() {
     def now = new Date().getTime()
-    def timeRunning = now.toInteger() - state.pingTime.toInteger()
+    def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
     sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
