@@ -37,20 +37,21 @@
  * ver. 1.3.0  2023-03-22 kkossev  -'_TYST11_7hfcudw5' moved to 3-in-1 group; added deviceProfiles; fixed initializaiton missing on the first pairing; added batteryVoltage; added tuyaVersion; added delayed battery event; 
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
- * ver. 1.3.2  2023-04-17 kkossev  - (dev. branch) 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
+ * ver. 1.3.2  2023-04-17 kkossev  - 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
+ * ver. 1.3.3  2023-04-25 kkossev  - (dev.branch) code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; 
  *
- *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
+ *                                   TODO: add rtt measurement for ping()
+ *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
  *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
  *                                   TODO: present state 'motionStarted' in a human-readable form.
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
- *                                   TODO: implement ping() for TS0601 sensors (rtt)
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.2" }
-def timeStamp() {"2023/04/17 8:48 PM"}
+def version() { "1.3.3" }
+def timeStamp() {"2023/04/25 9:58 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -77,6 +78,9 @@ metadata {
         capability "PowerSource"
         capability "HealthCheck"
         capability "Refresh"
+        //capability "PushableButton"        // uncomment for TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]
+        //capability "DoubleTapableButton"
+        //capability "HoldableButton"
 
         attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -153,7 +157,7 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>", 
-                   options: getDeviceProfilesMap() /*getDeviceProfiles()*/)
+                   options: getDeviceProfilesMap())
             input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
@@ -177,11 +181,6 @@ metadata {
             if (isBlackSquareRadar()) {
 		        input (name: "indicatorLight", type: "enum", title: "Indicator Light", description: "Red LED is lit when presence detected", defaultValue: "0", options: blackRadarLedOptions)  
             }
-            /*
-            if (isRadar()) {
-                input (name: "parEvents", type: "bool", title: "Send Event when parameters change", description: "<i>Enable only when the SetPar() custom command is used in RM or webCoRE</i>", defaultValue: false)
-            }
-            */
             if (is4in1()) {
   		        input ("reportingTime4in1", "number", title: "<b>4-in-1 Reporting Time</b>", description: "<i>4-in-1 Reporting Time configuration, minutes.<br>0 will enable real-time (10 seconds) reporting!</i>", range: "0..7200", defaultValue: DEFAULT_REPORTING_4IN1)
             }
@@ -231,6 +230,7 @@ def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<Stri
 def is4in1() { return getModelGroup().contains("TS0202_4IN1") }
 def is3in1() { return getModelGroup().contains("TS0601_3IN1") }
 def is2in1() { return getModelGroup().contains("TS0601_2IN1") }
+def isMotionSwitch() { return getModelGroup().contains("TS0202_MOTION_SWITCH") }
 def isIAS()  { return getModelGroup().contains("TS0202_MOTION_IAS") || getModelGroup().contains("TS0202_4IN1") || getModelGroup().contains("TS0601_2IN1") }
 def isChattyRadarDistanceReport(descMap)  {return isRadar() && (descMap?.clusterId == "EF00" && descMap.command == "02" && descMap.data?.size > 2  && descMap.data[2] == "09") }
 
@@ -330,7 +330,6 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019", model:"TY0202", manufacturer:"_TZ1800_fcdjzz3s", deviceJoinName: "Lidl TY0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05,FCC0", outClusters:"0019,FCC0", model:"TY0202", manufacturer:"_TZ3000_4ggd8ezp", deviceJoinName: "Bond motion sensor ZX-BS-J11W"]         // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
-                
             ],
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             capabilities  : ["motion": true, "battery": true],
@@ -339,7 +338,24 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
             preferences   : [
             ]
     ],
+    
+    "TS0202_MOTION_SWITCH": [
+            description   : "Tuya Motion Sensor and Scene Switch",
+            models        : ["TS0202"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,EF00,0000", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_cwamkvua", deviceJoinName: "Tuya Motion Sensor and Scene Switch"]
+                
+            ],
+            deviceJoinName: "Tuya Motion Sensor and Scene Switch",
+            capabilities  : ["motion": true, "switch": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],
 
+    
+    
     "TS0601_PIR_PRESENCE"   : [
             description   : "Tuya PIR Human Motion Presence Sensor (Black)",
             models        : ["TS0601"],
@@ -761,9 +777,9 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x02 :
                 if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true &&*/ settings?.radarSensitivity != safeToInt(device.currentValue("radarSensitivity")))) {logInfo "received Radar sensitivity : ${fncmd}"} //else {log.warn "skipped ${settings?.radarSensitivity} == ${fncmd as int}"}
+                    if (settings?.logEnable == true || settings?.radarSensitivity != safeToInt(device.currentValue("radarSensitivity"))) {logInfo "received Radar sensitivity : ${fncmd}"} //else {log.warn "skipped ${settings?.radarSensitivity} == ${fncmd as int}"}
                     device.updateSetting("radarSensitivity", [value:fncmd as int , type:"number"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "radarSensitivity", value : fncmd as int)
+                    sendEvent(name : "radarSensitivity", value : fncmd as int)
                 }
                 else {
                     logWarn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -771,9 +787,9 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x03 :
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true && */settings?.minimumDistance != safeToDouble(device.currentValue("minimumDistance")))) {logInfo "received Radar Minimum detection distance : ${fncmd/100} m"}
+                    if (settings?.logEnable == true || (settings?.minimumDistance != safeToDouble(device.currentValue("minimumDistance")))) {logInfo "received Radar Minimum detection distance : ${fncmd/100} m"}
                     device.updateSetting("minimumDistance", [value:fncmd/100, type:"decimal"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "minimumDistance", value : fncmd/100, unit : "m")
+                    sendEvent(name : "minimumDistance", value : fncmd/100, unit : "m")
                 }
                 else {        // also battery level STATE for TS0202 ? 
                     logWarn "non-radar event ${dp} fncmd = ${fncmd}"
@@ -781,9 +797,9 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x04 :    // maximumDistance for radars or Battery level for _TZE200_3towulqd 
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true && */settings?.maximumDistance != safeToDouble(device.currentValue("maximumDistance")))) {logInfo "received Radar Maximum detection distance : ${fncmd/100} m"}
+                    if (settings?.logEnable == true || (settings?.maximumDistance != safeToDouble(device.currentValue("maximumDistance")))) {logInfo "received Radar Maximum detection distance : ${fncmd/100} m"}
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
+                    sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
                 else {        // also battery level for TS0202 ; battery1 for Fantem 4-in-1 (100% or 0% )
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -799,8 +815,8 @@ def processTuyaCluster( descMap ) {
             
             case 0x06 :
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true &&*/ radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
+                    if (settings?.logEnable == true || (radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
+                    sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
                 }
                 else {    // TODO liminance for 4-in-1 !!!
                     logWarn "non-radar event ${dp} fncmd = ${fncmd}"
@@ -834,8 +850,10 @@ def processTuyaCluster( descMap ) {
             case 0x0C : // (12)
                 illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 break
-            //            
-            //
+            case 0x19 : // (25) 
+                logDebug "Motion Switch battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                handleTuyaBatteryLevel( fncmd )
+                break
             case 0x65 :    // (101)
                 if (isRadar()) {
                     def value = fncmd / 10
@@ -849,6 +867,11 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isBlackSquareRadar()) {    // presence time in minutes
                     existanceTimeEvent(fncmd)
+                }
+                else if (isMotionSwitch()) {    // button 'single': 0, 'hold': 1, 'double': 2
+                    def action = fncmd == 2 ? 'held' : fncmd == 1 ? 'doubleTapped' : fncmd == 0 ? 'pushed' : 'unknown'
+                    logInfo "button 1 was $action"
+                    sendEvent(name: action, value: '1', data: [buttonNumber: 1], descriptionText: "button 1 was pushed", isStateChange: true, type: 'physical')
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.debug "${device.displayName} motion event 0x65 fncmd = ${fncmd}"
@@ -880,6 +903,9 @@ def processTuyaCluster( descMap ) {
                 else if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1 
                     logInfo "4-in-1 reporting time interval is ${fncmd} minutes"
                     device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])
+                }
+                else if (isMotionSwitch()) {
+                    illuminanceEventLux( fncmd )    // 0 = 'dark' 1 = 'bright'
                 }
                 else {     // battery level for 3 in 1;  
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -1318,7 +1344,7 @@ def illuminanceEventLux( lux ) {
         logInfo "Illuminance is ${lux} Lux"
     }
     else {
-        logDebug "Ignored illuminance event ${lux} % - change is less than ${safeToInt(settings?.luxThreshold)} threshold!"
+        logDebug "ignored illuminance event ${lux} lux - change is less than ${safeToInt(settings?.luxThreshold)} lux threshold!"
     }
 }
 
@@ -1376,15 +1402,6 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    /*
-    if (settings?.parEvents == false) {
-        device.deleteCurrentState('radarSensitivity')
-        device.deleteCurrentState('detectionDelay')
-        device.deleteCurrentState('fadingTime')
-        device.deleteCurrentState('minimumDistance')
-        device.deleteCurrentState('maximumDistance')
-    }
-    */
 
     if (settings?.forcedProfile != null) {
         logDebug "state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
@@ -1397,8 +1414,6 @@ def updated() {
     else {
         logDebug "forcedProfile is not set"
     }
-        
-    
     
     if (true) {    // an configurable device parameter was changed
         //    LED enable
@@ -1908,30 +1923,11 @@ def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
-/*
-// check for device offline every 60 minutes
-def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
-    checkIfNotPresent()
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
-}
-*/
-
 
 def deleteAllStatesAndJobs() {
-/*    
     state.clear()    // clear all states
     unschedule()
-    device.deleteCurrentState('motion')
-    device.deleteCurrentState('temperature')
-    device.deleteCurrentState('humidity')
-    device.deleteCurrentState('illuminance')
-    device.deleteCurrentState('tamper')
-    device.deleteCurrentState('distance')
-    device.deleteCurrentState('powerSource')
-    device.deleteCurrentState('*')
     device.deleteCurrentState('')
-*/
     //device.removeDataValue("softwareBuild")
     log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}"
 }
