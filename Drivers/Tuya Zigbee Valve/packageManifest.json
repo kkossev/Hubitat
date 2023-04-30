@@ -1,7 +1,6 @@
 {
   "packageName": "Tuya Zigbee Valve",
   "author": "Krassimir Kossev",
-  "version": "1.2.4",
   "betaVersion": "1.2.5",
   "minimumHEVersion": "2.2.7",
   "dateReleased": "2022-04-30",
@@ -13,8 +12,8 @@
       "id": "f13edc5b-1560-4b1f-8123-4546162fedf8",
       "name": "Tuya Zigbee Valve",
       "namespace": "kkossev",
+	  "version": "1.2.4",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
-			"betaLocation": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
       "required": true
     }
   ]
