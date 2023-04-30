@@ -10,8 +10,8 @@
       "id": "f13edc5b-1560-4b1f-8123-4546162fedf8",
       "name": "Tuya Zigbee Valve",
       "namespace": "kkossev",
-	"betaVersion": "1.2.5",
-	"betaLocation": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
+	"version": "1.2.5",
+	"location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
       "required": true
     }
   ]
