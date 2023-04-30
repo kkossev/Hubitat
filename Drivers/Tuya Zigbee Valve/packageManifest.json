@@ -14,12 +14,12 @@
       "namespace": "kkossev",
 			"alternateNames" : [
 				{
-					"name": "Tuya Zigbee Valve oldNname",
-					"namespace": "kkossevOlDspace"
+					"name": "Tuya Zigbee Valve",
+					"namespace": "kkossev"
 				}
 			],  
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
-			"betaLocation": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
+	"betaLocation": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Valve/Tuya%20Zigbee%20Valve.groovy",
       "required": true
     }
   ]
