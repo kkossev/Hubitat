@@ -32,18 +32,20 @@
  * ver. 1.3.1  2023-02-10 kkossev - added RH3052 TUYATEC-gqhxixyk
  * ver. 1.3.2  2023-03-04 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
  * ver. 1.3.3  2023-04-23 kkossev - _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
- * ver. 1.3.4  2023-04-24 kkossev - (dev.branch) send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
+ * ver. 1.3.4  2023-04-24 kkossev - send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
+ * ver. 1.3.5  2023-05-05 kkossev - (dev.branch) sendRttEvent exception fixed
  * 
+ *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
+ *                                  TODO: healthStatus periodic job is not started.
  *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
- *                                  TODO: healthStatus check periodic job is not started?
  *                                  TODO:  add Sonoff SNZB-02D (CR2450 battery, C/F)
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
  *                                  TODO: add Batteryreporting time configuration (like in TS004F driver)
  *
 */
 
-def version() { "1.3.4" }
-def timeStamp() {"2023/04/24 10:48 PM"}
+def version() { "1.3.5" }
+def timeStamp() {"2023/05/05 7:20 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -357,9 +359,10 @@ def parse(String description) {
             def now = new Date().getTime()
             Map lastTxMap = stringToJsonMap(state.lastTx)
             def timeRunning = now.toInteger() - (lastTxMap.pingTime ?: '0').toInteger()
-            if (timeRunning < MAX_PING_MILISECONDS) {
+            if (timeRunning < MAX_PING_MILISECONDS && timeRunning > 0) {
                 sendRttEvent()
             }
+            unschedule('deviceCommandTimeout')
         }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
@@ -898,7 +901,7 @@ def updated() {
     logInfo "Debug logging is ${logEnable}; Description text logging is ${txtEnable}"
     if (logEnable) {
         runIn(86400, "logsOff", [overwrite: true, misfire: "ignore"])    // turn off debug logging after 30 minutes
-        logInfo "Debug logging is will be turned off after 24 hours"
+        logInfo "Debug logging will be turned off after 24 hours"
     }
     else {
         unschedule("logsOff")
@@ -1139,7 +1142,7 @@ def ping() {
 def sendRttEvent() {
     def now = new Date().getTime()
     Map lastTxMap = stringToJsonMap(state.lastTx)
-    def timeRunning = now.toInteger() - lastTxMap.pingTime.toInteger()
+    def timeRunning = now.toInteger() - (lastTxMap.pingTime ?: '0').toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
     sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
@@ -1355,7 +1358,7 @@ private Map getBatteryResult(rawValue) {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
+    if ((device.currentValue("healthStatus") ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent ony once now - 2023-01-31
         if (settings?.txtEnable) log.info "${device.displayName} is present"
