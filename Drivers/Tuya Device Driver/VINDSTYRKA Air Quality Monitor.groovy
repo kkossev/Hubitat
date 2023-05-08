@@ -22,7 +22,7 @@
  */
 
 static String version() { "2.0.0" }
-static String timeStamp() {"2023/05/08 11:07 AM"}
+static String timeStamp() {"2023/05/08 11:50 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -595,7 +595,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
     }
     eventMap.value = Math.round(pm25AsDouble)
     eventMap.name = "pm25"
-    eventMap.unit = "µg/m3 "    //"mg/m3"
+    eventMap.unit = "\u03BCg/m3"    //"mg/m3"
     eventMap.type = isDigital == true ? "digital" : "physical"
     eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${pm25AsDouble.round()} ${eventMap.unit}"
