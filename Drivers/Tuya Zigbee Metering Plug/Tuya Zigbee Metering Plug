@@ -50,22 +50,29 @@
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
- *  ver. 1.7.4 2023-04-22 kkossev - (dev.branch) added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
+ *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
+ *  ver. 1.7.5 2023-05-09 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it)
  *
+ *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
+ *                                 TODO: add rtt measurement in ping()
+ *                                 TODO: healthCheck not started if polling is disabled!
+ *                                 TODO: trap for Markus's checkPresence() - unschedule the job!
  *                                 TODO: RCBO: send temperature event only when changed; raname Hoch to RCBO; revise configure/initialize sequence; 
  *                                 TODO: energyDuration events have 'Days' in the value field!event type should be digital!
  *                                 TODO: Frient plug initialization doesn't work? replace Initialize() w/ Configure() command; implement ping();
  *                                 TODO: add  match descriptor request counter (ZDO cluster 6)
+ *                                 TODO: add powerSource attribute
+ *                                 TODO: add resetStats command
  *
  */
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.4" }
-def timeStamp() {"2023/04/22 2:41 PM"}
+def version() { "1.7.5" }
+def timeStamp() {"2023/05/09 11:44 PM"}
 
-@Field static final Boolean debug = false
+@Field static final Boolean _DEBUG = false
 
 metadata {
     definition (name: "Tuya Zigbee Metering Plug", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Metering%20Plug/Tuya%20Zigbee%20Metering%20Plug", singleThreaded: true ) {
@@ -136,10 +143,12 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_5f43h46b", deviceJoinName: " XUELILI 16A UK Standards Smart Outlet"
-        // temporary removed for tests //       fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cehuw1lw", deviceJoinName: "Haozee Smart Zigbee Plug 16A/20A EU Outlet" // https://www.aliexpress.com/item/1005002344798281.html  //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_typdpbpg", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zloso4jk", deviceJoinName: "Tuya Smart Zigbee Plug AU 16A" // https://www.aliexpress.com/item/1005004505868292.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_7dndcnnb", deviceJoinName: "LELLKI Smart Switch 25A Energy Monitor" // https://www.aliexpress.com/item/1005004564755069.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qeuvnohg", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // https://www.aliexpress.com/item/1005004747066832.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_8bxrzyxz", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // not tested
         // NOT WORKING WITH HE !
         /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"   // NOT WORKING WITH HE!
@@ -211,7 +220,7 @@ metadata {
         input (name: "autoPollingEnabled", type: "bool", title: "<b>Automatic polling</b>", description: "<i>Enable outlet automatic polling for power, voltage, amperage, energy and switch state. Recommended setting is <b>on</b></i>", defaultValue: true)
         if (autoPollingEnabled?.value == true) {
             input (name: "pollingInterval", type: "number", title: "<b>Polling interval</b>, seconds", description: "<i>The time period when the smart plug will be polled for power, voltage and amperage readings. Recommended setting is <b>60 seconds</b></i>", 
-                   range: "10..3600", defaultValue: defaultPollingInterval)
+                   range: "10..99999", defaultValue: defaultPollingInterval)
         }
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
         input (name: "optimizations", type: "bool", title: "<b>Optimize polling and logging</b>", description: "<i>Additional optimizations to reduce the hub load</i>. Recommended value is <b>on</b>", defaultValue: true)
@@ -243,6 +252,9 @@ metadata {
                 if (reportVoltage?.value == true) {
                     input (name: "voltageThreshold", type: "number", title: "<b>Voltage minimum change to be reported</b>, V", description: "<i>The minimum Voltage change that will trigger reporting.</i>", range: "1..10000", defaultValue: 1)
                 }
+                input (name: "reportFrequency", type:  "bool", title: "<b>Frequency Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
+                input (name: "reportPowerFactor", type:  "bool", title: "<b>Power Factor Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
+                input (name: "reportTemperature", type:  "bool", title: "<b>Temperature Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
             }
         } 
         if (isFrientEnergyMonitor() == true) {
@@ -376,9 +388,17 @@ def parse(String description) {
             case "energy" :
                 energyEvent(event.value/getEnergyDiv())
                 break
-            case "temperature" : // SiHAS
-                sendEvent(event)
-                logInfo "${event.descriptionText}"
+            case "temperature" : // SiHAS 
+                if (device.getDataValue('manufacturer') in ["_TZ3000_qeuvnohg"]) {
+                    return    // Tongou fake reading
+                }
+                if (settings?.reportTemperature == true) {
+                    sendEvent(event)
+                    logInfo "${event.descriptionText}" 
+                }
+                else {
+                    logDebug "reporting temperature (${event.value})is disabled"
+                }
                 break
             default :
                 logDebug "received <b>unhandled event</b> ${event.name} = $event.value"
@@ -631,8 +651,8 @@ def voltageEvent( voltage, isDigital=false ) {
 }
 
 def frequencyEvent( frequency, isDigital=false ) {
-    if (settings.reportAmperage != true) {
-        logDebug "ignored frequencyEvent (${frequency}) - reportAmperage is disabled"
+    if (settings.reportFrequency != true) {
+        logDebug "ignored frequencyEvent (${frequency}) - reportFrequency is disabled"
         return
     }
     def map = [:] 
@@ -654,8 +674,8 @@ def frequencyEvent( frequency, isDigital=false ) {
 }
 
 def powerFactorEvent( pf, isDigital=false ) {
-    if (settings.reportAmperage != true) {
-        logDebug "ignored powerFactorEvent (${pf}) - reportAmperage is disabled"
+    if (settings.reportPowerFactor != true) {
+        logDebug "ignored powerFactorEvent (${pf}) - reportPowerFactor is disabled"
         return
     }    
     def map = [:] 
@@ -1391,7 +1411,7 @@ def pollPower() {
     List<String> cmds = []
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
-            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :safeToInt(state.destinationEP)], delay=200)    // Power, Voltage and Amperage at once!
+            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :safeToInt(state.destinationEP)], delay=200)    // Power, Voltage and Amperage at once! don't care about freq. and PF here.
         }
     }
     else {
@@ -1424,7 +1444,12 @@ def poll( refreshAll = false ) {
     if (state.powerPollingSupported & state.voltagePollingSupported & state.currentPollingSupported == true) {
         if (settings?.reportPower == true || settings?.reportVoltage == true || settings?.reportAmperage == true) {
             logDebug "polling all 0x0B04 attributes"
-            cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508, 0x0300], [destEndpoint :ep], delay=200)    // Power, Voltage and Amperage at once. Frequency added 03/27/2023
+            if (settings?.reportPowerFactor == true) {
+                cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508, 0x0300], [destEndpoint :ep], delay=200)    // Power, Voltage and Amperage at once. Frequency added 03/27/2023
+            }
+            else {
+                cmds += zigbee.readAttribute(0x0B04, [0x050B, 0x0505, 0x0508], [destEndpoint :ep], delay=200)
+            }
         }
     }
     else {
@@ -1434,7 +1459,11 @@ def poll( refreshAll = false ) {
             cmds += zigbee.readAttribute(0x0B04, 0x0505, [destEndpoint :ep], delay=200)        // voltage
         if (state.currentPollingSupported == true  && settings?.reportAmperage == true) {
             cmds += zigbee.readAttribute(0x0B04, 0x0508, [destEndpoint :ep], delay=100)        // current
+        }
+        if (/*state.currentPollingSupported == true  && */settings?.reportFrequency == true) {
             cmds += zigbee.readAttribute(0x0B04, 0x0300, [destEndpoint :ep], delay=200)        // frequency
+        }
+        if (/*state.currentPollingSupported == true  && */settings?.reportPowerFactor == true) {
             cmds += zigbee.readAttribute(0x0B04, 0x0510, [destEndpoint :ep], delay=200)        // powerFactor
         }
     }    
@@ -1557,7 +1586,11 @@ def configure() {
     }
     if (settings.reportAmperage == false) {
         device.deleteCurrentState("amperage")
+    }
+    if (settings.reportFrequency == false) {
         device.deleteCurrentState("frequency")
+    }
+    if (settings.reportPowerFactor == false) {
         device.deleteCurrentState("powerFactor")
     }
     if (settings.attribEnable == false) {
@@ -1570,8 +1603,8 @@ def configure() {
         cmds += configureReporting(settings.reportPower ? "Write" : "Disable", POWER,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), powerThreshold.toString(), sendNow=false)
         cmds += configureReporting(settings.reportVoltage ? "Write" : "Disable", VOLTAGE,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), voltageThreshold.toString(), sendNow=false)
         cmds += configureReporting(settings.reportAmperage ? "Write" : "Disable", AMPERAGE,  energyMinReportingTime.toString(), energyMaxReportingTime.toString(), amperageThreshold.toString(), sendNow=false)
-        cmds += configureReporting(settings.reportAmperage ? "Write" : "Disable", FREQUENCY, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
-        cmds += configureReporting(settings.reportAmperage ? "Write" : "Disable", POWER_FACTOR, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
+        cmds += configureReporting(settings.reportFrequency ? "Write" : "Disable", FREQUENCY, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
+        cmds += configureReporting(settings.reportPowerFactor ? "Write" : "Disable", POWER_FACTOR, energyMinReportingTime.toString(), energyMaxReportingTime.toString(), "1", sendNow=false)
     }
     else {
         if (logEnable==true) log.info "${device.displayName} Automatic reporting configuration is disabled and will be skipped!"
@@ -1701,6 +1734,9 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
     if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", true)
+    if (fullInit == true || settings?.reportFrequency == null) device.updateSetting("reportFrequency", false)
+    if (fullInit == true || settings?.reportPowerFactor == null) device.updateSetting("reportPowerFactor", false)
+    if (fullInit == true || settings?.reportTemperature == null) device.updateSetting("reportTemperature", false)
     if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value: (isReportingConfigurable() ? "REPORTED" : "POLLED"), type:"enum"])
     if (fullInit == true || settings?.fixedPower == null) device.updateSetting("fixedPower", [value:100, type:"number"])
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
@@ -1906,25 +1942,25 @@ boolean otherTuyaOddities( String description ) {
         //log.trace "each it=${it}"
         def map = [:]
         if (it.status == "86") {
-            if (settings?.logEnable) log.info "${device.displayName} Tuya Cluster ${descMap.cluster} <b>unsupported attrId ${it.attrId}</b>"
+            logWarn "Tuya Cluster ${descMap.cluster} unsupported attrId ${it.attrId}"
             // TODO - skip parsing?
         }
         switch (it.cluster) {
             case "0000" :
                 if (it.attrId in ["0001"]) {
-                    if (settings?.logEnable) log.debug "${device.displayName} Tuya check-in Cluster 0 attrId 1 (application version is ${it.value})"
+                    logDebug "Check-in Cluster 0 attrId 1 (application version is ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
-                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else if (it.attrId in ["FFFE", "FFDF"]) {
-                    if (settings?.logEnable) log.debug "${device.displayName} Tuya Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value})"
+                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else {
-                    if (logEnable) log.debug "${device.displayName} otherTuyaOddities - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
+                    logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
                 }
                 break
             case "0006" :
