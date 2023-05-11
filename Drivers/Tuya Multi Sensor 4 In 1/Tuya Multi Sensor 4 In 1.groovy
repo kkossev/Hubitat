@@ -38,12 +38,13 @@
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
  * ver. 1.3.2  2023-04-17 kkossev  - 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
- * ver. 1.3.3  2023-04-25 kkossev  - (dev.branch) code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; 
+ * ver. 1.3.3  2023-05-11 kkossev  - (dev.branch) code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in radars group; 
  *
+ *                                   TODO: ignore invalid humidity reprots (>100 %)
+ *                                   TODO: add illuminance threshold / configuration
  *                                   TODO: add rtt measurement for ping()
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
- *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
  *                                   TODO: present state 'motionStarted' in a human-readable form.
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
@@ -51,7 +52,7 @@
 */
 
 def version() { "1.3.3" }
-def timeStamp() {"2023/04/25 9:58 PM"}
+def timeStamp() {"2023/05/11 8:09 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -111,6 +112,7 @@ metadata {
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
             ]
+            command "testParse", [[name:"val", type: "STRING", description: "description", constraints: ["STRING"]]]
             command "test", [[name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]]
         }
         
@@ -240,7 +242,7 @@ def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', 
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
 def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
-                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk', '_TZE200_xpq2rzhq'] }
+                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk', '_TZE200_xpq2rzhq', '_TZE204_sooucan5'] }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
 def isBlackPIRsensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
 def isBlackSquareRadar() { return device.getDataValue('manufacturer') in ['_TZE200_0u3bj3rc', '_TZE200_v6ossqfy']}
@@ -249,6 +251,7 @@ def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
+def isShenzhenshixiangchuangyeshiyey() { return device.getDataValue('manufacturer') in ['_TZE204_sooucan5'] } 
 
 
 @Field static final Map deviceProfilesV2 = [
@@ -421,7 +424,9 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ar0slwnd", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sfiy5tfs", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_holel4dk", deviceJoinName: "Tuya Human Presence Detector"],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"]                      // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
+                // Seller: shenzhenshixiangchuangyeshiyey Manufacturer: Shenzhen Eysltime Intelligent LTD    Item model number: YXZBRB58 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sooucan5", deviceJoinName: "Tuya Human Presence Detector YXZBRB58"]                      // https://www.amazon.com/dp/B0BYDCY4YN                   
             ],
             deviceJoinName: "Tuya Human Presence Detector",
             capabilities  : ["motion": true, "battery": true],
@@ -1887,7 +1892,7 @@ def sendKeepTimeIAS( lvl ) {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
+    if ((device.currentValue("healthStatus") ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent ony once now - 2023-01-31
         logInfo "is present"
@@ -1931,23 +1936,6 @@ def deleteAllStatesAndJobs() {
     //device.removeDataValue("softwareBuild")
     log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}"
 }
-
-def force_TZE200_9qayzqa8() {
-    log.warn "${device.displayName} is forced to manufacturer <b>_TZE200_9qayzqa8</b> parameters!"
-    device.updateDataValue("endpointId", "01")
-    device.updateDataValue("outClusters", "0019,000A")
-    device.updateDataValue("model", "TS0601")
-    device.updateDataValue("application", "46")
-    device.updateDataValue("inClusters", "0004,0005,EF00,0000")
-    device.updateDataValue("manufacturer", "_TZE200_9qayzqa8")
-    List<String> cmds = []
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0004 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xEF00 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 200", ]
-    sendZigbeeCommands(cmds)    
-}
-
 
 def setLEDMode(String mode) {
     Short paramVal = safeToInt(ledStatusOptions.find{ it.value == mode }?.key)    
@@ -2155,15 +2143,13 @@ def getProfileKey(String valueStr) {
     return key
 }
 
+def testParse(description) {
+    logWarn "testParse: ${description}"
+    parse(description)
+    log.trace "---end of testParse---"
+}
+
 def test( val ) {
-/*    
-    ArrayList<String> cmds = []
-    sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
-*/
-/*
-    log.warn "parse(${val})"
-    parse(val)
-*/
     zigbee.command(0xEF00, 0x07, "00")
 }
 
