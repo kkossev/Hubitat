@@ -45,13 +45,15 @@
  *                                  'not present' bug fix when polling is disabled; removed lastPresenceState; added SiHAS products; added frequency; added powerFactor; fixOtherTuyaOddities() for _TZ3000_okaz9tjs; extendedTuyaMagic
  *  ver. 1.6.4 2022-11-26 kkossev - added Frient Energy Monitor (ZHEMI101); pulseConfiguration; energyMeterMode; removed fixed destEndpoint; isRefreshRequest fix; _TZ3000_okaz9tjs tests; added rejoinCounter; fixed null Zigbee commands bug;
  *  ver. 1.6.5 2022-12-19 kkossev - _TZE204_cjbofhxw Smart Meter w/ Current Transformer ; fixed bug in html for Power attribute; added new models HIKING TOMZN DDS238-2 _TZE200_bkkmqmyo; added MatSee _TZE200_eaac7dkw
- *  ver. 1.6.6 2023-01-20 kkossev - Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb
+ *  ver. 1.6.6 2023-01-20 kkossev - Zigbee 3.0 incompatible with HE _TZ3000_r6buo8ba and _TZ3000_okaz9tjs fingerprints commented out; added SONOFF Z111PL0H-1JX to the isHEProblematic() list; added _TZ3000_7dndcnnb Overload Protection Switch 25A
  *  ver. 1.7.0 2023-01-29 kkossev - added healthStatus;
  *  ver. 1.7.1 2023-02-02 kkossev - added capability 'Health Check'
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
- *  ver. 1.7.5 2023-05-09 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it)
+ *  ver. 1.7.5 2023-05-12 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
+ *  ver. 1.7.6 2023-05-12 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P;
+ *
  *
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
  *                                 TODO: add rtt measurement in ping()
@@ -70,7 +72,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.5" }
-def timeStamp() {"2023/05/09 11:44 PM"}
+def timeStamp() {"2023/05/12 10:01 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -135,11 +137,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bkkmqmyo", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_eaac7dkw", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.youtube.com/watch?v=KwTz35OWmP4
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lsanae15", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.aliexpress.com/item/1005004399475951.html
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "Tuya Energy Device"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_fsb6zw01", deviceJoinName: "RTX Circuit Breaker 2x16A ZCB16-2P"  
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_hkdl5fmv", deviceJoinName: "Tuya RC-RCBO Circuit Breaker"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_1hwjutgo", deviceJoinName: "Tuya RC-MCB Circuit Breaker 2P"            // https://www.aliexpress.com/item/1005003725997370.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_lnggrqqi", deviceJoinName: "Tuya RC-MCB Circuit Breaker 2P"            // vendor: 'Mumubiz', model: 'ZJSB9-80Z' https://www.aliexpress.com/item/1005002605097816.html not tested  (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cjbofhxw", deviceJoinName: "MatSee Smart Meter with CT"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_abatw3kj", deviceJoinName: "RTX Circuit Breaker 4x25A ZCB25-4P"        // https://community.hubitat.com/t/3phase-switch-recomendations/118293/12?u=kkossev
+        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_5f43h46b", deviceJoinName: " XUELILI 16A UK Standards Smart Outlet"
@@ -312,9 +316,10 @@ def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
 private boolean isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
-private boolean isDinRail()       {device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"] }
+private boolean isRTXCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] }
+private boolean isDinRail()       { (device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"]) || isRTXCircuitBreaker() }
 private boolean isHEProblematic() {device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
-private boolean isHoch()          {device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"] }
+private boolean isHoch()          {device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"]}
 
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
@@ -710,7 +715,7 @@ def powerEvent( power, isDigital=false ) {
     if (state.isRefreshRequest == true) map.descriptionText += " (refresh)"
     def lastPower = device.currentValue("power", true) ?: 0.0
     if ( (power as int) > MAX_POWER) {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap {MAX_POWER} W)"
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap ${MAX_POWER} W)"
         return
     }
     if ((Math.abs((power as int) - (lastPower as int)) >= (powerThreshold as int)) || optimizations == false || state.isRefreshRequest == true ) {
@@ -1094,7 +1099,8 @@ def parseZHAcommand( Map descMap) {
                                     amperageEvent(value/getCurrentDiv())
                                 }
                                 else { // (18) Meter ID
-                                    logInfo "(18) AlarmSet2 : ${value}"    // AlarmSet2 
+                                    // TODO: check https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315 
+                                    logInfo "(18) AlarmSet2 : ${value}"    // AlarmSet2     
                                 }
                                 break
                             case "13" : // (19) Power
