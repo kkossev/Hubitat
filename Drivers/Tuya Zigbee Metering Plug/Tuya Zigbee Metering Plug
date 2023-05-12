@@ -71,7 +71,7 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.5" }
+def version() { "1.7.6" }
 def timeStamp() {"2023/05/12 10:01 PM"}
 
 @Field static final Boolean _DEBUG = false
