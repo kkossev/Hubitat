@@ -52,7 +52,7 @@
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
  *  ver. 1.7.5 2023-05-12 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
- *  ver. 1.7.6 2023-05-12 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P;
+ *  ver. 1.7.6 2023-05-13 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P;
  *
  *
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
@@ -72,7 +72,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.6" }
-def timeStamp() {"2023/05/12 10:01 PM"}
+def timeStamp() {"2023/05/13 8:42 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -118,6 +118,7 @@ metadata {
                 [name: "Minimum measurement change",           type: "STRING", defaultValue : "1", description: "Select Minimum measurement change to be reported"]
             ]
             command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command "testParse", [[name: "testParse", type: "STRING", description: "description", defaultValue : ""]]
         }
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006,0702,0B04", outClusters:"0019,000A", manufacturer:"_TZ3000_vtscrpmw", model:"TS0121",  deviceJoinName: "Tuya Outlet" //Tuya Smart Plug
@@ -317,7 +318,7 @@ def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 private boolean isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
 private boolean isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
 private boolean isRTXCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] }
-private boolean isDinRail()       { (device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"]) || isRTXCircuitBreaker() }
+private boolean isDinRail()       { (device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"]) }
 private boolean isHEProblematic() {device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
 private boolean isHoch()          {device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"]}
 
@@ -335,12 +336,12 @@ private boolean isSiHAS() { device.getDataValue("manufacturer") == "ShinaSystem"
 private boolean isThirdReality() { device.getDataValue("manufacturer") == "Third Reality, Inc" }
 private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdReality() }
 
-private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !isDinRail())) ? 10 : 1 }    // Tuya : default powerDiv = 1
+private int getPowerDiv() { ( isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() && !(isDinRail() || isRTXCircuitBreaker()))) ? 10 : 1 }    // Tuya : default powerDiv = 1
 private int getEnergyDiv() { ( isSengledOutlet() || isJascoProductsOutlet() ) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }    // Tuya :  energyDiv = 100
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue("model") in ["3200-Sgb"]) ? 100 : 1000 }  // Tuya :  currentDiv = 1000
 private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : ( isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() ? 10 : 1 }  // Tuya EF00 cluster voltage divider is 10 !
 private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdReality() ? 1F : 10F }
-private int getPowerFactorDiv() { isDinRail() ? 1000 : 100 }
+private int getPowerFactorDiv() { (isDinRail() || isRTXCircuitBreaker()) ? 1000 : 100 }
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -1028,53 +1029,74 @@ def parseZHAcommand( Map descMap) {
                         def map = [:]
                         def cmd = descMap.data[2]
                         switch (cmd) { // code : descMap.data[2]    ; attrId = descMap.data[1] + descMap.data[0] 
-                            case "01" : // switch state on/of for all models except the DinRail
-                                if (!isDinRail())  {
-                                    logDebug "Tuya switch event cmd=(01) value=${value}"
-                                    switchEvent(value==0 ? "off" : "on")
-                                }
-                                else {    //  Forward Energy Total _TZE200_eaac7dkw
+                            case "01" : // switch state on/of for all models except the DinRail and RTX
+                                if (isDinRail() || isRTXCircuitBreaker()) {
                                     logInfo "(01) Forward/Real Energy : ${value} raw"
                                     energyEvent(value/getEnergyDiv())    // should be 100
                                 }
+                                else {
+                                    logDebug "Tuya switch event cmd=(01) value=${value}"
+                                    switchEvent(value==0 ? "off" : "on")
+                                }
                                 break
                             case "03" :    //  _TZE200_eaac7dkw
-                                logInfo "Monthly Energy : ${value}"
+                                if (isDinRail() || isRTXCircuitBreaker()) {
+                                    logInfo "Monthly Energy : ${value}"
+                                }
+                                else {
+                                    logDebug "dp=${cmd} value=${value}"
+                                }
                                 break
                             case "04" :    //  _TZE200_eaac7dkw
-                                logInfo "Daily Energy : ${value}"
+                                if (isDinRail() || isRTXCircuitBreaker()) {
+                                    logInfo "Daily Energy : ${value}"
+                                }
+                                else {
+                                    logDebug "dp=${cmd} value=${value}"
+                                }
                                 break
                             case "06" : 
-                                if (!isDinRail()) {    
-                                    logInfo "(06) Phase A : ${value}"
+                                if (isRTXCircuitBreaker()) {
+                                    // catchall: 0104 EF00 01 01 0040 00 AB6E 01 00 0000 02 01 38C6060000080910000000000000,
+                                    //  [38, C6,    06, 00, 00, 08, 09,      10, 00, 00, 00, 00,     00, 00, ,]
+                                    value = zigbee.convertHexToInt(descMap.data[6]) + zigbee.convertHexToInt(descMap.data[5]) * 256
+                                    logInfo "RTX (06) Phase A : ${descMap.data} value=${value}"
                                 }
-                                else if (isHoch()) {
-                                    logWarn "skipped dp=6 for Hoch() value = ${value}"
-                                }
-                                else { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
+                                else if (isDinRail()) { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
                                     //       +0  +1  +2  +3  +4  +5  +6  +6  +8  +9 +10 +11 +12 +13 +14 +15 +16 +17 +18 +19 +20
                                     //      [00, FC, 06, 00, 00, 0F, 00, 00, 06, 96, 00, 00, 00, 4A, 03, E4, 00, 1D, 13, 08, E2]   (@ 15:17:05)
                                     //      [00, EF, 06, 00, 00, 0F, 00, 00, 06, A3, 00, 00, 00, 4B, 03, E4, 00, 1D, 4D, 08, E3]   (@ 15:16:05)  227 V; 6.613 A; 1504 W';
                                     //                               |active power | |react. power |  PF    |00| current|Voltage
-                                    logDebug "(06) combined reporting data: ${descMap.data}"
+                                    logDebug "DinRail(06) combined reporting data: ${descMap.data}"
                                     def voltageRaw = zigbee.convertHexToInt(descMap.data[20]) + zigbee.convertHexToInt(descMap.data[19]) * 256
-                                    logInfo "(06) Voltage : ${voltageRaw/getVoltageDiv()} V (raw ${voltageRaw})"
+                                    logInfo "DinRail(06) Voltage : ${voltageRaw/getVoltageDiv()} V (raw ${voltageRaw})"
                                     voltageEvent(voltageRaw/getVoltageDiv()) 
                                     def currentRaw = zigbee.convertHexToInt(descMap.data[18]) + zigbee.convertHexToInt(descMap.data[17]) * 256
-                                    logInfo "(06) Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
+                                    logInfo "DinRail(06) Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
                                     amperageEvent(currentRaw/getCurrentDiv()) 
                                     def pfRaw = zigbee.convertHexToInt(descMap.data[15]) + zigbee.convertHexToInt(descMap.data[14]) * 256
-                                    logInfo "(06) PF : ${pfRaw/getPowerFactorDiv()}  (raw ${pfRaw})"
+                                    logInfo "DinRail(06) PF : ${pfRaw/getPowerFactorDiv()}  (raw ${pfRaw})"
                                     powerFactorEvent(pfRaw/getPowerFactorDiv())
                                     def reactivePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
-                                    logInfo "(06) React. Power : ${reactivePowerRaw/getPowerDiv()} W"
+                                    logInfo "DinRail(06) React. Power : ${reactivePowerRaw/getPowerDiv()} W"
                                     def activePowerRaw = zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) * 256
-                                    logInfo "(06) Active. Power : ${activePowerRaw/getPowerDiv()} W"
+                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw/getPowerDiv()} W"
                                     powerEvent(activePowerRaw/getPowerDiv())
+                                }
+                                else if (isHoch()) {
+                                    logWarn "skipped dp=6 for Hoch() value = ${value}"
+                                }
+                                else {
+                                    logInfo "(06) Phase A : ${value}"
                                 }
                                 break
                             case "09" : // (09) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
-                                logInfo "(09) Fault : ${value}"
+                                if (isDinRail() || isRTXCircuitBreaker()) {
+                                    logInfo "(09) Fault : ${value}"
+                                }
+                                else {
+                                    logDebug "dp=${cmd} value=${value}"
+                                }
                                 break
                             case "0A" : // (10)
                                 logDebug "(10) unknown : ${value}"
@@ -1087,27 +1109,36 @@ def parseZHAcommand( Map descMap) {
                                 switchEvent(value==0 ? "off" : "on")
                                 break
                             case "11" : // (17) Energy
-                                if (!isDinRail())  {
-                                    energyEvent(value/getEnergyDiv())
-                                }
-                                else { // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
+                                if (isDinRail() || isRTXCircuitBreaker()) {     // (17) Alarm Set _TZE200_eaac7dkw // { 0: 'not set', 1: 'Over current threshold', 3: 'Over voltage threshold' }
                                     logInfo "(17) AlarmSet1 : ${value}"
                                 }
-                                break
-                            case "12" : // (18) Amperage
-                                if (!isDinRail())  {
-                                    amperageEvent(value/getCurrentDiv())
+                                else {
+                                    energyEvent(value/getEnergyDiv())
                                 }
-                                else { // (18) Meter ID
-                                    // TODO: check https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315 
+                                break
+                            case "12" : // (18) Amperage or AlarmSet2
+                                if (isDinRail() || isRTXCircuitBreaker()) {     // TODO: check https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315 
                                     logInfo "(18) AlarmSet2 : ${value}"    // AlarmSet2     
                                 }
+                                else {
+                                    amperageEvent(value/getCurrentDiv())
+                                }
                                 break
-                            case "13" : // (19) Power
-                                powerEvent(value/getPowerDiv())
+                            case "13" : // (19) Power or breaker id
+                                if (isRTXCircuitBreaker()) {    // breaker id
+                                    logInfo "breaker id = ${value}"
+                                }
+                                else {
+                                    powerEvent(value/getPowerDiv())
+                                }
                                 break
-                            case "14" : // (20) Voltage
-                                voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
+                            case "14" : // (20) Voltage or IMEI IMSI
+                                if (isRTXCircuitBreaker()) {    // IMEI IMSI
+                                    logInfo "IMEI IMSI = ${value}"
+                                }
+                                else {
+                                    voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
+                                }
                                 break
                             case "15" : // (21) Forward energy
                             case "16" : // (22) Forward energy
@@ -1119,7 +1150,7 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} Child Lock = ${value==0 ? 'off' : 'on'}"
                                 break
                             case "65" : // (101) Voltage HOCH    // DPID_ELECTRIC_ADD 101 // Total Energy ?
-                                if ((device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) || isDinRail()) {
+                                if ((device.getDataValue('manufacturer') in ["_TZE204_cjbofhxw"]) || isDinRail() || isRTXCircuitBreaker()) { // TODO - check RTX
                                     logInfo "(101) Total  Energy : ${value} raw (${value/getEnergyDiv()} kWh)"
                                     energyEvent(value/getEnergyDiv())
                                 }
@@ -1311,33 +1342,18 @@ def parseZHAcommand( Map descMap) {
     }
 }
 
-/*
-private String getAttribute(ArrayList _data) {
-    String retValue = ""
-    if (_data.size() >= 5) {
-        if (_data[2] == "01" && _data[3] == "01" && _data[4] == "00") {
-            retValue = "switch"
-        }
-        else if (_data[2] == "02" && _data[3] == "02" && _data[4] == "00") {
-            retValue = "level"
-        }
-    }
-    return retValue
-}
-*/
-
 private int getAttributeValue(ArrayList _data) {
     int retValue = 0
     try {    
-    if (_data.size() >= 6) {
-        int dataLength = zigbee.convertHexToInt(_data[5]) as Integer
-        int power = 1;
-        for (i in dataLength..1) {
-            retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
-            power = power * 256
+        if (_data.size() >= 6) {
+            int dataLength = zigbee.convertHexToInt(_data[5]) as Integer
+            int power = 1;
+            for (i in dataLength..1) {
+                retValue = retValue + power * zigbee.convertHexToInt(_data[i+5])
+                power = power * 256
+            }
         }
     }
-}
     catch ( e ) {
         log.error "${device.displayName} Exception caught : data = ${_data}"
     }
@@ -1356,7 +1372,7 @@ def off() {
             cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
         }
         else if (state.model == "TS0601") {
-            if (isDinRail()) {
+            if (isDinRail() || isRTXCircuitBreaker()) {
                 cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "00")
             }
             else {
@@ -1385,7 +1401,7 @@ def on() {
         cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02])
     }    
     else if (state.model == "TS0601") {
-        if (isDinRail()) {
+        if (isDinRail() || isRTXCircuitBreaker()) {
             cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "01")
         }
         else {
@@ -2422,6 +2438,11 @@ def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
+def testParse(description) {
+    log.warn "parsinbg ${description}"
+    parse(description)
+    log.trace "---end of parse---"
+}
 
 def test() {
         ArrayList<String> cmds = []
