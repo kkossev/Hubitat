@@ -72,7 +72,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.6" }
-def timeStamp() {"2023/05/13 8:42 AM"}
+def timeStamp() {"2023/05/13 10:14 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1059,7 +1059,11 @@ def parseZHAcommand( Map descMap) {
                                 if (isRTXCircuitBreaker()) {
                                     // catchall: 0104 EF00 01 01 0040 00 AB6E 01 00 0000 02 01 38C6060000080910000000000000,
                                     //  [38, C6,    06, 00, 00, 08, 09,      10, 00, 00, 00, 00,     00, 00, ,]
-                                    value = zigbee.convertHexToInt(descMap.data[6]) + zigbee.convertHexToInt(descMap.data[5]) * 256
+                                    //  current: (value[4] / 1000), voltage: (value[1]), power: value[7] ???
+                                    // data:[38, C6, 06, 00, 00,     08,        09, 10,   00, 00,   00, 00,   00, 00]]
+                                    //                               data len
+                                    //                                          0x910 = 2320 (dec)
+                                    value = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
                                     logInfo "RTX (06) Phase A : ${descMap.data} value=${value}"
                                 }
                                 else if (isDinRail()) { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
@@ -1090,9 +1094,12 @@ def parseZHAcommand( Map descMap) {
                                     logInfo "(06) Phase A : ${value}"
                                 }
                                 break
-                            case "09" : // (09) Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
-                                if (isDinRail() || isRTXCircuitBreaker()) {
-                                    logInfo "(09) Fault : ${value}"
+                            case "09" : // (09) 
+                                if (isDinRail()) {
+                                    logInfo "DIN(09) Fault : ${value}"            // Fault _TZE200_eaac7dkw    // { 0: 'clear', 1: 'over current threshold', 2: 'over power threshold', 4: 'over voltage threshold', 8: 'wrong frequency threshold' }
+                                }
+                                else if (isRTXCircuitBreaker()) {                //                                0: 'clear', 1: 'over current threshold', 2: 'over power threshold',  4: 'over voltage threshold',  8: 'Under voltage threshold',
+                                    logInfo "RTX(09) Fault : ${value}"
                                 }
                                 else {
                                     logDebug "dp=${cmd} value=${value}"
@@ -1117,8 +1124,17 @@ def parseZHAcommand( Map descMap) {
                                 }
                                 break
                             case "12" : // (18) Amperage or AlarmSet2
-                                if (isDinRail() || isRTXCircuitBreaker()) {     // TODO: check https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315 
-                                    logInfo "(18) AlarmSet2 : ${value}"    // AlarmSet2     
+                                if (isDinRail()) {     // TODO: check https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315 
+                                    logInfo "DIN(18) AlarmSet2 : ${value}"    // AlarmSet2     
+                                }
+                                else if (isRTXCircuitBreaker()) {            // https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315
+                                    // const name_lookup = { 0: 'not set', 1: 'Over current threshold', 2: 'Over power threshold', 3: 'Over voltage threshold', 4: 'Under voltage threshold',
+                                    // const unit_lookup = { 0: '-', 1: 'A', 3: 'V', 4: 'V', };
+                                    // data:[38, C1, 12, 00, 00,      0C,     01, 01, 00, 64,    03, 01, 01, 13,    04, 01, 00, AF]]
+                                    //                                12 bytes of data
+                                    // data:[38, C7, 12, 00, 00,      0C,     01, 01, 00, 64,     03, 01, 01, 13,   04, 01, 00, AF]]
+                                    //                                                100(dec)            275(dec)          175 dec
+                                    logInfo "RTX(18) AlarmSet2 :  ${descMap.data}"    // AlarmSet2     
                                 }
                                 else {
                                     amperageEvent(value/getCurrentDiv())
@@ -1126,7 +1142,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "13" : // (19) Power or breaker id
                                 if (isRTXCircuitBreaker()) {    // breaker id
-                                    logInfo "breaker id = ${value}"
+                                    logDebug "RTX(19) breaker id = ${getAttributeString(descMap.data)} (${descMap.data})"
                                 }
                                 else {
                                     powerEvent(value/getPowerDiv())
@@ -1359,6 +1375,26 @@ private int getAttributeValue(ArrayList _data) {
     }
     return retValue
 }
+
+private String getAttributeString(ArrayList _data) {
+    String retValue = ""
+    Integer i = 0
+    Integer  dataLength = zigbee.convertHexToInt(_data[5]) as Integer
+    try {    
+        if (_data.size() >= 6) {
+            for (i = 6; i < _data.size() && i < dataLength+6; i++) {
+                if (_data[i] != null && _data[i] != "00"  && _data[i] != "") {
+                    retValue = retValue + (zigbee.convertHexToInt(_data[i]) as char)
+                }
+            }            
+        }
+    }
+    catch(e) {
+        log.error "${device.displayName} Exception caught _data[${i}] = ${_data[i]} : string = ${_data}"
+    }
+    return retValue
+}
+
 
 def off() {
     if (alwaysOn == true) {
@@ -1750,8 +1786,30 @@ void initializeVars( boolean fullInit = false ) {
     if (_DEBUG == false) { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     else                 { if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true) }
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.autoPollingEnabled == null) { device.updateSetting("autoPollingEnabled", isReportingConfigurable() ? false : true) }
-    if (fullInit == true || settings?.autoReportingEnabled == null) { device.updateSetting("autoReportingEnabled", isReportingConfigurable() ? true : false) }
+    if (fullInit == true || settings?.autoPollingEnabled == null) { 
+        if (state.model == "TS0601") {
+            device.updateSetting("autoPollingEnabled", false) 
+        }
+        else {
+            device.updateSetting("autoPollingEnabled", isReportingConfigurable() ? false : true) 
+        }
+    }
+    if (fullInit == true || settings?.autoReportingEnabled == null) {
+        if (state.model == "TS0601") {
+            device.updateSetting("autoReportingEnabled", false)
+        }
+        else {
+            device.updateSetting("autoReportingEnabled", isReportingConfigurable() ? true : false)
+        }
+    }
+    if (fullInit == true || settings?.energyMode == null) {
+        if (state.model == "TS0601") {
+            device.updateSetting("energyMode", [value: "REPORTED", type:"enum"])
+        }
+        else {
+            device.updateSetting("energyMode", [value: (isReportingConfigurable() ? "REPORTED" : "POLLED"), type:"enum"])
+        }
+    }
     if (fullInit == true || settings?.optimizations == null) device.updateSetting("optimizations", true)
     if (fullInit == true || settings?.reportPower == null) device.updateSetting("reportPower", true)
     if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", true)
@@ -1759,7 +1817,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.reportFrequency == null) device.updateSetting("reportFrequency", false)
     if (fullInit == true || settings?.reportPowerFactor == null) device.updateSetting("reportPowerFactor", false)
     if (fullInit == true || settings?.reportTemperature == null) device.updateSetting("reportTemperature", false)
-    if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value: (isReportingConfigurable() ? "REPORTED" : "POLLED"), type:"enum"])
     if (fullInit == true || settings?.fixedPower == null) device.updateSetting("fixedPower", [value:100, type:"number"])
     if (fullInit == true || settings?.energyMinReportingTime == null) device.updateSetting("energyMinReportingTime", [value:30, type:"number"])
     if (fullInit == true || settings?.energyMaxReportingTime == null) device.updateSetting("energyMaxReportingTime", [value:900, type:"number"])
