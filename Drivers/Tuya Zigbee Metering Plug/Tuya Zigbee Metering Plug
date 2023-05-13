@@ -52,9 +52,10 @@
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
  *  ver. 1.7.5 2023-05-12 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
- *  ver. 1.7.6 2023-05-13 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P;
+ *  ver. 1.7.6 2023-05-13 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *
  *
+ *                                 TODO: Tongou D010_RestartStatus: 2 [ENUMERATION_8_BIT]    https://github.com/sprut/Hub/issues/2263
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
  *                                 TODO: add rtt measurement in ping()
  *                                 TODO: healthCheck not started if polling is disabled!
@@ -72,7 +73,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.6" }
-def timeStamp() {"2023/05/13 10:14 AM"}
+def timeStamp() {"2023/05/13 9:34 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -154,6 +155,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_7dndcnnb", deviceJoinName: "LELLKI Smart Switch 25A Energy Monitor" // https://www.aliexpress.com/item/1005004564755069.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qeuvnohg", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // https://www.aliexpress.com/item/1005004747066832.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_8bxrzyxz", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cayepv1a", deviceJoinName: "Tongou TO-Q-SY2-JZT DIN Rail Switch"    //
+        
         // NOT WORKING WITH HE !
         /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"   // NOT WORKING WITH HE!
@@ -298,6 +301,14 @@ metadata {
 //  "FIXED":       "Enabled  (Energy is calculated from the fixed Power consumption multiplied by the time)"
 ]
 
+@Field static final Map ThresholdNameOpts = [
+    defaultValue: 0,
+    options     : [0: 'not set', 1: 'Over Current Threshold', 2: 'Over Power Threshold', 3: 'Over Voltage Threshold', 4: 'Under Voltage Threshold']
+]
+
+//@Field static final Map UnitOpts = [ 0: '-', 1: 'A', 3: 'V', 4: 'V', ]
+
+
 @Field static final Map develcoInterfaceMode = [   
     '0': 'electricity',
     '1': 'gas',
@@ -321,6 +332,7 @@ private boolean isRTXCircuitBreaker() {device.getDataValue("manufacturer") in ["
 private boolean isDinRail()       { (device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"]) }
 private boolean isHEProblematic() {device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
 private boolean isHoch()          {device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"]}
+private boolean isTongou()        {device.getDataValue("manufacturer") in ["_TZ3000_qeuvnohg", "_TZ3000_8bxrzyxz", "_TZ3000_cayepv1a"]}    // TS011F
 
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
@@ -395,7 +407,7 @@ def parse(String description) {
                 energyEvent(event.value/getEnergyDiv())
                 break
             case "temperature" : // SiHAS 
-                if (device.getDataValue('manufacturer') in ["_TZ3000_qeuvnohg"]) {
+                if (isTongou() && (device.getDataValue('manufacturer') in ["_TZ3000_qeuvnohg"])) {
                     return    // Tongou fake reading
                 }
                 if (settings?.reportTemperature == true) {
@@ -1063,8 +1075,19 @@ def parseZHAcommand( Map descMap) {
                                     // data:[38, C6, 06, 00, 00,     08,        09, 10,   00, 00,   00, 00,   00, 00]]
                                     //                               data len
                                     //                                          0x910 = 2320 (dec)
-                                    value = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
-                                    logInfo "RTX (06) Phase A : ${descMap.data} value=${value}"
+                                    logDebug "RTX (06) Phase A combined reporting data: ${descMap.data}"
+                                    // voltage: ((value[1] | value[0] << 8) / 10),   => 7, 6
+                                    def voltageRaw = zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256
+                                    logInfo "RTX (06) Phase A Voltage : ${voltageRaw/getVoltageDiv()} V (raw ${voltageRaw})"
+                                    voltageEvent(voltageRaw/getVoltageDiv()) 
+                                    // current: ((value[4] | value[3] << 8) / 1000), => 10, 9
+                                    def currentRaw = zigbee.convertHexToInt(descMap.data[10]) + zigbee.convertHexToInt(descMap.data[9]) * 256    
+                                    logInfo "RTX (06) Phase A Current : ${currentRaw/getCurrentDiv()} V (raw ${currentRaw})"
+                                    amperageEvent(currentRaw/getCurrentDiv()) 
+                                    // power: ((value[7] | value[6] << 8)),          => 13, 12
+                                    def activePowerRaw = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
+                                    logInfo "DinRail(06) Active. Power : ${activePowerRaw/getPowerDiv()} W  (raw ${activePowerRaw})"
+                                    powerEvent(activePowerRaw/getPowerDiv())
                                 }
                                 else if (isDinRail()) { // _TZE200_eaac7dkw // https://user-images.githubusercontent.com/26296347/198841477-b80f0bda-2f3e-4f5e-96ba-4fcc87a094ec.png  - combined power, voltage, amperage, etc... event
                                     //       +0  +1  +2  +3  +4  +5  +6  +6  +8  +9 +10 +11 +12 +13 +14 +15 +16 +17 +18 +19 +20
@@ -1128,13 +1151,25 @@ def parseZHAcommand( Map descMap) {
                                     logInfo "DIN(18) AlarmSet2 : ${value}"    // AlarmSet2     
                                 }
                                 else if (isRTXCircuitBreaker()) {            // https://github.com/Koenkk/zigbee2mqtt/issues/12828#issuecomment-1455119315
-                                    // const name_lookup = { 0: 'not set', 1: 'Over current threshold', 2: 'Over power threshold', 3: 'Over voltage threshold', 4: 'Under voltage threshold',
-                                    // const unit_lookup = { 0: '-', 1: 'A', 3: 'V', 4: 'V', };
-                                    // data:[38, C1, 12, 00, 00,      0C,     01, 01, 00, 64,    03, 01, 01, 13,    04, 01, 00, AF]]
-                                    //                                12 bytes of data
+                                    logDebug "RTX(18) AlarmSet2 :  ${descMap.data}"    // AlarmSet2
+                                    // catchall: 0104 EF00 01 01 0040 00 DDC4 01 00 0000 02 01 018B1200000C0101006403010113040100AF, profileId:0104, clusterId:EF00, clusterInt:61184, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:DDC4, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:02, direction:01, data:[01, 8B, 12, 00, 00, 0C, 01, 01, 00, 64, 03, 01, 01, 13, 04, 01, 00, AF]]
+                                    //  [01, 8B, 12, 00, 00, 0C, 01, 01, 00, 64, 03, 01, 01, 13, 04, 01, 00, AF, ,]
                                     // data:[38, C7, 12, 00, 00,      0C,     01, 01, 00, 64,     03, 01, 01, 13,   04, 01, 00, AF]]
                                     //                                                100(dec)            275(dec)          175 dec
-                                    logInfo "RTX(18) AlarmSet2 :  ${descMap.data}"    // AlarmSet2     
+                                    def thName = ThresholdNameOpts.options[zigbee.convertHexToInt(descMap.data[6])]
+                                    def thState = descMap.data[7] == "01" ? 'ON' : 'OFF'
+                                    def thValue = zigbee.convertHexToInt(descMap.data[9]) + zigbee.convertHexToInt(descMap.data[8]) * 256
+                                    if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
+                                    //
+                                    thName = ThresholdNameOpts.options[zigbee.convertHexToInt(descMap.data[10])]
+                                    thState = descMap.data[11] == "01" ? 'ON' : 'OFF'
+                                    thValue = zigbee.convertHexToInt(descMap.data[13]) + zigbee.convertHexToInt(descMap.data[12]) * 256
+                                    if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
+                                    //
+                                    thName = ThresholdNameOpts.options[zigbee.convertHexToInt(descMap.data[14])]
+                                    thState = descMap.data[15] == "01" ? 'ON' : 'OFF'
+                                    thValue = zigbee.convertHexToInt(descMap.data[17]) + zigbee.convertHexToInt(descMap.data[16]) * 256
+                                    if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
                                 }
                                 else {
                                     amperageEvent(value/getCurrentDiv())
@@ -1749,8 +1784,8 @@ void initializeVars( boolean fullInit = false ) {
     def preservedLastHourlyEnergy = state.lastHourlyEnergy ?: 0  
     if (logEnable==true) log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
-        if (logEnable==true) log.warn "${device.displayName} clearing states and preferences ..."
-        if (logEnable==true) log.warn "${device.displayName} preservedResetEnergy = ${preservedResetEnergy}"
+        logDebug "clearing states and preferences ..."
+        logDebug "preservedResetEnergy = ${preservedResetEnergy}"
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
     }
@@ -1776,7 +1811,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || state.isRefreshRequest == null) state.isRefreshRequest = true
     if (fullInit == true || state.switchDebouncing == null) state.switchDebouncing = false
     if (state.lastResetEnergy == null) {
-        log.warn "state.lastResetEnergy = ${state.lastResetEnergy}, resetting it back to ${preservedResetEnergy}!"
+        logDebug "state.lastResetEnergy = ${state.lastResetEnergy}, resetting it back to ${preservedResetEnergy}!"
         state.lastResetEnergy = preservedResetEnergy                               // do not reset on Initialize!
     }
     if (state.lastHourlyEnergy == null) {
@@ -1900,7 +1935,7 @@ def logInitializeResults() {
 }
 
 def initialize() {
-    if (txtEnable==true) log.warn "${device.displayName} Initialize()..."
+    logDebug "Initialize()..."
     unschedule()
     initializeVars(fullInit = true)
     runIn( 1, resetEnergy, [overwrite: true])      // 09/18/2022
