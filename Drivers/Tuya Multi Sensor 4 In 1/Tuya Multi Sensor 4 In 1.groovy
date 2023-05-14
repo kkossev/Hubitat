@@ -38,7 +38,7 @@
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
  * ver. 1.3.2  2023-04-17 kkossev  - 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
- * ver. 1.3.3  2023-05-11 kkossev  - (dev.branch) code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in a new TS0601_YXZBRB58_RADAR group; 
+ * ver. 1.3.3  2023-05-14 kkossev  - code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in a new TS0601_YXZBRB58_RADAR group (for tests); added reportingTime4in1 to setPar command options;
  *
  *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: add illuminance threshold / configuration
@@ -52,7 +52,7 @@
 */
 
 def version() { "1.3.3" }
-def timeStamp() {"2023/05/11 10:29 PM"}
+def timeStamp() {"2023/05/14 5:45 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -194,11 +194,13 @@ metadata {
 }
 
 @Field static final Map settableParsMap = [
-    "radarSensitivity": [ min: 1,   scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
-    "detectionDelay"  : [ min: 0.0, scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
-    "fadingTime"      : [ min: 0.5, scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
-    "minimumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
-    "maximumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance']
+    "--- Select ---"   : [ min: null, scale: 0, max: null,  step: 1,    type: 'number',  defaultValue: 7   , function: 'setParSelectHelp'],
+    "reportingTime4in1": [ min: 0,    scale: 0, max: 7200,  step: 1,   type: 'number',   defaultValue: 10  , function: 'setReportingTime4in1'],
+    "radarSensitivity" : [ min: 1,    scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
+    "detectionDelay"   : [ min: 0.0,  scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
+    "fadingTime"       : [ min: 0.5,  scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
+    "minimumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
+    "maximumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance']
 ]
 
 @Field static final String UNKNOWN =  'UNKNOWN'
@@ -1998,6 +2000,20 @@ def logWarn(msg) {
 }
 
 
+def setParSelectHelp( val ) {
+    logWarn "setPar: select one of the parameters in this list depending on your device"             
+}
+
+def setReportingTime4in1( val ) {
+    if (is4in1()) { 
+        def value = safeToInt(val, -1)
+        if (value >= 0) {
+            logDebug "changing reportingTime4in1 to ${value==0 ? 10 : $val} ${value==0 ? 'seconds' : 'minutes'}  (raw=${value})"    
+            return sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))        
+        }
+    }
+}
+
 def setRadarDetectionDelay( val ) {
     if (isRadar()) { 
         def value = ((val as double) * 10.0) as int
@@ -2050,7 +2066,7 @@ def setPar( par=null, val=null )
     }
     value = settableParsMap[par]?.type == "number" ? safeToInt(val, -1) : safeToDouble(val, -1.0)
     if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
-    if (validated == false) {
+    if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
         log.warn "setPar: parameter <b>par</b> value <b>${val}</b> must be within ${settableParsMap[par]?.min} and  ${settableParsMap[par]?.max} "
         return
     }
