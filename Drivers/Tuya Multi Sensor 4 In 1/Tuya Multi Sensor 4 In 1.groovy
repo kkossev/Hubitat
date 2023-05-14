@@ -38,19 +38,21 @@
  *                                   removed state.lastBattery; caught sensitivity par exception; fixed forcedProfile was not set automatically on Initialize; 
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
  * ver. 1.3.2  2023-04-17 kkossev  - 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
+ * ver. 1.3.3  2023-05-14 kkossev  - code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in a new TS0601_YXZBRB58_RADAR group (for tests); added reportingTime4in1 to setPar command options;
  *
- *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time !
+ *                                   TODO: ignore invalid humidity reprots (>100 %)
+ *                                   TODO: add illuminance threshold / configuration
+ *                                   TODO: add rtt measurement for ping()
+ *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
  *                                   TODO: RADAR profile devices are not automtically updated from 'UNKNOWN'!
- *                                   TODO: add TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch] (Tuya Motion Sensor and Scene Switch LKMSZ001 Zigbee compatibility 3)
  *                                   TODO: present state 'motionStarted' in a human-readable form.
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
- *                                   TODO: implement ping() for TS0601 sensors (rtt)
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.2" }
-def timeStamp() {"2023/04/17 8:48 PM"}
+def version() { "1.3.3" }
+def timeStamp() {"2023/05/14 5:45 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -77,6 +79,9 @@ metadata {
         capability "PowerSource"
         capability "HealthCheck"
         capability "Refresh"
+        //capability "PushableButton"        // uncomment for TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]
+        //capability "DoubleTapableButton"
+        //capability "HoldableButton"
 
         attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -107,6 +112,7 @@ metadata {
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"] 
             ]
+            command "testParse", [[name:"val", type: "STRING", description: "description", constraints: ["STRING"]]]
             command "test", [[name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]]
         }
         
@@ -153,7 +159,7 @@ metadata {
         input (name: "advancedOptions", type: "bool", title: "Advanced Options", description: "<i>May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>", 
-                   options: getDeviceProfilesMap() /*getDeviceProfiles()*/)
+                   options: getDeviceProfilesMap())
             input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             if (isRadar()) {
                 input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
@@ -177,11 +183,6 @@ metadata {
             if (isBlackSquareRadar()) {
 		        input (name: "indicatorLight", type: "enum", title: "Indicator Light", description: "Red LED is lit when presence detected", defaultValue: "0", options: blackRadarLedOptions)  
             }
-            /*
-            if (isRadar()) {
-                input (name: "parEvents", type: "bool", title: "Send Event when parameters change", description: "<i>Enable only when the SetPar() custom command is used in RM or webCoRE</i>", defaultValue: false)
-            }
-            */
             if (is4in1()) {
   		        input ("reportingTime4in1", "number", title: "<b>4-in-1 Reporting Time</b>", description: "<i>4-in-1 Reporting Time configuration, minutes.<br>0 will enable real-time (10 seconds) reporting!</i>", range: "0..7200", defaultValue: DEFAULT_REPORTING_4IN1)
             }
@@ -193,11 +194,13 @@ metadata {
 }
 
 @Field static final Map settableParsMap = [
-    "radarSensitivity": [ min: 1,   scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
-    "detectionDelay"  : [ min: 0.0, scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
-    "fadingTime"      : [ min: 0.5, scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
-    "minimumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
-    "maximumDistance" : [ min: 0.0, scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance']
+    "--- Select ---"   : [ min: null, scale: 0, max: null,  step: 1,    type: 'number',  defaultValue: 7   , function: 'setParSelectHelp'],
+    "reportingTime4in1": [ min: 0,    scale: 0, max: 7200,  step: 1,   type: 'number',   defaultValue: 10  , function: 'setReportingTime4in1'],
+    "radarSensitivity" : [ min: 1,    scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
+    "detectionDelay"   : [ min: 0.0,  scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
+    "fadingTime"       : [ min: 0.5,  scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
+    "minimumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
+    "maximumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance']
 ]
 
 @Field static final String UNKNOWN =  'UNKNOWN'
@@ -231,6 +234,7 @@ def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<Stri
 def is4in1() { return getModelGroup().contains("TS0202_4IN1") }
 def is3in1() { return getModelGroup().contains("TS0601_3IN1") }
 def is2in1() { return getModelGroup().contains("TS0601_2IN1") }
+def isMotionSwitch() { return getModelGroup().contains("TS0202_MOTION_SWITCH") }
 def isIAS()  { return getModelGroup().contains("TS0202_MOTION_IAS") || getModelGroup().contains("TS0202_4IN1") || getModelGroup().contains("TS0601_2IN1") }
 def isChattyRadarDistanceReport(descMap)  {return isRadar() && (descMap?.clusterId == "EF00" && descMap.command == "02" && descMap.data?.size > 2  && descMap.data[2] == "09") }
 
@@ -239,16 +243,17 @@ def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(is
 def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
-def isRadar() { return device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
-                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk', '_TZE200_xpq2rzhq'] }
+def isRadar() { return (device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
+                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk', '_TZE200_xpq2rzhq']) || isYXZBRB58radar() }
 def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
 def isBlackPIRsensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
-def isBlackSquareRadar() { return device.getDataValue('manufacturer') in ['_TZE200_0u3bj3rc', '_TZE200_v6ossqfy']}
+def isBlackSquareRadar() {  return getModelGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
 def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
 
 def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
 def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
 def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
+def isYXZBRB58radar()              { return getModelGroup().contains("TS0601_YXZBRB58_RADAR") }  
 
 
 @Field static final Map deviceProfilesV2 = [
@@ -330,7 +335,6 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019", model:"TY0202", manufacturer:"_TZ1800_fcdjzz3s", deviceJoinName: "Lidl TY0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05,FCC0", outClusters:"0019,FCC0", model:"TY0202", manufacturer:"_TZ3000_4ggd8ezp", deviceJoinName: "Bond motion sensor ZX-BS-J11W"]         // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
-                
             ],
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             capabilities  : ["motion": true, "battery": true],
@@ -339,7 +343,24 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
             preferences   : [
             ]
     ],
+    
+    "TS0202_MOTION_SWITCH": [
+            description   : "Tuya Motion Sensor and Scene Switch",
+            models        : ["TS0202"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,EF00,0000", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_cwamkvua", deviceJoinName: "Tuya Motion Sensor and Scene Switch"]
+                
+            ],
+            deviceJoinName: "Tuya Motion Sensor and Scene Switch",
+            capabilities  : ["motion": true, "switch": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "battery"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],
 
+    
+    
     "TS0601_PIR_PRESENCE"   : [
             description   : "Tuya PIR Human Motion Presence Sensor (Black)",
             models        : ["TS0601"],
@@ -405,7 +426,7 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ar0slwnd", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sfiy5tfs", deviceJoinName: "Tuya Human Presence Detector"],                     // not tested
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_holel4dk", deviceJoinName: "Tuya Human Presence Detector"],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"]                      // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xpq2rzhq", deviceJoinName: "Tuya Human Presence Detector"],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
             ],
             deviceJoinName: "Tuya Human Presence Detector",
             capabilities  : ["motion": true, "battery": true],
@@ -448,7 +469,8 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
             models        : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_0u3bj3rc", deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED"],
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_v6ossqfy", deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED"]
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_v6ossqfy", deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED"],
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mx6u6l4y", deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED"]
             ],
             deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED",
             capabilities  : ["motion": true, "battery": true],
@@ -457,6 +479,21 @@ def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') 
             preferences   : [
             ]
     ],
+    
+    "TS0601_YXZBRB58_RADAR"   : [        // Seller: shenzhenshixiangchuangyeshiyey Manufacturer: Shenzhen Eysltime Intelligent LTD    Item model number: YXZBRB58 
+            description   : "Tuya YXZBRB58 Radar",
+            models        : ["TS0601"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sooucan5", deviceJoinName: "Tuya Human Presence Detector YXZBRB58"]                      // https://www.amazon.com/dp/B0BYDCY4YN                   
+                
+            ],
+            deviceJoinName: "Tuya Human Presence Detector YXZBRB58",
+            capabilities  : ["motion": true, "battery": true],
+            attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
+            configuration : ["battery": false],
+            preferences   : [
+            ]
+    ],    
 
     "OWON_OCP305_RADAR"   : [
             description   : "OWON OCP305 Radar",
@@ -754,16 +791,16 @@ def processTuyaCluster( descMap ) {
         def fncmd = getTuyaAttributeValue(descMap?.data)                 // 
         logDebug "Tuya cluster: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         switch (dp) {
-            case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR and BlackSquareRadar
+            case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR and isBlackSquareRadar
                 logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
                 // 03/29/2023 settings.invertMotion handles the 2-in-1 TS0601 wierness ..
                 handleMotion(motionActive = fncmd)
                 break
             case 0x02 :
                 if (isRadar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true &&*/ settings?.radarSensitivity != safeToInt(device.currentValue("radarSensitivity")))) {logInfo "received Radar sensitivity : ${fncmd}"} //else {log.warn "skipped ${settings?.radarSensitivity} == ${fncmd as int}"}
+                    if (settings?.logEnable == true || settings?.radarSensitivity != safeToInt(device.currentValue("radarSensitivity"))) {logInfo "received Radar sensitivity : ${fncmd}"} //else {log.warn "skipped ${settings?.radarSensitivity} == ${fncmd as int}"}
                     device.updateSetting("radarSensitivity", [value:fncmd as int , type:"number"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "radarSensitivity", value : fncmd as int)
+                    sendEvent(name : "radarSensitivity", value : fncmd as int)
                 }
                 else {
                     logWarn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
@@ -771,9 +808,9 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x03 :
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true && */settings?.minimumDistance != safeToDouble(device.currentValue("minimumDistance")))) {logInfo "received Radar Minimum detection distance : ${fncmd/100} m"}
+                    if (settings?.logEnable == true || (settings?.minimumDistance != safeToDouble(device.currentValue("minimumDistance")))) {logInfo "received Radar Minimum detection distance : ${fncmd/100} m"}
                     device.updateSetting("minimumDistance", [value:fncmd/100, type:"decimal"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "minimumDistance", value : fncmd/100, unit : "m")
+                    sendEvent(name : "minimumDistance", value : fncmd/100, unit : "m")
                 }
                 else {        // also battery level STATE for TS0202 ? 
                     logWarn "non-radar event ${dp} fncmd = ${fncmd}"
@@ -781,26 +818,29 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x04 :    // maximumDistance for radars or Battery level for _TZE200_3towulqd 
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true && */settings?.maximumDistance != safeToDouble(device.currentValue("maximumDistance")))) {logInfo "received Radar Maximum detection distance : ${fncmd/100} m"}
+                    if (settings?.logEnable == true || (settings?.maximumDistance != safeToDouble(device.currentValue("maximumDistance")))) {logInfo "received Radar Maximum detection distance : ${fncmd/100} m"}
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
+                    sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
                 else {        // also battery level for TS0202 ; battery1 for Fantem 4-in-1 (100% or 0% )
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )                    
                 }
                 break
-            
             case 0x05 :     // tamper alarm for TS0202 4-in-1
-                def value = fncmd==0 ? 'clear' : 'detected'
-                logInfo "${device.displayName} tamper alarm is ${value} (dp=05,fncmd=${fncmd})"
-             	sendEvent(name : "tamper",	value : value, isStateChange : true)
+                if (isYXZBRB58radar()) {
+                    logDebug "YXZBRB58 radar unknown event DP=0x05 fncmd = ${fncmd}"  
+                }
+                else {
+                    def value = fncmd==0 ? 'clear' : 'detected'
+                    logInfo "${device.displayName} tamper alarm is ${value} (dp=05,fncmd=${fncmd})"
+                 	sendEvent(name : "tamper",	value : value, isStateChange : true)
+                }
                 break
-            
             case 0x06 :
                 if (isRadar()) {
-                    if (settings?.logEnable == true || (/*settings?.parEvents == true &&*/ radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
-                    /*if (settings?.parEvents == true)*/ sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
+                    if (settings?.logEnable == true || (radarSelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${radarSelfCheckingStatus[fncmd.toString()]} (${fncmd})"}        // @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
+                    sendEvent(name : "radarStatus", value : radarSelfCheckingStatus[fncmd.toString()])
                 }
                 else {    // TODO liminance for 4-in-1 !!!
                     logWarn "non-radar event ${dp} fncmd = ${fncmd}"
@@ -834,10 +874,15 @@ def processTuyaCluster( descMap ) {
             case 0x0C : // (12)
                 illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 break
-            //            
-            //
+            case 0x19 : // (25) 
+                logDebug "Motion Switch battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                handleTuyaBatteryLevel( fncmd )
+                break
             case 0x65 :    // (101)
-                if (isRadar()) {
+                if (isBlackSquareRadar() || isYXZBRB58radar()) {    // presence time in minutes (must be the first check!)
+                    existanceTimeEvent(fncmd)
+                }
+                else if (isRadar()) {
                     def value = fncmd / 10
                     if (settings?.logEnable == true || (settings?.detectionDelay) != safeToDouble(device.currentValue("detectionDelay")) ) {logInfo "received Radar detection delay : ${value} seconds (${fncmd})"}
                     device.updateSetting("detectionDelay", [value:value , type:"decimal"])
@@ -847,8 +892,10 @@ def processTuyaCluster( descMap ) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
                     device.updateSetting("vSensitivity", [type:"enum", value: fncmd.toString()])
                 }
-                else if (isBlackSquareRadar()) {    // presence time in minutes
-                    existanceTimeEvent(fncmd)
+                else if (isMotionSwitch()) {    // button 'single': 0, 'hold': 1, 'double': 2
+                    def action = fncmd == 2 ? 'held' : fncmd == 1 ? 'doubleTapped' : fncmd == 0 ? 'pushed' : 'unknown'
+                    logInfo "button 1 was $action"
+                    sendEvent(name: action, value: '1', data: [buttonNumber: 1], descriptionText: "button 1 was pushed", isStateChange: true, type: 'physical')
                 }
                 else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
                     if (settings?.logEnable) log.debug "${device.displayName} motion event 0x65 fncmd = ${fncmd}"
@@ -856,7 +903,10 @@ def processTuyaCluster( descMap ) {
                 }
                 break            
             case 0x66 :     // (102)
-                if (isRadar()) {
+                if (isBlackSquareRadar() || isYXZBRB58radar()) {    // non-presence time in minutes (must be the first check!)
+                    leaveTimeEvent(fncmd)
+                }
+                else if (isRadar()) {
                     def value = fncmd / 10
                     if (settings?.logEnable == true || (settings?.fadingTime) != safeToDouble(device.currentValue("fadingTime")) ) {logInfo "received Radar fading time : ${value} seconds (${fncmd})"}
                     device.updateSetting("fadingTime", [value:value , type:"decimal"])
@@ -870,16 +920,12 @@ def processTuyaCluster( descMap ) {
                     if (settings?.logEnable) log.info "${device.displayName} (0x66) motion state is ${fncmd}"
                     handleMotion(motionActive=fncmd)
                 }
-                else if (isBlackPIRsensor()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} (0x66) induction time is ${fncmd}"
-                    device.updateSetting("inductionTime", [value:fncmd as int , type:"number"])
-                }
-                else if (isBlackSquareRadar()) {    // non-presence time in minutes
-                    leaveTimeEvent(fncmd)
-                }
                 else if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1 
                     logInfo "4-in-1 reporting time interval is ${fncmd} minutes"
                     device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])
+                }
+                else if (isMotionSwitch()) {
+                    illuminanceEventLux( fncmd )    // 0 = 'dark' 1 = 'bright'
                 }
                 else {     // battery level for 3 in 1;  
                     if (settings?.logEnable) log.debug "${device.displayName} Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -929,12 +975,15 @@ def processTuyaCluster( descMap ) {
                 }
                 break            
             case 0x69 :    // 105 
-                if (isHumanPresenceSensorAIR()) {
+                if (isYXZBRB58radar()) {
+                    logDebug "YXZBRB58 radar unknown event DP=0x69 fncmd = ${fncmd}"  
+                }
+                else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unacknowledgedTime ${fncmd} s"
-                        sendEvent(name : "unacknowledgedTime", value : fncmd, unit : "s")
+                    sendEvent(name : "unacknowledgedTime", value : fncmd, unit : "s")
                 }
                 else if (isBlackPIRsensor()) {
-                    if (settings?.txtEnable) log.debug "${device.displayName} reported target distance <b>${blackSensorDistanceOptions[fncmd.toString()]}</b> (${fncmd})"
+                    logInfo "reported target distance <b>${blackSensorDistanceOptions[fncmd.toString()]}</b> (${fncmd})"
                     device.updateSetting("targetDistance", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isHumanPresenceSensorFall()) {
@@ -1318,21 +1367,21 @@ def illuminanceEventLux( lux ) {
         logInfo "Illuminance is ${lux} Lux"
     }
     else {
-        logDebug "Ignored illuminance event ${lux} % - change is less than ${safeToInt(settings?.luxThreshold)} threshold!"
+        logDebug "ignored illuminance event ${lux} lux - change is less than ${safeToInt(settings?.luxThreshold)} lux threshold!"
     }
 }
 
 def existanceTimeEvent( Integer time ) {
-    if (device.currentValue("existance_time", true) == null ||  device.currentValue("existance_time") != time) {
+    if (device.currentValue("existance_time") == null ||  device.currentValue("existance_time") != time) {
         sendEvent("name": "existance_time", "value": time, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${time} minutes")
-        if (settings?.txtEnable) log.info "$device.displayName existance time is ${time} minutes"
+        logInfo "existance time is ${time} minutes"
     }
 }
 
 def leaveTimeEvent( Integer time ) {
-    if (device.currentValue("leave_time", true) == null ||  device.currentValue("leave_time") != time) {
+    if (device.currentValue("leave_time") == null ||  device.currentValue("leave_time") != time) {
         sendEvent("name": "leave_time", "value": time, "unit": "minutes", "type": "physical", "descriptionText": "Presence is inactive for ${time} minutes")
-        if (settings?.txtEnable) log.info "$device.displayName leave time is ${time} minutes"
+        logInfo "leave time is ${time} minutes"
     }
 }
 
@@ -1376,15 +1425,6 @@ def updated() {
     else {
         unschedule(logsOff)
     }
-    /*
-    if (settings?.parEvents == false) {
-        device.deleteCurrentState('radarSensitivity')
-        device.deleteCurrentState('detectionDelay')
-        device.deleteCurrentState('fadingTime')
-        device.deleteCurrentState('minimumDistance')
-        device.deleteCurrentState('maximumDistance')
-    }
-    */
 
     if (settings?.forcedProfile != null) {
         logDebug "state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
@@ -1397,8 +1437,6 @@ def updated() {
     else {
         logDebug "forcedProfile is not set"
     }
-        
-    
     
     if (true) {    // an configurable device parameter was changed
         //    LED enable
@@ -1872,7 +1910,7 @@ def sendKeepTimeIAS( lvl ) {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setPresent() {
-    if ((device.currentValue("healthStatus", true) ?: "unknown") != "online") {
+    if ((device.currentValue("healthStatus") ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent ony once now - 2023-01-31
         logInfo "is present"
@@ -1908,50 +1946,14 @@ def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
-/*
-// check for device offline every 60 minutes
-def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
-    checkIfNotPresent()
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true])
-}
-*/
-
 
 def deleteAllStatesAndJobs() {
-/*    
     state.clear()    // clear all states
     unschedule()
-    device.deleteCurrentState('motion')
-    device.deleteCurrentState('temperature')
-    device.deleteCurrentState('humidity')
-    device.deleteCurrentState('illuminance')
-    device.deleteCurrentState('tamper')
-    device.deleteCurrentState('distance')
-    device.deleteCurrentState('powerSource')
-    device.deleteCurrentState('*')
     device.deleteCurrentState('')
-*/
     //device.removeDataValue("softwareBuild")
     log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}"
 }
-
-def force_TZE200_9qayzqa8() {
-    log.warn "${device.displayName} is forced to manufacturer <b>_TZE200_9qayzqa8</b> parameters!"
-    device.updateDataValue("endpointId", "01")
-    device.updateDataValue("outClusters", "0019,000A")
-    device.updateDataValue("model", "TS0601")
-    device.updateDataValue("application", "46")
-    device.updateDataValue("inClusters", "0004,0005,EF00,0000")
-    device.updateDataValue("manufacturer", "_TZE200_9qayzqa8")
-    List<String> cmds = []
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0004 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xEF00 {${device.zigbeeId}} {}", "delay 200", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 200", ]
-    sendZigbeeCommands(cmds)    
-}
-
 
 def setLEDMode(String mode) {
     Short paramVal = safeToInt(ledStatusOptions.find{ it.value == mode }?.key)    
@@ -1997,6 +1999,20 @@ def logWarn(msg) {
     }
 }
 
+
+def setParSelectHelp( val ) {
+    logWarn "setPar: select one of the parameters in this list depending on your device"             
+}
+
+def setReportingTime4in1( val ) {
+    if (is4in1()) { 
+        def value = safeToInt(val, -1)
+        if (value >= 0) {
+            logDebug "changing reportingTime4in1 to ${value==0 ? 10 : $val} ${value==0 ? 'seconds' : 'minutes'}  (raw=${value})"    
+            return sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))        
+        }
+    }
+}
 
 def setRadarDetectionDelay( val ) {
     if (isRadar()) { 
@@ -2050,7 +2066,7 @@ def setPar( par=null, val=null )
     }
     value = settableParsMap[par]?.type == "number" ? safeToInt(val, -1) : safeToDouble(val, -1.0)
     if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
-    if (validated == false) {
+    if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
         log.warn "setPar: parameter <b>par</b> value <b>${val}</b> must be within ${settableParsMap[par]?.min} and  ${settableParsMap[par]?.max} "
         return
     }
@@ -2159,15 +2175,13 @@ def getProfileKey(String valueStr) {
     return key
 }
 
+def testParse(description) {
+    logWarn "testParse: ${description}"
+    parse(description)
+    log.trace "---end of testParse---"
+}
+
 def test( val ) {
-/*    
-    ArrayList<String> cmds = []
-    sendZigbeeCommands( sendKeepTimeIAS( val.toInteger() ) )
-*/
-/*
-    log.warn "parse(${val})"
-    parse(val)
-*/
     zigbee.command(0xEF00, 0x07, "00")
 }
 
