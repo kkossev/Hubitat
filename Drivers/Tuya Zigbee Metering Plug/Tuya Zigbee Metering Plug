@@ -52,7 +52,7 @@
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
  *  ver. 1.7.5 2023-05-12 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
- *  ver. 1.7.6 2023-05-13 kkossev - (dev. branch) added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
+ *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *
  *
  *                                 TODO: Tongou D010_RestartStatus: 2 [ENUMERATION_8_BIT]    https://github.com/sprut/Hub/issues/2263
@@ -900,6 +900,10 @@ def energyDurationEvent( duration, isDigital=false ) {
     map.unit = ""
     map.type = isDigital == true ? "digital" : "physical"
     map.descriptionText = "${map.name} is ${map.unit}${map.value} "
+    if (! isEnergyEnabled()) {
+        logDebug "ignored energyDurationEvent (${map.value}) - isEnergyEnabled is ${isEnergyEnabled()}"
+        return
+    }    
     sendEvent(map)     // Info log is in the Energy event
 }
 
@@ -1177,7 +1181,7 @@ def parseZHAcommand( Map descMap) {
                                 break
                             case "13" : // (19) Power or breaker id
                                 if (isRTXCircuitBreaker()) {    // breaker id
-                                    logDebug "RTX(19) breaker id = ${getAttributeString(descMap.data)} (${descMap.data})"
+                                    if (settings.logEnable) { logInfo "RTX(19) breaker id = ${getAttributeString(descMap.data)})" }
                                 }
                                 else {
                                     powerEvent(value/getPowerDiv())
@@ -1839,7 +1843,12 @@ void initializeVars( boolean fullInit = false ) {
     }
     if (fullInit == true || settings?.energyMode == null) {
         if (state.model == "TS0601") {
-            device.updateSetting("energyMode", [value: "REPORTED", type:"enum"])
+            if (isRTXCircuitBreaker()) {
+                device.updateSetting("energyMode", [value: "DISABLED", type:"enum"])
+            }
+            else {
+                device.updateSetting("energyMode", [value: "REPORTED", type:"enum"])
+            }
         }
         else {
             device.updateSetting("energyMode", [value: (isReportingConfigurable() ? "REPORTED" : "POLLED"), type:"enum"])
