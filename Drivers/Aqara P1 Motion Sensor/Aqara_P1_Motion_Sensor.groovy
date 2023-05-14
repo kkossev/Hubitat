@@ -37,8 +37,9 @@
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
+ * ver. 1.4.2 2023-05-14 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code';
  * 
- *                                 TODO: 
+ *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: reporting time configuration for the Lux sensor
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
@@ -49,8 +50,8 @@
  *
 */
 
-def version() { "1.4.1" }
-def timeStamp() {"2023/04/21 9:54 PM"}
+def version() { "1.4.2" }
+def timeStamp() {"2023/05/14 6:06 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -118,7 +119,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // Mi Light Detection Sensor GZCGQ01LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
         // experimental
-        //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,FCC0", outClusters:"0003,0019", model:"lumi.magnet.acn001", manufacturer:"LUMI",  deviceJoinName: aqaraModels['MCCGQ14LM'].deviceJoinName               // tests only : "Aqara Contact Sensor MCCGQ14LM"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
         
     }
@@ -208,7 +208,6 @@ metadata {
 def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
-def isE1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.magnet.acn001'] ) }   // Aqara E1 contact sensor
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
 def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor; T1 light intensity sensor
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
@@ -1282,12 +1281,9 @@ def aqaraReadAttributes() {
     else if (isFP1()) {  // Aqara presence detector FP1 
         cmds += zigbee.readAttribute(0xFCC0, [0x010C, 0x0142, 0x0144, 0x0146], [mfgCode: 0x115F], delay=200)
     }
-    else if (isE1()) {   // E1 contact sensor
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    //  battery voltage
-        cmds += zigbee.readAttribute(0x0002, 0x0500, [mfgCode: 0x115F], delay=200)    //  open/close IAS Zone 2
-    }
     else if (isLightSensorAqara()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)    // added 05/14/2023 - try both Aqara and Xiaomi codes
     }
     else if (isLightSensorXiaomi()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)
@@ -1305,11 +1301,6 @@ def aqaraBlackMagic() {
 
     if (isP1()) {
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005], [:], delay=200)
-    }
-    else if (isE1()) {
-        logWarn "aqaraBlackMagic() for E1"
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
-        cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 89 34 86 38 41 04 19 89 90 79 74 27 27 80 18 45}  {0x0104}", "delay 200",]     // contact sensor write attr 0xFF
     }
     else if (isFP1()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]
@@ -1340,7 +1331,20 @@ def aqaraBlackMagic() {
     else if (isLightSensorAqara()) {    // 'lumi.sen_ill.agl01' Aqara Light Sensor T1
         cmds += zigbee.writeAttribute(0xFCC0, 0x0009, DataType.UINT8, 0x01, [mfgCode: 0x115F], delay=50)      // mode UINT8
         cmds += zigbee.readAttribute(0xFCC0, 0x0000, [mfgCode: 0x115F], delay=200)    //  detection period ??? range 1..59 (seconds). Also Write ?
-        cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    //  illuminance UINT32
+        // cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    //  illuminance UINT32  doesn't work - retuns status code 86
+if (true) {    // test 05/14/2023 - try the same initialization as for the Xiaomi sensor 
+		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
+		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
+        int secondsMinLux = 10
+        int variance = 5
+        logDebug "Minimum Update Time: ${(secondsMinLux == null ? 10 : secondsMinLux).intValue()}"
+        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, (secondsMinLux == null ? 10 : secondsMinLux).intValue(), 3600, variance, [:], delay=200)
+        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=200)
+	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
+}
     }
     else {
         //logWarn "aqaraBlackMagic() = NOT E1 !!!!!!"
