@@ -37,10 +37,10 @@
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
- * ver. 1.4.2 2023-05-14 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code';
+ * ver. 1.4.2 2023-05-16 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup;
  * 
- *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: reporting time configuration for the Lux sensor
+ *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
  *                                 TODO: state motionStarted in human readable form
@@ -51,7 +51,7 @@
 */
 
 def version() { "1.4.2" }
-def timeStamp() {"2023/05/14 6:06 PM"}
+def timeStamp() {"2023/05/16 6:38 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -232,7 +232,7 @@ def parse(String description) {
     def descMap = [:]
     
     if (description.contains("cluster: 0000") && description.contains("attrId: FF02")) {
-        log.trace "parsing Xiaomi cluster 0xFF02"
+        //log.trace "parsing Xiaomi cluster 0xFF02"
         parseAqaraAttributeFF02( description )
         return null
     }
@@ -1028,7 +1028,7 @@ void deviceCommandTimeout() {
 }
 
 def sendHealthStatusEvent(value) {
-    log.trace "healthStatus ${value}"
+    //log.trace "healthStatus ${value}"    // TODO - send the event only if the healthStatus changes?
     sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
