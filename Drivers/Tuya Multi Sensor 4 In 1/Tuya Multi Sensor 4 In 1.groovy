@@ -39,7 +39,7 @@
  * ver. 1.3.1  2023-03-29 kkossev  - added 'invertMotion' option; 4in1 (Fantem) Refresh Tuya Magic; invertMotion is set to true by default for _TZE200_3towulqd;
  * ver. 1.3.2  2023-04-17 kkossev  - 4-in-1 parameter for adjusting the reporting time; supressed debug logs when ignoreDistance is flipped on; 'Send Event when parameters change' parameter is removed (events are always sent when there is a change); fadingTime and detectionDelay change was not logged and not sent as an event;
  * ver. 1.3.3  2023-05-14 kkossev  - code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in a new TS0601_YXZBRB58_RADAR group (for tests); added reportingTime4in1 to setPar command options;
- * ver. 1.3.4  2023-05-18 kkossev  - added _TZE204_sxm7l9xa mmWave radar to TS0601_YXZBRB58_RADAR group;
+ * ver. 1.3.4  2023-05-19 kkossev  - added _TZE204_sxm7l9xa mmWave radar to TS0601_YXZBRB58_RADAR group; isRadar() bug fix;
  *
  *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: add illuminance threshold / configuration
@@ -53,7 +53,7 @@
 */
 
 def version() { "1.3.4" }
-def timeStamp() {"2023/05/18 7:58 AM"}
+def timeStamp() {"2023/05/19 7:23 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -254,17 +254,15 @@ def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(is
 def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isYXZBRB58radar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
-def isRadar() { return (device.getDataValue('manufacturer') in ['_TZE200_ztc6ggyl', '_TZE204_ztc6ggyl', '_TZE200_ikvncluo', '_TZE200_lyetpprm', '_TZE200_wukb7rhc', '_TZE200_jva8ink8', '_TZE200_ar0slwnd', '_TZE200_sfiy5tfs',
-                                                               '_TZE200_mrf6vtua', '_TZE200_holel4dk', '_TZE200_xpq2rzhq', '_TZE204_sxm7l9xa'])}
-def isRadarMOES() { return device.getDataValue('manufacturer') in ['_TZE200_ikvncluo'] }
-def isBlackPIRsensor() { return device.getDataValue('manufacturer') in ['_TZE200_9qayzqa8'] }
-def isBlackSquareRadar() {  return getModelGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
-def isOWONRadar() { return device.getDataValue('manufacturer') in ['OWON'] }
+def isRadar()             { return getModelGroup().contains("TS0601_TUYA_RADAR") } 
+def isBlackPIRsensor()    { return getModelGroup().contains("TS0601_PIR_PRESENCE") }     
+def isBlackSquareRadar()  { return getModelGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
+def isOWONRadar()         { return getModelGroup().contains("OWON_OCP305_RADAR") } 
 
-def isHumanPresenceSensorAIR()     { return device.getDataValue('manufacturer') in ['_TZE200_auin8mzr'] } 
-def isHumanPresenceSensorScene()   { return device.getDataValue('manufacturer') in ['_TZE200_vrfecyku'] } 
-def isHumanPresenceSensorFall()    { return device.getDataValue('manufacturer') in ['_TZE200_lu01t0zl'] } 
-def isYXZBRB58radar()              { return getModelGroup().contains("TS0601_YXZBRB58_RADAR") }  
+def isHumanPresenceSensorAIR()     { return getModelGroup().contains("TS0601_PIR_AIR") }
+def isHumanPresenceSensorScene()   { return getModelGroup().contains("TS0601_RADAR_MIR-HE200-TY") }
+def isHumanPresenceSensorFall()    { return getModelGroup().contains("TS0601_RADAR_MIR-TY-FALL") }
+def isYXZBRB58radar()              { return getModelGroup().contains("TS0601_YXZBRB58_RADAR") }
 
 
 @Field static final Map deviceProfilesV2 = [
