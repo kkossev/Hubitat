@@ -37,9 +37,9 @@
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
- * ver. 1.4.2 2023-05-16 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup;
+ * ver. 1.4.2 2023-05-20 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors
  * 
- *                                 TODO: reporting time configuration for the Lux sensor
+ *                                 TODO: WARN log, when the devce model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
@@ -51,18 +51,23 @@
 */
 
 def version() { "1.4.2" }
-def timeStamp() {"2023/05/16 6:38 AM"}
+def timeStamp() {"2023/05/20 5:04 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
+import java.util.concurrent.ConcurrentHashMap
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean deviceSimulation = false
 @Field static final Boolean _REGIONS = false
 @Field static final String COMMENT_WORKS_WITH = 'Works with Aqara P1, FP1, Aqara/Xiaomi/Mija other motion and illuminance sensors'
+
+@Field static final Map<Integer, Map> DynamicSettingsMap = new ConcurrentHashMap<>().withDefault {
+    new ConcurrentHashMap<String, String>()
+}
 
 metadata {
     definition (name: "Aqara P1 Motion Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20P1%20Motion%20Sensor/Aqara_P1_Motion_Sensor.groovy", singleThreaded: true ) {
@@ -118,9 +123,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,FFFF,0019", outClusters:"0000,0004,0003,0006,0008,0005,0019", model:"lumi.sensor_motion", manufacturer:"LUMI", deviceJoinName: "Xiaomi/Mijia Motion Sensor RTCGQ01LM"   // https://zigbee.blakadder.com/Xiaomi_RTCGQ01LM.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer:"LUMI",   deviceJoinName: aqaraModels['GZCGQ01LM'].deviceJoinName                        // Mi Light Detection Sensor GZCGQ01LM
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.mgl01", manufacturer: "XIAOMI", deviceJoinName: "Mi Light Detection Sensor GZCGQ01LM" 
-        // experimental
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0001", outClusters:"0003", model:"lumi.sen_ill.agl01", manufacturer:"LUMI",   deviceJoinName:  aqaraModels['GZCGQ11LM'].deviceJoinName                       // tests only : "Aqara T1 light intensity sensor GZCGQ11LM"    
-        
     }
 
     preferences {
@@ -146,6 +149,11 @@ metadata {
                 // Monitoring Mode: "Undirected monitoring" - Monitors all motions within the sensing range; "Left and right monitoring" - Monitors motions on the lefy and right sides within
                 input (name: "monitoringMode", type: "enum", title: "<b>Monitoring mode</b>", description: "<i>monitoring mode</i>", defaultValue: 0, options: monitoringModeOptions)
             }
+            if (isLightSensor()) {
+                input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
+                input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "<i>illuminance maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
+                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, lux (1..255)</i>", range: "1..255", defaultValue: 1)
+            }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
                 input (name: "tempOffset", type: "decimal", title: "<b>Temperature offset</b>", description: "<i>Select how many degrees to adjust the temperature.</i>", range: "-100..100", defaultValue: 0)
@@ -155,8 +163,11 @@ metadata {
 }
 
 @Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
-@Field static final Integer presenceCountTreshold = 3
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
 @Field static final Integer DEFAULT_POLLING_INTERVAL = 3600
+@Field static final Integer DEFAULT_ILLUMINANCE_MIN_TIME = 5
+@Field static final Integer DEFAULT_ILLUMINANCE_MAX_TIME = 300
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 1
 
 
 @Field static final Map aqaraModels = [
@@ -209,7 +220,7 @@ def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDa
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
 def isT1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl02'] ) }    // Aqara T1 motion sensor
-def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor; T1 light intensity sensor
+def isLightSensorXiaomi() { return (device.getDataValue('model') in ['lumi.sen_ill.mgl01'] ) } // Mi Light Detection Sensor;
 def isLightSensorAqara()  { return (device.getDataValue('model') in ['lumi.sen_ill.agl01'] ) } // T1 light intensity sensor
 def isLightSensor() { return (isLightSensorXiaomi() || isLightSensorAqara()) }
 
@@ -747,7 +758,7 @@ def parseZHAcommand( Map descMap) {
             logDebug "Received Write Attribute Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             break
         case "07" : // Configure Reporting Response
-            logDebug "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+            logInfo "Received Configure Reporting Response for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             // Status: Unreportable Attribute (0x8c)
             break
         case "09" : // Command: Read Reporting Configuration Response (0x09)
@@ -756,11 +767,15 @@ def parseZHAcommand( Map descMap) {
             if (status == 0) {
                 def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
                 def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
-                def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
-                logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max}"
+                def max = zigbee.convertHexToInt(descMap.data[8])*256 + zigbee.convertHexToInt(descMap.data[7])
+                def delta = 0
+                if (descMap.data.size() >= 9 ) {
+                    delta = zigbee.convertHexToInt(descMap.data[9])
+                }
+                logInfo "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
             }
             else {
-                logDebug "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
+                logWarn "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
             }
             break
         case "0B" : // ZCL Default Response
@@ -819,12 +834,20 @@ def parseSimpleDescriptorResponse(Map descMap) {
 
 
 def illuminanceEvent( rawLux ) {
+    if (rawLux == 0xFFFF) {
+        logWarn "ignored rawLux reading ${rawLux}"
+        return
+    }
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
 
 def illuminanceEventLux( Integer lux ) {
+    if (lux == 0xFFFF) {
+        logWarn "ignored lux reading ${lux}"
+        return
+    }
     if ( lux > 0xFFDC ) lux = 0    // maximum value is 0xFFDC !
     sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
@@ -968,7 +991,7 @@ def setPresent() {
 def checkIfNotPresent() {
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
-        if (state.notPresentCounter >= presenceCountTreshold) {
+        if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
             sendHealthStatusEvent("offline")
             // TODO  remove the powerSource manipulation below...
             if (!(device.currentValue('powerSource', true) in ['unknown'])) {
@@ -1023,7 +1046,7 @@ void deviceCommandTimeout() {
         resetState()
     }
     else {
-        logDebug 'no response received (sleepy debice)'
+        logDebug 'no response received (sleepy device)'
     }
 }
 
@@ -1071,6 +1094,7 @@ def logsOff(){
 
 // called when preferences are saved
 def updated() {
+    logDebug "updated()..."
     checkDriverVersion()
     ArrayList<String> cmds = []
     
@@ -1086,6 +1110,17 @@ def updated() {
     if (settings?.internalTemperature == false) {
         device.deleteCurrentState("temperature")
     }
+    
+    /*
+    log.warn "updated(): before: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
+    if (settings?.testCommands == true) {
+        DynamicSettingsMap.get(device.id).put('dynamicCommands', 'true')
+    }
+    else {
+        DynamicSettingsMap.get(device.id).put('dynamicCommands', 'false')
+    }
+    log.warn "updated(): after: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
+   */
     
     def value = 0
     if (isP1()) {
@@ -1126,6 +1161,9 @@ def updated() {
         device.deleteCurrentState("battery")
     }
     //
+    if (isLightSensor()) {
+        cmds += configureIlluminance()
+    }
     if ( cmds != null ) {
         sendZigbeeCommands( cmds )     
     }
@@ -1181,6 +1219,12 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
+    
+    if (isLightSensor()) {
+        device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"])
+        device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"])
+        device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"])
+    }
     
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
@@ -1286,7 +1330,11 @@ def aqaraReadAttributes() {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)    // added 05/14/2023 - try both Aqara and Xiaomi codes
     }
     else if (isLightSensorXiaomi()) {
-        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=200)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=201)
+        //
+                cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=202)
+                cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=203)
+
     }
     else {
         logWarn "skipped unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
@@ -1315,36 +1363,23 @@ def aqaraBlackMagic() {
         //cmds += activeEndpoints()         
         logDebug "aqaraBlackMagic() for FP1"
     }
-    else if (isLightSensorXiaomi()) {
-		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
+    else if (isLightSensorXiaomi() || isLightSensorAqara()) {
+        /*
+//        if (isLightSensorAqara()) {
+            cmds += zigbee.writeAttribute(0xFCC0, 0x0009, DataType.UINT8, 0x01, [mfgCode: 0x115F], delay=50)      // mode UINT8
+            cmds += zigbee.readAttribute(0xFCC0, 0x0000, [mfgCode: 0x115F], delay=200)    //  detection period ??? range 1..59 (seconds). Also Write ?
+//        }
+    */
+        //cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
-		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
-        int secondsMinLux = 10
-        int variance = 5
-        logDebug "Minimum Update Time: ${(secondsMinLux == null ? 10 : secondsMinLux).intValue()}"
-        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, (secondsMinLux == null ? 10 : secondsMinLux).intValue(), 3600, variance, [:], delay=200)
-        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=200)
-	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
-    }
-    else if (isLightSensorAqara()) {    // 'lumi.sen_ill.agl01' Aqara Light Sensor T1
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0009, DataType.UINT8, 0x01, [mfgCode: 0x115F], delay=50)      // mode UINT8
-        cmds += zigbee.readAttribute(0xFCC0, 0x0000, [mfgCode: 0x115F], delay=200)    //  detection period ??? range 1..59 (seconds). Also Write ?
-        // cmds += zigbee.readAttribute(0xFCC0, 0x0102, [mfgCode: 0x115F], delay=200)    //  illuminance UINT32  doesn't work - retuns status code 86
-if (true) {    // test 05/14/2023 - try the same initialization as for the Xiaomi sensor 
+        cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 201)
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=202)
+		//cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
 		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
-        cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
-		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
-        int secondsMinLux = 10
-        int variance = 5
-        logDebug "Minimum Update Time: ${(secondsMinLux == null ? 10 : secondsMinLux).intValue()}"
-        cmds += zigbee.configureReporting(0x0400, 0x0000, 0x21, (secondsMinLux == null ? 10 : secondsMinLux).intValue(), 3600, variance, [:], delay=200)
-        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=200)
-	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=200)
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
-}
+        cmds += configureIlluminance()
+	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=207)
+        
+        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=208)
     }
     else {
         //logWarn "aqaraBlackMagic() = NOT E1 !!!!!!"
@@ -1442,11 +1477,39 @@ def logWarn(msg) {
     }
 }
 
+List<String> configureIlluminance() {
+     List<String> cmds = []
+     int secondsMinLux = settings.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME
+     int secondsMaxLux = settings.illuminanceMaxReportingTime ?: DEFAULT_ILLUMINANCE_MAX_TIME
+     int variance = settings.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD
+     cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.UINT16, secondsMinLux as int, secondsMaxLux as int, variance as int, [:], delay=201)
+     cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
+     return cmds 
+        sendZigbeeCommands( cmds )
+    
+}
+
 def test( description ) {
+    
+        List<String> cmds = []
+        cmds = configureIlluminance()
+        sendZigbeeCommands( cmds )
+/*    
+    log.warn "before: DynamicSettingsMap = ${DynamicSettingsMap}"
+    Random rnd = new Random()
+    //def setting = rnd.nextInt(99).toString()
+    def setting = "dynamicCommands"
+    def value = description ?: "empty"
+    DynamicSettingsMap.get(device.id).put(rnd.nextInt(99).toString(), "otherRandomParValue")
+    DynamicSettingsMap.get(device.id).put(setting, value)
+    log.warn "after: DynamicSettingsMap = ${DynamicSettingsMap}"
+    log.trace "DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get(setting)}"
+*/    
+    /*
     description = "read attr - raw: DE060100003002FF4C0600100121AA0B21A813242000000000212D002055, dni: DE06, endpoint: 01, cluster: 0000, size: 30, attrId: FF02, encoding: 4C, command: 0A, value: 0600100121AA0B21A813242000000000212D002055"
     logWarn "test parsing ${description}"
     parse(description)
-
+    */
     /*
     def map = aqaraModels
     map.each{ k, v -> log.trace "${k}:${v}" }
