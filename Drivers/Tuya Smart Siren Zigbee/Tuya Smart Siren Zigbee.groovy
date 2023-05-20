@@ -18,13 +18,16 @@
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
  * ver. 1.2.0 2023-01-22 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
- *                                  added advancedOptions: restoreAlarmSettings; presetBeepAndChimeSettings
+ * ver. 1.2.1 2023-05-20 kkossev  - added _TZE204_t1blo2bj in Neo group;
+ *
+ *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
+ *                                  TODO: add on/off preference selection like Zoos S2 Multisiren https://community.hubitat.com/t/hsm-custom-rule-bugs/117061/6?u=kkossev 
  *                                  TODO: mute/unmute
  *
 */
 
-def version() { "1.2.0" }
-def timeStamp() {"2023/01/22 1:10 PM"}
+def version() { "1.2.1" }
+def timeStamp() {"2023/05/20 7:41 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -74,11 +77,12 @@ metadata {
         }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // vendor: 'Neo', model: 'NAS-AB02B2'
+        // not working with this driver - use Markus's driver instead
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE200_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // Neo NAS-AB02B0
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TYST11_d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A" ,model:"TS0601", manufacturer:        "d0yu2xgi", deviceJoinName: "Tuya NEO Smart Siren T&H"      // not tested
-
-
+        // not working with this driver    // https://github.com/zigpy/zha-device-handlers/issues/1379
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A" ,model:"TS0601", manufacturer:"_TZE204_t1blo2bj", deviceJoinName: "Tuya NEO Smart Siren"          // https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
 
         // https://github.com/zigpy/zha-device-handlers/issues/1379#issuecomment-1077772021 
     }
@@ -104,7 +108,7 @@ metadata {
 }
 
 
-def isNeo() {(device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi']) || (debug == true)}
+def isNeo() {(device.getDataValue("manufacturer") in ['_TZE200_d0yu2xgi', '_TZE200_d0yu2xgi', 'd0yu2xgi', '_TZE204_t1blo2bj']) || (debug == true)}
 
 @Field static final Map disabledEnabledOptions = [
     '0' : 'disabled',
