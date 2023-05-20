@@ -37,9 +37,9 @@
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
- * ver. 1.4.2 2023-05-20 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors
+ * ver. 1.4.2 2023-05-20 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; preferences are NOT reset to defaults when paired again!
  * 
- *                                 TODO: WARN log, when the devce model is not registered during the pairing !!!!!!!!
+ *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
  *                                 TODO: configure to clear the current states and events
  *                                 TODO: Info logs only when parameters (sensitivity, etc..) are changed from the previous value
@@ -51,7 +51,7 @@
 */
 
 def version() { "1.4.2" }
-def timeStamp() {"2023/05/20 5:04 PM"}
+def timeStamp() {"2023/05/20 11:52 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -152,7 +152,7 @@ metadata {
             if (isLightSensor()) {
                 input (name: "illuminanceMinReportingTime", type: "number", title: "<b>Minimum time between Illuminance Reports</b>", description: "<i>illuminance minimum reporting interval, seconds (4..300)</i>", range: "4..300", defaultValue: DEFAULT_ILLUMINANCE_MIN_TIME)
                 input (name: "illuminanceMaxReportingTime", type: "number", title: "<b>Maximum time between Illuminance Reports</b>", description: "<i>illuminance maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_ILLUMINANCE_MAX_TIME)
-                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, lux (1..255)</i>", range: "1..255", defaultValue: 1)
+                input (name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: 1)
             }
             input (name: "internalTemperature", type: "bool", title: "<b>Internal Temperature</b>", description: "<i>The internal temperature sensor is not very accurate, requires an offset and does not update frequently.<br>Recommended value is <b>false</b></i>", defaultValue: false)
             if (internalTemperature == true) {
@@ -840,7 +840,7 @@ def illuminanceEvent( rawLux ) {
     }
 	def lux = rawLux > 0 ? Math.round(Math.pow(10,(rawLux/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "unit": "lx", type: "physical")
-    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
+    if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux (raw=${rawLux})"
 }
 
 def illuminanceEventLux( Integer lux ) {
@@ -1221,9 +1221,9 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
     
     if (isLightSensor()) {
-        device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"])
-        device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"])
-        device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"])
+        if (fullInit == true || settings?.illuminanceMinReportingTime == null) device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"])
+        if (fullInit == true || settings?.illuminanceMaxReportingTime == null) device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"])
+        if (fullInit == true || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"])
     }
     
     if (isFP1()) {
@@ -1241,8 +1241,8 @@ def installed() {
     aqaraBlackMagic()
 }
 
-def configure(boolean fullInit = true ) {
-    log.info "${device.displayName} configure...(driver version ${driverVersionAndTimeStamp()})"
+def configure(boolean fullInit = false) {
+    log.info "${device.displayName} configure...fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
     unschedule()
     initializeVars( fullInit )
     runIn( DEFAULT_POLLING_INTERVAL, "pollPresence", [overwrite: true, misfire: "ignore"])
@@ -1364,25 +1364,15 @@ def aqaraBlackMagic() {
         logDebug "aqaraBlackMagic() for FP1"
     }
     else if (isLightSensorXiaomi() || isLightSensorAqara()) {
-        /*
-//        if (isLightSensorAqara()) {
-            cmds += zigbee.writeAttribute(0xFCC0, 0x0009, DataType.UINT8, 0x01, [mfgCode: 0x115F], delay=50)      // mode UINT8
-            cmds += zigbee.readAttribute(0xFCC0, 0x0000, [mfgCode: 0x115F], delay=200)    //  detection period ??? range 1..59 (seconds). Also Write ?
-//        }
-    */
-        //cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 50",]
         cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 50",]
+        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=208)
         cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 201)
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=202)
-		//cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0003 {${device.zigbeeId}} {}", "delay 50",]
 		cmds += ["zdo bind ${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 50",]
         cmds += configureIlluminance()
 	    cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=207)
-        
-        cmds += zigbee.configureReporting(0x0001, 0x0020, 0x20, 3600, 3600, null, [:], delay=208)
     }
     else {
-        //logWarn "aqaraBlackMagic() = NOT E1 !!!!!!"
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
@@ -1396,11 +1386,9 @@ def aqaraBlackMagic() {
 
 def activeEndpoints() {
     List<String> cmds = []
-    
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
     String endpointIdTemp = endpointId == null ? "01" : endpointId
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0004 {00 ${zigbee.swapOctets(device.deviceNetworkId)} $endpointIdTemp} {0x0000}"]
-    
     return cmds    
 }
 
@@ -1418,22 +1406,6 @@ String getModel(){
             return ""
         }
     }
-}
-
-// credits @thebearmay
-void checkZigStack(){
-//    if(!beta)
-//        return
-    try{
-        httpGet("http://127.0.0.1:8080/hub/currentZigbeeStack") { resp ->
-            if(resp.data.toString().indexOf('standard') > -1) {
-                // 'Hub is set to use standard Zigbee stack'
-                logDebug "zigbeeStack is standard"
-            }
-            else
-                logDebug "zigbeeStack is NEW"
-            }       
-       } catch(ignore) { }
 }
 
 // credits @thebearmay
@@ -1458,7 +1430,6 @@ def updateAqaraVersion() {
     }
 }
 
-
 def logDebug(msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
@@ -1478,15 +1449,14 @@ def logWarn(msg) {
 }
 
 List<String> configureIlluminance() {
-     List<String> cmds = []
-     int secondsMinLux = settings.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME
-     int secondsMaxLux = settings.illuminanceMaxReportingTime ?: DEFAULT_ILLUMINANCE_MAX_TIME
-     int variance = settings.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD
-     cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.UINT16, secondsMinLux as int, secondsMaxLux as int, variance as int, [:], delay=201)
-     cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
-     return cmds 
-        sendZigbeeCommands( cmds )
-    
+    List<String> cmds = []
+    int secondsMinLux = settings.illuminanceMinReportingTime ?: DEFAULT_ILLUMINANCE_MIN_TIME
+    int secondsMaxLux = settings.illuminanceMaxReportingTime ?: DEFAULT_ILLUMINANCE_MAX_TIME
+    int variance = settings.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD
+    logDebug "configureIlluminance: min=${secondsMinLux} max=${secondsMaxLux} delta=${variance}"
+    cmds += zigbee.configureReporting(0x0400, 0x0000, DataType.UINT16, secondsMinLux as int, secondsMaxLux as int, variance as int, [:], delay=201)
+    cmds += zigbee.reportingConfiguration(0x0400, 0x0000, [:], 203)
+    return cmds 
 }
 
 def test( description ) {
