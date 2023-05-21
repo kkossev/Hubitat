@@ -37,7 +37,7 @@
  * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
  * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
  * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
- * ver. 1.4.2 2023-05-20 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; preferences are NOT reset to defaults when paired again!
+ * ver. 1.4.2 2023-05-21 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
  * 
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
@@ -51,7 +51,7 @@
 */
 
 def version() { "1.4.2" }
-def timeStamp() {"2023/05/20 11:52 PM"}
+def timeStamp() {"2023/05/21 10:48 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -238,7 +238,7 @@ def parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is ${description}"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
-    setPresent()
+    setHealthStatusOnline()
 
     def descMap = [:]
     
@@ -960,60 +960,46 @@ def getSecondsInactive() {
     }
 }
 
-def powerSourceEvent( state = null) {
-    if (state != null && state == 'unknown' ) {
-        sendEvent(name : "powerSource",	value : "unknown", descriptionText: "device is OFFLINE", type: "digital")
-    }
-    else if (isFP1()) {
-        sendEvent(name : "powerSource",	value : "dc", descriptionText: "device is back online", type: "digital")
-    }
-    else {
-        sendEvent(name : "powerSource",	value : "battery", descriptionText: "device is back online", type: "digital")
-    }
+def powerSourceEvent() {
+    def value = isFP1() ? "dc" : "battery"
+    def descriptionText = isFP1() ? "powerSource is dc/mains" : "powerSource is battery"
+    sendEvent(name : "powerSource",	value : value, descriptionText: descriptionText, type: "digital")
+    logInfo "${descriptionText}"
 }
 
 // called when any event was received from the Zigbee device in parse() method..
-def setPresent() {
+def setHealthStatusOnline() {
     if ((state.rxCounter != null) && state.rxCounter <= 2) {
         return                    // do not count the first device announcement or binding ack packet as an online presence!
     }
-    //powerSourceEvent()
     sendHealthStatusEvent("online")
-    // TODO - remove the powerSource manipulation below...
-    if (device.currentValue('powerSource', true) in ['unknown', '?']) {
-        if (settings?.txtEnable) log.info "${device.displayName} is online"
-    }    
     state.notPresentCounter = 0
     unschedule('deviceCommandTimeout')
 }
 
-// called every 60 minutes from pollPresence()
-def checkIfNotPresent() {
+def pollPresence() { deviceHealthCheck() }
+
+// check for device offline every 60 minutes
+def deviceHealthCheck() {
+    if (logEnable) log.debug "${device.displayName} deviceHealthCheck()"
+    
     if (state.notPresentCounter != null) {
         state.notPresentCounter = state.notPresentCounter + 1
         if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
             sendHealthStatusEvent("offline")
-            // TODO  remove the powerSource manipulation below...
-            if (!(device.currentValue('powerSource', true) in ['unknown'])) {
-    	        powerSourceEvent("unknown")
-                logWarn "is not present!"
-            }
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
-                handleMotion(false, isDigital=true)
-                logWarn "forced motion to <b>inactive</b>"
+                if (!isLightSensor()) {
+                    handleMotion(false, isDigital=true)
+                    logWarn "forced motion to <b>inactive</b>"
+                }
             }
         }
     }
     else {
         state.notPresentCounter = 0  
     }
-}
-
-// check for device offline every 60 minutes
-def pollPresence() {
-    if (logEnable) log.debug "${device.displayName} pollPresence()"
-    checkIfNotPresent()
-    runIn( DEFAULT_POLLING_INTERVAL, "pollPresence", [overwrite: true, misfire: "ignore"])
+    
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
 }
 
 def ping() {
@@ -1051,8 +1037,16 @@ void deviceCommandTimeout() {
 }
 
 def sendHealthStatusEvent(value) {
-    //log.trace "healthStatus ${value}"    // TODO - send the event only if the healthStatus changes?
-    sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} healthStatus set to $value")
+    if (device.currentValue('healthStatus') != value) {
+        def descriptionText = "healthStatus changed to $value"
+        sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} ${descriptionText}", type: "digital")
+        if (value != 'online') {
+            log.warn "${device.displayName} ${descriptionText}"
+        }
+        else {
+            log.info "${device.displayName} ${descriptionText}"
+        }
+    }
 }
 
 def resetPresence() {
@@ -1111,6 +1105,9 @@ def updated() {
         device.deleteCurrentState("temperature")
     }
     
+    // restart the healthCheck timer
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
+
     /*
     log.warn "updated(): before: DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get('dynamicCommands')}"
     if (settings?.testCommands == true) {
@@ -1230,7 +1227,7 @@ void initializeVars( boolean fullInit = false ) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
     if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
-    //if (fullInit == true ) sendEvent(name : "powerSource",	value : "?", isStateChange : true)
+    if (fullInit == true ) { powerSourceEvent() }
     
     updateAqaraVersion()
 }
@@ -1245,7 +1242,7 @@ def configure(boolean fullInit = false) {
     log.info "${device.displayName} configure...fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
     unschedule()
     initializeVars( fullInit )
-    runIn( DEFAULT_POLLING_INTERVAL, "pollPresence", [overwrite: true, misfire: "ignore"])
+    runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     runIn( 30, "aqaraReadAttributes", [overwrite: true])
 }
