@@ -33,7 +33,7 @@
  * ver. 1.3.2  2023-03-04 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
  * ver. 1.3.3  2023-04-23 kkossev - _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
  * ver. 1.3.4  2023-04-24 kkossev - send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
- * ver. 1.3.5  2023-05-20 kkossev - (dev.branch) sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Haozee group
+ * ver. 1.3.5  2023-05-21 kkossev - (dev.branch) sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -45,7 +45,7 @@
 */
 
 def version() { "1.3.5" }
-def timeStamp() {"2023/05/20 8:15 AM"}
+def timeStamp() {"2023/05/21 11:06 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -87,7 +87,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c7emyjom", deviceJoinName: "Tuya Temperature Humidity Illuminance LCD Display with a Clock"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_locansqn", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" // https://de.aliexpress.com/item/1005003634353180.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bq5c8xfe", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_cirvgep4", deviceJoinName: "Haozee Temperature Humidity Illuminance LCD Display with a Clock" //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_hjsgdkfl", deviceJoinName: "AVATTO S-H02"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_a476raq2", deviceJoinName: "Tuya Temperature Humidity LCD display" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
@@ -108,6 +107,7 @@ metadata {
         // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_cirvgep4", deviceJoinName: "Tuya Temperature Humidity LCD Display with a Clock" //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
@@ -207,9 +207,10 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
+    '_TZE200_9yapgbuv'  : 'TS0601_Tuya',         // not tested
+    '_TZE200_cirvgep4'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
-    '_TZE200_cirvgep4'  : 'TS0601_Haozee',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_nnrfa68v'  : 'TS0601_Haozee',       // not tested NOUS E6 https://noussmart.pl/product/e6.html 
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
