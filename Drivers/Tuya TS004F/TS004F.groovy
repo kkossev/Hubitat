@@ -42,8 +42,9 @@
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
  * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added "AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
- * ver. 2.6.5 2023-05-01 kkossev     - (dev. branch) TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons;
+ * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
  *
+ *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
  *                                   - TODO: Sonoff button - battery reporting to be enabled by default; Refresh to read battery level/voltage';
@@ -63,7 +64,7 @@
  */
 
 def version() { "2.6.5" }
-def timeStamp() {"2023/05/01 9:53 PM"}
+def timeStamp() {"2023/05/15 7:56 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -106,6 +107,7 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_ixla93vd", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_qja6nq5z", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_csflgqj2", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_abrsvsou", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
 
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_tk3s5tyg", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -212,7 +214,7 @@ metadata {
 
 def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046", "TS0215", "TS0215A"]}
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
-def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
+def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2", "_TZ3000_abrsvsou"]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
@@ -381,6 +383,7 @@ def parse(String description) {
             logInfo "leave response cluster: ${descMap.clusterId}"
             return null
         }
+        // TODO: (on pairing new device) :  Zigbee parsed:[raw:catchall: 0000 8005 00 00 0040 00 0F4B 00 00 0000 00 00 3B004B0F0101, profileId:0000, clusterId:8005, clusterInt:32773, sourceEndpoint:00, destinationEndpoint:00, options:0040, messageType:00, dni:0F4B, isClusterSpecific:false, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:00, data:[3B, 00, 4B, 0F, 01, 01]]
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
             if (descMap.data.size() == 10 && descMap.data[2] == "0A" ) {
                 def value = zigbee.convertHexToInt(descMap?.data[9])
