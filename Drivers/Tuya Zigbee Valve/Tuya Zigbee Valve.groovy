@@ -30,7 +30,7 @@
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
- *  ver. 1.2.5 2023-04-27 kkossev - (dev. branch)
+ *  ver. 1.2.5 2023-05-22 kkossev - (dev. branch) handle exception when processing application version;
  * 
  *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
@@ -46,7 +46,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.5" }
-def timeStamp() {"2023/04/27 10:22 PM"}
+def timeStamp() {"2023/05/22 8:37 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1401,18 +1401,22 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
-def updateTuyaVersion() {
+void updateTuyaVersion() {
     def application = device.getDataValue("application") 
     if (application != null) {
-        def ver = zigbee.convertHexToInt(application)
+        Integer ver
+        try {
+            ver = zigbee.convertHexToInt(application)
+        }
+        catch (e) {
+            logWarn "exception caught while converting application version ${application} to tuyaVersion"
+            return
+        }
         def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
         if (device.getDataValue("tuyaVersion") != str) {
             device.updateDataValue("tuyaVersion", str)
             logInfo "tuyaVersion set to $str"
         }
-    }
-    else {
-        return null
     }
 }
 
