@@ -42,10 +42,12 @@
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
  * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added "AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
+ * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
  *
+ *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
+ *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
  *                                   - TODO: Sonoff button - battery reporting to be enabled by default; Refresh to read battery level/voltage';
- *                                   - TODO: update the first post w/ the new models added recently
  *                                   - TODO: add IAS Zone (0x0500) and IAS ACE (0x0501) support; enroll for TS0215/TS0215A
  *                                   - TODO: Debug logs off after 24 hours
  *                                   - TODO: simulate double-click for the 4-button knobs
@@ -53,15 +55,16 @@
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
  *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
  *                                   - TODO: calculate battery % from Voltage event for Konke button!
- *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); add 'auto revert to scene mode' option
+ *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
+ *                                   - TODO: add 'auto revert to scene mode' option
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
  *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
  *
  */
 
-def version() { "2.6.4" }
-def timeStamp() {"2023/04/27 5:29 PM"}
+def version() { "2.6.5" }
+def timeStamp() {"2023/05/15 7:56 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -104,6 +107,7 @@ metadata {
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_ixla93vd", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_qja6nq5z", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
  	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_csflgqj2", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_abrsvsou", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
 
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_tk3s5tyg", model: "TS0041", deviceJoinName: "Tuya TS0041" // not tested
@@ -166,22 +170,22 @@ metadata {
     // OSRAM Lightify - use HE inbuilt driver to pair first !   
     //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0020,1000,FD00", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"Lightify Switch Mini", manufacturer:"OSRAM", deviceJoinName: "Lightify Switch Mini"        
     // 4 button        
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "4 Button Smart Remote Controller"     // https://www.aliexpress.com/item/4001062612446.html
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TYZB01_qm6djpta", deviceJoinName: "Tuya 4 Key Arm Disarm Home SOS Button"     // https://www.aliexpress.com/item/4001062612446.html KK
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_fsiepnrh", deviceJoinName: "4 Button Smart Remote Controller"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019,0501", model:"TS0215", manufacturer:"_TZ3000_p6ju8myv", deviceJoinName: "4 Button Smart Remote Controller"
     // 4 button Security remote control (cluster: 'ssIasAce') = command_arm, command_emergency; ['disarm', 'arm_day_zones', 'arm_night_zones', 'arm_all_zones', 'exit_delay', 'emergency']
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_fsiepnrh", deviceJoinName: "Nedis Zigbee 4 Button Fob"
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_ug1vtuzn", deviceJoinName: "Tuya Security remote control"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_ug1vtuzn", deviceJoinName: "Tuya Security remote control" // - 1 button ???
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_0zrccfgx", deviceJoinName: "Tuya Security remote control"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_p6ju8myv", deviceJoinName: "Tuya Security remote control"
 
     // SOS 1 button - command_emergency
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_4fsgukof", deviceJoinName: "Tuya SOS button"
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_wr2ucaj9", deviceJoinName: "Tuya SOS button"
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_zsh6uat3", deviceJoinName: "Tuya SOS button"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_4fsgukof", deviceJoinName: "Tuya SOS button"    // 1 button
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_wr2ucaj9", deviceJoinName: "Tuya SOS button"    // 1 button
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_zsh6uat3", deviceJoinName: "Tuya SOS button"    // 1 button
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_tj4pwzzm", deviceJoinName: "Tuya SOS button"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_2izubafb", deviceJoinName: "Tuya SOS button"    // @abraham
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,0501", outClusters: "0019,000A", model: "TS0215A", manufacturer: "_TZ3000_pkfazisv", deviceJoinName: "Tuya SOS button"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000", outClusters: "0501,0019,000A", model: "TS0215A", manufacturer: "_TZ3000_pkfazisv", deviceJoinName: "iAlarm (Meian) SOS button"    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
             
     }
     preferences {
@@ -210,13 +214,14 @@ metadata {
 
 def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046", "TS0215", "TS0215A"]}
 def isIcasa() {device.getDataValue("manufacturer") == "icasa"}
-def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2" ]}
+def isSmartKnob() {device.getDataValue("manufacturer") in ["_TZ3000_4fjiwweb", "_TZ3000_rco1yzb1", "_TZ3000_uri7ongn", "_TZ3000_ixla93vd", "_TZ3000_qja6nq5z", "_TZ3000_csflgqj2", "_TZ3000_abrsvsou"]}
 def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE170100510001"]}
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
 def isOsram() {device.getDataValue("manufacturer") == "OSRAM"}
 def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
+def isSOSbutton() {device.getDataValue("manufacturer") in ["_TZ3000_4fsgukof", "_TZ3000_wr2ucaj9", "_TZ3000_zsh6uat3", "_TZ3000_tj4pwzzm", "_TZ3000_2izubafb", "_TZ3000_pkfazisv" ]}
 
 // Parse incoming device messages to generate events
 def parse(String description) {
@@ -378,6 +383,7 @@ def parse(String description) {
             logInfo "leave response cluster: ${descMap.clusterId}"
             return null
         }
+        // TODO: (on pairing new device) :  Zigbee parsed:[raw:catchall: 0000 8005 00 00 0040 00 0F4B 00 00 0000 00 00 3B004B0F0101, profileId:0000, clusterId:8005, clusterInt:32773, sourceEndpoint:00, destinationEndpoint:00, options:0040, messageType:00, dni:0F4B, isClusterSpecific:false, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:00, data:[3B, 00, 4B, 0F, 01, 01]]
         else if (descMap.clusterId == "EF00" && descMap.command == "01") { // check for LoraTap button events
             if (descMap.data.size() == 10 && descMap.data[2] == "0A" ) {
                 def value = zigbee.convertHexToInt(descMap?.data[9])
@@ -622,9 +628,15 @@ def initialize() {
     else {
     	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
     }
+    
+    // determine the number of the buttons and the supported button actions (values) depending on the model/manufactuer 
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
-    if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || (device.getDataValue("manufacturer") in ["_TZ3000_ja5osu5g", "eWeLink"])) {
+    if (isSOSbutton()) {
+    	numberOfButtons = 1
+        supportedValues = ["pushed"]
+    }
+    else if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || (device.getDataValue("manufacturer") in ["_TZ3000_ja5osu5g", "eWeLink"])) {
     	numberOfButtons = 1
     } 
     else if (device.getDataValue("model") == "TS0042") {
