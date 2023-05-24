@@ -56,7 +56,8 @@
 |  Circuit Breakers ![image](https://user-images.githubusercontent.com/6189950/154424284-7cd1eea2-b0b9-4a89-9634-9876e4445005.png) | https://community.hubitat.com/t/release-tuya-zigbee-metering-plug/86465 <br> https://fr.aliexpress.com/item/1005003726599840.html  |
 | Tuya RC-MCB Circuit Breaker 2P <br> ![image](https://user-images.githubusercontent.com/6189950/232598234-b4a8515d-0610-4203-9efd-4489fde005ac.png)| Model:TS0601<br>Manufacturer: TZ3000_1hwjutgo TZ3000_lnggrqqi<br><br>https://www.aliexpress.com/item/1005003725997370.html |
 | RTX Controlled fuse 4x 25A ZigBee TUYA <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/d6a52d21-602b-4772-b6ba-fadff7023837) | <br> RTX24.pl [link](https://www.rtx24.pl/bezpiecznik-sterowany-4x-25a-zigbee-tuya-p-476.html) |
-
+| Tongou Zigbee Rail Switch MODEL TO-Q-SY1-JZT<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/12a461a5-f68d-43b1-a990-fb1dd0eb448f) | AliExpress: [(link)](https://www.aliexpress.com/item/1005004747066832.html)<br>| 
+| Tongou Zigbee Rail Switch MODEL TO-Q-SY2-JZT<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/520855da-be8c-4faa-b674-3b69288a21cb)| AliExpress: [(link)](https://www.aliexpress.com/item/1005005444617697.html)<br>| 
 
 ----------------------------
 
