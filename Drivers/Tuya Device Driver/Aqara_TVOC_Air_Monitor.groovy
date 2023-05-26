@@ -23,7 +23,7 @@
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/26 1:43 PM"}
+static String timeStamp() {"2023/05/26 2:13 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -76,7 +76,7 @@ metadata {
         //name: 'Tuya Zigbee Plug',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/Aqara%20TVOC%20Air%20Monitor.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/Aqara_TVOC_Air_Monitor.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
