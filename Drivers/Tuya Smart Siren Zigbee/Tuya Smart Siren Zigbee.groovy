@@ -18,7 +18,7 @@
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
  * ver. 1.2.0 2023-01-22 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
- * ver. 1.2.1 2023-05-20 kkossev  - added _TZE204_t1blo2bj in Neo group;
+ * ver. 1.2.1 2023-05-26 kkossev  - added _TZE204_t1blo2bj in Neo group; installed() bug fix;
  *
  *                                  TODO: _TZE204_t1blo2bj control @abraham : https://community.hubitat.com/t/release-tuya-smart-siren-zigbee-driver/91772/67?u=kkossev
  *                                  TODO: add on/off preference selection like Zoos S2 Multisiren https://community.hubitat.com/t/hsm-custom-rule-bugs/117061/6?u=kkossev 
@@ -27,7 +27,7 @@
 */
 
 def version() { "1.2.1" }
-def timeStamp() {"2023/05/20 7:41 AM"}
+def timeStamp() {"2023/05/26 8:13 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -833,7 +833,7 @@ def installed() {
     log.info "${device.displayName} installed()"
     unschedule()
     unmute()
-    sendEvent(name: "Info", "installed", isStateChange: true, type: "digital")
+    sendEvent(name: "Info", value:"installed", isStateChange: true, type: "digital")
 }
 
 // called when preferences are saved
