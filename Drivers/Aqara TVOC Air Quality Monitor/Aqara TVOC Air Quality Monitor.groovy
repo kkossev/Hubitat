@@ -16,16 +16,16 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
- * ver. 2.0.1  2023-05-26 kkossev  - another test version (Aqara Air Quality driver)
+ * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  *
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/26 12:46 PM"}
+static String timeStamp() {"2023/05/27 10:34 AM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap
  *        1. Copy this code
  *        2. From HE 'Drivers Code' select 'New Driver'
  *        3. Paste the copied code
- *        4. Comment the previous device type and uncomment the new device type in the lines defining : 
+ *        4. Comment out the previous device type and un-comment the new device type in the lines defining the: 
  *            deviceType 
  *            DEVICE_TYPE
  *            name (in the metadata definition section)
@@ -68,7 +68,7 @@ metadata {
     definition (
         //name: 'Tuya Zigbee Device',
         //name: 'VINDSTYRKA Air Quality Monitor',
-        name: 'Aqara TVOC Air Monitor',
+        name: 'Aqara TVOC Air Quality Monitor',
         //name: 'Tuya Zigbee Switch',
         //name: 'Tuya Zigbee Dimmer',
         //name: 'Tuya Zigbee Bulb',
@@ -76,7 +76,7 @@ metadata {
         //name: 'Tuya Zigbee Plug',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/Aqara%20TVOC%20Air%20Monitor.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -95,7 +95,7 @@ metadata {
         attribute "rtt", "number" 
 
         // common commands
-        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
+        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
 
         
         // deviceType specific capabilities, commands and attributes         
@@ -214,6 +214,9 @@ void parse(final String description) {
         case zigbee.ON_OFF_CLUSTER:
             parseOnOffCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseOnOffCluster(descMap + map) }
+            break
+        case 0x000C :                                       // Aqara TVOC Air Monitor
+            parsePm25Cluster(descMap)
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
             log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
@@ -586,7 +589,8 @@ void parsePm25Cluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())    
+	Float floatValue = Float.intBitsToFloat(value.intValue())
+    logDebug "pm25 float valye = ${floatValue}"
     handlePm25Event(floatValue as Integer)
 }
 
