@@ -18,12 +18,13 @@
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  *
+ *                                   TODO: implement battery level/percentage for Aqara TVOC
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/27 10:34 AM"}
+static String timeStamp() {"2023/05/27 10:58 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -152,8 +153,10 @@ metadata {
                  '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
         //}
         if (deviceType in  ["AirQuality"]) {
-            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: \
-                '<i>Changes how often the hub retreives the Air Quality Index.</i>'
+            if (isVINDSTIRKA()) {
+                input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: \
+                    '<i>Changes how often the hub retreives the Air Quality Index.</i>'
+            }
         }
     }
 }
@@ -178,7 +181,8 @@ metadata {
 def clearIsDigital() { state.states["isDigital"] = false }
 def switchDebouncingClear() { state.states["debounce"] = false }
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
-def isAqaraTVOC() { device.getDataValue('model') in ['lumi.airmonitor.acn01'] }
+def isVINDSTIRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
+def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 /**
  * Parse Zigbee message
  * @param description Zigbee message in hex format
@@ -216,7 +220,7 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseOnOffCluster(descMap + map) }
             break
         case 0x000C :                                       // Aqara TVOC Air Monitor
-            parsePm25Cluster(descMap)
+            parseAirQualityIndexluster(descMap)
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
             log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
@@ -960,7 +964,7 @@ void sendHealthStatusEvent(value) {
         logInfo "${descriptionText}"
     }
     else {
-        if (settings?.txtEnable) { log.warn "${} <b>${descriptionText}</b>" }
+        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" }
     }
 }
 
