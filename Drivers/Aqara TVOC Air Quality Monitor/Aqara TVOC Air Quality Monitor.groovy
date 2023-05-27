@@ -18,13 +18,14 @@
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  *
+ *                                   DONE: Aqara BlackMagic
  *                                   TODO: implement battery level/percentage for Aqara TVOC
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/27 10:58 AM"}
+static String timeStamp() {"2023/05/27 11:11 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -779,6 +780,23 @@ def tuyaBlackMagic() {
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay=200)
 }
 
+def aqaraBlackMagic() {
+    List<String> cmds = []
+
+
+    if (isAqaraTVOC()) {
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
+        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
+    }
+    //cmds += activeEndpoints()
+    sendZigbeeCommands( cmds )
+
+}
+
+
 /**
  * initializes the device
  * Invoked from configure()
@@ -1051,6 +1069,9 @@ def configure() {
     logInfo 'configure...'
     logDebug settings
     cmds += tuyaBlackMagic()
+    if (isAqaraTVOC()) {
+        aqaraBlackMagic()
+    }
     cmds += initializeDevice()
     sendZigbeeCommands(cmds)
 }
