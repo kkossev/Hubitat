@@ -16,14 +16,14 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
- * ver. 2.0.1  2023-05-26 kkossev  - another test version (Aqara TVOC Air Monitor driver)
+ * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  *
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/26 2:13 PM"}
+static String timeStamp() {"2023/05/27 10:34 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -68,7 +68,7 @@ metadata {
     definition (
         //name: 'Tuya Zigbee Device',
         //name: 'VINDSTYRKA Air Quality Monitor',
-        name: 'Aqara TVOC Air Monitor',
+        name: 'Aqara TVOC Air Quality Monitor',
         //name: 'Tuya Zigbee Switch',
         //name: 'Tuya Zigbee Dimmer',
         //name: 'Tuya Zigbee Bulb',
@@ -76,7 +76,7 @@ metadata {
         //name: 'Tuya Zigbee Plug',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/Aqara_TVOC_Air_Monitor.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -95,7 +95,7 @@ metadata {
         attribute "rtt", "number" 
 
         // common commands
-        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
+        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
 
         
         // deviceType specific capabilities, commands and attributes         
