@@ -23,7 +23,7 @@
  */
 
 static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/27 10:34 AM"}
+static String timeStamp() {"2023/05/27 10:39 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -216,7 +216,7 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseOnOffCluster(descMap + map) }
             break
         case 0x000C :                                       // Aqara TVOC Air Monitor
-            parsePm25Cluster(descMap)
+            parseAirQualityIndexluster(descMap)
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
             log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
