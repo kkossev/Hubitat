@@ -49,10 +49,10 @@ import java.util.concurrent.ConcurrentHashMap
  */
 //deviceType = "Device"
 //@Field static final String DEVICE_TYPE = "Device"
-deviceType = "AirQuality"
-@Field static final String DEVICE_TYPE = "AirQuality"
-//deviceType = "Thermostat"
-//@Field static final String DEVICE_TYPE = "Thermostat"
+//deviceType = "AirQuality"
+//@Field static final String DEVICE_TYPE = "AirQuality"
+deviceType = "Thermostat"
+@Field static final String DEVICE_TYPE = "Thermostat"
 //deviceType = "Switch"
 //@Field static final String DEVICE_TYPE = "Switch"
 //deviceType = "Dimmer"
@@ -72,8 +72,8 @@ metadata {
     definition (
         //name: 'Tuya Zigbee Device',
         //name: 'VINDSTYRKA Air Quality Monitor',
-        name: 'Aqara TVOC Air Quality Monitor',
-        //name: 'Aqara E1 Thermostat',
+        //name: 'Aqara TVOC Air Quality Monitor',
+        name: 'Aqara E1 Thermostat',
         //name: 'Tuya Zigbee Switch',
         //name: 'Tuya Zigbee Dimmer',
         //name: 'Tuya Zigbee Bulb',
@@ -81,8 +81,8 @@ metadata {
         //name: 'Tuya Zigbee Plug',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
