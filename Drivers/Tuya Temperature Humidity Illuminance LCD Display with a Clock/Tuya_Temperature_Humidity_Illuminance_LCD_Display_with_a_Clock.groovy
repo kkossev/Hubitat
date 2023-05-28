@@ -33,7 +33,7 @@
  * ver. 1.3.2  2023-03-04 kkossev - added TS0601 _TZE200_zl1kmjqx _TZE200_qyflbnbj, added TS0201 _TZ3000_dowj6gyi and _TZ3000_8ybe88nf
  * ver. 1.3.3  2023-04-23 kkossev - _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
  * ver. 1.3.4  2023-04-24 kkossev - send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
- * ver. 1.3.5  2023-05-21 kkossev - (dev.branch) sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group
+ * ver. 1.3.5  2023-05-28 kkossev - sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group; fingerprint correction; battery reports are capped to 100% and not ignored;
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -45,7 +45,7 @@
 */
 
 def version() { "1.3.5" }
-def timeStamp() {"2023/05/21 11:06 PM"}
+def timeStamp() {"2023/05/28 9:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -107,7 +107,7 @@ metadata {
         // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_cirvgep4", deviceJoinName: "Tuya Temperature Humidity LCD Display with a Clock" //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_cirvgep4", deviceJoinName: "Tuya Temperature Humidity LCD Display with a Clock" //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
@@ -307,7 +307,7 @@ def parse(String description) {
                 getBatteryPercentageResult(Integer.parseInt(descMap.value,16))
             } else if (descMap.attrInt == 0x0020){
                 //log.trace "descMap.attrInt == 0x0020"
-                getBatteryResult(Integer.parseInt(descMap.value, 16))
+                getBatteryVoltageResult(Integer.parseInt(descMap.value, 16))
             }
             else {
                 log.warn "unparesed attrint $descMap.attrInt"
@@ -811,7 +811,7 @@ def temperatureEvent( temperature, isDigital=false ) {
 
 private void sendDelayedEventTemp(Map map) {
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
-    Map lastRxMap = stringToJsonMap(state.lastRx); try {lastRxMap['tempTime'] = now()} catch (e) {lastRxMap['tempTime']=now()-(minReportingTimeHumidity * 2000)}; state.lastRx = mapToJsonString(lastRxMap)
+    Map lastRxMap = stringToJsonMap(state.lastRx); try {lastRxMap['tempTime'] = now()} catch (e) {lastRxMap['tempTime']=now()-(minReportingTimeTemp * 2000)}; state.lastRx = mapToJsonString(lastRxMap)
     sendEvent(map)
 }
 
@@ -1295,8 +1295,6 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
 }
 
 private getPACKET_ID() {
-    //state.packetID = ((state.packetID ?: 0) + 1 ) % 65536
-    //return zigbee.convertToHexString(state.packetID, 4)
     return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
@@ -1312,27 +1310,23 @@ def logsOff(){
 }
 
 def getBatteryPercentageResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} Battery Percentage rawValue = ${rawValue} -> ${rawValue / 2}%"
+    logDebug "getBatteryPercentageResult: rawValue = ${rawValue} -> ${rawValue / 2}%"
     def result = [:]
     Map statsMap = stringToJsonMap(state.stats); try {statsMap['battCtr']++ } catch (e) {statsMap['battCtr']=1}; state.stats = mapToJsonString(statsMap)
-
-    if (0 <= rawValue && rawValue <= 200) {
-        result.name = 'battery'
-        result.translatable = true
-        result.value = Math.round(rawValue / 2)
-        result.descriptionText = "${device.displayName} battery is ${result.value}%"
-        result.isStateChange = true
-        result.unit = "%"
-        result.type = 'physical'
-        sendEvent(result)
-    }
-    else {
-        if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})"
-    }
+    if (rawValue < 0) { rawValue = 0; logWarn "batteryPercentage rawValue corrected to ${rawValue}" }
+    if (rawValue >200 ) { rawValue = 200; logWarn "batteryPercentage rawValue corrected to ${rawValue}" }
+    result.name = 'battery'
+    result.translatable = true
+    result.value = Math.round(rawValue / 2)
+    result.descriptionText = "${device.displayName} battery is ${result.value}%"
+    result.isStateChange = true
+    result.unit = "%"
+    result.type = 'physical'
+    sendEvent(result)
 }
 
-private Map getBatteryResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} getBatteryResult volts = ${(double)rawValue / 10.0}"
+private Map getBatteryVoltageResult(rawValue) {
+    logDebug "getBatteryVoltageResult: volts = ${(double)rawValue / 10.0}"
     Map statsMap = stringToJsonMap(state.stats); try {statsMap['battCtr']++ } catch (e) {statsMap['battCtr']=1}; state.stats = mapToJsonString(statsMap)
     def linkText = getLinkText(device)
 
