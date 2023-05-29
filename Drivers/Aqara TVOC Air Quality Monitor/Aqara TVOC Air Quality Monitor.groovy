@@ -17,11 +17,9 @@
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
- * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; 
+ * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences
  *
- *                                   TODO: C/F configuration for Aqara TVOC
  *                                   TODO: temperature rounding bug fix
- *                                   TODO: TVOC configuration for Aqara TVOC
  *                                   TODO: implement battery level/percentage for Aqara TVOC
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
@@ -31,7 +29,7 @@
  */
 
 static String version() { "2.0.2" }
-static String timeStamp() {"2023/05/29 9:42 PM"}
+static String timeStamp() {"2023/05/29 11:58 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -190,6 +188,8 @@ metadata {
            //     if (isAqaraTRV()) {
                     input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: \
                         '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
+                    input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: \
+                        '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
            //     }
            }
         }
@@ -211,9 +211,13 @@ metadata {
     defaultValue: 240,
     options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
-@Field static final Map TemperatureScaleOpts = [
+@Field static final Map TemperatureScaleOpts = [            // bit 7
+    defaultValue: 0,
+    options     : [0: 'Celsius', 1: 'Fahrenheit']
+]
+@Field static final Map TvocUnitOpts = [                    // bit 0
     defaultValue: 1,
-    options     : [0: 'Automatic', 1: 'Celsius', 2: 'Fahrenheit']
+    options     : [0: 'mg/m³', 1: 'ppb']
 ]
 
 
@@ -732,12 +736,13 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 break
             case 0x66:
                 if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC
+                else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
                 else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" } 
                 break
             case 0x67:
-                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }    
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC: 
+                // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
                 break
             case 0x69:
                 if (isAqaraFP1()) { logDebug "xiaomi decode TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
@@ -1327,7 +1332,7 @@ def initializeDevice() {
     ArrayList<String> cmds = []
     logInfo 'initializeDevice...'
     
-
+    // TODO !!!!!!
     if (isAqaraTVOC()) {
 	return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+
 			zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+
@@ -1336,7 +1341,8 @@ def initializeDevice() {
 			zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) +
 			zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) +
 			zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) + 
-			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    }
+			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    
+    }
     
     // Ikea VINDSTYRKA : bind clusters 402, 405, 42A (PM2.5)
     int intMinTime = 10
@@ -1374,12 +1380,6 @@ def initializeDevice() {
             cmds += ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0xfc7e {${device.zigbeeId}} {}", "delay 251", ]
         }
     }
-    if (DEVICE_TYPE in  ["Thermostat"]) {
-        //        await endpoint.read('aqaraOpple', [0x040a], {manufacturerCode: 0x115f}
-            cmds += zigbee.readAttribute(0xFCC0, 0x040A, [mfgCode: 0x115F], delay=200)
-    }
-
-                            
     //
     if (cmds == []) {
         cmds = ["delay 299",]
@@ -1388,6 +1388,40 @@ def initializeDevice() {
 }
 
 
+/**
+ * configures the device
+ * Invoked from updated()
+ * @return zigbee commands
+ */
+def configureDevice() {
+    ArrayList<String> cmds = []
+    logInfo 'configureDevice...'
+    
+    if ((DEVICE_TYPE in  ["AirQuality"]) && isAqaraTVOC()) {
+        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21
+        //TemperatureScaleOpts
+/*
+                0b00000: 'mgm3_celsius',
+                0b00001: 'ppb_celsius',
+                0b10000: 'mgm3_fahrenheit',
+                0b10001: 'ppb_fahrenheit',
+*/
+        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue
+        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue
+        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})"
+        int cfg = tUnit
+        cfg |= (tScale << 4)
+        
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
+    }
+        
+    //
+    if (cmds == []) {
+        cmds = ["delay 299",]
+    }
+    sendZigbeeCommands(cmds)  
+}
 
 /*
  * -----------------------------------------------------------------------------
@@ -1640,11 +1674,14 @@ void updated() {
                 unScheduleAirQualityIndexCheck()
                 log.info "Air Quality Index polling is disabled!"
             }
+            
         }
         else {
             logDebug "skipping airQuality polling"
         }
     }
+    
+    configureDevice()    // sends Zigbee commands
     
     sendInfoEvent("updated")
 }
@@ -1672,6 +1709,7 @@ def configure() {
         aqaraBlackMagic()
     }
     cmds += initializeDevice()
+    cmds += configureDevice()
     sendZigbeeCommands(cmds)
 }
 
@@ -1805,6 +1843,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
+    
     
     if (DEVICE_TYPE in ["AirQuality"]) {
         if (fullInit || settings?.advancedOptions == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
@@ -1950,7 +1990,12 @@ def getCron( timeInSeconds ) {
 }
 
 def test(par) {
-    def interval = safeToInt(par)
-    log.warn "healthCheckMethod = ${HealthcheckMethodOpts.options[healthCheckMethod as int]}"
+/*    
+    cluster 0xfcc0 / attribute 0x0114 (display on the device):
+    bit 1: mg/m³ or ppb (unset, set)
+    bit 2: temperature °C/°F (unset, set)
+*/
+    zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, 17, [mfgCode: 0x115F], delay=200) +
+    zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
 }
 
