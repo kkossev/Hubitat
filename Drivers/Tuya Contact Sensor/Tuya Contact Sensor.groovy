@@ -16,16 +16,20 @@
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
  * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
  * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
+ * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  *
+ *                                   TODO: Add clearStats command
+ *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
+ *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
+ *                                   TODO: deviceProfile is not recognized?? ver 1.0.3 20223/02/25; TODO - remove 'lastRx'on Initialize
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contactif not supported by the device profile
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
-static def version() { "1.0.3" }
-
-static def timeStamp() { "2023/02/25 9:06 AM" }
+static def version() { "1.1.0" }
+static def timeStamp() { "2023/04/24 11:11 AM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -103,144 +107,128 @@ metadata {
                 }
             }
         }
+        input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
+        if (advancedOptions == true) {
+            if (isBatteryConfigurable()) {
+                input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
+                    '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.</i>'
+            }
+            input name: "minReportingTime", type: "number", title: "Minimum time between non-contact reports", description: "<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>", defaultValue: 10, range: "1..3600"
+            
+        }
+
     }
 }
 
-/*
-@Field static Map configParams = [
-
-        0: [input: [name: "temperatureOffset", type: "decimal", title: "Temperature offset", description: "Select how many degrees to adjust the temperature.", defaultValue: 0.0, range: "-100.0..100.0",
-                    limit:['ALL']]],
-        1: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..50.0",
-                    limit:['ALL']]],
-        2: [input: [name: "humiditySensitivity", type: "number", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
-                    limit:['ALL']]],
-        3: [input: [name: "illuminanceSensitivity", type: "number", title: "Illuminance Sensitivity", description: "Illuminance change for reporting, %", defaultValue: 12, range: "10..100",                // TS0222 "MOES ZSS-ZK-THL"
-                    limit:['ALL']]],
-        4: [input: [name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "Minimum time between reporting, seconds", defaultValue: 10, range: "1..3600",
-                    limit:['ALL']]],
-        5: [input: [name: "maxReportingTime", type: "number", title: "Maximum time between reports", description: "Maximum time between reporting, seconds", defaultValue: 3600, range: "10..43200",
-                     limit:['ALL']]]
+@Field static final Map batteryReportingOptions = [
+    defaultValue: 00,
+    options     : [00: 'Default', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
-*/
+
 
 @Field static final Map deviceProfiles = [
-        "TS0203_CONTACT_BATT"          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
-                                               model         : "TS0203",      // default battery reporting period = 4 hours
-                                               manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr",
-                                                                "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
-                                               deviceJoinName: "Tuya Zigbee Contact Sensor",
-                                               inClusters    : "0001,0003,0500,0000",
-                                               outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
-                                               capabilities  : ["contactSensor": true, "battery": true],
-                                               configuration : ["battery": true],
-                                               attributes    : ["healthStatus"],
-                                               preferences   : [
-                                                       "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12] //,
-                                               ],
-                                               batteries     : "unknown"
-        ],
-        "TS0203_UNKNOWN"      : [
-                model         : "TS0203",
-                manufacturers : [],
-                deviceJoinName: "Tuya TS0203 Sensor",
-                capabilities  : ["contactSensor": true, "battery": true],
-                configuration : ["battery": true],
-                attributes    : ["healthStatus"],
-                batteries     : "unknown"
-        ],
-        'TS0601_CONTACT_ILLUM_BATT'    : [
-                model         : "TS0601",
-                manufacturers : ["_TZE200_pay2byax", "_TZE200_n8dljorx"],
-                deviceJoinName: "Tuya Zigbee Contact w/ Illuminance Sensor",
-                capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
-                configuration : ["battery": false],
-                attributes    : ["healthStatus"],
-                batteries     : "unknown"
-        ],
-        'TS0601_CONTACT_TEMP_HUMI_BATT': [     // https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357        @Pr0z4k
-                                               // https://www.aliexpress.com/item/1005004878609097.html
-                                               model         : "TS0601",
-                                               manufacturers : ["_TZE200_nvups4nh"],
-                                               deviceJoinName: "Tuya Zigbee Contact Sensor w/ Temperature&Humidity",
-                                               inClusters    : "0000,0001,0500,EF00",
-                                               outClusters   : "0019,000A",
-                                               capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
-                                               configuration : ["battery": false],
-                                               attributes    : ["healthStatus"],
-                                               /*
-                                                   preferences   : [
-                                                          "temperatureOffset": [min: -10, scale: 0, max: 10, step: 1, type: 'number', defaultValue: 0],
-                                                          "humidityOffset"   : [min: -50, scale: 0, max: 50, step: 1, type: 'number', defaultValue: 0]
-                                                   ],
-                                               */
-                                               batteries     : "2xAAA"
-        ],
-        'TS0601_UNKNOWN'      : [
-                model         : "TS0601",
-                manufacturers : [],
-                deviceJoinName: "Tuya TS0601 Sensor",
-                capabilities  : ["contactSensor": true, "battery": true],
-                attributes    : ["healthStatus"],
-                batteries     : "unknown"
-        ],
-        'BLITZWOLF_CONTACT_BATT' : [
-                model         : "RH3001",
-                manufacturers : ["TUYATEC-trhrga6p", "TUYATEC-nznq0233", "TUYATEC-0l6xaqmi"],
-                deviceJoinName: "BlitzWolf Contact Sensor",
-                inClusters    : "0000,000A,0001,0500",
-                outClusters   : "0019",
-                capabilities  : ["contactSensor": true, "battery": true],
-                configuration : ["battery": true],
-                attributes    : ["healthStatus"],
-                preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
-                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
-                ],
-                batteries     : "CR2032"
-        ],
-        'SONOFF_CONTACT_BATT' : [
-                model         : "DS01",
-                manufacturers : ["eWeLink"],
-                deviceJoinName: "Sonoff Contact Sensor",
-                inClusters    : "0000,0003,0500,0001",
-                outClusters   : "0003",
-                capabilities  : ["contactSensor": true, "battery": true],
-                configuration : ["battery": true],
-                attributes    : ["healthStatus"],
-                preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
-                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
-                ],
-                batteries     : "CR2032"
-        ],
-        '3RDREALITY_CONTACT_BATT' : [
-                model         : "3RDS17BZ",
-                manufacturers : ["Third Reality, Inc"],
-                deviceJoinName: "Third Reality Contact Sensor",
-                inClusters    : "0000,0001,0500",
-                outClusters   : "0019",
-                capabilities  : ["contactSensor": true, "battery": true],
-                configuration : ["battery": true],
-                attributes    : ["healthStatus"],
-                preferences   : [
-                        "batteryReporting" : [ name: "batteryReporting",  type: "number", title: "Battery Reporting", description: "<i>Configure the Battery Reporting period, hours</i>", range: "1..24", defaultValue: 12],
-                        "minReportingTime" : [ name: "minReportingTime", type: "number", title: "Minimum time between reports", description: "<i>Minimum time between reporting, seconds</i>", defaultValue: 10, range: "1..3600"]
-                ],
-                batteries     : "2xAAA"
-        ],
-        'UNKNOWN'             : [
-                model         : "",
-                manufacturers : [],
-                deviceJoinName: "Unknown Sensor",
-                capabilities  : ["contactSensor": true, "battery": true],
-                attributes    : ["healthStatus"],
-                batteries     : "unknown"
-        ],
+    "TS0203_CONTACT_BATT"          : [     // https://community.hubitat.com/t/i-need-help-with-tuya-contact-sensor-ts0203-white-label-ih-f001/110946/1
+        model     : "TS0203",      // default battery reporting period = 4 hours
+        manufacturers : ["_TZ3000_26fmupbb",  "_TZ3000_n2egfsli", "_TZ3000_oxslv1c9", "_TZ3000_2mbfxlzr","_TZ3000_402jjyro","_TZ3000_7d8yme6f", "_TZ3000_psqjayrd", "_TZ3000_ebar6ljy", "_TYZB01_xph99wvr",
+                "_TYZB01_ncdapbwy", "_TZ3000_fab7r7mc", "TUYATEC-nznq0233"],
+        deviceJoinName: "Tuya Zigbee Contact Sensor",
+        inClusters    : "0001,0003,0500,0000",
+        outClusters   : "0003,0004,0005,0006,0008,1000,0019,000A",
+        capabilities  : ["contactSensor": true, "battery": true],    // capabilities  : not used
+        configuration : ["battery": true],                           // configuration : use in updated()
+        attributes    : ["healthStatus"],                            // attributes    : not used
+        preferences   : [],                                          // preferences   : used in the Preferences section
+        batteries     : "unknown"
+    ],
+    "TS0203_UNKNOWN"      : [
+        model         : "TS0203",
+        manufacturers : [],
+        deviceJoinName: "Tuya TS0203 Sensor",
+        capabilities  : ["contactSensor": true, "battery": true],
+        configuration : ["battery": true],
+        attributes    : ["healthStatus"],
+        batteries     : "unknown"
+    ],
+    'TS0601_CONTACT_ILLUM_BATT'    : [
+        model         : "TS0601",
+        manufacturers : ["_TZE200_pay2byax", "_TZE200_n8dljorx"],
+        deviceJoinName: "Tuya Zigbee Contact w/ Illuminance Sensor",
+        capabilities  : ["contactSensor": true, "IlluminanceMeasurement": true, "battery": true],
+        configuration : ["battery": false],
+        attributes    : ["healthStatus"],
+        preferences   : ["minReportingTime": true],
+        batteries     : "unknown"
+    ],
+    'TS0601_CONTACT_TEMP_HUMI_BATT': [     // https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357        @Pr0z4k
+                                           // https://www.aliexpress.com/item/1005004878609097.html
+        model         : "TS0601",
+        manufacturers : ["_TZE200_nvups4nh"],
+        deviceJoinName: "Tuya Zigbee Contact Sensor w/ Temperature&Humidity",
+        inClusters    : "0000,0001,0500,EF00",
+        outClusters   : "0019,000A",
+        capabilities  : ["contactSensor": true, "temperatureMeasurement": true, "RelativeHumidityMeasurement": true, "battery": true],
+        configuration : ["battery": false],
+        attributes    : ["healthStatus"],
+        preferences   : ["minReportingTime": true],
+        batteries     : "2xAAA"
+    ],
+    'TS0601_UNKNOWN'      : [
+        model         : "TS0601",
+        manufacturers : [],
+        deviceJoinName: "Tuya TS0601 Sensor",
+        capabilities  : ["contactSensor": true, "battery": true],
+        attributes    : ["healthStatus"],
+        batteries     : "unknown"
+    ],
+    'BLITZWOLF_CONTACT_BATT' : [
+        model         : "RH3001",
+        manufacturers : ["TUYATEC-trhrga6p", "TUYATEC-nznq0233", "TUYATEC-0l6xaqmi"],
+        deviceJoinName: "BlitzWolf Contact Sensor",
+        inClusters    : "0000,000A,0001,0500",
+        outClusters   : "0019",
+        capabilities  : ["contactSensor": true, "battery": true],
+        configuration : ["battery": true],
+        attributes    : ["healthStatus"],
+        preferences   : ["minReportingTime": true],
+        batteries     : "CR2032"
+    ],
+    'SONOFF_CONTACT_BATT' : [
+        model         : "DS01",
+        manufacturers : ["eWeLink"],
+        deviceJoinName: "Sonoff Contact Sensor",
+        inClusters    : "0000,0003,0500,0001",
+        outClusters   : "0003",
+        capabilities  : ["contactSensor": true, "battery": true],
+        configuration : ["battery": true, "minReportingTime": true],
+        attributes    : ["healthStatus"],
+        preferences   : ["minReportingTime": true],
+        batteries     : "CR2032"
+    ],
+    '3RDREALITY_CONTACT_BATT' : [
+        model         : "3RDS17BZ",
+        manufacturers : ["Third Reality, Inc"],
+        deviceJoinName: "Third Reality Contact Sensor",
+        inClusters    : "0000,0001,0500",
+        outClusters   : "0019",
+        capabilities  : ["contactSensor": true, "battery": true],
+        configuration : ["battery": true],
+        attributes    : ["healthStatus"],
+        preferences   : ["minReportingTime": true],
+        batteries     : "2xAAA"
+    ],
+    'UNKNOWN'             : [
+        model         : "",
+        manufacturers : [],
+        deviceJoinName: "Unknown Sensor",
+        capabilities  : ["contactSensor": true, "battery": true],
+        attributes    : ["healthStatus"],
+        batteries     : "unknown"
+    ]
 ]
 
 def isConfigurable(model) { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
 def isConfigurable() { def model = getModelGroup(); return isConfigurable(model) }
+def isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 
 @Field static final Integer MaxRetries = 3
 @Field static final Integer ConfigTimer = 15
@@ -643,7 +631,7 @@ def temperatureEvent(temperature, isDigital = false) {
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
     map.value = Math.round((tempCorrected - 0.05) * 10) / 10
     map.type = isDigital == true ? "digital" : "physical"
-    map.isStateChange = true
+    //map.isStateChange = true
     map.descriptionText = "${map.name} is ${tempCorrected} ${map.unit}"
     def timeElapsed = Math.round((now() - (lastRxMap['tempTime'] ?: now() - (minReportingTime * 2000))) / 1000)
     Integer timeRamaining = (minReportingTime - timeElapsed) as Integer
@@ -679,7 +667,7 @@ def humidityEvent(humidity, isDigital = false) {
     map.name = "humidity"
     map.unit = "% RH"
     map.type = isDigital == true ? "digital" : "physical"
-    map.isStateChange = true
+    //map.isStateChange = true
     map.descriptionText = "${map.name} is ${humidityAsDouble.round(1)} ${map.unit}"
     def timeElapsed = Math.round((now() - (lastRxMap['humiTime'] ?: now() - (minReportingTime * 2000))) / 1000)
     Integer timeRamaining = (minReportingTime - timeElapsed) as Integer
@@ -764,7 +752,7 @@ def updated() {
     }
     scheduleDeviceHealthCheck()
 
-    if (deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true) {
+    if (isBatteryConfigurable()) {
         //
         // try to configure some parameters and see what happens ..temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
         /*
@@ -793,8 +781,8 @@ def updated() {
         if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
             lastTxMap.battCfg = newBattCfg
             log.warn "lastTxMap.battCfg = ${lastTxMap.battCfg}"
-            cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-            cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, 1, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+            cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int,/* 1*/ 0, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+            cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, /*1*/ 0, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
             cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
             cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
             log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
@@ -911,8 +899,8 @@ def refresh() {
     checkDriverVersion()
     if (deviceProfiles[getModelGroup()]?.capabilities?.battery?.value == true) {
         List<String> cmds = []
-        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
         cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
         sendZigbeeCommands(cmds)
     } else {
         logInfo "refresh() is not implemented for this sleepy Zigbee device"
@@ -1103,7 +1091,7 @@ def sendBatteryPercentageEvent(rawValue) {
         result.translatable = true
         result.value = Math.round(rawValue / 2)
         result.descriptionText = "${device.displayName} battery is ${result.value}%"
-        result.isStateChange = true
+        //result.isStateChange = true
         result.unit = "%"
         result.type = 'physical'
         sendEvent(result)
@@ -1124,7 +1112,7 @@ def handleTuyaBatteryLevel( fncmd ) {
 }
 
 private Map getBatteryResult(rawValue) {
-    if (settings?.logEnable) log.debug "${device.displayName} getBatteryResult volts = ${(double) rawValue / 10.0}"
+    logDebug "getBatteryResult volts = ${(double) rawValue / 10.0}"
     def linkText = getLinkText(device)
 
     def result = [:]
@@ -1140,7 +1128,7 @@ private Map getBatteryResult(rawValue) {
         result.value = Math.min(100, roundedPct)
         result.descriptionText = "${linkText} battery is ${result.value}%"
         result.name = 'battery'
-        result.isStateChange = true
+        //result.isStateChange = true
         result.type = 'physical'
         result.unit = "%"
         sendEvent(result)
