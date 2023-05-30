@@ -1,5 +1,5 @@
 /**
- * Tuya-Zigbee-Device-Driver for Hubitat
+ *  Zigbee Device Drivers for Hubitat
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -17,15 +17,21 @@
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
+ * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  *
- *                                   DONE: Aqara BlackMagic
+ *                                   TODO: aqaraModel is no saved
+ *                                   TODO: notPresentCtr bug fix
+ *                                   TODO: store NWK in states
  *                                   TODO: implement battery level/percentage for Aqara TVOC
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
+ *                                   TODO: state timesamps in human readable form
+ *                                   TODO: ad min/max reporting times preferences for temperature and humidity;
+ *                                   TODO - parse the details of the configuration respose - cluster, min, max, delta ...
  */
 
-static String version() { "2.0.1" }
-static String timeStamp() {"2023/05/27 11:11 AM"}
+static String version() { "2.0.2" }
+static String timeStamp() {"2023/05/30 9:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -51,6 +57,8 @@ import java.util.concurrent.ConcurrentHashMap
 //@Field static final String DEVICE_TYPE = "Device"
 deviceType = "AirQuality"
 @Field static final String DEVICE_TYPE = "AirQuality"
+//deviceType = "Thermostat"
+//@Field static final String DEVICE_TYPE = "Thermostat"
 //deviceType = "Switch"
 //@Field static final String DEVICE_TYPE = "Switch"
 //deviceType = "Dimmer"
@@ -71,6 +79,7 @@ metadata {
         //name: 'Tuya Zigbee Device',
         //name: 'VINDSTYRKA Air Quality Monitor',
         name: 'Aqara TVOC Air Quality Monitor',
+        //name: 'Aqara E1 Thermostat',
         //name: 'Tuya Zigbee Switch',
         //name: 'Tuya Zigbee Dimmer',
         //name: 'Tuya Zigbee Bulb',
@@ -79,6 +88,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -86,17 +96,19 @@ metadata {
             command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
         }
         
-        // common capabilities
+        // common capabilities for all device types
         capability "Actuator"
+        capability "Sensor"
         capability 'Configuration'
-        capability 'Health Check'
         capability 'Refresh'
+        capability 'Health Check'
         
-        // common attributes
+        // common attributes for all device types
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "rtt", "number" 
+        attribute "Info", "string"
 
-        // common commands
+        // common commands for all device types
         command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
 
         
@@ -113,7 +125,15 @@ metadata {
             }
             //command "updateFirmware"
         }
-        if (deviceType in  ["Switch", "Dimmer"]) {
+        if (deviceType in  ["Device", "THSensor", "AirQuality", "Thermostat"]) {
+            capability "Battery"
+            attribute "batteryVoltage", "number"
+        }
+        if (deviceType in  ["Thermostat"]) {
+            capability "ThermostatHeatingSetpoint"
+        }
+
+        if (deviceType in  ["Device", "Switch", "Dimmer"]) {
             capability "Switch"
             command "switchCommand"
             attribute "switchAttribute", "number"  
@@ -123,8 +143,10 @@ metadata {
             command "switchLevelCommand"
             attribute "switchAttribute", "number"  
         }
-        if (deviceType in  ["THSensor", "AirQuality"]) {
+        if (deviceType in  ["Device", "THSensor", "AirQuality", "Thermostat"]) {
             capability "TemperatureMeasurement"
+        }
+        if (deviceType in  ["Device", "THSensor", "AirQuality"]) {
             capability "RelativeHumidityMeasurement"            
         }
         if (deviceType in  ["AirQuality"]) {
@@ -138,7 +160,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
         if (deviceType in  ["AirQuality"]) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E", outClusters:"0003,0019,0020,0202", model:"VINDSTYRKA", manufacturer:"IKEA of Sweden", deviceJoinName: "VINDSTYRKA Air Quality Monitor E2112" 
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Monitor" 
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor" 
+        }
+        if (deviceType in  ["Thermostat"]) {
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"     // model: 'SRTS-A01'
         }
     }
 
@@ -159,10 +184,21 @@ metadata {
                     '<i>Changes how often the hub retreives the Air Quality Index.</i>'
             }
         }
+        input name: 'advancedOptions', type: 'bool', title: 'Advanced Options', description: "<i>May not work for all device types!</i>", defaultValue: false
+        if (advancedOptions == true || advancedOptions == true) {
+           if (deviceType in  ["AirQuality"]) {
+           //     if (isAqaraTRV()) {
+                    input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: \
+                        '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
+                    input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: \
+                        '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
+           //     }
+           }
+        }
     }
 }
 
-@Field static final Integer REFRESH_TIMER = 3000             // refresh time in miliseconds
+@Field static final Integer REFRESH_TIMER = 5000             // refresh time in miliseconds
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
 @Field static String        UNKNOWN = "UNKNOWN"
@@ -177,6 +213,14 @@ metadata {
     defaultValue: 240,
     options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
+@Field static final Map TemperatureScaleOpts = [            // bit 7
+    defaultValue: 0,
+    options     : [0: 'Celsius', 1: 'Fahrenheit']
+]
+@Field static final Map TvocUnitOpts = [                    // bit 0
+    defaultValue: 1,
+    options     : [0: 'mg/m³', 1: 'ppb']
+]
 
 
 def clearIsDigital() { state.states["isDigital"] = false }
@@ -184,6 +228,9 @@ def switchDebouncingClear() { state.states["debounce"] = false }
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
 def isVINDSTIRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
+def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
+
 /**
  * Parse Zigbee message
  * @param description Zigbee message in hex format
@@ -204,6 +251,8 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
+    if (!isChattyDeviceReport(description)) {logDebug "descMap = ${descMap}"}
+    //
     final String clusterName = clusterLookup(descMap.clusterInt)
     final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
     //if (settings.logEnable) { log.trace "zigbee received ${clusterName} message" + attribute }
@@ -214,14 +263,19 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseBasicCluster(descMap + map) }
             break
         case zigbee.POWER_CONFIGURATION_CLUSTER:            //0x0001
-            log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
+            parsePowerCluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parsePowerCluster(descMap + map) }
             break
         case zigbee.ON_OFF_CLUSTER:
             parseOnOffCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseOnOffCluster(descMap + map) }
             break
         case 0x000C :                                       // Aqara TVOC Air Monitor
-            parseAirQualityIndexluster(descMap)
+            parseAirQualityIndexCluster(descMap)
+            break
+        case 0x0201 :                                       // Aqara E1 TRV 
+            parseThermostatCluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
             log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
@@ -235,9 +289,6 @@ void parse(final String description) {
         case 0x042A :                                       // pm2.5
             parsePm25Cluster(descMap)
             break
-        case 0xfc7e :                                       // tVOC 'Sensirion VOC index' https://sensirion.com/media/documents/02232963/6294E043/Info_Note_VOC_Index.pdf
-            parseAirQualityIndexluster(descMap)
-            break
         case zigbee.ELECTRICAL_MEASUREMENT_CLUSTER:
             parseElectricalMeasureCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseElectricalMeasureCluster(descMap + map) }
@@ -245,6 +296,13 @@ void parse(final String description) {
         case zigbee.METERING_CLUSTER:
             parseMeteringCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseMeteringCluster(descMap + map) }
+            break
+        case 0xfc7e :                                       // tVOC 'Sensirion VOC index' https://sensirion.com/media/documents/02232963/6294E043/Info_Note_VOC_Index.pdf
+            parseAirQualityIndexCluster(descMap)
+            break
+        case XIAOMI_CLUSTER_ID :                            // 0xFCC0 Xiaomi cluster
+            parseXiaomiCluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map m -> parseXiaomiCluster(descMap + m) }
             break
         default:
             if (settings.logEnable) {
@@ -349,6 +407,7 @@ void parseWriteAttributeResponse(final Map descMap) {
  */
 
 void parseConfigureResponse(final Map descMap) {
+    // TODO - parse the details of the configuration respose - cluster, min, max, delta ...
     final String status = ((List)descMap.data).first()
     final int statusCode = hexStrToUnsignedInt(status)
     if (statusCode == 0x00 && settings.enableReporting != false) {
@@ -403,7 +462,6 @@ void parseBasicCluster(final Map descMap) {
             break
     }
 }
-
 
 // Zigbee Attribute IDs
 @Field static final int AC_CURRENT_DIVISOR_ID = 0x0603
@@ -483,9 +541,379 @@ void parseBasicCluster(final Map descMap) {
 
 /*
  * -----------------------------------------------------------------------------
+ * Xiaomi cluster 0xFCC0 parser.
+ * -----------------------------------------------------------------------------
+ */
+@Field static final int XIAOMI_CLUSTER_ID = 0xFCC0
+
+// Zigbee Attributes
+@Field static final int DIRECTION_MODE_ATTR_ID = 0x0144
+@Field static final int MODEL_ATTR_ID = 0x05
+//@Field static final int PING_ATTR_ID = 0x01
+@Field static final int PRESENCE_ACTIONS_ATTR_ID = 0x0143
+@Field static final int PRESENCE_ATTR_ID = 0x0142
+@Field static final int REGION_EVENT_ATTR_ID = 0x0151
+@Field static final int RESET_PRESENCE_ATTR_ID = 0x0157
+@Field static final int SENSITIVITY_LEVEL_ATTR_ID = 0x010C
+@Field static final int SET_EDGE_REGION_ATTR_ID = 0x0156
+@Field static final int SET_EXIT_REGION_ATTR_ID = 0x0153
+@Field static final int SET_INTERFERENCE_ATTR_ID = 0x0154
+@Field static final int SET_REGION_ATTR_ID = 0x0150
+@Field static final int TRIGGER_DISTANCE_ATTR_ID = 0x0146
+@Field static final int XIAOMI_RAW_ATTR_ID = 0xFFF2
+@Field static final int XIAOMI_SPECIAL_REPORT_ID = 0x00F7
+@Field static final Map MFG_CODE = [ mfgCode: 0x115F ]
+
+// Xiaomi Tags
+@Field static final int DIRECTION_MODE_TAG_ID = 0x67
+@Field static final int SENSITIVITY_LEVEL_TAG_ID = 0x66
+@Field static final int SWBUILD_TAG_ID = 0x08
+@Field static final int TRIGGER_DISTANCE_TAG_ID = 0x69
+@Field static final int PRESENCE_ACTIONS_TAG_ID = 0x66
+@Field static final int PRESENCE_TAG_ID = 0x65
+
+
+void parseXiaomiCluster(final Map descMap) {
+    if (settings.logEnable) {
+        log.trace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+
+    switch (descMap.attrInt as Integer) {
+        case 0x00FC:                      // FP1
+            log.info 'unknown attribute - resetting?'
+            break
+        case PRESENCE_ATTR_ID:            // FP1
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            parseXiaomiClusterPresence(value)
+            break
+        case PRESENCE_ACTIONS_ATTR_ID:    // FP1
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            parseXiaomiClusterPresenceAction(value)
+            break
+        case REGION_EVENT_ATTR_ID:        // FP1
+            // Region events can be sent fast and furious so buffer them
+            final Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1])
+            final Integer value = HexUtils.hexStringToInt(descMap.value[2..3])
+            if (settings.logEnable) {
+                log.debug "xiaomi: region ${regionId} action is ${value}"
+            }
+            if (device.currentValue("region${regionId}") != null) {
+                RegionUpdateBuffer.get(device.id).put(regionId, value)
+                runInMillis(REGION_UPDATE_DELAY_MS, 'updateRegions')
+            }
+            break
+        case SENSITIVITY_LEVEL_ATTR_ID:   // FP1
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            log.info "sensitivity level is '${SensitivityLevelOpts.options[value]}' (0x${descMap.value})"
+            device.updateSetting('sensitivityLevel', [value: value.toString(), type: 'enum'])
+            break
+        case TRIGGER_DISTANCE_ATTR_ID:    // FP1
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            log.info "approach distance is '${ApproachDistanceOpts.options[value]}' (0x${descMap.value})"
+            device.updateSetting('approachDistance', [value: value.toString(), type: 'enum'])
+            break
+        case DIRECTION_MODE_ATTR_ID:    // FP1
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            log.info "monitoring direction mode is '${DirectionModeOpts.options[value]}' (0x${descMap.value})"
+            device.updateSetting('directionMode', [value: value.toString(), type: 'enum'])
+            break
+        case XIAOMI_SPECIAL_REPORT_ID: // sent every 5 minutes
+            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
+            parseXiaomiClusterTags(tags)
+            break
+        case XIAOMI_RAW_ATTR_ID:    // FP1 
+            final byte[] rawData = HexUtils.hexStringToByteArray(descMap.value)
+            if (rawData.size() == 24 && settings.enableDistanceDirection) {
+                final int degrees = rawData[19]
+                final int distanceCm = (rawData[17] << 8) | (rawData[18] & 0x00ff)
+                if (settings.logEnable) {
+                    log.debug "location ${degrees}&deg;, ${distanceCm}cm"
+                }
+                runIn(1, 'updateLocation', [ data: [ degrees: degrees, distanceCm: distanceCm ] ])
+            }
+            break
+        case 0x0271:    // result['system_mode'] = {1: 'heat', 0: 'off'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "system_mode raw = ${value}"
+            break;
+        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "preset raw = ${value}"
+            break;
+        case 0x0273:    // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "window_detection raw = ${value}"
+            break;
+        case 0x0274:    // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "valve_detection raw = ${value}"
+            break;
+        case 0x0275:    // result['valve_alarm'] = {1: true, 0: false}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "valve_alarm raw = ${value}"
+            break;
+        case 0x0277:    // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "child_lock raw = ${value}"
+            break;
+        case 0x0279:    // result['away_preset_temperature'] = (value / 100).toFixed(1);
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "away_preset_temperature raw = ${value}"
+            break;
+        case 0x027a:    // result['window_open'] = {1: true, 0: false}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "window_open raw = ${value}"
+            break;
+        case 0x027b:    // result['calibrated'] = {1: true, 0: false}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "calibrated raw = ${value}"
+            break;
+        case 0x0276:    // unknown
+        case 0x027c:    // unknown
+        case 0x027d:    // unknown
+        case 0x0280:    // unknown
+        case 0xfff2:    // unknown
+        case 0x00ff:    // unknown
+        case 0x00f7:    // unknown
+        case 0xfff2:    // unknown
+            try {
+                final Integer value = hexStrToUnsignedInt(descMap.value)
+                logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${value}"
+            }
+            catch (e) {
+                logWarn "exception caught while processing Aqara E1 TRV unknown attribute ${descMap.attrInt} descMap.value = ${descMap.value}"
+            }
+            break;
+        case 0x027e:    // result['sensor'] = {1: 'external', 0: 'internal'}[value];
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "sensor raw = ${value}"
+            break;
+        case 0x040a:    // E1 battery
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            logInfo "battery raw = ${value}"
+            break
+        case 0x00FF:
+            // unknown
+            break
+        default:
+            log.warn "zigbee received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
+            break
+    }
+}
+
+
+void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
+    tags.each { final Integer tag, final Object value ->
+        switch (tag) {
+            case 0x01:    // battery voltage
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})"
+                break
+            case 0x03:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
+                break
+            case 0x05:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
+                break
+            case 0x06:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}"
+                break
+            case 0x08:            // SWBUILD_TAG_ID:
+                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
+                device.updateDataValue(/*'softwareBuild'*/aqaraVersion, swBuild)
+                break
+            case 0x0a:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${value}</b>"
+                break
+            case 0x0b:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} light level is ${value}"
+                break
+            case 0x64:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC
+                // TODO - also smoke gas/density if UINT !
+                break
+            case 0x65:
+                if (isAqaraFP1()) { logDebug "xiaomi decode PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value/100} (raw ${value})" }    // Aqara TVOC
+                break
+            case 0x66:
+                if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
+                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" } 
+                break
+            case 0x67:
+                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }    
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC: 
+                // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
+                break
+            case 0x69:
+                if (isAqaraFP1()) { logDebug "xiaomi decode TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                break
+            case 0x6a:
+                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "xiaomi decode MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                break
+            case 0x6b:
+                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "xiaomi decode MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                break
+            case 0x95:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} energy is ${value}"
+                break
+            case 0x96:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} voltage is ${value}"
+                break
+            case 0x97:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} current is ${value}"
+                break
+            case 0x98:
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power is ${value}"
+                break
+            case 0x9b:
+                logDebug "xiaomi decode CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}"
+                break
+            default:
+                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
+        }
+    }
+}
+
+/**
+ *  Reads a specified number of little-endian bytes from a given
+ *  ByteArrayInputStream and returns a BigInteger.
+ */
+private static BigInteger readBigIntegerBytes(final ByteArrayInputStream stream, final int length) {
+    final byte[] byteArr = new byte[length]
+    stream.read(byteArr, 0, length)
+    BigInteger bigInt = BigInteger.ZERO
+    for (int i = byteArr.length - 1; i >= 0; i--) {
+        bigInt |= (BigInteger.valueOf((byteArr[i] & 0xFF) << (8 * i)))
+    }
+    return bigInt
+}
+
+/**
+ *  Decodes a Xiaomi Zigbee cluster attribute payload in hexadecimal format and
+ *  returns a map of decoded tag number and value pairs where the value is either a
+ *  BigInteger for fixed values or a String for variable length.
+ */
+private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
+    final Map<Integer, Object> results = [:]
+    final byte[] bytes = HexUtils.hexStringToByteArray(hexString)
+    new ByteArrayInputStream(bytes).withCloseable { final stream ->
+        while (stream.available() > 2) {
+            int tag = stream.read()
+            int dataType = stream.read()
+            Object value
+            if (DataType.isDiscrete(dataType)) {
+                int length = stream.read()
+                byte[] byteArr = new byte[length]
+                stream.read(byteArr, 0, length)
+                value = new String(byteArr)
+            } else {
+                int length = DataType.getLength(dataType)
+                value = readBigIntegerBytes(stream, length)
+            }
+            results[tag] = value
+        }
+    }
+    return results
+}
+
+/*
+ * -----------------------------------------------------------------------------
  * Standard clusters reporting handlers
  * -----------------------------------------------------------------------------
 */
+
+void parsePowerCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    final long rawValue = hexStrToUnsignedInt(descMap.value)
+    if (descMap.attrId == "0020") {
+        sendBatteryVoltageEvent(rawValue)
+        sendBatteryVoltageEvent(rawValue, convertToPercent=true)
+    }
+    else if (descMap.attrId == "0021") {
+        sendBatteryPercentageEvent(rawValue * 2)    
+    }
+    else {
+    }
+}
+
+def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
+    def result = [:]
+    def volts = rawValue / 10
+    if (!(rawValue == 0 || rawValue == 255)) {
+        def minVolts = 2.2
+        def maxVolts = 3.2
+        def pct = (volts - minVolts) / (maxVolts - minVolts)
+        def roundedPct = Math.round(pct * 100)
+        if (roundedPct <= 0) roundedPct = 1
+        if (roundedPct >100) roundedPct = 100
+        if (convertToPercent == true) {
+            result.value = Math.min(100, roundedPct)
+            result.name = 'battery'
+            result.unit  = '%'
+            result.descriptionText = "battery is ${roundedPct} %"
+        }
+        else {
+            result.value = volts
+            result.name = 'batteryVoltage'
+            result.unit  = 'V'
+            result.descriptionText = "battery is ${volts} Volts"
+        }
+        result.type = 'physical'
+        result.isStateChange = true
+        logInfo "${result.descriptionText}"
+        sendEvent(result)
+    }
+    else {
+        logWarn "ignoring BatteryResult(${rawValue})"
+    }    
+}
+
+def sendBatteryPercentageEvent( batteryPercent, isDigital=false ) {
+    def map = [:]
+    map.name = 'battery'
+    map.timeStamp = now()
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int)
+    map.unit  = '%'
+    map.type = isDigital ? 'digital' : 'physical'    
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.isStateChange = true
+    // 
+    def latestBatteryEvent = device.latestState('battery', skipCache=true)
+    def latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now()
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}"
+    def timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
+        // send it now!
+        sendDelayedBatteryEvent(map)
+    }
+    else {
+        def delayedTime = (settings?.batteryDelay as int) - timeDiff
+        map.delayed = delayedTime
+        map.descriptionText += " [delayed ${map.delayed} seconds]"
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
+        runIn( delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
+    }
+}
+
+private void sendDelayedBatteryPercentageEvent(Map map) {
+    logInfo "${map.descriptionText}"
+    //map.each {log.trace "$it"}
+    sendEvent(map)
+}
+
+private void sendDelayedBatteryVoltageEvent(Map map) {
+    logInfo "${map.descriptionText}"
+    //map.each {log.trace "$it"}
+    sendEvent(map)
+}
+
 /*
  * -----------------------------------------------------------------------------
  * temperature
@@ -511,10 +939,10 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
         eventMap.unit = "\u00B0"+"C"
     }
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset ?: 0)
-    eventMap.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
+    eventMap.value  =  Math.round(tempCorrected * 10) / 10.0
     eventMap.type = isDigital == true ? "digital" : "physical"
-    eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${tempCorrected} ${eventMap.unit}"
+    //eventMap.isStateChange = true
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000)
     Integer minTime = settings?.minReportingTimeTemp ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
@@ -561,7 +989,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
     eventMap.name = "humidity"
     eventMap.unit = "% RH"
     eventMap.type = isDigital == true ? "digital" : "physical"
-    eventMap.isStateChange = true
+    //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${humidityAsDouble.round(1)} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now()))/1000)
     Integer minTime = settings?.minReportingTimeHumidity ?: DEFAULT_MIN_REPORTING_TIME
@@ -645,7 +1073,7 @@ private void sendDelayedPm25Event(Map eventMap) {
     options     : [0: 'Disabled', 10: 'Every 10 seconds', 30: 'Every 30 seconds', 60: 'Every 1 minute', 300: 'Every 5 minutes', 900: 'Every 15 minutes', 3600: 'Every 1 hour']
 ]
 
-void parseAirQualityIndexluster(final Map descMap) {
+void parseAirQualityIndexCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
@@ -731,6 +1159,104 @@ private void unScheduleAirQualityIndexCheck() {
 }
 
 
+/*
+ * -----------------------------------------------------------------------------
+ * thermostat cluster 0x0201
+ * -----------------------------------------------------------------------------
+*/
+
+void parseThermostatCluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    if (settings.logEnable) {
+        log.trace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    }
+
+    switch (descMap.attrInt as Integer) {
+        case 0x000:                      // temperature
+            logInfo "temperature = ${value/100.0} (raw ${value})"
+            handleTemperatureEvent(value/100.0)
+            break
+        case 0x0011:                      // cooling setpoint
+            logInfo "cooling setpoint = ${value/100.0} (raw ${value})"
+            break
+        case 0x0012:                      // heating setpoint
+            logInfo "heating setpoint = ${value/100.0} (raw ${value})"
+            handleHeatingSetpointEvent(value/100.0)
+            break
+        case 0x001c:                      // mode
+            logInfo "mode = ${value} (raw ${value})"
+            break
+        case 0x001e:                      // thermostatRunMode
+            logInfo "thermostatRunMode = ${value} (raw ${value})"
+            break
+        case 0x0020:                      // battery
+            logInfo "battery = ${value} (raw ${value})"
+            break
+        case 0x0023:                      // thermostatHoldMode
+            logInfo "thermostatHoldMode = ${value} (raw ${value})"
+            break
+        case 0x0029:                      // thermostatOperatingState
+            logInfo "thermostatOperatingState = ${value} (raw ${value})"
+            break
+        case 0xfff2:    // unknown
+            logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${value}"
+            break;
+        default:
+            log.warn "zigbee received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
+            break
+    }
+}
+
+def handleHeatingSetpointEvent( temperature ) {
+    setHeatingSetpoint(temperature)
+}
+
+//  ThermostatHeatingSetpoint command
+//  sends TuyaCommand and checks after 4 seconds
+//  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface)
+def setHeatingSetpoint( temperature ) {
+    def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0
+    double tempDouble
+    logDebug "setHeatingSetpoint temperature = ${temperature}  as int = ${temperature as int} (previousSetpointt = ${previousSetpoint})"
+    if (true) {
+        logDebug "0.5 C correction of the heating setpoint${temperature}"
+        tempDouble = safeToDouble(temperature)
+        tempDouble = Math.round(tempDouble * 2) / 2.0
+    }
+    else {
+        if (temperature != (temperature as int)) {
+            if ((temperature as double) > (previousSetpoint as double)) {
+                temperature = (temperature + 0.5 ) as int
+            }
+            else {
+                temperature = temperature as int
+            }
+        logDebug "corrected heating setpoint ${temperature}"
+        }
+        tempDouble = temperature
+    }
+    def maxTemp = settings?.maxThermostatTemp ?: 50
+    def minTemp = settings?.minThermostatTemp ?: 5
+    if (tempDouble > maxTemp ) tempDouble = maxTemp
+    if (tempDouble < minTemp) tempDouble = minTemp
+    tempDouble = tempDouble.round(1)
+    Map eventMap = [name: "heatingSetpoint",  value: tempDouble, unit: "\u00B0"+"C"]
+    eventMap.descriptionText = "heatingSetpoint is ${tempDouble}"
+    sendHeatingSetpointEvent(eventMap)
+    eventMap = [name: "thermostatSetpoint", value: tempDouble, unit: "\u00B0"+"C"]
+    eventMap.descriptionText = null
+    sendHeatingSetpointEvent(eventMap)
+    updateDataValue("lastRunningMode", "heat")
+    // 
+    zigbee.writeAttribute(0x0201, 0x12, 0x29, (tempDouble * 100) as int)
+}
+
+private void sendHeatingSetpointEvent(Map eventMap) {
+    if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
+	sendEvent(eventMap)
+}
+
+// -------------------------------------------------------------------------------------------------------------------------
 
 
 /*
@@ -780,20 +1306,22 @@ def tuyaBlackMagic() {
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay=200)
 }
 
-def aqaraBlackMagic() {
+void aqaraBlackMagic() {
     List<String> cmds = []
-
-
-    if (isAqaraTVOC()) {
+    if (isAqaraTVOC() || isAqaraTRV()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
-        cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)
+        if (isAqaraTVOC()) {
+            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // TVOC only
+        }
+        sendZigbeeCommands( cmds )
+        logDebug "sent aqaraBlackMagic()"
     }
-    //cmds += activeEndpoints()
-    sendZigbeeCommands( cmds )
-
+    else {
+        logDebug "aqaraBlackMagic() was SKIPPED"
+    }
 }
 
 
@@ -806,7 +1334,7 @@ def initializeDevice() {
     ArrayList<String> cmds = []
     logInfo 'initializeDevice...'
     
-
+    // TODO !!!!!!
     if (isAqaraTVOC()) {
 	return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+
 			zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+
@@ -815,7 +1343,8 @@ def initializeDevice() {
 			zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) +
 			zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) +
 			zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) + 
-			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    }
+			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    
+    }
     
     // Ikea VINDSTYRKA : bind clusters 402, 405, 42A (PM2.5)
     int intMinTime = 10
@@ -861,6 +1390,40 @@ def initializeDevice() {
 }
 
 
+/**
+ * configures the device
+ * Invoked from updated()
+ * @return zigbee commands
+ */
+def configureDevice() {
+    ArrayList<String> cmds = []
+    logInfo 'configureDevice...'
+    
+    if ((DEVICE_TYPE in  ["AirQuality"]) && isAqaraTVOC()) {
+        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21
+        //TemperatureScaleOpts
+/*
+                0b00000: 'mgm3_celsius',
+                0b00001: 'ppb_celsius',
+                0b10000: 'mgm3_fahrenheit',
+                0b10001: 'ppb_fahrenheit',
+*/
+        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue
+        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue
+        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})"
+        int cfg = tUnit
+        cfg |= (tScale << 4)
+        
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200)
+        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
+    }
+        
+    //
+    if (cmds == []) {
+        cmds = ["delay 299",]
+    }
+    sendZigbeeCommands(cmds)  
+}
 
 /*
  * -----------------------------------------------------------------------------
@@ -880,8 +1443,36 @@ def refresh() {
 	    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)        
     }
     if (DEVICE_TYPE in  ["AirQuality"]) {
-	    cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance
-	    cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+        if (true) {
+            // TODO - check what is available for VINDSTYRKA
+	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance
+	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+        }
+        else if (false) {
+            // TODO - check what is available for Aqara 
+        }
+        else {
+            // TODO - unknown AirQuaility sensor - try all ??
+        }
+    }
+    if (DEVICE_TYPE in  ["Thermostat"]) {
+        // TODO - Aqara E1 specific refresh commands only 1
+	    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage (E1 does not send percentage)
+	    //cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=100)         // local temperature
+	   //cmds += zigbee.readAttribute(0x0201, 0x0011, [:], delay=100)         // cooling setpoint
+	    //cmds += zigbee.readAttribute(0x0201, 0x0012, [:], delay=100)         // heating setpoint
+	    cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001C], [:], delay=100)         // local temperature, cooling setpoint, heating setpoint, system mode (enum8 )
+	    //cmds += zigbee.readAttribute(0x0201, 0x0015, [:], delay=100)         // min heat setpoint limit - Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0016, [:], delay=100)         // max heat setpoint limit = Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0017, [:], delay=100)         // min cool setpoint limit - Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0018, [:], delay=100)         // max cool setpoint limit - Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0019, [:], delay=100)         // min setpoint dead band ?- Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x001C, [:], delay=100)         // system mode (enum8 )
+	    //cmds += zigbee.readAttribute(0x0201, 0x001E, [:], delay=100)         // Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0020, [:], delay=100)         // Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0023, [:], delay=100)         // hold temperature (enum) on/off  - Unsupported Attribute
+	    //cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay=100)         // thermostat running mode  - Unsupported Attribute
+	    cmds += zigbee.readAttribute(0x0202, 0x0000, [:], delay=100) 
     }
     
     runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true])                 // 3 seconds
@@ -890,22 +1481,53 @@ def refresh() {
     }
 }
 
+
 def clearRefreshRequest() { state.states["isRefresh"] = false }
 
-
-def ping() {
-    logInfo 'ping...'
-    scheduleCommandTimeoutCheck()
-    state.lastTx["pingTime"] = new Date().getTime()
-    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+void sendInfoEvent(String info=null) {
+    if (info == null) {
+        logDebug "clearing the Info event"
+        device.deleteCurrentState("$it")
+    }
+    else {
+        logInfo "${info}"
+        sendEvent(name: "Info", value: info, isDigital: true)    
+    }
 }
 
-def sendRttEvent() {
+def ping() {
+    if (!(isAqaraTVOC())) {
+        logInfo 'ping...'
+        scheduleCommandTimeoutCheck()
+        state.lastTx["pingTime"] = new Date().getTime()
+        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+    }
+    else {
+        // Aqara TVOC is sleepy or does not respond to the ping.
+        logInfo "ping() command is not available for this sleepy device."
+        sendRttEvent("n/a")
+    }
+}
+
+/**
+ * sends 'rtt'event (after a ping() command)
+ * @param null: calculate the RTT in ms
+ *        value: send the text instead ('timeout', 'n/a', etc..)
+ * @return none
+ */
+void sendRttEvent( String value=null) {
     def now = new Date().getTime()
     def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
-    logInfo "${descriptionText}"
-    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+    if (value == null) {
+        logInfo "${descriptionText}"
+        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+    }
+    else {
+        descriptionText = "Round-trip time is ${value}"
+        logInfo "${descriptionText}"
+        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, isDigital: true)    
+    }
 }
 
 /**
@@ -914,7 +1536,13 @@ def sendRttEvent() {
  * @return cluster name if known, otherwise "private cluster"
  */
 private String clusterLookup(final Object cluster) {
-    return zigbee.clusterLookup(cluster.toInteger()) ?: "private cluster 0x${intToHexStr(cluster.toInteger())}"
+    if (cluster != null) {
+        return zigbee.clusterLookup(cluster.toInteger()) ?: "private cluster 0x${intToHexStr(cluster.toInteger())}"
+    }
+    else {
+        logWarn "cluster is NULL!"
+        return "NULL"
+    }
 }
 
 private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
@@ -923,7 +1551,7 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
-    sendEvent(name: "rtt", value: 'timeout', descriptionText: 'ping timeout!', unit: "", isDigital: true)    
+    sendRttEvent("timeout")
 }
 
 /**
@@ -1038,16 +1666,26 @@ void updated() {
 
     
     if (DEVICE_TYPE in ["AirQuality"])  {
-        final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0
-        if (intervalAirQuality > 0) {
-            log.info "scheduling Air Quality Index check every ${intervalAirQuality} seconds"
-            scheduleAirQualityIndexCheck(intervalAirQuality)
+        if (!(isAqaraTVOC())) {
+            final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0
+            if (intervalAirQuality > 0) {
+                log.info "scheduling Air Quality Index check every ${intervalAirQuality} seconds"
+                scheduleAirQualityIndexCheck(intervalAirQuality)
+            }
+            else {
+                unScheduleAirQualityIndexCheck()
+                log.info "Air Quality Index polling is disabled!"
+            }
+            
         }
         else {
-            unScheduleAirQualityIndexCheck()
-            log.info "Air Quality Index polling is disabled!"
+            logDebug "skipping airQuality polling"
         }
     }
+    
+    configureDevice()    // sends Zigbee commands
+    
+    sendInfoEvent("updated")
 }
 
 /**
@@ -1069,10 +1707,11 @@ def configure() {
     logInfo 'configure...'
     logDebug settings
     cmds += tuyaBlackMagic()
-    if (isAqaraTVOC()) {
+    if (isAqaraTVOC() || isAqaraTRV()) {
         aqaraBlackMagic()
     }
     cmds += initializeDevice()
+    cmds += configureDevice()
     sendZigbeeCommands(cmds)
 }
 
@@ -1084,6 +1723,7 @@ void installed() {
     // populate some default values for attributes
     sendEvent(name: 'healthStatus', value: 'unknown')
     sendEvent(name: 'powerSource', value: 'unknown')
+    sendInfoEvent("installed")
     runIn(3, 'updated')
 }
 
@@ -1202,8 +1842,12 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
-    if (fullInit || settings?.advancedOptions == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.advancedOptions == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
+    
+    
     if (DEVICE_TYPE in ["AirQuality"]) {
         if (fullInit || settings?.advancedOptions == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     }
@@ -1348,7 +1992,12 @@ def getCron( timeInSeconds ) {
 }
 
 def test(par) {
-    def interval = safeToInt(par)
-    log.warn "healthCheckMethod = ${HealthcheckMethodOpts.options[healthCheckMethod as int]}"
+/*    
+    cluster 0xfcc0 / attribute 0x0114 (display on the device):
+    bit 1: mg/m³ or ppb (unset, set)
+    bit 2: temperature °C/°F (unset, set)
+*/
+    zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, 17, [mfgCode: 0x115F], delay=200) +
+    zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
 }
 
