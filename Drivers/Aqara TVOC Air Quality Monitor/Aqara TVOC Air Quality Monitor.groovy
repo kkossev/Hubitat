@@ -17,9 +17,11 @@
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
- * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences
+ * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  *
- *                                   TODO: temperature rounding bug fix
+ *                                   TODO: aqaraModel is no saved
+ *                                   TODO: notPresentCtr bug fix
+ *                                   TODO: store NWK in states
  *                                   TODO: implement battery level/percentage for Aqara TVOC
  *                                   TODO: implement Get Device Info command
  *                                   TODO: 'device' capability
@@ -29,7 +31,7 @@
  */
 
 static String version() { "2.0.2" }
-static String timeStamp() {"2023/05/29 11:58 PM"}
+static String timeStamp() {"2023/05/30 9:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -937,10 +939,10 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
         eventMap.unit = "\u00B0"+"C"
     }
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset ?: 0)
-    eventMap.value  =  Math.round((tempCorrected - 0.05) * 10) / 10
+    eventMap.value  =  Math.round(tempCorrected * 10) / 10.0
     eventMap.type = isDigital == true ? "digital" : "physical"
     //eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${tempCorrected} ${eventMap.unit}"
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000)
     Integer minTime = settings?.minReportingTimeTemp ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
