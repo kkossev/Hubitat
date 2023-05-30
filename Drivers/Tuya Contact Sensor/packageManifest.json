@@ -1,9 +1,10 @@
 {
   "packageName": "Tuya Zigbee Contact Sensor++ w/ healthStatus",
   "author": "Krassimir Kossev",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2023-021728",
+  "dateReleased": "2023-05-30",
+  "releaseNotes": "1.1.0  2023-04-24 - added advancedOptions; added battery reporting configuration\n1.0.3  2023-02-25 - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; \n1.0.2  2023-02-17 - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ\n1.0.1  2023-02-15 - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;\n1.0.0  2023-02-12 - Initial test version",  
   "drivers": [
     {
       "id": "ea11eefa-641f-440c-9f4e-e4d921e3204f",
