@@ -17,19 +17,20 @@
  * ver. 1.0.2  2023-02-17 kkossev  - healthCheck is scheduled every 1 hour; added presenceCountThreshold option (default 12 hours); healthStatus is cleared when disabled or set to 'unknown' when enabled back; offlineThreshold bug fix; added Third Reality 3RDS17BZ
  * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
+ * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
  *
  *                                   TODO: Add clearStats command
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
  *                                   TODO: deviceProfile is not recognized?? ver 1.0.3 20223/02/25; TODO - remove 'lastRx'on Initialize
- *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contactif not supported by the device profile
+ *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact if not supported by the device profile
  *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
-static def version() { "1.1.0" }
-static def timeStamp() { "2023/04/24 11:11 AM" }
+static def version() { "1.1.1" }
+static def timeStamp() { "2023/06/08 9:56 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,7 +87,8 @@ metadata {
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,000A,0001,0500", outClusters: "0019", model: "RH3001", manufacturer: "TUYATEC-0l6xaqmi", deviceJoinName: "BlitzWolf Contact Sensor"   // KK
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0500,0001", outClusters: "0003", model: "DS01", manufacturer: "eWeLink", deviceJoinName: "Sonoff Contact Sensor"
-        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor"             // application: 17 https://community.hubitat.com/t/best-motion-sensor-on-battery/40054/158?u=kkossev
+        // for tests only
+        //fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor"             // application: 17 https://community.hubitat.com/t/best-motion-sensor-on-battery/40054/158?u=kkossev
 
     }
     preferences {
@@ -94,18 +96,22 @@ metadata {
         input(name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input(name: "offlineThreshold", type: "number", title: "<b>HealthCheck Offline Threshold</b>", description: "<i>HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check</i>", range:"0..24", defaultValue: presenceCountDefaultThreshold)
         if (isConfigurable()) {
-            input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
+            input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
+            /*
             def model = getModelGroup()
             def modelProperties = deviceProfiles["$model"] as Map
+
             if (modelProperties != null) {
                 def preferences =  modelProperties.find{it.key=="preferences"}
                 if (preferences != null && preferences != []) {
                     preferences.value.each { key, value ->
                         def strMap = value as Map
-                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "${strMap.range}", defaultValue: "${strMap.defaultValue}")
+//                        input ("${strMap.name}", "${strMap.type}", title: "<b>${strMap.title}</b>", description: "<i>${strMap.description}</i>", range: "${strMap.range}", defaultValue: "${strMap.defaultValue}")
                     }
                 }
             }
+            */
+            
         }
         input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
         if (advancedOptions == true) {
@@ -116,7 +122,6 @@ metadata {
             input name: "minReportingTime", type: "number", title: "Minimum time between non-contact reports", description: "<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>", defaultValue: 10, range: "1..3600"
             
         }
-
     }
 }
 
@@ -226,8 +231,9 @@ metadata {
     ]
 ]
 
-def isConfigurable(model) { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
-def isConfigurable() { def model = getModelGroup(); return isConfigurable(model) }
+def getModelGroup()         { return (state.deviceProfile as String) ?: "UNKNOWN" }
+def isConfigurable(model)   { return (deviceProfiles["$model"]?.preferences != null && deviceProfiles["$model"]?.preferences != []) }
+def isConfigurable()        { def model = getModelGroup(); return isConfigurable(model) }
 def isBatteryConfigurable() { deviceProfiles[getModelGroup()]?.configuration?.battery?.value == true }
 
 @Field static final Integer MaxRetries = 3
@@ -266,13 +272,15 @@ def parse(String description) {
     if (description?.startsWith('zone status') || description?.startsWith('zone report')) {
         logDebug "Zone status: $description"
         parseIasMessage(description)    // TS0203 contact sensors
-    } else if (description?.startsWith('enroll request')) {
+    } 
+    else if (description?.startsWith('enroll request')) {
         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
         logInfo "Sending IAS enroll response..."
         ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "sending enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
-    } else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
+    } 
+    else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         try {
             descMap = zigbee.parseDescriptionAsMap(description)
         }
@@ -282,67 +290,82 @@ def parse(String description) {
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
                 sendBatteryPercentageEvent(Integer.parseInt(descMap.value, 16))
-            } else if (descMap.attrInt == 0x0020) {
+            } 
+            else if (descMap.attrInt == 0x0020) {
                 //log.trace "descMap.attrInt == 0x0020"
                 getBatteryResult(Integer.parseInt(descMap.value, 16))
-            } else {
+            } 
+            else {
                 log.warn "unparesed attrint $descMap.attrInt"
             }
         } else if (descMap?.cluster == "0500" && descMap?.command in ["01", "0A"]) {    //IAS read attribute response
             //if (settings?.logEnable) log.debug "${device.displayName} IAS read attribute ${descMap?.attrId} response is ${descMap?.value}"
             if (descMap?.attrId == "0000") {
                 if (settings?.logEnable) log.debug "${device.displayName} Zone State repot ignored value= ${Integer.parseInt(descMap?.value, 16)}"
-            } else if (descMap?.attrId == "0002") {
+            } 
+            else if (descMap?.attrId == "0002") {
                 if (settings?.logEnable) log.debug "${device.displayName} Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
                 sendContactEvent(Integer.parseInt(descMap?.value, 16))
-            } else if (descMap?.attrId == "000B") {
+            } 
+            else if (descMap?.attrId == "000B") {
                 if (settings?.logEnable) log.debug "${device.displayName} IAS Zone ID: ${descMap.value}"
-            } else if (descMap?.attrId == "0013") {
+            } 
+            else if (descMap?.attrId == "0013") {
                 // [raw:7CC50105000813002002, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:0013, encoding:20, command:0A, value:02, clusterInt:1280, attrInt:19]
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getSensitivityString(value)
                 if (settings?.txtEnable) log.info "${device.displayName} Current Zone Sensitivity Level = ${str} (${value})"
                 device.updateSetting("sensitivity", [value: str, type: "enum"])
-            } else if (descMap?.attrId == "F001") {
+            } 
+            else if (descMap?.attrId == "F001") {
                 // [raw:7CC50105000801F02000, dni:7CC5, endpoint:01, cluster:0500, size:08, attrId:F001, encoding:20, command:0A, value:00, clusterInt:1280, attrInt:61441]
                 def value = Integer.parseInt(descMap?.value, 16)
                 def str = getKeepTimeString(value)
                 if (settings?.txtEnable) log.info "${device.displayName} Current Zone Keep-Time =  ${str} (${value})"
                 //log.trace "str = ${str}"
                 device.updateSetting("keepTime", [value: str, type: "enum"])
-            } else {
+            } 
+            else {
                 if (settings?.logEnable) log.warn "${device.displayName} Zone status: NOT PROCESSED ${descMap}"
             }
         } // if IAS read attribute response
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
             if (settings?.logEnable) log.debug "${device.displayName} IAS enroll write attribute response is ${descMap?.data[0] == "00" ? "success" : "<b>FAILURE</b>"}"
-        } else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
+        } 
+        else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
             def rawLux = Integer.parseInt(descMap.value, 16)
             illuminanceEventLux(rawLux)
-        } else if (descMap.cluster == "0400" && descMap.attrId == "F001") {
+        } 
+        else if (descMap.cluster == "0400" && descMap.attrId == "F001") {
             def raw = Integer.parseInt(descMap.value, 16)
             if (settings?.txtEnable) log.info "${device.displayName} illuminance sensitivity is ${raw} Lux"
             device.updateSetting("illuminanceSensitivity", [value: raw, type: "number"])
-        } else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
+        } 
+        else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value, 16)
             if (raw > 32767) {
                 //Here we deal with negative values
                 raw = raw - 65536
             }
             temperatureEvent(raw / 100.0)
-        } else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
+        } 
+        else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value, 16)
             humidityEvent(raw / 100.0)
-        } else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON, SiHAS
+        } 
+        else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON, SiHAS
             def raw = Integer.parseInt(descMap.value, 16)
             motionEvent(raw & 0x01)
-        } else if (descMap?.clusterInt == CLUSTER_TUYA) {
+        } 
+        else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster(descMap)
-        } else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
+        } 
+        else if (descMap?.clusterId == "0013") {    // device announcement, profileId:0000
             logInfo "device announcement"
             statsMap['rejoins'] = (statsMap['rejoins'] ?: 0) + 1
             state.stats = mapToJsonString(statsMap)
-        } else if (descMap.isClusterSpecific == false && descMap.command == "01") {
+        } 
+        else if (descMap.isClusterSpecific == false && descMap.command == "01") {
             //global commands read attribute response
             def status = descMap.data[2]
             if (status == "86") {
@@ -350,11 +373,14 @@ def parse(String description) {
             } else {
                 if (settings?.logEnable) log.warn "${device.displayName} <b>UNPROCESSED Global Command</b> :  ${descMap}"
             }
-        } else if (descMap.profileId == "0000") { //zdo
+        } 
+        else if (descMap.profileId == "0000") { //zdo
             parseZDOcommand(descMap)
-        } else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
+        } 
+        else if (descMap.clusterId != null && descMap.profileId == "0104") { // ZHA global command
             parseZHAcommand(descMap)
-        } else {
+        } 
+        else {
             if (descMap != [:]) {
                 logDebug "<b> NOT PARSED </b> :  ${descMap}"
             }
@@ -378,7 +404,8 @@ def parseZHAcommand(Map descMap) {
             def attrId = descMap.data[1] + descMap.data[0]
             if (status == "86") {
                 if (logEnable == true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${clusterId}"
-            } else {
+            }
+            else {
                 if (logEnable == true) log.debug "${device.displayName} Read attribute response: status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
             }
             break
@@ -399,9 +426,11 @@ def parseZHAcommand(Map descMap) {
                 def delta = 0
                 if (descMap.data.size() == 11) {
                     delta = zigbee.convertHexToInt(descMap.data[10] + descMap.data[9])
-                } else if (descMap.data.size() == 10) {
+                } 
+                else if (descMap.data.size() == 10) {
                     delta = zigbee.convertHexToInt(descMap.data[9])
-                } else {
+                } 
+                else {
                     if (logEnable == true) log.debug "${device.displayName} descMap.data.size = ${descMap.data.size()}"
                 }
                 logDebug "Received Read Reporting Configuration response (0x09) for cluster:${descMap.clusterId} attribite:${descMap.data[3] + descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0] == "00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
@@ -412,19 +441,22 @@ def parseZHAcommand(Map descMap) {
                     if (lastRxMap.humiCfg == lastTxMap.humiCfg) {
                         lastTxMap.humiCfgOK = true
                     }
-                } else if (descMap.clusterId == "0402") {
+                } 
+                else if (descMap.clusterId == "0402") {
                     attributeName = "temperature"
                     lastRxMap.tempCfg = min.toString() + "," + max.toString() + "," + delta.toString()
                     if (lastRxMap.tempCfg == lastTxMap.tempCfg) {
                         lastTxMap.tempCfgOK = true
                     }
-                } else if (descMap.clusterId == "0001") {
+                } 
+                else if (descMap.clusterId == "0001") {
                     attributeName = "battery %"
                     lastRxMap.battCfg = min.toString() + "," + max.toString() + "," + delta.toString()
                     if (lastRxMap.battCfg == lastTxMap.battCfg) {
                         lastTxMap.battCfgOK = true
                     }
-                } else {
+                } 
+                else {
                     attributeName = descMap.clusterId
                 }
                 if ((lastTxMap.humiCfgOK != null ? lastTxMap.humiCfgOK : true) && (lastTxMap.tempCfgOK != null ? lastTxMap.tempCfgOK : true) && (lastTxMap.battCfgOK != null ? lastTxMap.battCfgOK : true)) {
@@ -502,14 +534,16 @@ def processTuyaCluster(descMap) {
         if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
         cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
         //if (state.txCounter != null) state.txCounter = state.txCounter + 1
-    } else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
+    } 
+    else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
         def status = descMap?.data[1]
         logDebug "Tuya cluster confirmation for command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
         if (status != "00") {
             if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} group = ${getModelGroup()} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"
         }
-    } else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02")) {
+    } 
+    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02")) {
         def dataLen = descMap?.data.size()
         //log.warn "dataLen=${dataLen}"
         def transid = zigbee.convertHexToInt(descMap?.data[1])
@@ -613,10 +647,6 @@ def sendContactEvent(contactActive, isDigital = false) {
     )
 }
 
-def getModelGroup() {
-    return state.deviceProfile ?: "UNKNOWN"
-}
-
 def temperatureEvent(temperature, isDigital = false) {
     Map lastRxMap = stringToJsonMap(state.lastRx)
     def map = [:]
@@ -625,7 +655,8 @@ def temperatureEvent(temperature, isDigital = false) {
     if (Scale == "F") {
         temperature = (temperature * 1.8) + 32
         map.unit = "\u00B0" + "F"
-    } else {
+    } 
+    else {
         map.unit = "\u00B0" + "C"
     }
     def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset)
@@ -642,7 +673,8 @@ def temperatureEvent(temperature, isDigital = false) {
         unschedule("sendDelayedEventTemp")        //get rid of stale queued reports
         lastRxMap['tempTime'] = now()
         sendEvent(map)
-    } else {         // queue the event
+    } 
+    else {         // queue the event
         map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventTemp', [overwrite: true, data: map])
@@ -678,7 +710,8 @@ def humidityEvent(humidity, isDigital = false) {
         unschedule("sendDelayedEventHumi")
         lastRxMap['humiTime'] = now()
         sendEvent(map)
-    } else {         // queue the event
+    } 
+    else {         // queue the event
         map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventHumi', [overwrite: true, data: map])
@@ -747,49 +780,33 @@ def updated() {
     if (logEnable == true) {
         runIn(86400, "logsOff", [overwrite: true, misfire: "ignore"])    // turn off debug logging after 30 minutes
         if (settings?.txtEnable) log.info "${device.displayName} Debug logging will be turned off after 24 hours"
-    } else {
+    } 
+    else {
         unschedule("logsOff")
     }
     scheduleDeviceHealthCheck()
 
     if (isBatteryConfigurable()) {
-        //
-        // try to configure some parameters and see what happens ..temperatureSensitivity  humiditySensitivity minReportingTimeTemp maxReportingTimeTemp c maxReportingTimeHumidity
-        /*
-        lastTxMap.tempCfg = (settings?.minReportingTimeTemp as int).toString() + "," + (settings?.maxReportingTimeTemp as int).toString() + "," + ((settings?.temperatureSensitivity * 100) as int).toString()
-        lastTxMap.humiCfg = (settings?.minReportingTimeHumidity as int).toString() + "," + (settings?.maxReportingTimeHumidity as int).toString() + "," + ((settings?.humiditySensitivity * 100) as int).toString()
-
-        if (lastTxMap.tempCfg != lastRxMap.tempCfg) {
-            cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, settings?.maxReportingTimeTemp as int, (settings?.temperatureSensitivity * 100) as int, [:], 200)
-            log.info "configure temperature reporting (${lastTxMap.tempCfg}) pending ..."
-            lastTxMap.tempCfgOK = false
-        } else {
-            logDebug "Temperature reporting already configured (${lastTxMap.tempCfg}), skipping ..."
-            lastTxMap.tempCfgOK = true
+        int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
+        logDebug "settings?.batteryReporting = ${settings?.batteryReporting as int} batteryReportinginterval=${batteryReportinginterval}"
+        if (batteryReportinginterval > 0) {
+            def newBattCfg = "3600" + "," + batteryReportinginterval.toString() + "," + "1"                // TODO !! org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object '[, 0, , 0, , 0, , 0, , 0, , 0, , 0, ............. with class 'java.util.ArrayList' to class 'int' on line 780 (method updated)
+            if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
+                lastTxMap.battCfg = newBattCfg
+                logDebug "lastTxMap.battCfg = ${lastTxMap.battCfg}"
+                cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 3600, batteryReportinginterval as int, 1  /*0*/, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
+                cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 3600, batteryReportinginterval as int, 1  /*0*/, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
+                cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
+                cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
+                log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
+                lastTxMap.battCfgOK = false
+            } else {
+                logDebug "Battery reporting already configured (${lastRxMap.battCfg} == ${lastTxMap.battCfg}), skipping ..."
+                lastTxMap.battCfgOK = true
+            }
         }
-        if (lastTxMap.humiCfg != lastRxMap.humiCfg) {
-            cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, settings?.maxReportingTimeHumidity as int, (settings?.humiditySensitivity * 100) as int, [:], 200)
-            log.info "configure humidity reporting (${lastTxMap.humiCfg}) pending ..."
-            lastTxMap.humiCfgOK = false
-        } else {
-            logDebug "Humidity reporting already configured (${lastTxMap.humiCfg}), skipping ..."
-            lastTxMap.humiCfgOK = true
-        }
-        */
-        log.trace "settings?.batteryReporting = ${settings?.batteryReporting}"
-        def newBattCfg = "10" + "," + (((settings?.batteryReporting ?: 12) *3600) as int).toString() + "," + "1"
-        if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
-            lastTxMap.battCfg = newBattCfg
-            log.warn "lastTxMap.battCfg = ${lastTxMap.battCfg}"
-            cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int,/* 1*/ 0, [:], 101)   // Configure Voltage - Report once per 6hrs or if a change of 100mV detected
-            cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, ((settings?.batteryReporting ?: 12) *3600) as int, /*1*/ 0, [:], 102)   // Configure Battery % - Report once per 6hrs or if a change of 1% detected
-            cmds += zigbee.reportingConfiguration(0x0001, 0x0020, [:], 103)
-            cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 104)
-            log.info "configure battery reporting (${lastTxMap.battCfg}) pending ..."
-            lastTxMap.battCfgOK = false
-        } else {
-            logDebug "Battery reporting already configured (${lastRxMap.battCfg} == ${lastTxMap.battCfg}), skipping ..."
-            lastTxMap.battCfgOK = true
+        else {
+            logDebug "no battery reporting configuration"
         }
     } // SONOFF
 
@@ -927,30 +944,13 @@ def resetStats() {
             txCtr  : 0,
             rejoins: 0
     ]
-
-    Map lastRx = [:
-                  /*
-                      tempTime : now() - defaultMinReportingTime * 1000,
-                      humiTime : now() - defaultMinReportingTime * 1000,
-                      tempCfg : '-1,-1,-1',
-                      humiCfg : '-1,-1,-1'
-                      battCfg : '-1,-1,-1',
-                 */
+    Map lastRx = [
+            battCfg : '-1,-1,-1'
     ]
-
     Map lastTx = [
-            /*
-                tempCfg : '-1,-1,-1',
-                humiCfg : '-1,-1,-1',
-    */
-            /*
-                          tempCfgOK : true,
-                          humiCfgOK : true,
-                          battCfgOK : true,
-              */
+            battCfgOK : true,
             cfgTimer : 0
     ]
-
     state.stats = mapToJsonString(stats)
     state.lastRx = mapToJsonString(lastRx)
     state.lastTx = mapToJsonString(lastTx)
@@ -1019,7 +1019,7 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value: 3600, type: "number"])
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (fullInit == true || settings?.offlineThreshold == null) device.updateSetting("offlineThreshold", [value: presenceCountDefaultThreshold, type: "number"])
-
+    if (fullInit == true || settings?.batteryReporting == null) device.updateSetting('batteryReporting', [value: batteryReportingOptions.defaultValue.toString(), type: 'enum'])
 
 }
 
@@ -1180,8 +1180,6 @@ void scheduleDeviceHealthCheck() {
     }
 }
 
-
-
 def ping() {
     logInfo "ping() is not implemented"
 }
@@ -1238,49 +1236,7 @@ def zTest(dpCommand, dpValue, dpTypeString) {
     sendZigbeeCommands(sendTuyaCommand(dpCommand, dpType, dpValHex))
 }
 
-
 def test(String description) {
     log.warn "test parsing : ${description}"
     parse( description)
-
-    /*
-    def map = deviceProfiles
-    map.each { k, v -> log.trace "${k}:${v}" }
-
-    log.trace "deviceProfiles joinName = ${deviceProfiles['SONOFF_CONTACT_BATT'].deviceJoinName}"
-    */
-/*    
-    def model = "SONOFF_CONTACT_BATT"    //"getModelGroup(); 
-    log.trace "model=${model}"
-    def modelPreferences = deviceProfiles["$model"].preferences; 
-    log.trace "capabilities = ${deviceProfiles["$model"].capabilities} modelPreferences= ${(deviceProfiles['SONOFF_CONTACT_BATT'].preferences)} "
-    log.trace "isConfigurable($model) = ${isConfigurable(model)}"
-    //log.trace "isConfigurable('unknown') = ${isConfigurable('unknown')}"
-    
-
-        if (isConfigurable(model)) {
-            //input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
-            //def model = getModelGroup()
-            def modelProperties = deviceProfiles["$model"] as Map
-            def preferences =  modelProperties.find{it.key=="preferences"}
-            log.warn "preferences = ${preferences}"
-            if (preferences != null && preferences != []) {
-                preferences.value.each { key, value ->
-                    def strMap = value as Map
-                    log.debug "<b>INPUT:</b> name:${strMap.name}, type:${strMap.type}, title: <b>${strMap.title}</b>, description: <i>${strMap.description}</i> TODO MORE"
-                }
-            }
-        }
-    //settings.remove("batteryReporting")
-    log.warn "batteryReporting = ${settings.batteryReporting}"
-*/
-/*
-    def model = getModelGroup()
-    def modelProperties = deviceProfiles["$model"] as Map
-
-    log.trace "a = ${modelProperties.Xconfiguration?.Xbattery?.value}"
-    log.trace "b = ${deviceProfiles['SONOFF_CONTACT_BATT'].configuration.battery.value}"
-    log.trace "c = ${deviceProfiles[state.deviceProfile].configuration.battery.value}"
-    log.trace "d = ${deviceProfiles[getModelGroup()]?.configuration?.battery?.value}"
-*/
 }
