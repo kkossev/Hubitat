@@ -53,13 +53,11 @@
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
- *  ver. 1.7.7 2023-06-03 kkossev - (dev.branch) isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding;
+ *  ver. 1.7.7 2023-06-10 kkossev - (dev.branch) isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
  *
  *
- *                                 TODO: Tongou SY2 over/under V/A/P protection ENCODING configuration (W.I.P.)
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
  *                                 TODO: if a plug is offline, do not refreh all parameters but ping() instead
- *                                 TODO: add RTX link on the first post
  *                                 TODO: Tongou D010_RestartStatus: 2 [ENUMERATION_8_BIT]    https://github.com/sprut/Hub/issues/2263
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
  *                                 TODO: add rtt measurement in ping()
@@ -78,7 +76,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.7" }
-def timeStamp() {"2023/05/03 11:34 PM"}
+def timeStamp() {"2023/06/10 11:21 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -136,11 +134,14 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ps3dmato",  deviceJoinName: "Lellki WK35 Plug Wall Socket"   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_1h2x4akh",  deviceJoinName: "Ajax/Zignito Plug Wall Socket"   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        /* moved to "Zemismart Zemismart ZigBee Wall Switch Multi-Gang" driver (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cymsnfvf", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zigisuyh", deviceJoinName: "Wall Outlet with USB Universal"  // https://zigbee.blakadder.com/Zemismart_B90.html
+        */
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bkkmqmyo", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_eaac7dkw", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.youtube.com/watch?v=KwTz35OWmP4
@@ -277,9 +278,9 @@ metadata {
                     input (name: "overCurrentBreaker", type:  "bool", title: "<b>Over Current Protection</b>",  description: "<i>Disable or enable the Over Current Protection</i>", defaultValue: false)
                     input (name: "overCurrentBreakerThreshold", type: "number", title: "<b>Over Current Protection Threshold, A</b>", description: "<i>The Over Current Protection Threshold, (1..64) A</i>", range: "1..64", defaultValue: 64)
                     input (name: "overVoltageBreaker", type:  "bool", title: "<b>Over Voltage Protection</b>",  description: "<i>Disable or enable the Over Voltage Protection</i>", defaultValue: false)
-                    input (name: "overVoltageBreakerThreshold", type: "number", title: "<b>Over Voltage Protection Threshold, V</b>", description: "<i>The Over Voltage Protection Threshold, (100..255) V</i>", range: "1..64", defaultValue: 64)
+                    input (name: "overVoltageBreakerThreshold", type: "number", title: "<b>Over Voltage Protection Threshold, V</b>", description: "<i>The Over Voltage Protection Threshold, (100..255) V</i>", range: "100..255", defaultValue: 64)
                     input (name: "underVoltageBreaker", type:  "bool", title: "<b>Under Voltage Protection</b>",  description: "<i>Disable or enable the Under Voltage Protection</i>", defaultValue: false)
-                    input (name: "underVoltageBreakerThreshold", type: "number", title: "<b>Under Voltage Protection Threshold, V</b>", description: "<i>The Under Voltage Protection Threshold, (50..240) V</i>", range: "1..64", defaultValue: 64)
+                    input (name: "underVoltageBreakerThreshold", type: "number", title: "<b>Under Voltage Protection Threshold, V</b>", description: "<i>The Under Voltage Protection Threshold, (50..240) V</i>", range: "50..240", defaultValue: 64)
                 }
             }
         } 
@@ -1461,7 +1462,7 @@ private String getAttributeString(ArrayList _data) {
 
 
 void processTuyaThresholdsCommands(Map descMap) {
-    logWarn "processTuyaThresholdsCommands ${descMap}"
+    logDebug "processTuyaThresholdsCommands ${descMap}"
     
     if (descMap.clusterId != "E001")
         return
@@ -1694,7 +1695,7 @@ def fixOtherTuyaOddities() {
     def ep = device.getEndpointId()
     logDebug "ep=${ep} isF2=${ep=='F2'}"
     if (isHEProblematic() || ep == 'F2') {
-        log.warn "fixing other Tuya oddities ..."
+        logWarn "fixing other Tuya oddities ..."
         def endpoint = '01'
         cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]    // node descriptor response as for Aqara E1 hub, doesn't seem to improve anything ...
         cmds +=   ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
@@ -1797,6 +1798,14 @@ def configure() {
         }
         logDebug "setting FrientEnergyMonitor pulseConfiguration (${settings?.pulseConfiguration} )"
         cmds += pulseConfiguration( settings?.pulseConfiguration )
+    }
+    if (isTongouSY2()) {
+        def E6Array
+        def E7Array
+        (E6Array, E7Array) = packSY2thresholdsData()
+        logDebug "E6Array=${E6Array} E7Array=${E7Array}"
+        cmds += zigbee.command(0xE001, 0xE6, E6Array as String)
+        cmds += zigbee.command(0xE001, 0xE7, E7Array as String)
     }
     
     sendZigbeeCommands(cmds)
@@ -1985,7 +1994,7 @@ void initializeVars( boolean fullInit = false ) {
         }
     }
     if (isFrientEnergyMonitor() == true) {
-        log.warn "disabling V/A reporting for Frient Energy monitor"
+        logWarn "disabling V/A reporting for Frient Energy monitor"
         if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"REPORTED", type:"enum"])
         if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", [value: false, type: "bool"])
         if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", [value: false, type: "bool"])
@@ -2675,10 +2684,45 @@ def testParse(description) {
     log.trace "---end of parse---"
 }
 
+@Field static final Map ThresholdIDs = [
+   'TEMPERATURE'  : [cmd:'E6', code:0x05, enabled: "overTemperatureBreaker", threshold: "overTemperatureBreakerThreshold"],
+   'POWER'        : [cmd:'E6', code:0x07, enabled: "overPowerBreaker", threshold: "overPowerBreakerThreshold"],
+   'CURRENT'      : [cmd:'E7', code:0x01, enabled: "overCurrentBreaker", threshold: "overCurrentBreakerThreshold"],
+   'OVERVOLT'     : [cmd:'E7', code:0x03, enabled: "overVoltageBreaker", threshold: "overVoltageBreakerThreshold"],
+   'UNDERVOLT'    : [cmd:'E7', code:0x04, enabled: "underVoltageBreaker", threshold: "underVoltageBreakerThreshold"],
+]
+
+String encodeSY2chunk(String chunk) {
+    String encoded
+    if (ThresholdIDs[chunk] == null) return "??"
+    def code = ThresholdIDs[chunk]?.code
+    def threshold = settings?.(ThresholdIDs[chunk]?.threshold)
+    def enabled = settings?.(ThresholdIDs[chunk]?.enabled) ? 1 : 0
+    logDebug "$chunk code=$code threshold = $threshold enabled=$enabled"
+    encoded  = zigbee.convertToHexString(code as int, 2)
+    encoded += zigbee.convertToHexString(enabled as int, 2)
+    encoded += zigbee.convertToHexString(threshold as int, 4)
+    logDebug "encoded $chunk = $encoded"
+    return encoded
+}
+
+def packSY2thresholdsData() {
+    String E6Array = encodeSY2chunk('TEMPERATURE' ) + encodeSY2chunk('POWER')
+    String E7Array = encodeSY2chunk('CURRENT' ) + encodeSY2chunk('OVERVOLT') + encodeSY2chunk('UNDERVOLT')
+    return [E6Array, E7Array]
+}
+
 def test() {
-        ArrayList<String> cmds = []
-        cmds = sendTuyaCommand("1B", DP_TYPE_ENUM, "00")
-    return cmds
+    ArrayList<String> cmds = []
+    def E6Array
+    def E7Array
+    (E6Array, E7Array) = packSY2thresholdsData()
+    log.warn "E6Array=${E6Array} E7Array=${E7Array} "
+    
+    cmds = zigbee.command(0xE001, 0xE6, E6Array as String)
+    cmds += zigbee.command(0xE001, 0xE7, E7Array as String)
+    
+    sendZigbeeCommands(cmds)
 }
 
 
