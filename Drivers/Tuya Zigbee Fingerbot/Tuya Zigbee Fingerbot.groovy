@@ -21,6 +21,7 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  *
  *                                   TODO: aqaraModel is no saved
+ *                                   TODO: rtt 0 fix
  *                                   TODO: notPresentCtr bug fix
  *                                   TODO: store NWK in states
  *                                   TODO: implement battery level/percentage for Aqara TVOC
@@ -32,7 +33,7 @@
  */
 
 static String version() { "2.0.3" }
-static String timeStamp() {"2023/06/10 1:17 PM"}
+static String timeStamp() {"2023/06/10 7:35 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -166,7 +167,10 @@ metadata {
         }
         if (deviceType in  ["Fingerbot"]) {
             attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String>
+            attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String>
             attribute "pushTime", "number"
+            attribute "dnPosition", "number"
+            attribute "upPosition", "number"
         }
 
         // trap for Hubitat F2 bug
@@ -200,7 +204,11 @@ metadata {
         if (deviceType in  ["Fingerbot"]) {
             input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: \
                 '<i>Push or Switch.</i>'
-            input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode</i>', required: true, range: "0..255", defaultValue: 0  
+            input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: \
+                '<i>Finger movement direction.</i>'
+            input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0  
+            input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0  
+            input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100  
 
         }
         input name: 'advancedOptions', type: 'bool', title: 'Advanced Options', description: "<i>May not work for all device types!</i>", defaultValue: false
@@ -243,6 +251,10 @@ metadata {
 @Field static final Map FingerbotModeOpts = [
     defaultValue: 0,
     options     : [0: 'push', 1: 'switch']
+]
+@Field static final Map FingerbotDirectionOpts = [
+    defaultValue: 0,
+    options     : [0: 'normal', 1: 'reverse']
 ]
 
 
@@ -1515,7 +1527,15 @@ Custom Timing		112
             }
             break
         case 0x66 : // (102)
-            logInfo "Fingerbot Degree of declining	code is ${fncmd}"
+            if (isFingerbot()) {
+                def value = fncmd as int
+                def descriptionText = "Fingerbot Down Position is ${value} %"
+                sendEvent(name: "dnPosition", value: value, descriptionText: descriptionText)
+                logInfo "${descriptionText}"
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x67 : // (103)
             if (isFingerbot()) {
@@ -1529,7 +1549,15 @@ Custom Timing		112
             }
             break
         case 0x68 : // (104)
-            logInfo "Fingerbot Switch Reverse is ${fncmd}"
+            if (isFingerbot()) {
+                def value = FingerbotDirectionOpts.options[fncmd as int]
+                def descriptionText = "Fingerbot switch direction is ${value} (${fncmd})"
+                sendEvent(name: "direction", value: value, descriptionText: descriptionText)
+                logInfo "${descriptionText}"
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x69 : // (105)
             if (isFingerbot()) {
@@ -1541,7 +1569,15 @@ Custom Timing		112
             }
             break
         case 0x6A : // (106)
-            logInfo "Fingerbot Increase is ${fncmd}"
+            if (isFingerbot()) {
+                def value = fncmd as int
+                def descriptionText = "Fingerbot Up Position is ${value} %"
+                sendEvent(name: "upPosition", value: value, descriptionText: descriptionText)
+                logInfo "${descriptionText}"
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x6B : // (107)
             logInfo "Fingerbot Tact Switch is ${fncmd}"
@@ -1736,6 +1772,15 @@ def configureDevice() {
         final int duration = (settings.pushTime as Integer) ?: 0
         logDebug "setting pushTime to ${duration} seconds)"
         cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) )
+        final int dnPos = (settings.dnPosition as Integer) ?: 0
+        logDebug "setting dnPosition to ${dnPos} %)"
+        cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) )
+        final int upPos = (settings.upPosition as Integer) ?: 0
+        logDebug "setting upPosition to ${upPos} %)"
+        cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) )
+        final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue
+        logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})"
+        cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) )
     }
         
     //
@@ -2172,6 +2217,9 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in  ["Fingerbot"]) {
         if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum'])
         if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"])
+        if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"])
+        if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"])
+        
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
