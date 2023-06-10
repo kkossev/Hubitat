@@ -32,7 +32,7 @@
  */
 
 static String version() { "2.0.3" }
-static String timeStamp() {"2023/06/10 9:44 AM"}
+static String timeStamp() {"2023/06/10 1:17 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -58,8 +58,8 @@ import java.util.concurrent.ConcurrentHashMap
 //@Field static final String DEVICE_TYPE = "Device"
 //deviceType = "AirQuality"
 //@Field static final String DEVICE_TYPE = "AirQuality"
-deviceType = "FingerBot"
-@Field static final String DEVICE_TYPE = "FingerBot"
+deviceType = "Fingerbot"
+@Field static final String DEVICE_TYPE = "Fingerbot"
 //deviceType = "Thermostat"
 //@Field static final String DEVICE_TYPE = "Thermostat"
 //deviceType = "Switch"
@@ -99,6 +99,11 @@ metadata {
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
             command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
+            command "tuyaTest", [
+                [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
+                [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
+                [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
+            ]
         }
         
         // common capabilities for all device types
@@ -130,7 +135,7 @@ metadata {
             }
             //command "updateFirmware"
         }
-        if (deviceType in  ["Device", "THSensor", "AirQuality", "Thermostat", "FingerBot"]) {
+        if (deviceType in  ["Device", "THSensor", "AirQuality", "Thermostat", "Fingerbot"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -138,12 +143,12 @@ metadata {
             capability "ThermostatHeatingSetpoint"
         }
 
-        if (deviceType in  ["Device", "Switch", "Dimmer", "FingerBot"]) {
+        if (deviceType in  ["Device", "Switch", "Dimmer", "Fingerbot"]) {
             capability "Switch"
             //command "switchCommand"
             //attribute "switchAttribute", "number"  
         }        
-        if (deviceType == "Dimmer") {
+        if (deviceType in ["Dimmer"]) {
             capability "SwitchLevel"
             command "switchLevelCommand"
             attribute "switchAttribute", "number"  
@@ -158,8 +163,11 @@ metadata {
             capability "AirQuality"            // Attributes: airQualityIndex - NUMBER, range:0..500
             attribute "pm25", "number"
             attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ 
-        }        
-        
+        }
+        if (deviceType in  ["Fingerbot"]) {
+            attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String>
+            attribute "pushTime", "number"
+        }
 
         // trap for Hubitat F2 bug
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
@@ -177,28 +185,32 @@ metadata {
              '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: \
              '<i>Turns on debug logging for 24 hours.</i>'
-        input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: \
-             '<i>Method to check device online/offline status.</i>'
-        //if (healthCheckMethod != null && safeToInt(healthCheckMethod.value) != 0) {
-            input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: \
-                 '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-        //}
         if (deviceType in  ["AirQuality"]) {
             if (isVINDSTIRKA()) {
                 input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: \
                     '<i>Changes how often the hub retreives the Air Quality Index.</i>'
             }
+            else  if (isAqaraTRV()) {
+                input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: \
+                        '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
+                input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: \
+                        '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
+            }
+        }
+        if (deviceType in  ["Fingerbot"]) {
+            input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: \
+                '<i>Push or Switch.</i>'
+            input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode</i>', required: true, range: "0..255", defaultValue: 0  
+
         }
         input name: 'advancedOptions', type: 'bool', title: 'Advanced Options', description: "<i>May not work for all device types!</i>", defaultValue: false
         if (advancedOptions == true || advancedOptions == true) {
-           if (deviceType in  ["AirQuality"]) {
-           //     if (isAqaraTRV()) {
-                    input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: \
-                        '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
-                    input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: \
-                        '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
-           //     }
-           }
+            input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: \
+                 '<i>Method to check device online/offline status.</i>'
+            //if (healthCheckMethod != null && safeToInt(healthCheckMethod.value) != 0) {
+                input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: \
+                     '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
+            //}
         }
     }
 }
@@ -208,7 +220,7 @@ metadata {
 @Field static final Integer DEBOUNCING_TIMER = 300           // ignore switch events 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
-@Field static String        UNKNOWN = "UNKNOWN"
+@Field static final String  UNKNOWN = "UNKNOWN"
 @Field static final Integer DEFAULT_MIN_REPORTING_TIME = 10  // send the report event no more often than 10 seconds by default
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 
@@ -228,6 +240,10 @@ metadata {
     defaultValue: 1,
     options     : [0: 'mg/m³', 1: 'ppb']
 ]
+@Field static final Map FingerbotModeOpts = [
+    defaultValue: 0,
+    options     : [0: 'push', 1: 'switch']
+]
 
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
@@ -235,6 +251,7 @@ def isVINDSTIRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] 
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
+def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
 
 /**
  * Parse Zigbee message
@@ -900,7 +917,7 @@ def sendBatteryPercentageEvent( batteryPercent, isDigital=false ) {
     def timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
     if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
         // send it now!
-        sendDelayedBatteryEvent(map)
+        sendDelayedBatteryPercentageEvent(map)
     }
     else {
         def delayedTime = (settings?.batteryDelay as int) - timeDiff
@@ -1447,12 +1464,16 @@ void parseTuyaCluster(final Map descMap) {
         def dataLen = descMap?.data.size()
         //log.warn "dataLen=${dataLen}"
         def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
+        if (dataLen <= 5) {
+            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
+            return
+        }
         for (int i = 0; i < (dataLen-4); ) {
             def dp = zigbee.convertHexToInt(descMap?.data[2+i])          // "dp" field describes the action/message of a command frame
             def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])       // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i]) 
             def fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
         }
@@ -1483,19 +1504,41 @@ Sports Statistics	111
 Custom Timing		112
 */
         case 0x65 : // (101)
-            logInfo "Fingerbot mode is ${fncmd}"
+            if (isFingerbot()) {
+                def value = FingerbotModeOpts.options[fncmd as int]
+                def descriptionText = "Fingerbot mode is ${value} (${fncmd})"
+                sendEvent(name: "fingerbotMode", value: value, descriptionText: descriptionText)
+                logInfo "${descriptionText}"
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x66 : // (102)
             logInfo "Fingerbot Degree of declining	code is ${fncmd}"
             break
         case 0x67 : // (103)
-            logInfo "Fingerbot Duration is ${fncmd}"
+            if (isFingerbot()) {
+                def value = fncmd as int
+                def descriptionText = "Fingerbot push time (duration) is ${value} seconds"
+                sendEvent(name: "pushTime", value: value, descriptionText: descriptionText)
+                logInfo "${descriptionText}"
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x68 : // (104)
             logInfo "Fingerbot Switch Reverse is ${fncmd}"
             break
         case 0x69 : // (105)
-            logInfo "Fingerbot Battery Power is ${fncmd}"
+            if (isFingerbot()) {
+                //logInfo "Fingerbot Battery Power is ${fncmd}"
+                sendBatteryPercentageEvent(fncmd) 
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
             break
         case 0x6A : // (106)
             logInfo "Fingerbot Increase is ${fncmd}"
@@ -1545,14 +1588,25 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     def ep = safeToInt(state.destinationEP)
     if (ep==null || ep==0) ep = 1
+    def tuyaCmd = isFingerbot() ? 0x04 : SETDATA
     
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     logDebug "${device.displayName} sendTuyaCommand = ${cmds}"
     return cmds
 }
 
 private getPACKET_ID() {
-    return randomPacketId()
+    return zigbee.convertToHexString(new Random().nextInt(65536), 4) 
+}
+
+def tuyaTest( dpCommand, dpValue, dpTypeString ) {
+    ArrayList<String> cmds = []
+    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null
+    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
+
+    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
+
+    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
 private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C }
@@ -1674,6 +1728,14 @@ def configureDevice() {
         
         cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200)
         cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
+    }
+    if (DEVICE_TYPE in  ["Fingerbot"]) {
+        final int mode = (settings.fingerbotMode as Integer) ?: FingerbotModeOpts.defaultValue
+        logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode]} (${mode})"
+        cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) )
+        final int duration = (settings.pushTime as Integer) ?: 0
+        logDebug "setting pushTime to ${duration} seconds)"
+        cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) )
     }
         
     //
@@ -2018,7 +2080,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     sendHubCommand(allActions)
 }
 
-static def driverVersionAndTimeStamp() {version() + ' ' + timeStamp() + ((_DEBUG) ? " debug version!" : " ")}
+static def driverVersionAndTimeStamp() {version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!)" : " ")}
 
 def getDeviceInfo() {
     return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>"
@@ -2104,12 +2166,13 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
-    
-    
     if (DEVICE_TYPE in ["AirQuality"]) {
-        if (fullInit || settings?.advancedOptions == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
+        if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     }
-    
+    if (DEVICE_TYPE in  ["Fingerbot"]) {
+        if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum'])
+        if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"])
+    }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')    
 
     //updateTuyaVersion()
@@ -2255,7 +2318,13 @@ def test(par) {
     bit 1: mg/m³ or ppb (unset, set)
     bit 2: temperature °C/°F (unset, set)
 */
-    zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, 17, [mfgCode: 0x115F], delay=200) +
-    zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
+    ArrayList<String> cmds = []
+    log.warn 'test...'
+    
+        final int mode = (settings.fingerbotMode as Integer) ?: FingerbotModeOpts.defaultValue
+        logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode]} (${mode})"
+        cmds = sendTuyaCommand("01", DP_TYPE_ENUM, zigbee.convertToHexString(mode as int, 2) )
+    
+    sendZigbeeCommands(cmds)    
 }
 
