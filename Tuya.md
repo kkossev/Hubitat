@@ -147,7 +147,10 @@
 ### Tuya Dimmers 
 |  Device |  Links |
 |---|---|
-| Zigbee Smart Dimmer Switch Module With Neutral 1 2 Gang  ![image](https://user-images.githubusercontent.com/6189950/155127750-4c780918-fd6d-49d5-aca2-d3b27eb9bcea.png) | https://www.aliexpress.com/item/1005003012298844.html <br> |
+| Lonsonho Zigbee Smart Dimmer Switch Module With Neutral 1 2 Gang <br> ![image](https://user-images.githubusercontent.com/6189950/155127750-4c780918-fd6d-49d5-aca2-d3b27eb9bcea.png) |Profile: "TS110E_LONSONHO_DIMMER"<br><br>Manufacturer:_TZ3210_ngqk6jia _TZ3210_pagajpog _TZ3210_4ubylghk <br><br>AliExpress: [(link)](https://www.aliexpress.com/item/1005003012298844.html) <br> AliExpress: [(link)](https://www.aliexpress.com/item/4001279149071.html) <br>|
+|Girier Tuya Zigbee Smart Dimmer Switch Module With Neutral 1 2 Gang<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/8272a145-9eb6-41cc-8913-8d8ea4162ce2)|Profile: "TS110E_GIRIER_DIMMER"<br><br>Manufacturer: _TZ3210_zxbtub8r _TZ3210_k1msuvg6<br><br> AliExpress: [(link)](https://www.aliexpress.com/item/1005004580552856.html)<br>  |
+|Moes ZigBee Dimmer <br>![image](https://github.com/kkossev/Hubitat/assets/6189950/c55acff8-a081-450e-90bf-4865842cb4aa) |Profile: "TS110E_DIMMER"<br><br>Manufacturer: _TZE200_e3oitdyu<br><br>AliExpress: [(link)](https://www.aliexpress.com/item/1005001593033528.html) |
+|Tuya Zigbee 3.0 Dimmer Smart Switch Module<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/1e99b8f3-1c8f-492d-a69e-f0d9e462e444)|Profile: "TS110F_DIMMER"<br><br>Manufacturer: _TYZB01_v8gtiaed _TYZB01_qezuin6k _TZ3000_ktuoyvt5 _TZ3000_92chsky7 _TZ3000_7ysdnebc <br><br> |
 
 ---------------------------
 
