@@ -151,6 +151,7 @@
 |Girier Tuya Zigbee Smart Dimmer Switch Module With Neutral 1 2 Gang<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/8272a145-9eb6-41cc-8913-8d8ea4162ce2)|Profile: "TS110E_GIRIER_DIMMER"<br><br>Manufacturer: _TZ3210_zxbtub8r _TZ3210_k1msuvg6<br><br> AliExpress: [(link)](https://www.aliexpress.com/item/1005004580552856.html)<br>  |
 |Moes ZigBee Dimmer <br>![image](https://github.com/kkossev/Hubitat/assets/6189950/c55acff8-a081-450e-90bf-4865842cb4aa) |Profile: "TS110E_DIMMER"<br><br>Manufacturer: _TZE200_e3oitdyu<br><br>AliExpress: [(link)](https://www.aliexpress.com/item/1005001593033528.html) |
 |Tuya Zigbee 3.0 Dimmer Smart Switch Module<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/1e99b8f3-1c8f-492d-a69e-f0d9e462e444)|Profile: "TS110F_DIMMER"<br><br>Manufacturer: _TYZB01_v8gtiaed _TYZB01_qezuin6k _TZ3000_ktuoyvt5 _TZ3000_92chsky7 _TZ3000_7ysdnebc <br><br> |
+| Zigbee Multi-Gang Smart Light Dimmer <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/db56be87-7a78-4bc1-989a-ae7e49b09cef) |Profile: "TS0601_DIMMER"<br><br>Manufacturers: _TZE200_vm1gyrso _TZE200_whpb9yts _TZE200_ebwgzdqq _TZE200_9i9dt8is _TZE200_dfxkcots _TZE200_w4cryh2i _TZE200_ip2akl4w _TZE200_1agwnems _TZE200_la2c2uo9 _TZE200_579lguh2 _TZE200_fjjbhx9d _TZE200_drs6j6m5<br><br>AliExpress: [(link)](https://www.aliexpress.com/item/1005003571841927.html) |
 
 ---------------------------
 
