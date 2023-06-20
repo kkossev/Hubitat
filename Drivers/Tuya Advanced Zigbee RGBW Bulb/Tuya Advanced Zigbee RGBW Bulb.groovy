@@ -15,12 +15,13 @@
  * This driver is based on @bradsjm code https://github.com/bradsjm/hubitat-public/blob/development/PhilipsHue/Philips-Hue-Zigbee-Bulb-RGBW.groovy
  *
  * ver. 1.0.0  2023-04-14 kkossev  - Initial test version : Hubitat 'F2 bug' workaround; commented out Philips Hue specific commands; trap for Hubitat F2 bug
+ * ver. 1.0.1  2023-04-24 kkossev  - (dev.branch) added Lidl _TZ3000_9cpuaca6 ;
  *
  *                                   TODO: 
  */
 
-def version() { "1.0.0" }
-def timeStamp() {"2023/04/14 12:15 PM"}
+def version() { "1.0.1" }
+def timeStamp() {"2023/04/24 7:18 AM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -86,6 +87,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,1000,0008,0300,EF00,0000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_qqjaziws", deviceJoinName: "Tuya LED Strip"  // https://community.hubitat.com/t/anyone-used-this-tuya-led-strip-controller-with-success/55593/21?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300,EF00", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3210_zexrfbzd", deviceJoinName: "Tuya Bulb"       // https://community.hubitat.com/t/zigbee-bulb-paired-as-device/107530/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300,EF00", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_cmaky9gq", deviceJoinName: "Ikuu LED Strip"  // https://community.hubitat.com/t/mercator-ikuu/70404/191?u=kkossev
+
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_9cpuaca6", deviceJoinName: "Ikuu LED Strip"  // https://community.hubitat.com/t/mercator-ikuu/70404/191?u=kkossev
         
         // trap for Hubitat F2 bug
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
