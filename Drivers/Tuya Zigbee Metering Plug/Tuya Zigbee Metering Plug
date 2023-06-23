@@ -51,10 +51,13 @@
  *  ver. 1.7.2 2023-02-16 kkossev - InteliJ lint +bug fixes; added ThirdReality 3RSP02028BZ metering plug; powerOnState for non-Tuya plugs
  *  ver. 1.7.3 2023-03-28 kkossev - Third Reality amperage divisor fix; added frequency polling; completely removed presence capability; improvede logging for disabled attributes; hourlyEnergy is not sent of disabled or the deviceHealth is ofline; dummy ping
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
- *  ver. 1.7.5 2023-05-12 kkossev - (dev. branch) added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
+ *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
+ *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
  *
  *
+ *                                 TODO: configure the temperature reproting (be able to switch if off!)
+ *                                 TODO: if a plug is offline, do not refreh all parameters but ping() instead
  *                                 TODO: Tongou D010_RestartStatus: 2 [ENUMERATION_8_BIT]    https://github.com/sprut/Hub/issues/2263
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
  *                                 TODO: add rtt measurement in ping()
@@ -72,8 +75,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.6" }
-def timeStamp() {"2023/05/13 9:34 PM"}
+def version() { "1.7.7" }
+def timeStamp() {"2023/06/10 11:21 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -99,6 +102,7 @@ metadata {
         attribute "hourlyEnergy", "NUMBER"
         //attribute "dailyEnergy", "string"
         attribute "healthStatus", "enum", ["unknown", "offline", "online"]
+        attribute "temperature", "NUMBER"    // Tongou SY2
         
         
         command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
@@ -130,11 +134,14 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ps3dmato",  deviceJoinName: "Lellki WK35 Plug Wall Socket"   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_1h2x4akh",  deviceJoinName: "Ajax/Zignito Plug Wall Socket"   
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_w0qqde0g", deviceJoinName: "Neo NAS-WR01 Outlet TS011F"  
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        /* moved to "Zemismart Zemismart ZigBee Wall Switch Multi-Gang" driver (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_v1pdxuqq", deviceJoinName: "XH-002P Outlet TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_hyfvrar3", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cymsnfvf", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_bfn1w0mm", deviceJoinName: "TS011F No Power Monitoring"  // - no power monitoring !
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_gjnozsaz", deviceJoinName: "NEO ZigBee On Off Power Metering Plug"  // https://ultrasmart.pl/en_GB/p/NEO-ZigBee-On-Off-Power-Metering-Plug/81
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_zigisuyh", deviceJoinName: "Wall Outlet with USB Universal"  // https://zigbee.blakadder.com/Zemismart_B90.html
+        */
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_byzdayie", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bkkmqmyo", deviceJoinName: "HIKING TOMZN DDS238-2 TS0601_din"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_eaac7dkw", deviceJoinName: "MatSee Plus Energy Meter 80A Din Rail"    // https://www.youtube.com/watch?v=KwTz35OWmP4
@@ -165,24 +172,24 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B04,0702", outClusters:"0003,0019,0006,E001", model:"TS011F", manufacturer:"_TZ3000_r6buo8ba", deviceJoinName: "US Power Outlet"  // https://www.aliexpress.com/item/1005004128965720.htm
         */
         // NON-Tuya plugs
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006", outClusters:"0000", model:"BASICZBR3", manufacturer:"SONOFF", deviceJoinName: "SONOFF BASICZBR3"
+        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"                    // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"                    // SIHAS Smart Plug with on/off button
+        
+        // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
+        // Manually switching to this driver for the plugs below will still work.
+        /*
         fingerprint profileId:"C05E", endpointId:"03", inClusters:"1000,0000,0003,0004,0005,0006,0B04,FC0F", outClusters:"0019", model:"Plug 01", manufacturer:"OSRAM", deviceJoinName: "OSRAM Plug 01"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,FC01,FC08", outClusters:"0003,0019", model:"PLUG", manufacturer:"LEDVANCE", deviceJoinName: "Sylvania Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,FC7C", outClusters:"0005,0019,0020", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006", outClusters:"0000", model:"BASICZBR3", manufacturer:"SONOFF", deviceJoinName: "SONOFF BASICZBR3"
-        fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0003,0702", outClusters:"000A", model:"ZHEMI101", manufacturer:"Develco", deviceJoinName: "Frient Energy Monitor"                    // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality smart plug"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"0000,0019,000A,0003,0406", model:"SMRZB-143", manufacturer:"Develco Products A/S", deviceJoinName: "Frient/Develco Smart Cable"
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-134", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-134"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-137", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-137"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SMRZB-143", manufacturer:"frient A/S", deviceJoinName: "frient smart cable"        // frient smart cable
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0B04,0702", outClusters:"0003,0004,0019", model:"CCM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Outlet CCM-300Z"                    // SIHAS Smart Plug with on/off button
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality smart plug"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
-        
-        // As these metering plugs are (most probably) already supported in the stock HE drivers or other community drivers, the fingerprints are commented out to prevent this driver being automatically selected when paired to HE.
-        // Manually switching to this driver for the plugs below will still work.
-        /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z1", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Power Meter PMM-300Z1"        // SIHAS Power Meter 01 0104 0000 01 05 0000 0004 0003 0B04 0702 02 0004 0019
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z2", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Energy Monitor PMM-300Z2"     // Single Phase, SIHAS Power Meter 01 0104 0000 01 06 0000 0004 0003 0B04 0702 0402 02 0004 0019
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0003,0B04,0702,0402", outClusters:"0004,0019", model:"PMM-300Z3", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS Energy Monitor PMM-300Z3"     // Three Phase,  SIHAS Power Meter 01 0104 0000 01 06 0000 0004 0003 0B04 0702 0402 02 0004 0019
@@ -263,6 +270,18 @@ metadata {
                 input (name: "reportFrequency", type:  "bool", title: "<b>Frequency Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
                 input (name: "reportPowerFactor", type:  "bool", title: "<b>Power Factor Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
                 input (name: "reportTemperature", type:  "bool", title: "<b>Temperature Reporting Off or On</b>",  description: "<i>(Disable reporting (Off) when not desired)</i>", defaultValue: false)
+                if (isTongouSY2()) {
+                    input (name: "overTemperatureBreaker", type:  "bool", title: "<b>Over Temperature Protection</b>",  description: "<i>Disable or enable the Over Temperature Protection</i>", defaultValue: false)
+                    input (name: "overTemperatureBreakerThreshold", type: "number", title: "<b>Temperature Protection Threshold, &degC</b>", description: "<i>The Temperature Protection Threshold, &degC</i>", range: "0..100", defaultValue: 90)
+                    input (name: "overPowerBreaker", type:  "bool", title: "<b>Over Power Protection</b>",  description: "<i>Disable or enable the Over Power Protection</i>", defaultValue: false)
+                    input (name: "overPowerBreakerThreshold", type: "number", title: "<b>Power Protection Threshold, kW</b>", description: "<i>The Power Protection Threshold, (1..13) kW</i>", range: "1..13", defaultValue: 12)
+                    input (name: "overCurrentBreaker", type:  "bool", title: "<b>Over Current Protection</b>",  description: "<i>Disable or enable the Over Current Protection</i>", defaultValue: false)
+                    input (name: "overCurrentBreakerThreshold", type: "number", title: "<b>Over Current Protection Threshold, A</b>", description: "<i>The Over Current Protection Threshold, (1..64) A</i>", range: "1..64", defaultValue: 64)
+                    input (name: "overVoltageBreaker", type:  "bool", title: "<b>Over Voltage Protection</b>",  description: "<i>Disable or enable the Over Voltage Protection</i>", defaultValue: false)
+                    input (name: "overVoltageBreakerThreshold", type: "number", title: "<b>Over Voltage Protection Threshold, V</b>", description: "<i>The Over Voltage Protection Threshold, (100..255) V</i>", range: "100..255", defaultValue: 64)
+                    input (name: "underVoltageBreaker", type:  "bool", title: "<b>Under Voltage Protection</b>",  description: "<i>Disable or enable the Under Voltage Protection</i>", defaultValue: false)
+                    input (name: "underVoltageBreakerThreshold", type: "number", title: "<b>Under Voltage Protection Threshold, V</b>", description: "<i>The Under Voltage Protection Threshold, (50..240) V</i>", range: "50..240", defaultValue: 64)
+                }
             }
         } 
         if (isFrientEnergyMonitor() == true) {
@@ -326,13 +345,14 @@ private boolean isEnergyEnabled() {energyMode != "DISABLED"}
 def getATTRIBUTE_READING_INFO_SET() { 0x0000 }
 def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
-private boolean isTuyaSpecificCluster() {device.getDataValue("model") in ["TS0601"] }
-private boolean isCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
-private boolean isRTXCircuitBreaker() {device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] }
-private boolean isDinRail()       { (device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"]) }
-private boolean isHEProblematic() {device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
-private boolean isHoch()          {device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"]}
-private boolean isTongou()        {device.getDataValue("manufacturer") in ["_TZ3000_qeuvnohg", "_TZ3000_8bxrzyxz", "_TZ3000_cayepv1a"]}    // TS011F
+private boolean isTuyaSpecificCluster() { device.getDataValue("model") in ["TS0601"] }
+private boolean isCircuitBreaker()      { device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
+private boolean isRTXCircuitBreaker()   { device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] }
+private boolean isDinRail()             { device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"] }
+private boolean isHEProblematic()       { device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
+private boolean isHoch()                { device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"] }
+private boolean isTongouSY1()           { (device?.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_qeuvnohg", "_TZ3000_8bxrzyxz"] }    // TS011F
+private boolean isTongouSY2()           { (device?.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_cayepv1a"] }
 
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
@@ -407,15 +427,15 @@ def parse(String description) {
                 energyEvent(event.value/getEnergyDiv())
                 break
             case "temperature" : // SiHAS 
-                if (isTongou() && (device.getDataValue('manufacturer') in ["_TZ3000_qeuvnohg"])) {
-                    return    // Tongou fake reading
+                if (isTongouSY1()) {
+                    return    // Tongou SY1 fake reading
                 }
                 if (settings?.reportTemperature == true) {
                     sendEvent(event)
-                    logInfo "${event.descriptionText}" 
+                    logInfo "temperature ${event.descriptionText}" 
                 }
                 else {
-                    logDebug "reporting temperature (${event.value})is disabled"
+                    logDebug "reporting temperature (${event.value}) is disabled"
                 }
                 break
             default :
@@ -596,7 +616,7 @@ def parseOnOffAttributes( it ) {
             logWarn "Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}"
             return
     }
-    logDebug "${attrName} is ${mode}"
+    if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
 def switchEvent( value ) {
@@ -1026,7 +1046,7 @@ def disableUnsupportedAttribute(String clusterId, String attrId) {
     }
 }
 
-def parseZHAcommand( Map descMap) {
+def parseZHAcommand(Map descMap) {
     switch (descMap.command) {
         case "01" : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
         case "02" : 
@@ -1391,6 +1411,12 @@ def parseZHAcommand( Map descMap) {
             def  cmds =  ["he raw 0x${device.deviceNetworkId} 1 1 0xEF00 {11 01 25 ${descMap.data[0]+descMap.data[1]+'01'}}","delay 100"]    // Frame Control Field 0x11 : Disable Default Response: True; Frame Type: Cluster-specific (0x1)
             cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
             break
+        case "E5" :
+        case "E6" :
+        case "E7" : // isTongouSY2
+            logDebug "Tuya Tongou SY2 command ${descMap.command}"
+            processTuyaThresholdsCommands(descMap)
+            break
         default :
             if (logEnable==true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
             break    // 9/16/2022
@@ -1432,6 +1458,63 @@ private String getAttributeString(ArrayList _data) {
         log.error "${device.displayName} Exception caught _data[${i}] = ${_data[i]} : string = ${_data}"
     }
     return retValue
+}
+
+
+void processTuyaThresholdsCommands(Map descMap) {
+    logDebug "processTuyaThresholdsCommands ${descMap}"
+    
+    if (descMap.clusterId != "E001")
+        return
+    //      const lookup = {0: 'OFF', 1: 'ON'};
+    //      const command = msg.data[2];   ========= descMap.data[2]
+    //      const data = msg.data.slice(3); ======== descMap.data[3]
+    if (descMap.command == "E5") {
+        // raw:catchall: 0104 E001 01 01 0040 00 838C 01 00 0000 E5 01 00010801, profileId:0104, clusterId:E001, clusterInt:57345, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:838C, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:E5, direction:01, data:[00, 01, 08, 01]
+        //   cluster=E001 command=E5 attrId=null value=null data=[00, 01, 08, 01]
+        logDebug "TuyaThresholdsCommand 0xE5 is unknown, data: ${descMap.data}"
+    }
+    else if (descMap.command == "E6") {
+        // raw:catchall: 0104 E001 01 01 0040 00 838C 01 00 0000 E6 01 050100630700000C, profileId:0104, clusterId:E001, clusterInt:57345, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:838C, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:E6, direction:01, data:[05, 01, 00, 63, 07, 00, 00, 0C]
+        //  cluster=E001 command:E6, direction:01, data:[05, 01, 00, 63,      07, 00, 00, 0C]]
+        //                                               +0  +1  +2  +3       +4  +5  +6  +7
+        //                                                          (99)                 (12)
+        //                                                   On                   Off
+        //                                                === temp ====        === power ===
+        def temperature_threshold = zigbee.convertHexToInt(descMap.data[2])*256 + zigbee.convertHexToInt(descMap.data[3])
+        device.updateSetting("overTemperatureBreakerThreshold", [value:temperature_threshold as int , type:"number"])
+        def temperature_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true: false
+        device.updateSetting("overTemperatureBreaker", [value:temperature_breaker, type:"bool"])
+        def power_threshold = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[7])
+        device.updateSetting("overPowerBreakerThreshold", [value:power_threshold as int , type:"number"])
+        def power_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true: false
+        device.updateSetting("overPowerBreaker", [value:power_breaker, type:"bool"])
+        logInfo "temperature_threshold=${temperature_threshold} (${temperature_breaker ? 'enabled':'disabled'}) power_threshold=${power_threshold} (${power_breaker ? 'enabled':'disabled'})"
+    }
+    else if (descMap.command == "E7") {
+        // raw:catchall: 0104 E001 01 01 0040 00 838C 01 00 0000 E7 01 01010016030100F90400005B, profileId:0104, clusterId:E001, clusterInt:57345, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:838C, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:E7, direction:01, data:[01, 01, 00, 16, 03, 01, 00, F9, 04, 00, 00, 5B]
+        //  cluster=E001 command=E7 command:E7, direction:01, data:[01, 01, 00, 16,      03, 01, 00, F9,      04, 00, 00, 5B]]
+        //                                                          +0  +1  +2  +3       +4  +5  +6  +7       +8  +9 +10 +11
+        //                                                                     (22)                (249)                 (91)
+        //                                                              On                   On                   Off
+        //                                                          === current ===      === overVolt ===      === underVolt ===
+        def over_current_threshold = zigbee.convertHexToInt(descMap.data[2])*256 + zigbee.convertHexToInt(descMap.data[3])
+        device.updateSetting("overCurrentBreakerThreshold", [value:over_current_threshold as int , type:"number"])
+        def over_current_breaker = zigbee.convertHexToInt(descMap.data[1]) ? true: false
+        device.updateSetting("overCurrentBreaker", [value:over_current_breaker, type:"bool"])
+        def over_voltage_threshold = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[7])
+        device.updateSetting("overVoltageBreakerThreshold", [value:over_voltage_threshold as int , type:"number"])
+        def over_voltage_breaker = zigbee.convertHexToInt(descMap.data[5]) ? true: false
+        device.updateSetting("overVoltageBreaker", [value:over_voltage_breaker, type:"bool"])
+        def under_voltage_threshold = zigbee.convertHexToInt(descMap.data[10])*256 + zigbee.convertHexToInt(descMap.data[11])
+        device.updateSetting("underVoltageBreakerThreshold", [value:under_voltage_threshold as int , type:"number"])
+        def under_voltage_breaker = zigbee.convertHexToInt(descMap.data[9]) ? true: false
+        device.updateSetting("underVoltageBreaker", [value:under_voltage_breaker, type:"bool"])
+        logInfo "over_current_threshold=${over_current_threshold} (${over_current_breaker ? 'enabled':'disabled'}) over_voltage_threshold=${over_voltage_threshold} (${over_voltage_breaker ? 'enabled':'disabled'}) under_voltage_threshold=${under_voltage_threshold} (${under_voltage_breaker ? 'enabled':'disabled'})"
+    }
+    else {
+        return
+    }   
 }
 
 
@@ -1612,7 +1695,7 @@ def fixOtherTuyaOddities() {
     def ep = device.getEndpointId()
     logDebug "ep=${ep} isF2=${ep=='F2'}"
     if (isHEProblematic() || ep == 'F2') {
-        log.warn "fixing other Tuya oddities ..."
+        logWarn "fixing other Tuya oddities ..."
         def endpoint = '01'
         cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]    // node descriptor response as for Aqara E1 hub, doesn't seem to improve anything ...
         cmds +=   ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
@@ -1715,6 +1798,14 @@ def configure() {
         }
         logDebug "setting FrientEnergyMonitor pulseConfiguration (${settings?.pulseConfiguration} )"
         cmds += pulseConfiguration( settings?.pulseConfiguration )
+    }
+    if (isTongouSY2()) {
+        def E6Array
+        def E7Array
+        (E6Array, E7Array) = packSY2thresholdsData()
+        logDebug "E6Array=${E6Array} E7Array=${E7Array}"
+        cmds += zigbee.command(0xE001, 0xE6, E6Array as String)
+        cmds += zigbee.command(0xE001, 0xE7, E7Array as String)
     }
     
     sendZigbeeCommands(cmds)
@@ -1872,7 +1963,17 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
     if (fullInit == true || settings?.pulseConfiguration == null) device.updateSetting("pulseConfiguration", [value:1000, type:"number"])
     if (fullInit == true || settings?.frientEnergyMeterMode == null) device.updateSetting("frientEnergyMeterMode", [value:"0", type:"enum"])    // electricity
-
+    if (fullInit == true || settings?.overTemperatureBreaker == null) device.updateSetting("overTemperatureBreaker", false)
+    if (fullInit == true || settings?.overTemperatureBreakerThreshold == null) device.updateSetting("overTemperatureBreakerThreshold", [value:90, type:"number"])
+    if (fullInit == true || settings?.overPowerBreaker == null) device.updateSetting("overPowerBreaker", false)
+    if (fullInit == true || settings?.overPowerBreakerThreshold == null) device.updateSetting("overPowerBreakerThreshold", [value:12, type:"number"])
+    if (fullInit == true || settings?.overCurrentBreaker == null) device.updateSetting("overCurrentBreaker", false)
+    if (fullInit == true || settings?.overCurrentBreakerThreshold == null) device.updateSetting("overCurrentBreakerThreshold", [value:64, type:"number"])
+    if (fullInit == true || settings?.overVoltageBreaker == null) device.updateSetting("overVoltageBreaker", false)
+    if (fullInit == true || settings?.overVoltageBreakerThreshold == null) device.updateSetting("overVoltageBreakerThreshold", [value:64, type:"number"])
+    if (fullInit == true || settings?.underVoltageBreaker == null) device.updateSetting("underVoltageBreaker", false)
+    if (fullInit == true || settings?.underVoltageBreakerThreshold == null) device.updateSetting("underVoltageBreakerThreshold", [value:64, type:"number"])
+    
     if (fullInit == true || settings?.pollingInterval == null) device.updateSetting("pollingInterval", defaultPollingInterval)
     if (settings?.alwaysOn == null)  device.updateSetting("alwaysOn", false)       // do not change the "alwaysOn" setting if already set!
 
@@ -1893,7 +1994,7 @@ void initializeVars( boolean fullInit = false ) {
         }
     }
     if (isFrientEnergyMonitor() == true) {
-        log.warn "disabling V/A reporting for Frient Energy monitor"
+        logWarn "disabling V/A reporting for Frient Energy monitor"
         if (fullInit == true || settings?.energyMode == null) device.updateSetting("energyMode", [value:"REPORTED", type:"enum"])
         if (fullInit == true || settings?.reportVoltage == null) device.updateSetting("reportVoltage", [value: false, type: "bool"])
         if (fullInit == true || settings?.reportAmperage == null) device.updateSetting("reportAmperage", [value: false, type: "bool"])
@@ -2024,15 +2125,53 @@ def logsOff(){
     device.updateSetting("logEnable", [value:"false",type:"bool"])
 }
 
+@Field static final Map powerOnBehaviourOptions = [   
+    '0': 'closed',
+    '1': 'open',
+    '2': 'last state'
+]
+
+@Field static final Map switchTypeOptions = [   
+    '0': 'toggle',
+    '1': 'state',
+    '2': 'momentary'
+]
+
 boolean isTuyaE00xCluster( String description )
 {
-    if(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0) {
-        if (logEnable) log.debug "${device.displayName} Tuya cluster: E000 or E001 - don't know how to handle it, skipping it for now..."
+    if(description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) {
+        return false 
+    }
+    // try to parse ...
+    //logDebug "Tuya cluster: E000 or E001 - try to parse it..."
+    def descMap = [:]
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}"
+    }
+    catch ( e ) {
+        logDebug "<b>exception</b> caught while parsing description:  ${description}"
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}"
+        // cluster E001 is the one that is generating exceptions...
         return true
     }
-    else
-        return false
+
+    if (descMap.cluster == "E000" && descMap.attrId in ["D001", "D002", "D003"]) {
+        logDebug "Tuya Specific cluster ${descMap.cluster} attribute ${descMap.attrId} value is ${descMap.value}"
+    }
+    else if (descMap.cluster == "E001" && descMap.attrId == "D010") {
+        if (settings?.logEnable) { logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" }
+    }
+    else if (descMap.cluster == "E001" && descMap.attrId == "D030") {
+        if (settings?.logEnable) { logInfo "swith type is <b>${switchTypeOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" }
+    }
+    else {
+        logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap"
+        return false 
+    }
+    return true    // processed
 }
+
 
 // return true if further processing in the main parse method should be cancelled !
 boolean otherTuyaOddities( String description ) {
@@ -2545,11 +2684,45 @@ def testParse(description) {
     log.trace "---end of parse---"
 }
 
+@Field static final Map ThresholdIDs = [
+   'TEMPERATURE'  : [cmd:'E6', code:0x05, enabled: "overTemperatureBreaker", threshold: "overTemperatureBreakerThreshold"],
+   'POWER'        : [cmd:'E6', code:0x07, enabled: "overPowerBreaker", threshold: "overPowerBreakerThreshold"],
+   'CURRENT'      : [cmd:'E7', code:0x01, enabled: "overCurrentBreaker", threshold: "overCurrentBreakerThreshold"],
+   'OVERVOLT'     : [cmd:'E7', code:0x03, enabled: "overVoltageBreaker", threshold: "overVoltageBreakerThreshold"],
+   'UNDERVOLT'    : [cmd:'E7', code:0x04, enabled: "underVoltageBreaker", threshold: "underVoltageBreakerThreshold"],
+]
+
+String encodeSY2chunk(String chunk) {
+    String encoded
+    if (ThresholdIDs[chunk] == null) return "??"
+    def code = ThresholdIDs[chunk]?.code
+    def threshold = settings?.(ThresholdIDs[chunk]?.threshold)
+    def enabled = settings?.(ThresholdIDs[chunk]?.enabled) ? 1 : 0
+    logDebug "$chunk code=$code threshold = $threshold enabled=$enabled"
+    encoded  = zigbee.convertToHexString(code as int, 2)
+    encoded += zigbee.convertToHexString(enabled as int, 2)
+    encoded += zigbee.convertToHexString(threshold as int, 4)
+    logDebug "encoded $chunk = $encoded"
+    return encoded
+}
+
+def packSY2thresholdsData() {
+    String E6Array = encodeSY2chunk('TEMPERATURE' ) + encodeSY2chunk('POWER')
+    String E7Array = encodeSY2chunk('CURRENT' ) + encodeSY2chunk('OVERVOLT') + encodeSY2chunk('UNDERVOLT')
+    return [E6Array, E7Array]
+}
+
 def test() {
-        ArrayList<String> cmds = []
-        cmds += zigbee.readAttribute(0x0000, 0x0001, [destEndpoint : 0x01], delay=200)    // App version
-        cmds += zigbee.readAttribute(0x0702, 0x0000, [destEndpoint : 0x01], delay=200)            // energy - polled only on full Refresh    ATTRIBUTE_READING_INFO_SET
-    return cmds
+    ArrayList<String> cmds = []
+    def E6Array
+    def E7Array
+    (E6Array, E7Array) = packSY2thresholdsData()
+    log.warn "E6Array=${E6Array} E7Array=${E7Array} "
+    
+    cmds = zigbee.command(0xE001, 0xE6, E6Array as String)
+    cmds += zigbee.command(0xE001, 0xE7, E7Array as String)
+    
+    sendZigbeeCommands(cmds)
 }
 
 
