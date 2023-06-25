@@ -41,6 +41,7 @@
  * ver. 1.3.3  2023-05-14 kkossev  - code cleanup; added TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]; added _TZE204_sooucan5 radar in a new TS0601_YXZBRB58_RADAR group (for tests); added reportingTime4in1 to setPar command options;
  * ver. 1.3.4  2023-05-19 kkossev  - added _TZE204_sxm7l9xa mmWave radar to TS0601_YXZBRB58_RADAR group; isRadar() bug fix;
  * ver. 1.3.5  2023-05-28 kkossev  - fixes for _TZE200_lu01t0zlTS0601_RADAR_MIR-TY-FALL mmWave radar (only the basic Motion and radarSensitivity is supported for now).
+ * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
  *
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
  *                                   TODO: ignore invalid humidity reprots (>100 %)
@@ -53,8 +54,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.5" }
-def timeStamp() {"2023/05/28 10:34 PM"}
+def version() { "1.3.6" }
+def timeStamp() {"2023/06/25 9:09 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -243,10 +244,10 @@ def isMotionSwitch() { return getModelGroup().contains("TS0202_MOTION_SWITCH") }
 def isIAS()  { return getModelGroup().contains("TS0202_MOTION_IAS") || getModelGroup().contains("TS0202_4IN1") || getModelGroup().contains("TS0601_2IN1") }
 def isChattyRadarDistanceReport(descMap) { 
     if (isRadar()) {
-        return (descMap?.clusterId == "EF00" && descMap.command == "02" && descMap.data?.size > 2  && descMap.data[2] == "09") 
+        return (descMap?.clusterId == "EF00" && (descMap.command in ["01", "02"]) && descMap.data?.size > 2  && descMap.data[2] == "09") 
     }
     else if (isYXZBRB58radar()) {
-        return (descMap?.clusterId == "EF00" && descMap.command == "02" && descMap.data?.size > 2  && descMap.data[2] == "6D") 
+        return (descMap?.clusterId == "EF00" && (descMap.command in ["01", "02"]) && descMap.data?.size > 2  && descMap.data[2] == "6D") 
     }
     else {
         return false
@@ -617,7 +618,6 @@ def parse(String description) {
     else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         Map descMap = zigbee.parseDescriptionAsMap(description)
         if (isChattyRadarDistanceReport(descMap) && (settings?.ignoreDistance == true)) {
-            //log.trace "settings?.ignoreDistance = ${settings?.ignoreDistance}"
             // do not even log these spammy distance reports ...
             return
         }
