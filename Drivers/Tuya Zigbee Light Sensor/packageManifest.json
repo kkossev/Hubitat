@@ -1,0 +1,16 @@
+{
+  "packageName": "Tuya Zigbee Light Sensor",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2023-06-30",
+  "drivers": [
+    {
+      "id": "71ef9bd1-82ac-4c1d-b986-444b4cfbc8a7",
+      "name": "",
+      "namespace": "",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy",
+      "required": true
+    }
+  ]
+}
