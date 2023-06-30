@@ -195,6 +195,13 @@
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Apps/packageManifest_DeviceHealthStatus.json",
       "description": "Device Health Status - app for Hubitat Elevation hub"
+    },
+    {
+      "id": "9a6bfb6e-f5a7-4901-a031-3d354387f5b5",
+      "name": "Tuya Zigbee Light Sensor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Light%20Sensor/packageManifest.json",
+      "description": "Tuya Zigbee Light Sensor - driver for Hubitat Elevation hub"
     }
   ]
 }
