@@ -19,27 +19,30 @@
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
- * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer;
+ * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
+ * ver. 2.0.5  2023-06-30 kkossev  - (dev. branch) Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix;
  *
+ *                                   TODO: Tuya Zigbee Light Sensor: add min reporting time
+ *                                   TODO: Tuya Zigbee Light Sensor: add IAS cluster processing
+ *                                   TODO: VINDSTYRKA: micro gram symbol fix
  *                                   TODO: rtt 0 fix
  *                                   TODO: measure PTT for on/off commands
  *                                   TODO: calculate and store the average ping RTT
- *                                   TODO: add the Fingerbot fingerprint
- *                                   TODO: Momentary capability for Tuya Fingerbot
- *                                   TODO: touch button (on top) enable/disable option for Tuya Fingerbot
+ *                                   TODO: Fingerbot: add the  fingerprint
+ *                                   TODO: Fingerbot: add Momentary capability
+ *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: aqaraModel is no saved
- *                                   TODO: notPresentCtr bug fix
- *                                   TODO: store NWK in states for Aqara devices
- *                                   TODO: implement battery level/percentage for Aqara TVOC
+ *                                   TODO: Aqara devices: store NWK in states for 
+ *                                   TODO: Aqara TVOC: implement battery level/percentage for 
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
  *                                   TODO: state timesamps in human readable form
- *                                   TODO: add min/max reporting times preferences for temperature and humidity;
+ *                                   TODO: add min/max reporting times preferences for illuminance, temperature and humidity;
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
  */
 
-static String version() { "2.0.4" }
-static String timeStamp() {"2023/06/29 3:50 PM"}
+static String version() { "2.0.5" }
+static String timeStamp() {"2023/06/30 1:51 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -59,7 +62,7 @@ import java.util.concurrent.ConcurrentHashMap
  *            deviceType 
  *            DEVICE_TYPE
  *            name (in the metadata definition section)
- *        5. Save
+ *        5. Save 
  */
 //deviceType = "Device"
 //@Field static final String DEVICE_TYPE = "Device"
@@ -76,6 +79,8 @@ deviceType = "Dimmer"
 //deviceType = "Bulb"
 //@Field static final String DEVICE_TYPE = "ButtonDimmer"
 //deviceType = "ButtonDimmer"
+//@Field static final String DEVICE_TYPE = "LightSensor"
+//deviceType = "LightSensor"
 //@Field static final String DEVICE_TYPE = "Bulb"
 //deviceType = "Relay"
 //@Field static final String DEVICE_TYPE = "Relay"
@@ -110,6 +115,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya%20Zigbee%20Switch.groovy',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%Button%20Dimmer/Tuya%20Zigbee%20Button%20Dimmer.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -149,13 +155,13 @@ metadata {
             }
             //command "updateFirmware"
         }
-        if (deviceType in  ["Device", "THSensor", "MotionSensor", "AirQuality", "Thermostat"]) {
+        if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat"]) {
             capability "Sensor"
         }
         if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb"]) {
             capability "Actuator"
         }
-        if (deviceType in  ["Device", "THSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer"]) {
+        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -188,6 +194,9 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "AirQuality"]) {
             capability "RelativeHumidityMeasurement"            
         }
+        if (deviceType in  ["Device", "LightSensor"]) {
+            capability "IlluminanceMeasurement"
+        }
         if (deviceType in  ["AirQuality"]) {
             capability "AirQuality"            // Attributes: airQualityIndex - NUMBER, range:0..500
             attribute "pm25", "number"
@@ -210,6 +219,20 @@ metadata {
         if (deviceType in  ["Thermostat"]) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"     // model: 'SRTS-A01'
         }
+        if (deviceType in  ["LightSensor"]) {
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222"
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_khx7nnka", deviceJoinName: "Tuya Illuminance Sensor TS0601"
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yi4jtqq1", deviceJoinName: "Tuya Illuminance Sensor TS0601"
+        }
+        if (deviceType in  ["ButtonDimmer"]) {
+         	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000", outClusters:"0019,000A,0003,0004,0005,0006,0008,1000", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Scene Switch TS004F"
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
+  	        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000,E001", outClusters:"0019,000A,0003,0004,0006,0008,1000", model: "TS004F", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart Wireless Scene Switch"          
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0006", outClusters: "0019", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+        }
+
     }
 
     preferences {
@@ -247,9 +270,16 @@ metadata {
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: \
                      '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
             //}
-            
-            if (_THREE_STATE == true && (deviceType in  ["Switch", "Plug", "Dimmer"])) {
+            if (device.hasCapability("Battery")) {
+                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
+                
+            }
+            if ((deviceType in  ["Switch", "Plug", "Dimmer"]) && _THREE_STATE == true) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>What\'s wrong with the three-state concept?</i>', defaultValue: false
+            }
+            if (deviceType in  ["Button", "ButtonDimmer"]) {
+                input name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: true, description: '<i>Switches button order </i>'
+                input name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options.</i>'
             }
         }
     }
@@ -292,6 +322,10 @@ metadata {
 @Field static final Map SwitchThreeStateOpts = [
     defaultValue: 0,
     options     : [0: 'off', 1: 'on', 2: 'switching_off', 3: 'switching_on', 4: 'switch_failure']
+]
+@Field static final Map DebounceOpts = [
+    defaultValue: 1000,
+    options     : [0: 'disabled', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',]
 ]
 
 
@@ -353,7 +387,9 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
-            log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
+            parseIlluminanceCluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseIlluminanceCluster(descMap + map) }
+            //log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
             break
         case zigbee.TEMPERATURE_MEASUREMENT_CLUSTER :       //0x0402
             parseTemperatureCluster(descMap)
@@ -912,7 +948,9 @@ void parsePowerCluster(final Map descMap) {
     final long rawValue = hexStrToUnsignedInt(descMap.value)
     if (descMap.attrId == "0020") {
         sendBatteryVoltageEvent(rawValue)
-        sendBatteryVoltageEvent(rawValue, convertToPercent=true)
+        if ((settings.voltageToPercent ?: false) == true) {
+            sendBatteryVoltageEvent(rawValue, convertToPercent=true)
+        }
     }
     else if (descMap.attrId == "0021") {
         sendBatteryPercentageEvent(rawValue * 2)    
@@ -1001,12 +1039,12 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
 
 void parseOnOffCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
-    if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-    final long rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == "0000" && descMap.command == "FD") {
+    if (descMap.command in ["FC", "FD"]) {
         processTS004Fcommand(descMap)
     }
     else if (descMap.attrId == "0000") {
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
+        final long rawValue = hexStrToUnsignedInt(descMap.value)
         sendSwitchEvent(rawValue)
     }
     else {
@@ -1155,8 +1193,7 @@ def sendSwitchEvent( switchValue ) {
  * -----------------------------------------------------------------------------
 */
 
-def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
-@Field static final Integer DEBOUNCE_TIME = 1000
+def needsDebouncing() { ((settings.debounce ?: 0) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
 
 void processTS004Fcommand(final Map descMap) {
     logDebug "processTS004Fcommand: descMap: $descMap"
@@ -1215,8 +1252,8 @@ void processTS004Fcommand(final Map descMap) {
         if (needsDebouncing()) {
             if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active!
                 logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!"
-                runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
-                logDebug "restarted debouncing timer ${DEBOUNCE_TIME}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})"
+                runInMillis(settings.debounce ?: DebounceOpts.defaultValue, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
+                logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})"
                 return
             }
         }
@@ -1231,7 +1268,7 @@ void processTS004Fcommand(final Map descMap) {
         logInfo "${descriptionText}"
 		sendEvent(event)
         if (needsDebouncing()) {
-            runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
+            runInMillis(settings.debounce ?: DebounceOpts.defaultValue, buttonDebounce, [overwrite: true])
         }
     }
     else {
@@ -1442,6 +1479,52 @@ void /*List<String>*/ setLevel(final Object value, final Object transitionTime =
     scheduleCommandTimeoutCheck()
     /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate))
 }
+
+/*
+ * -----------------------------------------------------------------------------
+ * Illuminance    cluster 0x0400
+ * -----------------------------------------------------------------------------
+*/
+void parseIlluminanceCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    final long value = hexStrToUnsignedInt(descMap.value)
+    def lux = value > 0 ? Math.round(Math.pow(10,(value/10000))) : 0
+    handleIlluminanceEvent(lux)
+}
+
+void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
+    def eventMap = [:]
+    if (state.stats != null) state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 else state.stats=[:]
+    eventMap.name = "illuminance"
+    Integer illumCorrected = illuminance + (settings?.illuminanceOffset ?: 0)
+    eventMap.value  = illumCorrected
+    eventMap.type = isDigital ? "digital" : "physical"
+    eventMap.unit = "lx"
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now()))/1000)
+    Integer minTime = settings?.minReportingTime ?: /*DEFAULT_MIN_REPORTING_TIME*/ 1
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    if (timeElapsed >= minTime) {
+		logInfo "${eventMap.descriptionText}"
+		unschedule("sendDelayedIllumEvent")		//get rid of stale queued reports
+        state.lastRx['illumTime'] = now()
+        sendEvent(eventMap)
+	}		
+    else {         // queue the event
+    	eventMap.type = "delayed"
+        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedIllumEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText} (${eventMap.type})"
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
+    sendEvent(eventMap)
+}
+
+@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
 
 
 /*
@@ -1852,7 +1935,7 @@ void parseTuyaCluster(final Map descMap) {
             def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])       // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i]) 
             def fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            logDebug "dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
         }
@@ -1865,7 +1948,12 @@ void parseTuyaCluster(final Map descMap) {
 void processTuyaDP( descMap, dp, dp_id, fncmd) {
     switch (dp) {
         case 0x01 : // on/off
-            sendSwitchEvent(fncmd)
+            if (DEVICE_TYPE in  ["LightSensor"]) {
+                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})"
+            }
+            else {
+                sendSwitchEvent(fncmd)
+            }
             break
 /*
 Switch1 		    1
@@ -1882,6 +1970,18 @@ Producion Test		110
 Sports Statistics	111
 Custom Timing		112
 */
+        case 0x02 :
+            if (DEVICE_TYPE in  ["LightSensor"]) {
+                handleIlluminanceEvent(fncmd)
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
+            break
+        case 0x04 : // battery
+            sendBatteryPercentageEvent(fncmd)
+            break
+        
         case 0x65 : // (101)
             if (isFingerbot()) {
                 def value = FingerbotModeOpts.options[fncmd as int]
@@ -2170,6 +2270,10 @@ def refresh() {
     if (state.states == null) state.states = [:]
     state.states["isRefresh"] = true
     
+    if (device.hasCapability("Battery")) {
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage 
+    }
     if (DEVICE_TYPE in  ["Switch", "Plug", "Dimmer"]) {
 	    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)        
     }
@@ -2195,7 +2299,7 @@ def refresh() {
     }
     if (DEVICE_TYPE in  ["Thermostat"]) {
         // TODO - Aqara E1 specific refresh commands only 1
-	    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage (E1 does not send percentage)
+	    //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage (E1 does not send percentage)
 	    //cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=100)         // local temperature
 	   //cmds += zigbee.readAttribute(0x0201, 0x0011, [:], delay=100)         // cooling setpoint
 	    //cmds += zigbee.readAttribute(0x0201, 0x0012, [:], delay=100)         // heating setpoint
@@ -2221,7 +2325,6 @@ def refresh() {
         logDebug "no refresh() commands defined for device type ${DEVICE_TYPE}"
     }
 }
-
 
 def clearRefreshRequest() { state.states["isRefresh"] = false }
 
@@ -2341,7 +2444,7 @@ def deviceHealthCheck() {
     else {
         logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})"
     }
-    state.states['checkCtr3'] = ctr + 1
+    state.health['checkCtr3'] = ctr + 1
 }
 
 void sendHealthStatusEvent(value) {
@@ -2579,7 +2682,6 @@ void initializeVars( boolean fullInit = false ) {
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.health == null) { state.health = [:] }
     
-    if (fullInit || state.states["notPresentCtr"] == null) state.states["notPresentCtr"]  = 0
     if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
@@ -2599,6 +2701,10 @@ void initializeVars( boolean fullInit = false ) {
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
+    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false)
+    if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
+    
     
 
     //updateTuyaVersion()
