@@ -22,6 +22,7 @@
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-06-30 kkossev  - (dev. branch) Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix;
  *
+ *                                   TODO: Button Dimmer: add scene/dimmer mode
  *                                   TODO: Tuya Zigbee Light Sensor: add min reporting time
  *                                   TODO: Tuya Zigbee Light Sensor: add IAS cluster processing
  *                                   TODO: VINDSTYRKA: micro gram symbol fix
@@ -42,7 +43,7 @@
  */
 
 static String version() { "2.0.5" }
-static String timeStamp() {"2023/06/30 1:51 PM"}
+static String timeStamp() {"2023/06/30 6:45 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1194,7 +1195,7 @@ def sendSwitchEvent( switchValue ) {
  * -----------------------------------------------------------------------------
 */
 
-def needsDebouncing() { ((settings.debounce ?: 0) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
+def needsDebouncing() { (((settings.debounce ?: 0) as int) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
 
 void processTS004Fcommand(final Map descMap) {
     logDebug "processTS004Fcommand: descMap: $descMap"
@@ -1253,7 +1254,7 @@ void processTS004Fcommand(final Map descMap) {
         if (needsDebouncing()) {
             if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active!
                 logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!"
-                runInMillis(settings.debounce ?: DebounceOpts.defaultValue, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
+                runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
                 logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})"
                 return
             }
@@ -1269,7 +1270,7 @@ void processTS004Fcommand(final Map descMap) {
         logInfo "${descriptionText}"
 		sendEvent(event)
         if (needsDebouncing()) {
-            runInMillis(settings.debounce ?: DebounceOpts.defaultValue, buttonDebounce, [overwrite: true])
+            runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])
         }
     }
     else {
@@ -1277,8 +1278,8 @@ void processTS004Fcommand(final Map descMap) {
     }
 }
 
-def buttonDebounce(button) {
-    logDebug "debouncing timer for button ${state.states['lastButtonNumber']} expired."
+def buttonDebounce(/*button*/) {
+    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired."
     state.states["lastButtonNumber"] = 0
 }
 
