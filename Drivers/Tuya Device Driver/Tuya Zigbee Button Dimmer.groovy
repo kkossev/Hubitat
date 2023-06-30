@@ -19,7 +19,8 @@
  * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
  * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
- * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; 
+ * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
+ * ver. 2.0.5  2023-06-30 kkossev  - (dev. branch)
  *
  *                                   TODO: rtt 0 fix
  *                                   TODO: measure PTT for on/off commands
@@ -38,8 +39,8 @@
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
  */
 
-static String version() { "2.0.4" }
-static String timeStamp() {"2023/06/29 1:54 PM"}
+static String version() { "2.0.5" }
+static String timeStamp() {"2023/06/30 8:00 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -59,7 +60,7 @@ import java.util.concurrent.ConcurrentHashMap
  *            deviceType 
  *            DEVICE_TYPE
  *            name (in the metadata definition section)
- *        5. Save
+ *        5. Save 
  */
 //deviceType = "Device"
 //@Field static final String DEVICE_TYPE = "Device"
@@ -76,6 +77,8 @@ import java.util.concurrent.ConcurrentHashMap
 //deviceType = "Bulb"
 @Field static final String DEVICE_TYPE = "ButtonDimmer"
 deviceType = "ButtonDimmer"
+//@Field static final String DEVICE_TYPE = "LightSensor"
+//deviceType = "LightSensor"
 //@Field static final String DEVICE_TYPE = "Bulb"
 //deviceType = "Relay"
 //@Field static final String DEVICE_TYPE = "Relay"
@@ -98,6 +101,7 @@ metadata {
         //name: 'Tuya Zigbee Switch',
         //name: 'Tuya Zigbee Dimmer',
         name: 'Tuya Zigbee Button Dimmer',
+        //name: 'Tuya Zigbee Light Sensor',
         //name: 'Tuya Zigbee Bulb',
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
@@ -108,7 +112,9 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Plug/Tuya%20Zigbee%20Plug%20V2.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya%20Zigbee%20Switch.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%Button%20Dimmer/Tuya%20Zigbee%20Button%20Dimmer.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -148,13 +154,13 @@ metadata {
             }
             //command "updateFirmware"
         }
-        if (deviceType in  ["Device", "THSensor", "MotionSensor", "AirQuality", "Thermostat"]) {
+        if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat"]) {
             capability "Sensor"
         }
         if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb"]) {
             capability "Actuator"
         }
-        if (deviceType in  ["Device", "THSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer"]) {
+        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -187,6 +193,9 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "AirQuality"]) {
             capability "RelativeHumidityMeasurement"            
         }
+        if (deviceType in  ["Device", "LightSensor"]) {
+            capability "IlluminanceMeasurement"
+        }
         if (deviceType in  ["AirQuality"]) {
             capability "AirQuality"            // Attributes: airQualityIndex - NUMBER, range:0..500
             attribute "pm25", "number"
@@ -209,6 +218,12 @@ metadata {
         if (deviceType in  ["Thermostat"]) {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"     // model: 'SRTS-A01'
         }
+        if (deviceType in  ["LightSensor"]) {
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222"
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_khx7nnka", deviceJoinName: "Tuya Illuminance Sensor TS0601"
+            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yi4jtqq1", deviceJoinName: "Tuya Illuminance Sensor TS0601"
+        }
+
     }
 
     preferences {
@@ -247,7 +262,7 @@ metadata {
                      '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
             //}
             
-            if (_THREE_STATE == true && (deviceType in  ["Switch", "Plug"])) {
+            if (_THREE_STATE == true && (deviceType in  ["Switch", "Plug", "Dimmer"])) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>What\'s wrong with the three-state concept?</i>', defaultValue: false
             }
         }
@@ -352,7 +367,9 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
-            log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
+            parseIlluminanceCluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseIlluminanceCluster(descMap + map) }
+            //log.warn "${clusterName} (${(descMap.clusterInt as Integer)}) parser not implemented yet!"
             break
         case zigbee.TEMPERATURE_MEASUREMENT_CLUSTER :       //0x0402
             parseTemperatureCluster(descMap)
@@ -1000,12 +1017,12 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
 
 void parseOnOffCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
-    if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-    final long rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == "0000" && descMap.command == "FD") {
+    if (descMap.command in ["FC", "FD"]) {
         processTS004Fcommand(descMap)
     }
     else if (descMap.attrId == "0000") {
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
+        final long rawValue = hexStrToUnsignedInt(descMap.value)
         sendSwitchEvent(rawValue)
     }
     else {
@@ -1138,6 +1155,7 @@ def sendSwitchEvent( switchValue ) {
     boolean isRefresh = state.states["isRefresh"] ?: false
     if (isRefresh == true) {
         map.descriptionText = "${device.displayName} is ${value} [Refresh]"
+        map.isStateChange = true
     }
     else {
         map.descriptionText = "${device.displayName} is ${value} [${map.type}]"
@@ -1277,7 +1295,7 @@ void parseLevelControlCluster(final Map descMap) {
         processTS004Fcommand(descMap)
     }
     else if (descMap.attrId == "0000") {
-        sendSwitchEvent(rawValue)
+        sendLevelControlEvent(rawValue)
     }
     else {
         logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}"
@@ -1285,7 +1303,29 @@ void parseLevelControlCluster(final Map descMap) {
 }
 
 
-
+def sendLevelControlEvent( rawValue ) {
+    def value = rawValue as int
+    if (value <0) value = 0
+    if (value >100) value = 100
+    def map = [:] 
+    
+    def isDigital = state.states["isDigital"]
+    map.type = isDigital == true ? "digital" : "physical"
+        
+    map.name = "level"
+    map.value = value
+    boolean isRefresh = state.states["isRefresh"] ?: false
+    if (isRefresh == true) {
+        map.descriptionText = "${device.displayName} is ${value} [Refresh]"
+        map.isStateChange = true
+    }
+    else {
+        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]"
+    }
+    logInfo "${map.descriptionText}"
+    sendEvent(map)
+    clearIsDigital()
+}
 
 /**
  * Get the level transition rate
@@ -1368,6 +1408,15 @@ private List<String> ifPolling(final int delayMs = 0, final Closure commands) {
     return []
 }
 
+def intTo16bitUnsignedHex(value) {
+    def hexStr = zigbee.convertToHexString(value.toInteger(),4)
+    return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
+}
+
+def intTo8bitUnsignedHex(value) {
+    return zigbee.convertToHexString(value.toInteger(), 2)
+}
+
 /**
  * Send 'switchLevel' attribute event
  * @param isOn true if light is on, false otherwise
@@ -1385,8 +1434,14 @@ private List<String> setLevelPrivate(final Object value, final Integer rate = 0,
     }
     // Payload: Level | Transition Time | Options Mask | Options Override
     // Options: Bit 0x01 enables pre-staging level
+    /*
     cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, levelCommand, [destEndpoint:safeToInt(getDestinationEP())], delay, "${hexLevel} ${hexRate} ${PRE_STAGING_OPTION}") +
         ifPolling(DELAY_MS + (rate * 100)) { zigbee.levelRefresh(0) }
+    */
+    int duration = 10            // TODO !!!
+    String endpointId = "01"     // TODO !!!
+     cmds +=  ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0x0008 4 { 0x${intTo8bitUnsignedHex(level)} 0x${intTo16bitUnsignedHex(duration)} }",]
+
     return cmds
 }
 
@@ -1403,6 +1458,52 @@ void /*List<String>*/ setLevel(final Object value, final Object transitionTime =
     scheduleCommandTimeoutCheck()
     /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate))
 }
+
+/*
+ * -----------------------------------------------------------------------------
+ * Illuminance    cluster 0x0400
+ * -----------------------------------------------------------------------------
+*/
+void parseIlluminanceCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    final long value = hexStrToUnsignedInt(descMap.value)
+    def lux = value > 0 ? Math.round(Math.pow(10,(value/10000))) : 0
+    handleIlluminanceEvent(lux)
+}
+
+void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
+    def eventMap = [:]
+    if (state.stats != null) state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 else state.stats=[:]
+    eventMap.name = "illuminance"
+    Integer illumCorrected = illuminance + (settings?.illuminanceOffset ?: 0)
+    eventMap.value  = illumCorrected
+    eventMap.type = isDigital ? "digital" : "physical"
+    eventMap.unit = "lx"
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now()))/1000)
+    Integer minTime = settings?.minReportingTime ?: /*DEFAULT_MIN_REPORTING_TIME*/ 1
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    if (timeElapsed >= minTime) {
+		logInfo "${eventMap.descriptionText}"
+		unschedule("sendDelayedIllumEvent")		//get rid of stale queued reports
+        state.lastRx['illumTime'] = now()
+        sendEvent(eventMap)
+	}		
+    else {         // queue the event
+    	eventMap.type = "delayed"
+        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedIllumEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText} (${eventMap.type})"
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
+    sendEvent(eventMap)
+}
+
+@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
 
 
 /*
@@ -1813,7 +1914,7 @@ void parseTuyaCluster(final Map descMap) {
             def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])       // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i]) 
             def fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            logDebug "dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
         }
@@ -1826,7 +1927,12 @@ void parseTuyaCluster(final Map descMap) {
 void processTuyaDP( descMap, dp, dp_id, fncmd) {
     switch (dp) {
         case 0x01 : // on/off
-            sendSwitchEvent(fncmd)
+            if (DEVICE_TYPE in  ["LightSensor"]) {
+                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})"
+            }
+            else {
+                sendSwitchEvent(fncmd)
+            }
             break
 /*
 Switch1 		    1
@@ -1843,6 +1949,18 @@ Producion Test		110
 Sports Statistics	111
 Custom Timing		112
 */
+        case 0x02 :
+            if (DEVICE_TYPE in  ["LightSensor"]) {
+                handleIlluminanceEvent(fncmd)
+            }
+            else {
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+            }
+            break
+        case 0x04 : // battery
+            sendBatteryPercentageEvent(fncmd)
+            break
+        
         case 0x65 : // (101)
             if (isFingerbot()) {
                 def value = FingerbotModeOpts.options[fncmd as int]
@@ -2131,8 +2249,11 @@ def refresh() {
     if (state.states == null) state.states = [:]
     state.states["isRefresh"] = true
     
-    if (DEVICE_TYPE in  ["Switch", "Plug"]) {
+    if (DEVICE_TYPE in  ["Switch", "Plug", "Dimmer"]) {
 	    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)        
+    }
+    if (DEVICE_TYPE in  ["Dimmer"]) {
+	    cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)        
     }
     if (DEVICE_TYPE in  ["THSensor", "AirQuality"]) {
 	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)        
