@@ -201,7 +201,10 @@
       "name": "Tuya Zigbee Light Sensor",
       "category": "Control",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Light%20Sensor/packageManifest.json",
-      "description": "Tuya Zigbee Light Sensor - driver for Hubitat Elevation hub"
+      "description": "Tuya Zigbee Light Sensor - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
     }
   ]
 }
