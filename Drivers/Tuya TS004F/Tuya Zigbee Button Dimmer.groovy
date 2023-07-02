@@ -20,7 +20,7 @@
  * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
- * ver. 2.0.5  2023-07-02 kkossev  - (dev. branch) Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command;
+ * ver. 2.0.5  2023-07-02 kkossev  - (dev. branch) Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  *
  *                                   TODO: Button Dimmer: add scene/dimmer mode
  *                                   TODO: Tuya Zigbee Light Sensor: add min reporting time
@@ -40,10 +40,11 @@
  *                                   TODO: state timesamps in human readable form
  *                                   TODO: add min/max reporting times preferences for illuminance, temperature and humidity;
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
+ *                                   TODO: battery min/max voltage preferences
  */
 
 static String version() { "2.0.5" }
-static String timeStamp() {"2023/07/02 11:12 PM"}
+static String timeStamp() {"2023/07/02 11:59 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -196,6 +197,10 @@ metadata {
             capability "HoldableButton"
    	        capability "ReleasableButton"
         }
+        if (deviceType in ["ButtonDimmer"]) {
+            attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
+            command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["--- select ---"] + SwitchModeOpts.options.values() as List<String>, description: "Select device mode"]]
+        }
         if (deviceType in  ["Device", "THSensor", "AirQuality", "Thermostat"]) {
             capability "TemperatureMeasurement"
         }
@@ -343,8 +348,10 @@ metadata {
     defaultValue: 0,
     options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
-
-
+@Field static final Map SwitchModeOpts = [
+    defaultValue: 1,
+    options     : [0: 'dimmer', 1: 'scene']
+]
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
 def isVINDSTIRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
@@ -1119,6 +1126,7 @@ void parseGroupsCluster(final Map descMap) {
                 groups.add(hexStrToUnsignedInt(group))
             }
             state.zigbeeGroups['groups'] = groups
+            state.zigbeeGroups['capacity'] = capacity
             logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
             break
         case 0x03: // Remove group
@@ -1233,6 +1241,8 @@ def zigbeeGroups( command=null, par=null )
 {
     logInfo "executing command \'${command}\', parameter ${par}"
     ArrayList<String> cmds = []
+    if (state.zigbeeGroups == null) state.zigbeeGroups = [:]
+    if (state.zigbeeGroups['groups'] == null) state.zigbeeGroups['groups'] = []
     def value
     Boolean validated = false
     if (command == null || !(command in (GroupCommandsMap.keySet() as List))) {
@@ -1281,6 +1291,9 @@ void parseOnOffCluster(final Map descMap) {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
         final long rawValue = hexStrToUnsignedInt(descMap.value)
         sendSwitchEvent(rawValue)
+    }
+    else if (descMap.attrId == "8004") {
+        processTS004Fmode(descMap)
     }
     else {
         logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}"
@@ -1512,6 +1525,21 @@ void processTS004Fcommand(final Map descMap) {
     }
 }
 
+void processTS004Fmode(final Map descMap) {
+    if (descMap.value == "00") {
+        sendEvent(name: "switchMode", value: "dimmer", isStateChange: true) 
+        logInfo "mode is <b>dimmer</b>"
+    }
+    else if (descMap.value == "01") {
+        sendEvent(name: "switchMode", value: "scene", isStateChange: true)
+        logInfo "mode is <b>scene</b>"
+    }
+    else {
+        logWarn "TS004F unknown attrId ${descMap.attrId} value ${descMap.value}"
+    }
+}
+
+
 def buttonDebounce(/*button*/) {
     logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired."
     state.states["lastButtonNumber"] = 0
@@ -1522,6 +1550,28 @@ def buttonEvent(buttonNumber, buttonState, isDigital=false) {
     if (txtEnable) {log.info "${device.displayName} $event.descriptionText"}
     sendEvent(event)
 }
+
+def switchToSceneMode()
+{
+    logInfo "switching TS004F into Scene mode"
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01))
+}
+
+def switchToDimmerMode()
+{
+    logInfo "switching TS004F into Dimmer mode"
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
+}
+
+def switchMode( mode ) {
+    if (mode == "dimmer") {
+        switchToDimmerMode()
+    }
+    else if (mode == "scene") {
+        switchToSceneMode()
+    }
+}
+
 
 def push(buttonNumber) {
     buttonEvent(buttonNumber, "pushed", isDigital=true)
@@ -2855,6 +2905,7 @@ def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         state.driverVersion = driverVersionAndTimeStamp()
+        initializeVars(fullInit = false)
     }
     else {
         // no driver version change
@@ -2887,6 +2938,7 @@ def resetStats() {
     state.lastRx = [:]
     state.lastTx = [:]
     state.health = [:]
+    state.zigbeeGroups = [:] 
     state.stats["rxCtr"] = 0
     state.stats["txCtr"] = 0
     state.states["isDigital"] = false
@@ -2918,6 +2970,7 @@ void initializeVars( boolean fullInit = false ) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.health == null) { state.health = [:] }
+    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     
     if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
@@ -2942,8 +2995,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false)
     if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
     
-    
-
     //updateTuyaVersion()
     
     def mm = device.getDataValue("model")
