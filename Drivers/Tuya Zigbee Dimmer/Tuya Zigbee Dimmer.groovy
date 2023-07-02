@@ -22,6 +22,7 @@
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - (dev. branch) Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command;
  *
+ *                                   TODO: Button Dimmer: add scene/dimmer mode
  *                                   TODO: Tuya Zigbee Light Sensor: add min reporting time
  *                                   TODO: Tuya Zigbee Light Sensor: add IAS cluster processing
  *                                   TODO: VINDSTYRKA: micro gram symbol fix
@@ -42,7 +43,7 @@
  */
 
 static String version() { "2.0.5" }
-static String timeStamp() {"2023/07/02 8:22 AM"}
+static String timeStamp() {"2023/07/02 10:50 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -103,6 +104,7 @@ metadata {
         //name: 'Tuya Zigbee Switch',
         name: 'Tuya Zigbee Dimmer',
         //name: 'Tuya Zigbee Button Dimmer',
+        //name: 'Tuya Zigbee Light Sensor',
         //name: 'Tuya Zigbee Bulb',
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
@@ -125,10 +127,6 @@ metadata {
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
                 [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
-            ]
-            command "zigbeeGroups", [
-                [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:"value",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]]
             ]
         }
         
@@ -159,6 +157,12 @@ metadata {
             }
             //command "updateFirmware"
         }
+        if (deviceType in ["Dimmer", "ButtonDimmer"]) {
+            command "zigbeeGroups", [
+                [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
+                [name:"value",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]]
+            ]
+        }        
         if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat"]) {
             capability "Sensor"
         }
@@ -331,9 +335,13 @@ metadata {
     defaultValue: 1000,
     options     : [0: 'disabled', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',]
 ]
-@Field static final Map ZigbeeGroupsOpts = [
+@Field static final Map ZigbeeGroupsOptsDebug = [
     defaultValue: 0,
     options     : [99: '--- select ---', 0: 'Add group', 1: 'View group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups', 5: 'Add group if identifying']
+]
+@Field static final Map ZigbeeGroupsOpts = [
+    defaultValue: 0,
+    options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
 
 
@@ -1068,20 +1076,20 @@ void parseGroupsCluster(final Map descMap) {
             final String groupId = data[2] + data[1]
             final int groupIdInt = hexStrToUnsignedInt(groupId)
             if (statusCode > 0x00) {
-                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (${groupIdInt}) <b>error: ${statusName}</b>"
+                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) <b>error: ${statusName}</b>"
             }
             else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (${groupIdInt}) statusCode: ${statusName}"
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) statusCode: ${statusName}"
                 // add the group to state.zigbeeGroups['groups'] if not exist
                 int groupCount = state.zigbeeGroups['groups'].size()
                 for (int i=0; i<groupCount; i++ ) {
-                    if (state.zigbeeGroups['groups'][i] == groupId) {
-                        logDebug "Zigbee group ${groupId} (${groupIdInt}) already exist"
+                    if (safeToInt(state.zigbeeGroups['groups'][i]) == groupIdInt) {
+                        logDebug "Zigbee group ${groupIdInt} (0x${groupId}) already exist"
                         return
                     }
                 }
-                state.zigbeeGroups['groups'].add(groupId)
-                logInfo "Zigbee group added new ${groupId} (${hexStrToUnsignedInt(groupId)})"
+                state.zigbeeGroups['groups'].add(groupIdInt)
+                logInfo "Zigbee group added new group ${groupIdInt} (0x${zigbee.convertToHexString(groupIdInt,4)})"
                 state.zigbeeGroups['groups'].sort()
             }
             break
@@ -1094,13 +1102,13 @@ void parseGroupsCluster(final Map descMap) {
             final String groupId = data[2] + data[1]
             final int groupIdInt = hexStrToUnsignedInt(groupId)
             if (statusCode > 0x00) {
-                logWarn "zigbee response View group ${groupId} (${groupIdInt}) error: ${statusName}"
+                logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}"
             }
             else {
-                logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (${groupIdInt}) statusCode: ${statusName}"
+                logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
             }
             break
-        case 0x02: // Get group membership response
+        case 0x02: // Get group membership
             final List<String> data = descMap.data as List<String>
             final int capacity = hexStrToUnsignedInt(data[0])
             final int groupCount = hexStrToUnsignedInt(data[1])
@@ -1108,7 +1116,7 @@ void parseGroupsCluster(final Map descMap) {
             for (int i = 0; i < groupCount; i++) {
                 int pos = (i * 2) + 2
                 String group = data[pos + 1] + data[pos]
-                groups.add(group)
+                groups.add(hexStrToUnsignedInt(group))
             }
             state.zigbeeGroups['groups'] = groups
             logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
@@ -1121,22 +1129,22 @@ void parseGroupsCluster(final Map descMap) {
             final String groupId = data[2] + data[1]
             final int groupIdInt = hexStrToUnsignedInt(groupId)
             if (statusCode > 0x00) {
-                logWarn "zigbee response remove group ${groupId} (${groupIdInt}) error: ${statusName}"
+                logWarn "zigbee response remove group 0x${groupId} (${groupIdInt}) error: ${statusName}"
             }
             else {
-                logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (${groupIdInt}) statusCode: ${statusName}"
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
             }
             // remove it from the states, even if status code was 'Not Found'
             state.zigbeeGroups['groups'].remove(groupId)
-            logDebug "Zigbee group ${groupId} (${groupIdInt}) removed"
+            logDebug "Zigbee group ${groupIdInt} (0x${groupId}) removed"
             break
         case 0x04: //Remove all groups
-            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (0x${zigbee.convertToHexString(groupId,4)}) statusCode: ${statusName}"
+            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
             logWarn "not implemented!"
             break
         case 0x05: // Add group if identifying
             //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5). 
-            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupId} (0x${zigbee.convertToHexString(groupId,4)}) statusCode: ${statusName}"
+            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
             logWarn "not implemented!"
             break
         default:
@@ -1534,8 +1542,8 @@ void processTS004Fcommand(final Map descMap) {
     }
 }
 
-def buttonDebounce() {
-    logDebug "debouncing timer for button ${state.states['lastButtonNumber']} expired."
+def buttonDebounce(/*button*/) {
+    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired."
     state.states["lastButtonNumber"] = 0
 }
 
