@@ -1,5 +1,5 @@
 /**
- *  Zigbee Device Drivers for Hubitat
+ *  Tuya Zigbee Dimmer - driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -43,7 +43,7 @@
  */
 
 static String version() { "2.0.5" }
-static String timeStamp() {"2023/07/03 10:01 AM"}
+static String timeStamp() {"2023/07/03 10:46 AM"}
 
 @Field static final Boolean _DEBUG = false
 
