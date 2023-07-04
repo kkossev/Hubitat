@@ -21,9 +21,8 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
+ * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold
  *
- *                                   TODO: Tuya Zigbee Light Sensor: add min reporting time
- *                                   TODO: Tuya Zigbee Light Sensor: add IAS cluster processing
  *                                   TODO: VINDSTYRKA: micro gram symbol fix
  *                                   TODO: rtt 0 fix
  *                                   TODO: measure PTT for on/off commands
@@ -42,8 +41,8 @@
  *                                   TODO: battery min/max voltage preferences
  */
 
-static String version() { "2.0.5" }
-static String timeStamp() {"2023/07/03 10:46 AM"}
+static String version() { "2.0.6" }
+static String timeStamp() {"2023/07/04 8:06 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -274,6 +273,16 @@ metadata {
             input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100  
 
         }
+        if (advancedOptions == true || advancedOptions == false) { // groovy ...
+            if (device.hasCapability("IlluminanceMeasurement")) {
+                input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
+                input name: "maxReportingTime", type: "number", title: "<b>Maximum time between reports</b>", description: "<i>Maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_MAX_REPORTING_TIME
+            }
+            if (device.hasCapability("IlluminanceMeasurement")) {
+                input name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
+            }
+        }
+        
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: "<i>These advanced options should be already automatically set in an optimal way for your device...</i>", defaultValue: false
         if (advancedOptions == true || advancedOptions == true) {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: \
@@ -304,8 +313,10 @@ metadata {
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
 @Field static final String  UNKNOWN = "UNKNOWN"
 @Field static final Integer DEFAULT_MIN_REPORTING_TIME = 10  // send the report event no more often than 10 seconds by default
+@Field static final Integer DEFAULT_MAX_REPORTING_TIME = 3600
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 2
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
     defaultValue: 1,
@@ -1791,8 +1802,14 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
     eventMap.unit = "lx"
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now()))/1000)
-    Integer minTime = settings?.minReportingTime ?: /*DEFAULT_MIN_REPORTING_TIME*/ 1
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastIllum = device.currentValue("illuminance") ?: 0
+    Integer delta = Math.abs(lastIllum- illumCorrected)
+    if (delta < (settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD)) {
+        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
+        return
+    }
     if (timeElapsed >= minTime) {
 		logInfo "${eventMap.descriptionText}"
 		unschedule("sendDelayedIllumEvent")		//get rid of stale queued reports
@@ -1801,7 +1818,7 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
 	}		
     else {         // queue the event
     	eventMap.type = "delayed"
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
+        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
     }
 }
@@ -1845,7 +1862,7 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000)
-    Integer minTime = settings?.minReportingTimeTemp ?: DEFAULT_MIN_REPORTING_TIME
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     if (timeElapsed >= minTime) {
 		logInfo "${eventMap.descriptionText}"
@@ -1893,7 +1910,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
     //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${humidityAsDouble.round(1)} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now()))/1000)
-    Integer minTime = settings?.minReportingTimeHumidity ?: DEFAULT_MIN_REPORTING_TIME
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer    
     if (timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
@@ -2996,7 +3013,14 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false)
     if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
-    
+    if (device.hasCapability("IlluminanceMeasurement")) {
+        if (fullInit || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value:DEFAULT_MIN_REPORTING_TIME, type:"number"])
+        if (fullInit || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value:DEFAULT_MAX_REPORTING_TIME, type:"number"])
+    }
+    if (device.hasCapability("IlluminanceMeasurement")) {
+        if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:"number"])
+    }
+
     //updateTuyaVersion()
     
     def mm = device.getDataValue("model")
