@@ -21,8 +21,10 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
- * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold
+ * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; 
  *
+ *                                   TODO: add pingSuccess and pingFailure in health stats
+ *                                   TODO: add clearStatistics toggle in Preferences
  *                                   TODO: VINDSTYRKA: micro gram symbol fix
  *                                   TODO: rtt 0 fix
  *                                   TODO: measure PTT for on/off commands
@@ -36,13 +38,13 @@
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
  *                                   TODO: state timesamps in human readable form
- *                                   TODO: add min/max reporting times preferences for illuminance, temperature and humidity;
+ *                                   TODO: process the min/max reporting times preferences for temperature and humidity;
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
  *                                   TODO: battery min/max voltage preferences
  */
 
 static String version() { "2.0.6" }
-static String timeStamp() {"2023/07/04 8:06 AM"}
+static String timeStamp() {"2023/07/04 1:48 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -140,21 +142,14 @@ metadata {
         attribute "Info", "string"
 
         // common commands for all device types
-        command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
-
+        // removed from version 2.0.6    //command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
+        command "configure", [[name:"normally it is not needed to configure anything", type: "ENUM",   constraints: ["--- select ---"]+ConfigureOpts.keySet() as List<String>]]
         
         // deviceType specific capabilities, commands and attributes         
         if (deviceType in ["Device"]) {
-            command "deleteAllSettings",      [[name: "Delete All Preferences"]]
-            command "deleteAllCurrentStates", [[name: "Delete All Current States"]]
-            command "deleteAllScheduledJobs", [[name: "Delete All Scheduled Jobs"]]        // any scheduled jobs were deleted...
-            command "deleteAllStates",        [[name: "Delete All State Variables"]]       // state.$it was removed...
-            command "deleteAllChildDevices",  [[name: "Delete All Child Devices"]]
-            //command "getInfo",                [[name: "Get Fingerprint"]]                // TODO
             if (_DEBUG) {
                 command "getAllProperties",       [[name: "Get All Properties"]]
             }
-            //command "updateFirmware"
         }
         if (deviceType in ["Dimmer", "ButtonDimmer"]) {
             command "zigbeeGroups", [
@@ -358,6 +353,13 @@ metadata {
     defaultValue: 0,
     options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
+/*
+@Field static final Map ConfigureOpts = [
+    defaultValue: 0,
+    options     : [0: 'LOAD ALL DEFAULTS', 1: 'Configure the device only', 2: 'Delete All Preferences', 3: 'Delete All Current States', 4:'Delete All Scheduled Jobs',\
+                   5:'Delete All State Variables',  6:'Delete All Child Devices']
+]
+*/
 @Field static final Map SwitchModeOpts = [
     defaultValue: 1,
     options     : [0: 'dimmer', 1: 'scene']
@@ -590,31 +592,6 @@ void parseDefaultCommandResponse(final Map descMap) {
     }
 }
 
-/**
- * Zigbee Basic Cluster Parsing
- * @param descMap Zigbee message in parsed map format
- */
-void parseBasicCluster(final Map descMap) {
-    switch (descMap.attrInt as Integer) {
-        case PING_ATTR_ID: // Using 0x01 read as a simple ping/pong mechanism
-            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
-            def now = new Date().getTime()
-            if (state.lastTx == null) state.lastTx = [:]
-            def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
-            if (timeRunning < MAX_PING_MILISECONDS) {
-                sendRttEvent()
-            }
-            break
-        case FIRMWARE_VERSION_ID:
-            final String version = descMap.value ?: 'unknown'
-            log.info "device firmware version is ${version}"
-            updateDataValue('softwareBuild', version)
-            break
-        default:
-            logWarn "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
-            break
-    }
-}
 
 // Zigbee Attribute IDs
 @Field static final int AC_CURRENT_DIVISOR_ID = 0x0603
@@ -702,7 +679,6 @@ void parseBasicCluster(final Map descMap) {
 // Zigbee Attributes
 @Field static final int DIRECTION_MODE_ATTR_ID = 0x0144
 @Field static final int MODEL_ATTR_ID = 0x05
-//@Field static final int PING_ATTR_ID = 0x01
 @Field static final int PRESENCE_ACTIONS_ATTR_ID = 0x0143
 @Field static final int PRESENCE_ATTR_ID = 0x0142
 @Field static final int REGION_EVENT_ATTR_ID = 0x0151
@@ -733,8 +709,8 @@ void parseXiaomiCluster(final Map descMap) {
 
     switch (descMap.attrInt as Integer) {
         case 0x00FC:                      // FP1
-            log.info 'unknown attribute - resetting?'
-            break
+            log.info "unknown attribute - resetting?"
+        break
         case PRESENCE_ATTR_ID:            // FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             parseXiaomiClusterPresence(value)
@@ -873,7 +849,7 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
             case 0x08:            // SWBUILD_TAG_ID:
                 final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue(/*'softwareBuild'*/aqaraVersion, swBuild)
+                device.updateDataValue(aqaraVersion, swBuild)
                 break
             case 0x0a:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${value}</b>"
@@ -979,6 +955,54 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
  * Standard clusters reporting handlers
  * -----------------------------------------------------------------------------
 */
+@Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']]
+
+/**
+ * Zigbee Basic Cluster Parsing  0x0000
+ * @param descMap Zigbee message in parsed map format
+ */
+void parseBasicCluster(final Map descMap) {
+    def now = new Date().getTime()
+    state.lastRx["checkInTime"] = now
+    switch (descMap.attrInt as Integer) {
+        case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism
+            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
+            if (state.lastTx == null) state.lastTx = [:]
+            def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+            if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                sendRttEvent()
+            }
+            break
+        case 0x0004:
+            logDebug "received device manufacturer ${descMap?.value}"
+            break
+        case 0x0007:
+            def powerSourceReported = powerSourceOpts.options[descMap?.value as int]
+            logDebug "received Power source <b>${powerSourceReported}</b> (${descMap?.value})"
+            //powerSourceEvent( powerSourceReported )
+            break
+        case 0xFFDF:
+            logDebug "Tuya check-in (Cluster Revision=${descMap?.value})"
+            break
+        case 0xFFE2:
+            logDebug "Tuya check-in (AppVersion=${descMap?.value})"
+            break
+        case [0xFFE0, 0xFFE1, 0xFFE3, 0xFFE4] :
+            logDebug "Tuya unknown attribute ${descMap?.attrId} value=${descMap?.value}"
+            break
+        case 0xFFFE:
+            logDebug "Tuya attributeReportingStatus (attribute FFFE) value=${descMap?.value}"
+            break
+        case FIRMWARE_VERSION_ID:    // 0x4000
+            final String version = descMap.value ?: 'unknown'
+            log.info "device firmware version is ${version}"
+            updateDataValue('softwareBuild', version)
+            break
+        default:
+            logWarn "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+            break
+    }
+}
 
 /*
  * -----------------------------------------------------------------------------
@@ -988,6 +1012,11 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
 void parsePowerCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    if (descMap.attrId in ["0020", "0021"]) {
+        state.lastRx["batteryTime"] = new Date().getTime()
+        state.stats["battCtr"] = (state.stats["battCtr"] ?: 0 ) + 1
+    }
+
     final long rawValue = hexStrToUnsignedInt(descMap.value)
     if (descMap.attrId == "0020") {
         sendBatteryVoltageEvent(rawValue)
@@ -999,6 +1028,7 @@ void parsePowerCluster(final Map descMap) {
         sendBatteryPercentageEvent(rawValue * 2)    
     }
     else {
+        logWarn "zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
@@ -1229,7 +1259,6 @@ List<String> notImplementedGroups(groupNr) {
     List<String> cmds = []
     final Integer group = safeToInt(groupNr)
     final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    //cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x04, [:], DELAY_MS, "${groupHex} 00")
     logWarn "notImplementedGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
     return cmds
 }
@@ -2842,8 +2871,47 @@ void updated() {
  * Disable logging (for debugging)
  */
 void logsOff() {
-    logInfo 'debug logging disabled...'
+    logInfo "debug logging disabled..."
     device.updateSetting('logEnable', [value: 'false', type: 'bool'])
+}
+
+@Field static final Map ConfigureOpts = [
+    "Configure the device only"  : [key:2, function: 'configureHelp'],
+    "           --            "  : [key:3, function: 'configureHelp'],
+    "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
+    "Delete All Current States"  : [key:5, function: 'deleteAllCurrentStates'],
+    "Delete All Scheduled Jobs"  : [key:6, function: 'deleteAllScheduledJobs'],
+    "Delete All State Variables" : [key:7, function: 'deleteAllStates'],
+    "Delete All Child Devices"   : [key:8, function: 'deleteAllChildDevices'],
+    "           -             "  : [key:1, function: 'configureHelp'],
+    "*** LOAD ALL DEFAULTS ***"  : [key:0, function: 'configureHelp']
+]
+
+def configure(command) {
+    ArrayList<String> cmds = []
+    logInfo "configure(${command})..."
+    
+    Boolean validated = false
+    if (!(command in (ConfigureOpts.keySet() as List))) {
+        logWarn "configure: command <b>${command}</b> must be one of these : ${ConfigureOpts.keySet() as List}"
+        return
+    }
+    //
+    def func
+   // try {
+        func = ConfigureOpts[command]?.function
+        cmds = "$func"()
+ //   }
+//    catch (e) {
+//        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)"
+//        return
+//    }
+
+    logInfo "executed '${func}'"
+}
+
+def configureHelp( val ) {
+    logWarn "configureHelp: select one of the commands in this list!"             
 }
 
 
@@ -2907,6 +2975,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
             if (state.stats != null) state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 else state.stats=[:]
     }
+    if (state.lastTx != null) state.lastTx['cmdTime'] = now() else state.lastTx=[:]
     sendHubCommand(allActions)
 }
 
@@ -2980,8 +3049,9 @@ void initializeVars( boolean fullInit = false ) {
         //state.comment = 'Works with Tuya Zigbee Devices'
         logInfo "all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()
-        log.trace "deviceType = ${deviceType} DEVICE_TYPE = ${DEVICE_TYPE}"
+        logInfo "DEVICE_TYPE = ${DEVICE_TYPE}"
         state.deviceType = DEVICE_TYPE
+        sendInfoEvent("Initialized")
     }
     
     if (state.stats == null)  { state.stats  = [:] }
@@ -3093,10 +3163,10 @@ void getAllProperties() {
 void deleteAllSettings() {
     settings.each { it->
         log.debug "deleting ${it.key}"
-        this.removeSetting("${it.key}")
+        //this.removeSetting("${it.key}")
+        device.removeSetting("${it.key}")
     }
-    log.trace settings
-    log.trace 'Done'
+    logInfo  "All settings (preferences) DELETED"
 }
 
 // delete all attributes
@@ -3105,7 +3175,7 @@ void deleteAllCurrentStates() {
         log.debug "deleting $it"
         device.deleteCurrentState("$it")
     }
-    log.trace 'Done'
+    logInfo "All current states (attributes) DELETED"
 }
 
 // delete all State Variables
@@ -3114,12 +3184,16 @@ void deleteAllStates() {
         log.debug "deleting state ${it.key}"
     }
     state.clear()
-    log.trace 'Done'
+    logInfo "All States DELETED"
 }
 
 void deleteAllScheduledJobs() {
     unschedule()
-    log.trace 'Done'
+    logInfo "All scheduled jobs DELETED"
+}
+
+void deleteAllChildDevices() {
+    logWarn "deleteAllChildDevices : not implemented!"
 }
 
 def parseTest(par) {
