@@ -21,7 +21,7 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
- * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; 
+ * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  *
  *                                   TODO: add pingSuccess and pingFailure in health stats
  *                                   TODO: add clearStatistics toggle in Preferences
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.0.6" }
-static String timeStamp() {"2023/07/04 1:48 PM"}
+static String timeStamp() {"2023/07/05 9:54 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -274,7 +274,9 @@ metadata {
                 input name: "maxReportingTime", type: "number", title: "<b>Maximum time between reports</b>", description: "<i>Maximum reporting interval, seconds (120..10000)</i>", range: "120..10000", defaultValue: DEFAULT_MAX_REPORTING_TIME
             }
             if (device.hasCapability("IlluminanceMeasurement")) {
-                input name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>illuminance reporting threshold, value (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
+                input name: "illuminanceThreshold", type: "number", title: "<b>Illuminance Reporting Threshold</b>", description: "<i>Illuminance reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
+                input name: "illuminanceCoeff", type: "decimal", title: "<b>Illuminance Correction Coefficient</b>", description: "<i>Illuminance correction coefficient, range (0.10..10.00)</i>", range: "0.10..10.00", defaultValue: 1.00
+                
             }
         }
         
@@ -311,7 +313,7 @@ metadata {
 @Field static final Integer DEFAULT_MAX_REPORTING_TIME = 3600
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 2
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
     defaultValue: 1,
@@ -377,6 +379,7 @@ def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ321
  * @param description Zigbee message in hex format
  */
 void parse(final String description) {
+    checkDriverVersion()
     if (!isChattyDeviceReport(description)) { logDebug "parse: ${description}" }
     if (state.stats != null) state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 else state.stats=[:]
     unschedule('deviceCommandTimeout')
@@ -1825,7 +1828,7 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
     def eventMap = [:]
     if (state.stats != null) state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 else state.stats=[:]
     eventMap.name = "illuminance"
-    Integer illumCorrected = illuminance + (settings?.illuminanceOffset ?: 0)
+    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
     eventMap.value  = illumCorrected
     eventMap.type = isDigital ? "digital" : "physical"
     eventMap.unit = "lx"
@@ -1835,7 +1838,7 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     Integer lastIllum = device.currentValue("illuminance") ?: 0
     Integer delta = Math.abs(lastIllum- illumCorrected)
-    if (delta < (settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD)) {
+    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
         logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
         return
     }
@@ -2992,6 +2995,7 @@ def getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationEP())]
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(fullInit = false)
     }
@@ -3040,7 +3044,7 @@ def resetStats() {
  * 
  */
 void initializeVars( boolean fullInit = false ) {
-    logInfo "InitializeVars()... fullInit = ${fullInit}"
+    logDebug "InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
         state.clear()
         unschedule()
@@ -3089,24 +3093,25 @@ void initializeVars( boolean fullInit = false ) {
     }
     if (device.hasCapability("IlluminanceMeasurement")) {
         if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:"number"])
+        if (fullInit || settings?.illuminanceCoeff == null) device.updateSetting("illuminanceCoeff", [value:1.00, type:"decimal"])
     }
 
     //updateTuyaVersion()
     
     def mm = device.getDataValue("model")
     if ( mm != null) {
-        if (logEnable==true) log.trace " model = ${mm}"
+        logDebug " model = ${mm}"
     }
     else {
-        if (txtEnable==true) log.warn " Model not found, please re-pair the device!"
+        logWarn " Model not found, please re-pair the device!"
     }
     def ep = device.getEndpointId()
     if ( ep  != null) {
         //state.destinationEP = ep
-        if (logEnable==true) log.trace " destinationEP = ${ep}"
+        logDebug " destinationEP = ${ep}"
     }
     else {
-        if (txtEnable==true) log.warn " Destination End Point not found, please re-pair the device!"
+        logWarn " Destination End Point not found, please re-pair the device!"
         //state.destinationEP = "01"    // fallback
     }    
 }
