@@ -21,12 +21,14 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
- * ver. 2.0.6  2023-07-04 kkossev  - (dev. branch) Tuya Zigbee Light Sensor: added min/max reporting time; added illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
+ * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  *
+ *                                   TODO: implement Configure device only
+ *                                   TODO: implement LOAD ALL DEFAUTS
+ *                                   TODO: add timeout for auto-clearing of the Info event
  *                                   TODO: add pingSuccess and pingFailure in health stats
  *                                   TODO: add clearStatistics toggle in Preferences
- *                                   TODO: VINDSTYRKA: micro gram symbol fix
- *                                   TODO: rtt 0 fix
+ *                                   TODO: skip threshold checking on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
  *                                   TODO: calculate and store the average ping RTT
  *                                   TODO: Fingerbot: add the  fingerprint
@@ -44,7 +46,7 @@
  */
 
 static String version() { "2.0.6" }
-static String timeStamp() {"2023/07/05 9:54 AM"}
+static String timeStamp() {"2023/07/09 10:21 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -151,7 +153,7 @@ metadata {
                 command "getAllProperties",       [[name: "Get All Properties"]]
             }
         }
-        if (deviceType in ["Dimmer", "ButtonDimmer"]) {
+        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
             command "zigbeeGroups", [
                 [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
                 [name:"value",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]]
@@ -1269,9 +1271,9 @@ List<String> notImplementedGroups(groupNr) {
 @Field static final Map GroupCommandsMap = [
     "--- select ---"           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'GroupCommandsHelp'],
     "Add group"                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'],
-    "View group"               : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'],
+    "View group"               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'],
     "Get group membership"     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'],
-    "Remove group"             : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'],
+    "Remove group"             : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'],
     "Remove all groups"        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'],
     "Add group if identifying" : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
 ]
@@ -3241,8 +3243,13 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    //cmds = addGroupMembership(safeToInt(par))
-    cmds = removeGroupMembership(safeToInt(par))
+    //cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0xfc7e {${device.zigbeeId}} {}", "delay 251", ]
+    //cmds = ["zdo unbind 0xFFFD 0x01 0xFF 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds = ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 252", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0004 {${device.zigbeeId}} {}", "delay 253", ]
+    //cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x0033 {40 00 ${device.zigbeeId}} {0x0000}", "delay 50",]
+    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x0033 {40 01} {0x0000}", "delay 50",]
     
     sendZigbeeCommands(cmds)    
 }
