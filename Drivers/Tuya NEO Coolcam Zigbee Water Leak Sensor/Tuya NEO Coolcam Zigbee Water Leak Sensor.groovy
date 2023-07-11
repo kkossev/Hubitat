@@ -21,14 +21,16 @@
  *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
  *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability; 
  * ver. 1.0.8 2023-05-13 kkossev  -  'unprocessed water event unknown' fix; lastWaterWet update bug fix;
+ * ver. 1.1.0 2023-07-11 kkossev  - (dev. branch) replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
  *
  * 
- *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; make optional dropping the battery level 0% when offline.
+ *                                  TODO: check why Neo Coolcam is not sending actual battery reports : https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/86?u=kkossev 
+ *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; 
  *
 */
 
-def version() { "1.0.8" }
-def timeStamp() {"2023/05/13 7:49 PM"}
+def version() { "1.1.0" }
+def timeStamp() {"2023/07/11 10:51 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -48,8 +50,11 @@ metadata {
         capability "PowerSource"
         capability "TestCapability"
         capability "Momentary"
-        capability "PresenceSensor"
-        //capability "TamperAlert"    // tamper - ENUM ["clear", "detected"]
+        capability "Health Check"		// replaced capability "PresenceSensor"
+        //capability "TamperAlert"      // tamper - ENUM ["clear", "detected"]
+        
+        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute "rtt", "number" 
 
         
         command "configure", [[name: "Manually initialize the sensor after switching drivers.  \n\r   ***** Will load the device default values! *****" ]]
@@ -70,6 +75,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_kyb656no", deviceJoinName: "MEIAN Water Leak Sensor"          // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/22?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.0", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/41?u=kkossev 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.4", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_js34cuma", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // KK
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
@@ -84,8 +90,12 @@ metadata {
     }
 }
 
-@Field static final Integer presenceCountTreshold = 12
-@Field static final Integer defaultPollingInterval = 3600
+// Constants
+@Field static final int COMMAND_TIMEOUT = 10                // Command timeout before setting healthState to offline
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 13   // 3 x 4 hours + 1
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 3600 // 1 hour
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
+@Field static String UNKNOWN = "UNKNOWN"
 
 private getCLUSTER_TUYA()       { 0xEF00 }
 private getSETDATA()            { 0x00 }
@@ -412,48 +422,82 @@ def powerSourceEvent( state = null) {
     }
 }
 
-// called when any event was received from the Zigbee device in parse() method..
-def setPresent() {
-    /*
-    if ((state.rxCounter != null) && state.rxCounter <= 2)
-        return                    // do not count the first device announcement or binding ack packet as an online presence!
-    */
-    powerSourceEvent()
-    if (device.currentValue('powerSource', true) in ['unknown', '?'] || device.currentValue('presence', true) != "present") {
-        logInfo "is now present"
-        if (device.currentValue('battery', true) == 0 ) {
-            if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
-            }
-        }
-        sendEvent(name: "presence", value: "present", descriptionText: "device is now online", type:  'digital' , isStateChange: true )
-    }    
-    state.notPresentCounter = 0    
+def ping() {
+    logInfo 'ping...'
+    scheduleCommandTimeoutCheck()
+    state.pingTime = new Date().getTime()
+    sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
 
-// called every 60 minutes from pollPresence()
+def sendRttEvent() {
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
+    def descriptionText = "Round-trip time is ${timeRunning} (ms)"
+    logInfo "${descriptionText}"
+    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+private void scheduleDeviceHealthCheck(int intervalMins) {
+    Random rnd = new Random()
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+}
+
+// called when any event was received from the Zigbee device in parse() method..
+def setPresent() {
+    powerSourceEvent()
+    if ((device.currentValue("healthStatus", true) ?: "") != "online") {
+        sendHealthStatusEvent("online")
+    	sendEvent(name: "powerSource", value: "battery") 
+    }
+    state.notPresentCounter = 0
+    unschedule('deviceCommandTimeout')
+}
+
+// called from pollPresence()
 def checkIfNotPresent() {
-    state.notPresentCounter = (state.notPresentCounter?: 0) + 1
-    if (state.notPresentCounter >= presenceCountTreshold) {
-        if (!(device.currentValue('powerSource', true) in ['unknown'])) {
-    	    powerSourceEvent("unknown")
-            logWarn "<b>is not present!</b>"
+    if (state.notPresentCounter != null) {
+        state.notPresentCounter = state.notPresentCounter + 1
+        if (state.notPresentCounter >= PRESENCE_COUNT_THRESHOLD) {
+            if ((device.currentValue("healthStatus", true) ?: "") != "offline") {
+                sendHealthStatusEvent("offline")
+            }
+            if (device.currentValue('water', true) != 'unknown') {
+                processWaterEvent( 'unknown',  isDigital=true )
+            }
+            logWarn "is not present!"
         }
-        if (safeToInt(device.currentValue('battery', true)) != 0) {
-            logWarn "forced battery to '<b>0 %</b>"
-            sendBatteryEvent( 0, isDigital=true )
-        }
-        if (device.currentValue('water', true) != 'unknown') {
-            processWaterEvent( 'unknown',  isDigital=true )
-        }
-        if (device.currentValue('presence', true) != "not present") {
-            sendEvent(name: "presence", value: "not present", descriptionText: "device is <b>not present</b>", type:  'digital' , isStateChange: true )
-        }
+    }
+    else {
+        state.notPresentCounter = 1
     }
 }
 
+// check for device offline every 60 minutes
+def deviceHealthCheck() {
+    logDebug "pollPresence()..."
+    checkIfNotPresent()
+    runIn( DEFAULT_POLLING_INTERVAL, deviceHealthCheck, [overwrite: true])
+}
+
+def sendHealthStatusEvent(value) {
+    //log.trace "healthStatus ${value}"
+    def descriptionText = "healthStatus set to ${value}"
+    logInfo "${descriptionText}"
+    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText)
+}
+
+
+
 def configurePollPresence() {
-    runIn( defaultPollingInterval, pollPresence, [overwrite: true, misfire: "ignore"])
+    runIn( DEFAULT_POLLING_INTERVAL, deviceHealthCheck, [overwrite: true, misfire: "ignore"])
 }
 
 def configureLogsOff() {
@@ -464,13 +508,6 @@ def configureLogsOff() {
     else {
         unschedule(logsOff)
     }
-}
-
-// check for device offline every 60 minutes
-def pollPresence() {
-    logDebug "pollPresence()"
-    checkIfNotPresent()
-    configurePollPresence()
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
@@ -545,7 +582,7 @@ void initializeVars( boolean fullInit = true ) {
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
     if (device.currentValue('powerSource', true) == null) sendEvent(name : "powerSource", descriptionText: "device just installed",	value : "?", isStateChange : true)
     if (device.currentValue('water', true) == null) sendEvent(name : "water",	value : "unknown", descriptionText: "device just installed", isStateChange : true)
-    if (device.currentValue('presence', true) == null) sendEvent(name: "presence", value: "unknown", descriptionText: "device just installed", type:  'digital' , isStateChange: true )
+    if (device.currentValue('healthStatus', true) == null) sendEvent(name: "healthStatus", value: "unknown", descriptionText: "device just installed", type:  'digital' , isStateChange: true )
     
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", [value:debugLogsDefault, type:"bool"])
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", [value: true, type:"bool"])
