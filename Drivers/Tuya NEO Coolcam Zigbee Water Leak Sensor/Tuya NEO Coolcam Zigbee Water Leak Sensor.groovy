@@ -20,13 +20,15 @@
  * ver. 1.0.7 2022-11-20 kkossev  - offline timeout increased to 12 hours; Import button loads the dev. branch version; Configure will not reset power source to '?'; Save Preferences will update the driver version state; water is set to 'unknown' when offline
  *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
  *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability; 
+ * ver. 1.0.8 2023-05-13 kkossev  -  'unprocessed water event unknown' fix; lastWaterWet update bug fix; 
+ *
  * 
- *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state
+ *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; make optional dropping the battery level 0% when offline.
  *
 */
 
-def version() { "1.0.7" }
-def timeStamp() {"2022/11/20 8:35 AM"}
+def version() { "1.0.8" }
+def timeStamp() {"2023/05/13 7:49 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -207,6 +209,7 @@ def processWaterEvent( String value, boolean isDigital=false, boolean wasChecked
             }
             if (isDigital==false ) {
                 state.lastWaterWet = FormattedDateTimeFromUnix( now() )
+                logDebug "setting state.lastWaterWet to ${state.lastWaterWet}"
             }
             break
         case 'dry' :
@@ -215,13 +218,20 @@ def processWaterEvent( String value, boolean isDigital=false, boolean wasChecked
             descriptionText = "${device.displayName} is ${valueToBeSent}"
             state.isTesting = false
             break
+        case 'unknown' :
+            // 'unknown' is sent when the water leak sensor healthStatus goes in offline state
+            valueToBeSent = "unknown"
+            descriptionText = "${device.displayName} status is ${valueToBeSent}"
+            state.isTesting = false
+            break
         default :
-            log.warn "unprocessed water event ${value}"
+            log.warn "processWaterEvent: unprocessed water event '${value}'"
             return
     }
     sendWaterEvent( valueToBeSent, isDigital )
 }
 
+// should be called from processWaterEvent() only!
 def sendWaterEvent( String value, boolean isDigital=false) {
     def type = isDigital == true ? "digital" : "physical"
     String descriptionText
@@ -258,8 +268,12 @@ def sendWaterEvent( String value, boolean isDigital=false) {
                 descriptionText = "${device.displayName} is dry"
             }
             break
+        case 'unknown' :
+            // 'unknown' is sent when the water leak sensor healthStatus goes in offline state
+            descriptionText = "${device.displayName} status is unknown"
+            break
         default :
-            log.warn "unprocessed water event ${value}"
+            log.warn "sendWaterEvent: unprocessed water event '${value}'"
             return
     }
     if (isDigital == true) descriptionText += " (digital)"
@@ -430,7 +444,7 @@ def checkIfNotPresent() {
             sendBatteryEvent( 0, isDigital=true )
         }
         if (device.currentValue('water', true) != 'unknown') {
-            sendWaterEvent( 'unknown',  isDigital=true )
+            processWaterEvent( 'unknown',  isDigital=true )
         }
         if (device.currentValue('presence', true) != "not present") {
             sendEvent(name: "presence", value: "not present", descriptionText: "device is <b>not present</b>", type:  'digital' , isStateChange: true )
