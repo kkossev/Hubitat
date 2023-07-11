@@ -30,7 +30,7 @@
 */
 
 def version() { "1.1.0" }
-def timeStamp() {"2023/07/11 10:51 PM"}
+def timeStamp() {"2023/07/11 11:18 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -482,7 +482,7 @@ def checkIfNotPresent() {
 
 // check for device offline every 60 minutes
 def deviceHealthCheck() {
-    logDebug "pollPresence()..."
+    logDebug "deviceHealthCheck()..."
     checkIfNotPresent()
     runIn( DEFAULT_POLLING_INTERVAL, deviceHealthCheck, [overwrite: true])
 }
@@ -494,7 +494,9 @@ def sendHealthStatusEvent(value) {
     sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText)
 }
 
-
+def pollPresence() {
+    deviceHealthCheck()
+}
 
 def configurePollPresence() {
     runIn( DEFAULT_POLLING_INTERVAL, deviceHealthCheck, [overwrite: true, misfire: "ignore"])
