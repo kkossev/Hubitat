@@ -21,16 +21,17 @@
  *                                  added lastWaterWet time in human readable format; added device rejoinCounter state; water is set to 'unknown' when offline; added feibit FNB56-WTS05FB2.0; added 'tested' water state; pollPresence misfire after hub reboot bug fix
  *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability; 
  * ver. 1.0.8 2023-05-13 kkossev  -  'unprocessed water event unknown' fix; lastWaterWet update bug fix;
- * ver. 1.1.0 2023-07-11 kkossev  - (dev. branch) replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
+ * ver. 1.1.0 2023-07-11 kkossev  - replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
+ * ver. 1.1.1 2023-07-12 kkossev  - (dev. branch) added ping rtt;
  *
- * 
+ *                                  TODO:  scheduleCommandTimeoutCheck()
  *                                  TODO: check why Neo Coolcam is not sending actual battery reports : https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/86?u=kkossev 
  *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; 
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2023/07/11 11:18 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2023/07/12 6:42 PM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -143,6 +144,14 @@ def parse(String description) {
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             logDebug "Tuya check-in (0001) app version ${descMap?.value}"
+            if ((state.pingTime ?: '0').toInteger() > 0) {
+                def now = new Date().getTime()
+                def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                    sendRttEvent()
+                }
+                state.pingTime = null
+            }
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId in ["FFDF", "FFE2", "FFE4","FFFE"]) {
             logDebug "Tuya check-in (${descMap?.attrId}) value is ${descMap?.value}"
@@ -556,9 +565,9 @@ def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
-        state.driverVersion = driverVersionAndTimeStamp()
         configurePollPresence()
         configureLogsOff()
+        state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
