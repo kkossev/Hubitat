@@ -22,7 +22,7 @@
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
- * ver. 2.1.0  2023-07-13 kkossev  - (dev. branch) - Libraries first introduction for the Aqara Cube T1 Pro driver;    
+ * ver. 2.1.0  2023-07-13 kkossev  - (dev. branch) - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver;   
  *
  *                                   TODO: implement Configure device only
  *                                   TODO: implement LOAD ALL DEFAUTS
@@ -47,7 +47,7 @@
  */
 
 static String version() { "2.1.0" }
-static String timeStamp() {"2023/07/13 12:17 PM"}
+static String timeStamp() {"2023/07/14 7:29 AM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -77,6 +77,7 @@ import java.util.concurrent.ConcurrentHashMap
 //@Field static final String DEVICE_TYPE = "AirQuality"
 //deviceType = "Fingerbot"
 //@Field static final String DEVICE_TYPE = "Fingerbot"
+//#include kkossev.tuyaFingerbotLib
 //deviceType = "Thermostat"
 //@Field static final String DEVICE_TYPE = "Thermostat"
 //deviceType = "Switch"
@@ -99,7 +100,7 @@ import java.util.concurrent.ConcurrentHashMap
 //@Field static final String DEVICE_TYPE = "THSensor"
 deviceType = "AqaraCube"
 @Field static final String DEVICE_TYPE = "AqaraCube"
-
+#include kkossev.aqaraCubeT1ProLib
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -219,11 +220,7 @@ metadata {
             attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ 
         }
         if (deviceType in  ["Fingerbot"]) {
-            attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String>
-            attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String>
-            attribute "pushTime", "number"
-            attribute "dnPosition", "number"
-            attribute "upPosition", "number"
+            // Fingerbot attributes moved to tuyaFingerbotLib
         }
         if (deviceType in  ["AqaraCube"]) {
             // defined in aqaraCubeT1ProLib //attribute "mode", "enum", AqaraCubeModeOpts.options.values() as List<String>
@@ -272,14 +269,7 @@ metadata {
             }
         }
         if (deviceType in  ["Fingerbot"]) {
-            input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: \
-                '<i>Push or Switch.</i>'
-            input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: \
-                '<i>Finger movement direction.</i>'
-            input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0  
-            input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0  
-            input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100  
-
+            // Fingerbot settings moved 
         }
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("IlluminanceMeasurement")) {
@@ -344,14 +334,6 @@ metadata {
 @Field static final Map TvocUnitOpts = [                    // bit 0
     defaultValue: 1,
     options     : [0: 'mg/m³', 1: 'ppb']
-]
-@Field static final Map FingerbotModeOpts = [
-    defaultValue: 0,
-    options     : [0: 'push', 1: 'switch']
-]
-@Field static final Map FingerbotDirectionOpts = [
-    defaultValue: 0,
-    options     : [0: 'normal', 1: 'reverse']
 ]
 @Field static final Map SwitchThreeStateOpts = [
     defaultValue: 0,
@@ -729,15 +711,15 @@ void parseXiaomiCluster(final Map descMap) {
         case 0x00FC:                      // FP1
             log.info "unknown attribute - resetting?"
             break
-        case PRESENCE_ATTR_ID:            // FP1
+        case PRESENCE_ATTR_ID:            // 0x0142 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             parseXiaomiClusterPresence(value)
             break
-        case PRESENCE_ACTIONS_ATTR_ID:    // FP1
+        case PRESENCE_ACTIONS_ATTR_ID:    // 0x0143 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             parseXiaomiClusterPresenceAction(value)
             break
-        case REGION_EVENT_ATTR_ID:        // FP1
+        case REGION_EVENT_ATTR_ID:        // 0x0151 FP1
             // Region events can be sent fast and furious so buffer them
             final Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1])
             final Integer value = HexUtils.hexStringToInt(descMap.value[2..3])
@@ -749,26 +731,31 @@ void parseXiaomiCluster(final Map descMap) {
                 runInMillis(REGION_UPDATE_DELAY_MS, 'updateRegions')
             }
             break
-        case SENSITIVITY_LEVEL_ATTR_ID:   // FP1
+        case SENSITIVITY_LEVEL_ATTR_ID:   // 0x010C FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             log.info "sensitivity level is '${SensitivityLevelOpts.options[value]}' (0x${descMap.value})"
             device.updateSetting('sensitivityLevel', [value: value.toString(), type: 'enum'])
             break
-        case TRIGGER_DISTANCE_ATTR_ID:    // FP1
+        case TRIGGER_DISTANCE_ATTR_ID:    // 0x0146 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             log.info "approach distance is '${ApproachDistanceOpts.options[value]}' (0x${descMap.value})"
             device.updateSetting('approachDistance', [value: value.toString(), type: 'enum'])
             break
-        case DIRECTION_MODE_ATTR_ID:    // FP1
+        case DIRECTION_MODE_ATTR_ID:     // 0x0144 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
             log.info "monitoring direction mode is '${DirectionModeOpts.options[value]}' (0x${descMap.value})"
             device.updateSetting('directionMode', [value: value.toString(), type: 'enum'])
             break
-        case XIAOMI_SPECIAL_REPORT_ID: // sent every 5 minutes
+        case 0x0148 :                    // Aqara Cube T1 Pro - Mode
+            final Integer value = hexStrToUnsignedInt(descMap.value)
+            log.info "cubeMode is '${AqaraCubeModeOpts.options[value]}' (0x${descMap.value})"
+            device.updateSetting('cubeMode', [value: value.toString(), type: 'enum'])
+            break
+        case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 5 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterTags(tags)
             break
-        case XIAOMI_RAW_ATTR_ID:    // FP1 
+        case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1 
             final byte[] rawData = HexUtils.hexStringToByteArray(descMap.value)
             if (rawData.size() == 24 && settings.enableDistanceDirection) {
                 final int degrees = rawData[19]
@@ -2585,21 +2572,7 @@ def configureDevice() {
         cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)    
     }
     if (DEVICE_TYPE in  ["Fingerbot"]) {
-        final int mode = (settings.fingerbotMode as Integer) ?: FingerbotModeOpts.defaultValue
-        logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode]} (${mode})"
-        cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) )
-        final int duration = (settings.pushTime as Integer) ?: 0
-        logDebug "setting pushTime to ${duration} seconds)"
-        cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) )
-        final int dnPos = (settings.dnPosition as Integer) ?: 0
-        logDebug "setting dnPosition to ${dnPos} %)"
-        cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) )
-        final int upPos = (settings.upPosition as Integer) ?: 0
-        logDebug "setting upPosition to ${upPos} %)"
-        cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) )
-        final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue
-        logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})"
-        cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) )
+        cmds += configureDeviceFingerbot()
     }
     if (DEVICE_TYPE in  ["AqaraCube"]) {
         cmds += configureDeviceAqaraCube()
@@ -2674,6 +2647,9 @@ def refresh() {
     }
     if (DEVICE_TYPE in  ["AqaraCube"]) {
         cmds += refreshAqaraCube()
+    }
+    if (DEVICE_TYPE in  ["Fingerbot"]) {
+        cmds += refreshFingerbot()
     }
     
     runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true])                 // 3 seconds
@@ -3099,11 +3075,7 @@ void initializeVars( boolean fullInit = false ) {
         if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     }
     if (DEVICE_TYPE in  ["Fingerbot"]) {
-        if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum'])
-        if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"])
-        if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"])
-        if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"])
-        
+        initVarsFingerbot(fullInit)
     }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
@@ -3274,5 +3246,4 @@ def test(par) {
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-
 
