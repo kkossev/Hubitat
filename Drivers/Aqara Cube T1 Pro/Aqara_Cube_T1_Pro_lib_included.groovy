@@ -98,7 +98,7 @@ import java.util.concurrent.ConcurrentHashMap
 //@Field static final String DEVICE_TYPE = "THSensor"
 deviceType = "AqaraCube"
 @Field static final String DEVICE_TYPE = "AqaraCube"
-#include kkossev.aqaraCubeT1ProLib
+
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -3319,3 +3319,428 @@ def test(par) {
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
 
+
+// ~~~~~ start include (131) kkossev.aqaraCubeT1ProLib ~~~~~
+library ( // library marker kkossev.aqaraCubeT1ProLib, line 1
+    base: "driver", // library marker kkossev.aqaraCubeT1ProLib, line 2
+    author: "Krassimir Kossev", // library marker kkossev.aqaraCubeT1ProLib, line 3
+    category: "zigbee", // library marker kkossev.aqaraCubeT1ProLib, line 4
+    description: "Aqara Cube T1 Pro Library", // library marker kkossev.aqaraCubeT1ProLib, line 5
+    name: "aqaraCubeT1ProLib", // library marker kkossev.aqaraCubeT1ProLib, line 6
+    namespace: "kkossev", // library marker kkossev.aqaraCubeT1ProLib, line 7
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/aqaraCubeT1ProLib.groovy", // library marker kkossev.aqaraCubeT1ProLib, line 8
+    version: "1.0.0", // library marker kkossev.aqaraCubeT1ProLib, line 9
+    documentationLink: "" // library marker kkossev.aqaraCubeT1ProLib, line 10
+) // library marker kkossev.aqaraCubeT1ProLib, line 11
+/* // library marker kkossev.aqaraCubeT1ProLib, line 12
+ *  zigbeeScenes - ZCL Scenes Cluster methods - library // library marker kkossev.aqaraCubeT1ProLib, line 13
+ * // library marker kkossev.aqaraCubeT1ProLib, line 14
+ *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.aqaraCubeT1ProLib, line 15
+ *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.aqaraCubeT1ProLib, line 16
+ * // library marker kkossev.aqaraCubeT1ProLib, line 17
+ *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.aqaraCubeT1ProLib, line 18
+ * // library marker kkossev.aqaraCubeT1ProLib, line 19
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.aqaraCubeT1ProLib, line 20
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.aqaraCubeT1ProLib, line 21
+ *  for the specific language governing permissions and limitations under the License. // library marker kkossev.aqaraCubeT1ProLib, line 22
+ * // library marker kkossev.aqaraCubeT1ProLib, line 23
+ * ver. 1.0.0  2023-07-15 kkossev  - (dev. branch) - Libraries introduction for the AqaraCubeT1Pro driver; operationMode 'scene': action:wakup, hold, shake, flipToSide,  rotateLeft, rotateRight; sideUp: 1..6; // library marker kkossev.aqaraCubeT1ProLib, line 24
+ * // library marker kkossev.aqaraCubeT1ProLib, line 25
+ *                                   TODO:  // library marker kkossev.aqaraCubeT1ProLib, line 26
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 27
+
+
+def aqaraCubeT1ProLibVersion()   {"1.0.0"} // library marker kkossev.aqaraCubeT1ProLib, line 30
+def aqaraCubeT1ProLibTimeStamp() {"2023/07/15 1:14 PM"} // library marker kkossev.aqaraCubeT1ProLib, line 31
+
+metadata { // library marker kkossev.aqaraCubeT1ProLib, line 33
+    attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String> // library marker kkossev.aqaraCubeT1ProLib, line 34
+    attribute "action", "enum", (AqaraCubeSceneModeOpts.options.values() + AqaraCubeActionModeOpts.options.values()) as List<String> // library marker kkossev.aqaraCubeT1ProLib, line 35
+    attribute "cubeSide", "enum", AqaraCubeSideOpts.options.values() as List<String> // library marker kkossev.aqaraCubeT1ProLib, line 36
+    attribute "angle", "number" // library marker kkossev.aqaraCubeT1ProLib, line 37
+    attribute "sideUp", "number" // library marker kkossev.aqaraCubeT1ProLib, line 38
+
+
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0012,0006", outClusters:"0000,0003,0019", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro" // library marker kkossev.aqaraCubeT1ProLib, line 41
+    preferences { // library marker kkossev.aqaraCubeT1ProLib, line 42
+        input name: 'cubeOperationMode', type: 'enum', title: '<b>Cube Operation Mode</b>', options: AqaraCubeModeOpts.options, defaultValue: AqaraCubeModeOpts.defaultValue, required: true, description: '<i>Operation Mode.<br>Press LINK button 5 times to toggle between action mode and scene mode</i>' // library marker kkossev.aqaraCubeT1ProLib, line 43
+    } // library marker kkossev.aqaraCubeT1ProLib, line 44
+} // library marker kkossev.aqaraCubeT1ProLib, line 45
+
+// https://github.com/Koenkk/zigbee2mqtt/issues/15652  // library marker kkossev.aqaraCubeT1ProLib, line 47
+// https://homekitnews.com/2022/02/17/aqara-cube-t1-pro-review/ // library marker kkossev.aqaraCubeT1ProLib, line 48
+
+@Field static final Map AqaraCubeModeOpts = [ // library marker kkossev.aqaraCubeT1ProLib, line 50
+    defaultValue: 1, // library marker kkossev.aqaraCubeT1ProLib, line 51
+    options     : [0: 'action', 1: 'scene'] // library marker kkossev.aqaraCubeT1ProLib, line 52
+] // library marker kkossev.aqaraCubeT1ProLib, line 53
+
+/////////////////////// scene mode ///////////////////// // library marker kkossev.aqaraCubeT1ProLib, line 55
+@Field static final Map AqaraCubeSceneModeOpts = [ // library marker kkossev.aqaraCubeT1ProLib, line 56
+    defaultValue: 0, // library marker kkossev.aqaraCubeT1ProLib, line 57
+    options     : [ // library marker kkossev.aqaraCubeT1ProLib, line 58
+        0: 'rotate', // library marker kkossev.aqaraCubeT1ProLib, line 59
+        1: 'shake', // library marker kkossev.aqaraCubeT1ProLib, line 60
+        2: 'hold',            // activated if user picks up the cube and holds it // library marker kkossev.aqaraCubeT1ProLib, line 61
+        3: 'sideUp',          // activated when the cube is resting on a surface // library marker kkossev.aqaraCubeT1ProLib, line 62
+        4: 'inactivity', // library marker kkossev.aqaraCubeT1ProLib, line 63
+        5: 'flipToSide',      // was fall // library marker kkossev.aqaraCubeT1ProLib, line 64
+        6: 'rotateLeft', // library marker kkossev.aqaraCubeT1ProLib, line 65
+        7: 'rotateRight'    // library marker kkossev.aqaraCubeT1ProLib, line 66
+    ] // library marker kkossev.aqaraCubeT1ProLib, line 67
+] // library marker kkossev.aqaraCubeT1ProLib, line 68
+
+/////////////////////// action mode //////////////////// // library marker kkossev.aqaraCubeT1ProLib, line 70
+@Field static final Map AqaraCubeActionModeOpts = [ // library marker kkossev.aqaraCubeT1ProLib, line 71
+    defaultValue: 0, // library marker kkossev.aqaraCubeT1ProLib, line 72
+    options     : [ // library marker kkossev.aqaraCubeT1ProLib, line 73
+        0: 'slide', // library marker kkossev.aqaraCubeT1ProLib, line 74
+        1: 'rotate', // library marker kkossev.aqaraCubeT1ProLib, line 75
+        2: 'tapTwice', // library marker kkossev.aqaraCubeT1ProLib, line 76
+        3: 'flip90', // library marker kkossev.aqaraCubeT1ProLib, line 77
+        4: 'flip180', // library marker kkossev.aqaraCubeT1ProLib, line 78
+        5: 'shake', // library marker kkossev.aqaraCubeT1ProLib, line 79
+        6: 'inactivity' // library marker kkossev.aqaraCubeT1ProLib, line 80
+    ] // library marker kkossev.aqaraCubeT1ProLib, line 81
+] // library marker kkossev.aqaraCubeT1ProLib, line 82
+
+@Field static final Map AqaraCubeSideOpts = [ // library marker kkossev.aqaraCubeT1ProLib, line 84
+    defaultValue: 0, // library marker kkossev.aqaraCubeT1ProLib, line 85
+    options     : [ // library marker kkossev.aqaraCubeT1ProLib, line 86
+        0: 'actionFromSide', // library marker kkossev.aqaraCubeT1ProLib, line 87
+        1: 'actionSide', // library marker kkossev.aqaraCubeT1ProLib, line 88
+        2: 'actionToSide', // library marker kkossev.aqaraCubeT1ProLib, line 89
+        3: 'side',                 // Destination side of action // library marker kkossev.aqaraCubeT1ProLib, line 90
+        4: 'sideUp'                // Upfacing side of current scene // library marker kkossev.aqaraCubeT1ProLib, line 91
+    ] // library marker kkossev.aqaraCubeT1ProLib, line 92
+]           // library marker kkossev.aqaraCubeT1ProLib, line 93
+
+
+def refreshAqaraCube() { // library marker kkossev.aqaraCubeT1ProLib, line 96
+    List<String> cmds = [] // library marker kkossev.aqaraCubeT1ProLib, line 97
+
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                 // battery voltage // library marker kkossev.aqaraCubeT1ProLib, line 99
+    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200) // library marker kkossev.aqaraCubeT1ProLib, line 100
+    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)   // operation_mode // library marker kkossev.aqaraCubeT1ProLib, line 101
+    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)   // side_up attribute report // library marker kkossev.aqaraCubeT1ProLib, line 102
+
+    logDebug "refreshAqaraCube() : ${cmds}" // library marker kkossev.aqaraCubeT1ProLib, line 104
+    return cmds // library marker kkossev.aqaraCubeT1ProLib, line 105
+} // library marker kkossev.aqaraCubeT1ProLib, line 106
+
+def initVarsAqaraCube(boolean fullInit=false) { // library marker kkossev.aqaraCubeT1ProLib, line 108
+    logDebug "initVarsAqaraCube(${fullInit})" // library marker kkossev.aqaraCubeT1ProLib, line 109
+    if (fullInit || settings?.cubeOperationMode == null) device.updateSetting('cubeOperationMode', [value: AqaraCubeModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.aqaraCubeT1ProLib, line 110
+} // library marker kkossev.aqaraCubeT1ProLib, line 111
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 113
+    configure: async (device, coordinatorEndpoint, logger) => { // library marker kkossev.aqaraCubeT1ProLib, line 114
+        const endpoint = device.getEndpoint(1); // library marker kkossev.aqaraCubeT1ProLib, line 115
+        await endpoint.write('aqaraOpple', {'mode': 1}, {manufacturerCode: 0x115f}); // library marker kkossev.aqaraCubeT1ProLib, line 116
+        await reporting.bind(endpoint, coordinatorEndpoint, ['genBasic','genOnOff','genPowerCfg','genMultistateInput']); // library marker kkossev.aqaraCubeT1ProLib, line 117
+        await endpoint.read('genPowerCfg', ['batteryVoltage']); // library marker kkossev.aqaraCubeT1ProLib, line 118
+        await endpoint.read('aqaraOpple', [0x0148], {manufacturerCode: 0x115f}); // library marker kkossev.aqaraCubeT1ProLib, line 119
+        await endpoint.read('aqaraOpple', [0x0149], {manufacturerCode: 0x115f}); // library marker kkossev.aqaraCubeT1ProLib, line 120
+    }, // library marker kkossev.aqaraCubeT1ProLib, line 121
+
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 123
+
+def configureDeviceAqaraCube() { // library marker kkossev.aqaraCubeT1ProLib, line 125
+    List<String> cmds = [] // library marker kkossev.aqaraCubeT1ProLib, line 126
+    cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 50",]                                                 // Aqara - Hubitat C-7 voodoo // library marker kkossev.aqaraCubeT1ProLib, line 127
+
+    // await endpoint.write('aqaraOpple', {'mode': 1}, {manufacturerCode: 0x115f}); // library marker kkossev.aqaraCubeT1ProLib, line 129
+    def mode = settings?.cubeOperationMode != null ? settings.cubeOperationMode : AqaraCubeModeOpts.defaultValue // library marker kkossev.aqaraCubeT1ProLib, line 130
+    logDebug "cubeOperationMode will be set to ${(AqaraCubeModeOpts.options[mode as int])} (${mode})" // library marker kkossev.aqaraCubeT1ProLib, line 131
+    cmds += zigbee.writeAttribute(0xFCC0, 0x0009, 0x20, mode as int, [mfgCode: 0x115F], delay=200) // library marker kkossev.aqaraCubeT1ProLib, line 132
+
+    // https://github.com/Koenkk/zigbee-herdsman-converters/pull/5367 // library marker kkossev.aqaraCubeT1ProLib, line 134
+    cmds += ["he raw 0x${device.deviceNetworkId} 1 ${device.endpointId} 0xFCC0 {14 5F 11 01 02 FF 00 41 10 45 65 21 20 75 38 17 69 78 53 89 51 13 16 49 58}  {0x0104}", "delay 50",]      // Aqara Cube T1 Pro voodoo // library marker kkossev.aqaraCubeT1ProLib, line 135
+
+    // TODO - check if explicit binding is needed at all? // library marker kkossev.aqaraCubeT1ProLib, line 137
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.aqaraCubeT1ProLib, line 138
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.aqaraCubeT1ProLib, line 139
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.aqaraCubeT1ProLib, line 140
+
+    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200) // library marker kkossev.aqaraCubeT1ProLib, line 142
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200) // library marker kkossev.aqaraCubeT1ProLib, line 143
+    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)    // library marker kkossev.aqaraCubeT1ProLib, line 144
+    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)    // library marker kkossev.aqaraCubeT1ProLib, line 145
+
+    logDebug "configureDeviceAqaraCube() : ${cmds}" // library marker kkossev.aqaraCubeT1ProLib, line 147
+    return cmds     // library marker kkossev.aqaraCubeT1ProLib, line 148
+} // library marker kkossev.aqaraCubeT1ProLib, line 149
+
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 152
+ # Clusters (Scene Mode):  // library marker kkossev.aqaraCubeT1ProLib, line 153
+  ## Endpoint 2:  // library marker kkossev.aqaraCubeT1ProLib, line 154
+
+  | Cluster            | Data                      | Description                   | // library marker kkossev.aqaraCubeT1ProLib, line 156
+  | ------------------ | ------------------------- | ----------------------------- | // library marker kkossev.aqaraCubeT1ProLib, line 157
+  | genMultistateInput | {presentValue: 0}         | action: shake                 | // library marker kkossev.aqaraCubeT1ProLib, line 158
+  | genMultistateInput | {presentValue: 4}         | action: hold                  | // library marker kkossev.aqaraCubeT1ProLib, line 159
+  | genMultistateInput | {presentValue: 2}         | action: wakeup                | // library marker kkossev.aqaraCubeT1ProLib, line 160
+  | genMultistateInput | {presentValue: 1024-1029} | action: fall with ith side up | // library marker kkossev.aqaraCubeT1ProLib, line 161
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 162
+void parseMultistateInputClusterAqaraCube(final Map descMap) { // library marker kkossev.aqaraCubeT1ProLib, line 163
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.aqaraCubeT1ProLib, line 164
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.aqaraCubeT1ProLib, line 165
+    logDebug "parseMultistateInputClusterAqaraCube: (0X012)  descMap.value=${descMap.value} value=${value}" // library marker kkossev.aqaraCubeT1ProLib, line 166
+    String action = null // library marker kkossev.aqaraCubeT1ProLib, line 167
+    Integer side = 0 // library marker kkossev.aqaraCubeT1ProLib, line 168
+    switch (value as Integer) { // library marker kkossev.aqaraCubeT1ProLib, line 169
+        case 0:  // library marker kkossev.aqaraCubeT1ProLib, line 170
+            action = 'shake' // library marker kkossev.aqaraCubeT1ProLib, line 171
+            break // library marker kkossev.aqaraCubeT1ProLib, line 172
+        case 2: // library marker kkossev.aqaraCubeT1ProLib, line 173
+            action = 'wakeup' // library marker kkossev.aqaraCubeT1ProLib, line 174
+            break // library marker kkossev.aqaraCubeT1ProLib, line 175
+        case 4: // library marker kkossev.aqaraCubeT1ProLib, line 176
+            action = 'hold' // library marker kkossev.aqaraCubeT1ProLib, line 177
+            break // library marker kkossev.aqaraCubeT1ProLib, line 178
+        case 1024..1029 : // library marker kkossev.aqaraCubeT1ProLib, line 179
+            action = 'flipToSide' // library marker kkossev.aqaraCubeT1ProLib, line 180
+            side = value - 1024 + 1 // library marker kkossev.aqaraCubeT1ProLib, line 181
+            break // library marker kkossev.aqaraCubeT1ProLib, line 182
+        default : // library marker kkossev.aqaraCubeT1ProLib, line 183
+            logWarn "parseMultistateInputClusterAqaraCube: unknown value: xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.aqaraCubeT1ProLib, line 184
+            return // library marker kkossev.aqaraCubeT1ProLib, line 185
+    } // library marker kkossev.aqaraCubeT1ProLib, line 186
+    if (action != null) { // library marker kkossev.aqaraCubeT1ProLib, line 187
+        def eventMap = [:] // library marker kkossev.aqaraCubeT1ProLib, line 188
+        eventMap.value = action // library marker kkossev.aqaraCubeT1ProLib, line 189
+        eventMap.name = "action" // library marker kkossev.aqaraCubeT1ProLib, line 190
+        eventMap.unit = "" // library marker kkossev.aqaraCubeT1ProLib, line 191
+        eventMap.type = "physical" // library marker kkossev.aqaraCubeT1ProLib, line 192
+        eventMap.isStateChange = true    // always send these events as a change! // library marker kkossev.aqaraCubeT1ProLib, line 193
+        String sideStr = "" // library marker kkossev.aqaraCubeT1ProLib, line 194
+        if (action == "flipToSide") { // library marker kkossev.aqaraCubeT1ProLib, line 195
+            sideStr = side.toString() // library marker kkossev.aqaraCubeT1ProLib, line 196
+            eventMap.data = [side: side] // library marker kkossev.aqaraCubeT1ProLib, line 197
+        } // library marker kkossev.aqaraCubeT1ProLib, line 198
+        eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${sideStr} ${eventMap.unit}" // library marker kkossev.aqaraCubeT1ProLib, line 199
+        sendEvent(eventMap) // library marker kkossev.aqaraCubeT1ProLib, line 200
+        logInfo "${eventMap.descriptionText}"      // library marker kkossev.aqaraCubeT1ProLib, line 201
+    } // library marker kkossev.aqaraCubeT1ProLib, line 202
+    else { // library marker kkossev.aqaraCubeT1ProLib, line 203
+        logWarn "parseMultistateInputClusterAqaraCube: unknown action: ${action} xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.aqaraCubeT1ProLib, line 204
+    } // library marker kkossev.aqaraCubeT1ProLib, line 205
+} // library marker kkossev.aqaraCubeT1ProLib, line 206
+
+void parseXiaomiClusterAqaraCube(final Map descMap) { // library marker kkossev.aqaraCubeT1ProLib, line 208
+    logDebug "parseMultistateInputClusterAqaraCube: cluster 0xFCC0 attribute 0x${descMap.attrId} ${descMap}" // library marker kkossev.aqaraCubeT1ProLib, line 209
+    switch (descMap.attrInt as Integer) { // library marker kkossev.aqaraCubeT1ProLib, line 210
+        case 0x0148 :                    // Aqara Cube T1 Pro - Mode // library marker kkossev.aqaraCubeT1ProLib, line 211
+            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.aqaraCubeT1ProLib, line 212
+            log.info "cubeMode is '${AqaraCubeModeOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.aqaraCubeT1ProLib, line 213
+            device.updateSetting('cubeMode', [value: value.toString(), type: 'enum']) // library marker kkossev.aqaraCubeT1ProLib, line 214
+            break // library marker kkossev.aqaraCubeT1ProLib, line 215
+        case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5) // library marker kkossev.aqaraCubeT1ProLib, line 216
+            processSideFacingUp(descMap) // library marker kkossev.aqaraCubeT1ProLib, line 217
+            break // library marker kkossev.aqaraCubeT1ProLib, line 218
+        default: // library marker kkossev.aqaraCubeT1ProLib, line 219
+            logWarn "parseXiaomiClusterAqaraCube: unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.aqaraCubeT1ProLib, line 220
+            break // library marker kkossev.aqaraCubeT1ProLib, line 221
+    } // library marker kkossev.aqaraCubeT1ProLib, line 222
+} // library marker kkossev.aqaraCubeT1ProLib, line 223
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 225
+ # Clusters (Scene Mode):  // library marker kkossev.aqaraCubeT1ProLib, line 226
+  ## Endpoint 2:  // library marker kkossev.aqaraCubeT1ProLib, line 227
+
+  | Cluster            | Data                      | Description                   | // library marker kkossev.aqaraCubeT1ProLib, line 229
+  | ------------------ | ------------------------- | ----------------------------- | // library marker kkossev.aqaraCubeT1ProLib, line 230
+  | aqaraopple         | {329: 0-5}                | i side facing up              | // library marker kkossev.aqaraCubeT1ProLib, line 231
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 232
+void processSideFacingUp(final Map descMap) { // library marker kkossev.aqaraCubeT1ProLib, line 233
+    logDebug "processSideFacingUp: ${descMap}" // library marker kkossev.aqaraCubeT1ProLib, line 234
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.aqaraCubeT1ProLib, line 235
+    def value = hexStrToUnsignedInt(descMap.value)     // library marker kkossev.aqaraCubeT1ProLib, line 236
+    if (value>=0 && value<=5) { // library marker kkossev.aqaraCubeT1ProLib, line 237
+        def eventMap = [:] // library marker kkossev.aqaraCubeT1ProLib, line 238
+        eventMap.value = value + 1 // library marker kkossev.aqaraCubeT1ProLib, line 239
+        eventMap.name = "sideUp" // library marker kkossev.aqaraCubeT1ProLib, line 240
+        eventMap.unit = "" // library marker kkossev.aqaraCubeT1ProLib, line 241
+        eventMap.type = "physical" // library marker kkossev.aqaraCubeT1ProLib, line 242
+        eventMap.isStateChange = true // library marker kkossev.aqaraCubeT1ProLib, line 243
+        eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.aqaraCubeT1ProLib, line 244
+        sendEvent(eventMap) // library marker kkossev.aqaraCubeT1ProLib, line 245
+        logInfo "${eventMap.descriptionText}"         // library marker kkossev.aqaraCubeT1ProLib, line 246
+    } // library marker kkossev.aqaraCubeT1ProLib, line 247
+    else { // library marker kkossev.aqaraCubeT1ProLib, line 248
+        logWarn "invalid Aqara Cube side facing up value=${value}" // library marker kkossev.aqaraCubeT1ProLib, line 249
+    } // library marker kkossev.aqaraCubeT1ProLib, line 250
+} // library marker kkossev.aqaraCubeT1ProLib, line 251
+
+def sendAqaraCubeOperationModeEvent(final Integer mode) // library marker kkossev.aqaraCubeT1ProLib, line 253
+{ // library marker kkossev.aqaraCubeT1ProLib, line 254
+    logDebug "sendAqaraCubeModeEvent: ${mode}" // library marker kkossev.aqaraCubeT1ProLib, line 255
+    if (mode in [0,1]) { // library marker kkossev.aqaraCubeT1ProLib, line 256
+        def eventMap = [:] // library marker kkossev.aqaraCubeT1ProLib, line 257
+        eventMap.value = AqaraCubeModeOpts.options.values()[mode as int] // library marker kkossev.aqaraCubeT1ProLib, line 258
+        eventMap.name = "operationMode" // library marker kkossev.aqaraCubeT1ProLib, line 259
+        eventMap.unit = "" // library marker kkossev.aqaraCubeT1ProLib, line 260
+        eventMap.type = "physical" // library marker kkossev.aqaraCubeT1ProLib, line 261
+        eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} (${mode})" // library marker kkossev.aqaraCubeT1ProLib, line 262
+        sendEvent(eventMap) // library marker kkossev.aqaraCubeT1ProLib, line 263
+        logInfo "${eventMap.descriptionText}"         // library marker kkossev.aqaraCubeT1ProLib, line 264
+    } // library marker kkossev.aqaraCubeT1ProLib, line 265
+    else { // library marker kkossev.aqaraCubeT1ProLib, line 266
+        logWarn "invalid Aqara Cube mode ${mode}" // library marker kkossev.aqaraCubeT1ProLib, line 267
+    }     // library marker kkossev.aqaraCubeT1ProLib, line 268
+} // library marker kkossev.aqaraCubeT1ProLib, line 269
+
+void parseAqaraCubeAnalogInputCluster(final Map descMap) { // library marker kkossev.aqaraCubeT1ProLib, line 271
+    logDebug "parseAqaraCubeAnalogInputCluster: (0x000C) attribute 0x${descMap.attrId} (value ${descMap.value}) !TODO!" // library marker kkossev.aqaraCubeT1ProLib, line 272
+    if (descMap.value == null || descMap.value == 'FFFF') { logWarn "invalid or unknown value"; return } // invalid or unknown value // library marker kkossev.aqaraCubeT1ProLib, line 273
+    if (descMap.attrId == "0055") { // library marker kkossev.aqaraCubeT1ProLib, line 274
+        def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.aqaraCubeT1ProLib, line 275
+	    Float floatValue = Float.intBitsToFloat(value.intValue())    // library marker kkossev.aqaraCubeT1ProLib, line 276
+        logWarn "value=${value} floatValue=${floatValue}"  // library marker kkossev.aqaraCubeT1ProLib, line 277
+        sendAqaraCubeRotateEvent(floatValue as Integer) // library marker kkossev.aqaraCubeT1ProLib, line 278
+    } // library marker kkossev.aqaraCubeT1ProLib, line 279
+    else { // library marker kkossev.aqaraCubeT1ProLib, line 280
+        logDebug "skipped attribute 0x${descMap.attrId}" // library marker kkossev.aqaraCubeT1ProLib, line 281
+        return // library marker kkossev.aqaraCubeT1ProLib, line 282
+    } // library marker kkossev.aqaraCubeT1ProLib, line 283
+    // value: 05 0B01214E 02550039 91C24042 // library marker kkossev.aqaraCubeT1ProLib, line 284
+    // value: 05 0B0121F4 01550039 15AE1EC2 // library marker kkossev.aqaraCubeT1ProLib, line 285
+    //        05 0B0121F4 01550039 1E853FC2 // library marker kkossev.aqaraCubeT1ProLib, line 286
+
+    //        01 0B0121F4 01550039 0A579B42 // library marker kkossev.aqaraCubeT1ProLib, line 288
+    //        01 0B0121C2 01550039 EB518CC1 // library marker kkossev.aqaraCubeT1ProLib, line 289
+    //        02 0B012168 01550039 C3F5F8C1 // library marker kkossev.aqaraCubeT1ProLib, line 290
+    //        04 0B0121F4 01550039 FFFF6CC2 // library marker kkossev.aqaraCubeT1ProLib, line 291
+    //        00 0B0121F4 01550039 02001742 // library marker kkossev.aqaraCubeT1ProLib, line 292
+    //        05 0B0121F4 01550039 EB519FC2 // library marker kkossev.aqaraCubeT1ProLib, line 293
+
+    // left :  000B0121F401550039 A4F0B3C2  ( side 1) // library marker kkossev.aqaraCubeT1ProLib, line 295
+    // left :  000B0121F401550039 AF47C1C2 // library marker kkossev.aqaraCubeT1ProLib, line 296
+    // left :  000B01214001550039 53B8CCC1 // library marker kkossev.aqaraCubeT1ProLib, line 297
+
+    // rihjt:  000B0121F401550039 EBD1EA42 // library marker kkossev.aqaraCubeT1ProLib, line 299
+    // right:  000B0121F401550039 A4700F43 // library marker kkossev.aqaraCubeT1ProLib, line 300
+    // right:  000B0121F401550039 703D4B42 // library marker kkossev.aqaraCubeT1ProLib, line 301
+
+    // left :  010B0121F401550039 15AEAFC2  (side 2) // library marker kkossev.aqaraCubeT1ProLib, line 303
+    // left:   010B0121F401550039 8E4291C2 // library marker kkossev.aqaraCubeT1ProLib, line 304
+
+    // right:  010B0121F401550039 5338D042 // library marker kkossev.aqaraCubeT1ProLib, line 306
+    // right:  010B01210C03550039 C4F5C342 // library marker kkossev.aqaraCubeT1ProLib, line 307
+
+    // left:   010B0121F401550039 656689C2 // library marker kkossev.aqaraCubeT1ProLib, line 309
+    // left:   010B01216801550039 295CAFC1 attribute 0x0055 (value C1AF5C29) !TODO! // library marker kkossev.aqaraCubeT1ProLib, line 310
+    // left:   010B0121F401550039 90C258C2 attribute 0x0055 (value C258C290) !TODO! // library marker kkossev.aqaraCubeT1ProLib, line 311
+    // left:   010B0121F401550039 9799CBC2 attribute 0x0055 (value C2CB9997) // library marker kkossev.aqaraCubeT1ProLib, line 312
+
+} // library marker kkossev.aqaraCubeT1ProLib, line 314
+
+void sendAqaraCubeRotateEvent(final Integer degrees) { // library marker kkossev.aqaraCubeT1ProLib, line 316
+    String leftRight = degrees < 0 ? 'rotateLeft' : 'rotateRight' // library marker kkossev.aqaraCubeT1ProLib, line 317
+
+    def eventMap = [:] // library marker kkossev.aqaraCubeT1ProLib, line 319
+    eventMap.name = "action" // library marker kkossev.aqaraCubeT1ProLib, line 320
+    eventMap.value = leftRight // library marker kkossev.aqaraCubeT1ProLib, line 321
+    eventMap.unit = "degrees" // library marker kkossev.aqaraCubeT1ProLib, line 322
+    eventMap.type = "physical" // library marker kkossev.aqaraCubeT1ProLib, line 323
+    eventMap.isStateChange = true    // always send these events as a change! // library marker kkossev.aqaraCubeT1ProLib, line 324
+    eventMap.data = [degrees: degrees] // library marker kkossev.aqaraCubeT1ProLib, line 325
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${degrees} ${eventMap.unit}" // library marker kkossev.aqaraCubeT1ProLib, line 326
+    sendEvent(eventMap) // library marker kkossev.aqaraCubeT1ProLib, line 327
+    logInfo "${eventMap.descriptionText}"         // library marker kkossev.aqaraCubeT1ProLib, line 328
+} // library marker kkossev.aqaraCubeT1ProLib, line 329
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 331
+  ## Endpoint 3:  // library marker kkossev.aqaraCubeT1ProLib, line 332
+
+  | Cluster   | Data                                  | Desc                                       | // library marker kkossev.aqaraCubeT1ProLib, line 334
+  | --------- | ------------------------------------- | ------------------------------------------ | // library marker kkossev.aqaraCubeT1ProLib, line 335
+  | genAnalog | {267: 500, 329: 3, presentValue: -51} | 267: NA, 329: side up, presentValue: angle | // library marker kkossev.aqaraCubeT1ProLib, line 336
+
+
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 339
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 341
+        zigbeeModel: ['lumi.sensor_cube', 'lumi.sensor_cube.aqgl01', 'lumi.remote.cagl02'], // library marker kkossev.aqaraCubeT1ProLib, line 342
+        model: 'MFKZQ01LM', // library marker kkossev.aqaraCubeT1ProLib, line 343
+        vendor: 'Xiaomi', // library marker kkossev.aqaraCubeT1ProLib, line 344
+        description: 'Mi/Aqara smart home cube', // library marker kkossev.aqaraCubeT1ProLib, line 345
+        meta: {battery: {voltageToPercentage: '3V_2850_3000'}}, // library marker kkossev.aqaraCubeT1ProLib, line 346
+        fromZigbee: [fz.xiaomi_basic, fz.MFKZQ01LM_action_multistate, fz.MFKZQ01LM_action_analog], // library marker kkossev.aqaraCubeT1ProLib, line 347
+        exposes: [e.battery(), e.battery_voltage(), e.angle('action_angle'), e.device_temperature(), e.power_outage_count(false), // library marker kkossev.aqaraCubeT1ProLib, line 348
+            e.cube_side('action_from_side'), e.cube_side('action_side'), e.cube_side('action_to_side'), e.cube_side('side'), // library marker kkossev.aqaraCubeT1ProLib, line 349
+            e.action(['shake', 'wakeup', 'fall', 'tap', 'slide', 'flip180', 'flip90', 'rotate_left', 'rotate_right'])], // library marker kkossev.aqaraCubeT1ProLib, line 350
+        toZigbee: [], // library marker kkossev.aqaraCubeT1ProLib, line 351
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 352
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 354
+const definition = { // library marker kkossev.aqaraCubeT1ProLib, line 355
+    zigbeeModel: ['lumi.remote.cagl02'], // library marker kkossev.aqaraCubeT1ProLib, line 356
+    model: 'CTP-R01', // library marker kkossev.aqaraCubeT1ProLib, line 357
+    vendor: 'Lumi', // library marker kkossev.aqaraCubeT1ProLib, line 358
+    description: 'Aqara cube T1 Pro', // library marker kkossev.aqaraCubeT1ProLib, line 359
+    meta: { battery: { voltageToPercentage: '3V_2850_3000' } }, // library marker kkossev.aqaraCubeT1ProLib, line 360
+    configure: async (device, coordinatorEndpoint, logger) => { // library marker kkossev.aqaraCubeT1ProLib, line 361
+        const endpoint = device.getEndpoint(1); // library marker kkossev.aqaraCubeT1ProLib, line 362
+        await endpoint.write('aqaraOpple', {'mode': 1}, {manufacturerCode: 0x115f}); // library marker kkossev.aqaraCubeT1ProLib, line 363
+        await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff','genPowerCfg','genMultistateInput']); // library marker kkossev.aqaraCubeT1ProLib, line 364
+    }, // library marker kkossev.aqaraCubeT1ProLib, line 365
+    fromZigbee: [aqara_opple, action_multistate, fz.MFKZQ01LM_action_analog], // library marker kkossev.aqaraCubeT1ProLib, line 366
+
+
+ convert: (model, msg, publish, options, meta) => { // library marker kkossev.aqaraCubeT1ProLib, line 369
+   const value = msg.data['presentValue']; // library marker kkossev.aqaraCubeT1ProLib, line 370
+   let result; // library marker kkossev.aqaraCubeT1ProLib, line 371
+   if (value === 0) result = { action: 'shake' }; // library marker kkossev.aqaraCubeT1ProLib, line 372
+   else if (value === 2) result = { action: 'wakeup' }; // library marker kkossev.aqaraCubeT1ProLib, line 373
+   else if (value === 4) result = { action: 'hold' }; // library marker kkossev.aqaraCubeT1ProLib, line 374
+   else if (value >= 512) result = { action: 'tap', side: value - 511 }; // library marker kkossev.aqaraCubeT1ProLib, line 375
+   else if (value >= 256) result = { action: 'slide', side: value - 255 }; // library marker kkossev.aqaraCubeT1ProLib, line 376
+   else if (value >= 128) result = { action: 'flip180', side: value - 127 }; // library marker kkossev.aqaraCubeT1ProLib, line 377
+   else if (value >= 64) result = { action: 'flip90', action_from_side: Math.floor((value - 64) / 8) + 1, action_to_side: (value % 8) + 1, action_side: (value % 8) + 1, from_side: Math.floor((value - 64) / 8) + 1, to_side: (value % 8) + 1, side: (value % 8) + 1 }; // library marker kkossev.aqaraCubeT1ProLib, line 378
+   else if (value >= 1024) result = { action: 'side_up', side_up: value - 1023 }; // library marker kkossev.aqaraCubeT1ProLib, line 379
+   if (result && !utils.isLegacyEnabled(options)) { delete result.to_side, delete result.from_side }; // library marker kkossev.aqaraCubeT1ProLib, line 380
+   return result ? result : null; // library marker kkossev.aqaraCubeT1ProLib, line 381
+ }, // library marker kkossev.aqaraCubeT1ProLib, line 382
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 383
+
+
+/* // library marker kkossev.aqaraCubeT1ProLib, line 386
+Manufacturer:	LUMI // library marker kkossev.aqaraCubeT1ProLib, line 387
+Endpoint 01 application:	19 // library marker kkossev.aqaraCubeT1ProLib, line 388
+Endpoint 01 endpointId:	01 // library marker kkossev.aqaraCubeT1ProLib, line 389
+Endpoint 01 idAsInt:	1 // library marker kkossev.aqaraCubeT1ProLib, line 390
+Endpoint 01 inClusters:	0000,0003,0001,0012,0006 // library marker kkossev.aqaraCubeT1ProLib, line 391
+Endpoint 01 initialized:	true // library marker kkossev.aqaraCubeT1ProLib, line 392
+Endpoint 01 manufacturer:	LUMI // library marker kkossev.aqaraCubeT1ProLib, line 393
+Endpoint 01 model:	lumi.remote.cagl02 // library marker kkossev.aqaraCubeT1ProLib, line 394
+Endpoint 01 outClusters:	0000,0003,0019 // library marker kkossev.aqaraCubeT1ProLib, line 395
+Endpoint 01 profileId:	0104 // library marker kkossev.aqaraCubeT1ProLib, line 396
+Endpoint 01 stage:	4 // library marker kkossev.aqaraCubeT1ProLib, line 397
+
+Endpoint 02 application:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 399
+Endpoint 02 endpointId:	02 // library marker kkossev.aqaraCubeT1ProLib, line 400
+Endpoint 02 idAsInt:	2 // library marker kkossev.aqaraCubeT1ProLib, line 401
+Endpoint 02 inClusters:	0012 // library marker kkossev.aqaraCubeT1ProLib, line 402
+Endpoint 02 initialized:	true // library marker kkossev.aqaraCubeT1ProLib, line 403
+Endpoint 02 manufacturer:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 404
+Endpoint 02 model:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 405
+Endpoint 02 outClusters:	0012 // library marker kkossev.aqaraCubeT1ProLib, line 406
+Endpoint 02 profileId:	0104 // library marker kkossev.aqaraCubeT1ProLib, line 407
+Endpoint 02 stage:	4 // library marker kkossev.aqaraCubeT1ProLib, line 408
+
+Endpoint 03 application:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 410
+Endpoint 03 endpointId:	03 // library marker kkossev.aqaraCubeT1ProLib, line 411
+Endpoint 03 idAsInt:	3 // library marker kkossev.aqaraCubeT1ProLib, line 412
+Endpoint 03 inClusters:	000C // library marker kkossev.aqaraCubeT1ProLib, line 413
+Endpoint 03 initialized:	true // library marker kkossev.aqaraCubeT1ProLib, line 414
+Endpoint 03 manufacturer:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 415
+Endpoint 03 model:	unknown // library marker kkossev.aqaraCubeT1ProLib, line 416
+Endpoint 03 outClusters:	000C // library marker kkossev.aqaraCubeT1ProLib, line 417
+Endpoint 03 profileId:	0104 // library marker kkossev.aqaraCubeT1ProLib, line 418
+Endpoint 03 stage:	4 // library marker kkossev.aqaraCubeT1ProLib, line 419
+
+*/ // library marker kkossev.aqaraCubeT1ProLib, line 421
+
+// ~~~~~ end include (131) kkossev.aqaraCubeT1ProLib ~~~~~
