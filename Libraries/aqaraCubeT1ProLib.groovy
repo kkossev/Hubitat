@@ -12,23 +12,16 @@ library (
 /*
  *  zigbeeScenes - ZCL Scenes Cluster methods - library
  *
- *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except
- *  in compliance with the License. You may obtain a copy of the License at:
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *  for the specific language governing permissions and limitations under the License.
- *
- * ver. 1.0.0  2023-07-15 kkossev  - (dev. branch) - Libraries introduction for the AqaraCubeT1Pro driver; operationMode 'scene': action:wakup, hold, shake, flipToSide,  rotateLeft, rotateRight; sideUp: 1..6;
+ * ver. 1.0.0  2023-07-15 kkossev  - Libraries introduction for the AqaraCubeT1Pro driver; operationMode 'scene': action:wakeup, hold, shake, flipToSide,  rotateLeft, rotateRight; sideUp: 1..6;
+ * ver. 1.0.1  2023-07-16 kkossev  - (dev. branch) - sideUp # event is now sent before the flipToSide action; added second fingerprint (@stephen_nutt); skipped duplicated 'sideUp' events; added 'throw' action; 
  *
  *                                   TODO: 
+ *                                   TODO: send action flipToSide when side is changed when the cube is lifted and put down quickly @AlanB
+ *                                   TODO: 'sideUp' events also be detected as a button presses @Sebastien
 */
 
-
-def aqaraCubeT1ProLibVersion()   {"1.0.0"}
-def aqaraCubeT1ProLibTimeStamp() {"2023/07/15 1:14 PM"}
+def aqaraCubeT1ProLibVersion()   {"1.0.1"}
+def aqaraCubeT1ProLibTimeStamp() {"2023/07/16 4:47 PM"}
 
 metadata {
     attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String>
@@ -39,6 +32,7 @@ metadata {
     
 	 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0012,0006", outClusters:"0000,0003,0019", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006", outClusters:"0000,0003", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"                        // https://community.hubitat.com/t/alpha-aqara-cube-t1-pro-c-7/121604/11?u=kkossev
     preferences {
         input name: 'cubeOperationMode', type: 'enum', title: '<b>Cube Operation Mode</b>', options: AqaraCubeModeOpts.options, defaultValue: AqaraCubeModeOpts.defaultValue, required: true, description: '<i>Operation Mode.<br>Press LINK button 5 times to toggle between action mode and scene mode</i>'
     }
@@ -56,14 +50,14 @@ metadata {
 @Field static final Map AqaraCubeSceneModeOpts = [
     defaultValue: 0,
     options     : [
-        0: 'rotate',
-        1: 'shake',
+        1: 'shake',           // activated when the cube is shaken
         2: 'hold',            // activated if user picks up the cube and holds it
         3: 'sideUp',          // activated when the cube is resting on a surface
         4: 'inactivity',
-        5: 'flipToSide',      // was fall
-        6: 'rotateLeft',
-        7: 'rotateRight'   
+        5: 'flipToSide',      // activated when the cube is flipped on a surface
+        6: 'rotateLeft',      // activated when the cube is rotated left on a surface
+        7: 'rotateRight',     // activated when the cube is rotated right on a surface
+        8: 'throw'            // activated after a throw motion
     ]
 ]
 
@@ -163,12 +157,15 @@ def configureDeviceAqaraCube() {
 void parseMultistateInputClusterAqaraCube(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseMultistateInputClusterAqaraCube: (0X012)  descMap.value=${descMap.value} value=${value}"
+    logDebug "parseMultistateInputClusterAqaraCube: (0x012)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
     String action = null
     Integer side = 0
     switch (value as Integer) {
         case 0: 
             action = 'shake'
+            break
+        case 1: 
+            action = 'throw'
             break
         case 2:
             action = 'wakeup'
@@ -195,6 +192,8 @@ void parseMultistateInputClusterAqaraCube(final Map descMap) {
         if (action == "flipToSide") {
             sideStr = side.toString()
             eventMap.data = [side: side]
+            // first send a sideUp event, so that the side number is available in the automation rule
+            sendAqaraCubeSideUpEvent((side-1) as int)
         }
         eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${sideStr} ${eventMap.unit}"
         sendEvent(eventMap)
@@ -233,7 +232,15 @@ void parseXiaomiClusterAqaraCube(final Map descMap) {
 void processSideFacingUp(final Map descMap) {
     logDebug "processSideFacingUp: ${descMap}"
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)    
+    Integer value = hexStrToUnsignedInt(descMap.value)    
+    sendAqaraCubeSideUpEvent(value)
+}
+
+def sendAqaraCubeSideUpEvent(final Integer value) {
+    if ((device.currentValue('sideUp', true) as Integer) == (value+1)) {
+        logDebug "no change in sideUp (${(value+1)}), skipping..."
+        return
+    }
     if (value>=0 && value<=5) {
         def eventMap = [:]
         eventMap.value = value + 1
@@ -247,7 +254,7 @@ void processSideFacingUp(final Map descMap) {
     }
     else {
         logWarn "invalid Aqara Cube side facing up value=${value}"
-    }
+    }    
 }
 
 def sendAqaraCubeOperationModeEvent(final Integer mode)
@@ -269,48 +276,18 @@ def sendAqaraCubeOperationModeEvent(final Integer mode)
 }
 
 void parseAqaraCubeAnalogInputCluster(final Map descMap) {
-    logDebug "parseAqaraCubeAnalogInputCluster: (0x000C) attribute 0x${descMap.attrId} (value ${descMap.value}) !TODO!"
+    logDebug "parseAqaraCubeAnalogInputCluster: (0x000C) attribute 0x${descMap.attrId} (value ${descMap.value})"
     if (descMap.value == null || descMap.value == 'FFFF') { logWarn "invalid or unknown value"; return } // invalid or unknown value
     if (descMap.attrId == "0055") {
         def value = hexStrToUnsignedInt(descMap.value)
 	    Float floatValue = Float.intBitsToFloat(value.intValue())   
-        logWarn "value=${value} floatValue=${floatValue}" 
+        logDebug "value=${value} floatValue=${floatValue}" 
         sendAqaraCubeRotateEvent(floatValue as Integer)
     }
     else {
-        logDebug "skipped attribute 0x${descMap.attrId}"
+        //logDebug "skipped attribute 0x${descMap.attrId}"
         return
     }
-    // value: 05 0B01214E 02550039 91C24042
-    // value: 05 0B0121F4 01550039 15AE1EC2
-    //        05 0B0121F4 01550039 1E853FC2
-    
-    //        01 0B0121F4 01550039 0A579B42
-    //        01 0B0121C2 01550039 EB518CC1
-    //        02 0B012168 01550039 C3F5F8C1
-    //        04 0B0121F4 01550039 FFFF6CC2
-    //        00 0B0121F4 01550039 02001742
-    //        05 0B0121F4 01550039 EB519FC2
-    
-    // left :  000B0121F401550039 A4F0B3C2  ( side 1)
-    // left :  000B0121F401550039 AF47C1C2
-    // left :  000B01214001550039 53B8CCC1
-    
-    // rihjt:  000B0121F401550039 EBD1EA42
-    // right:  000B0121F401550039 A4700F43
-    // right:  000B0121F401550039 703D4B42
-    
-    // left :  010B0121F401550039 15AEAFC2  (side 2)
-    // left:   010B0121F401550039 8E4291C2
-    
-    // right:  010B0121F401550039 5338D042
-    // right:  010B01210C03550039 C4F5C342
-    
-    // left:   010B0121F401550039 656689C2
-    // left:   010B01216801550039 295CAFC1 attribute 0x0055 (value C1AF5C29) !TODO!
-    // left:   010B0121F401550039 90C258C2 attribute 0x0055 (value C258C290) !TODO!
-    // left:   010B0121F401550039 9799CBC2 attribute 0x0055 (value C2CB9997)
-
 }
 
 void sendAqaraCubeRotateEvent(final Integer degrees) {

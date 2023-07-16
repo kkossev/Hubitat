@@ -1,7 +1,7 @@
 /**
- *  Tuya Zigbee Device - Device Driver for Hubitat Elevation
+ *  Aqara Cube T1 Pro - Device Driver for Hubitat Elevation
  *
- *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/alpha-aqara-cube-t1-pro-mfczq12lm-c-7/121604
  *
  * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * 	in compliance with the License. You may obtain a copy of the License at:
@@ -22,7 +22,8 @@
  * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
- * ver. 2.1.0  2023-07-145kkossev  - (dev. branch) - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
+ * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
+ * ver. 2.1.1  2023-07-16 kkossev  - (dev. branch) - Aqara Cube T1 Pro fixes and improvements
  *
  *                                   TODO: implement Configure device only
  *                                   TODO: implement LOAD ALL DEFAUTS
@@ -44,8 +45,8 @@
  *                                   TODO: battery min/max voltage preferences
  */
 
-static String version() { "2.1.0" }
-static String timeStamp() {"2023/07/15 1:14 PM"}
+static String version() { "2.1.1" }
+static String timeStamp() {"2023/07/16 4:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -127,7 +128,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Aqara_Qube_T1_Pro.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -711,6 +712,10 @@ void parseXiaomiCluster(final Map descMap) {
     }
 
     switch (descMap.attrInt as Integer) {
+        case 0x0009:                      // Aqara Cube T1 Pro
+            if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
+            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
+            break
         case 0x00FC:                      // FP1
             log.info "unknown attribute - resetting?"
             break
@@ -1001,6 +1006,9 @@ void parseBasicCluster(final Map descMap) {
             break
         case 0x0004:
             logDebug "received device manufacturer ${descMap?.value}"
+            break
+        case 0x0005:
+            logDebug "received device model ${descMap?.value}"
             break
         case 0x0007:
             def powerSourceReported = powerSourceOpts.options[descMap?.value as int]
