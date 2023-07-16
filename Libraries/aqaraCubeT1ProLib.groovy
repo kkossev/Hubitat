@@ -10,18 +10,17 @@ library (
     documentationLink: ""
 )
 /*
- *  zigbeeScenes - ZCL Scenes Cluster methods - library
+ * zigbeaqaraCubeT1ProLib - Aqara Cube T1 Pro Library
  *
  * ver. 1.0.0  2023-07-15 kkossev  - Libraries introduction for the AqaraCubeT1Pro driver; operationMode 'scene': action:wakeup, hold, shake, flipToSide,  rotateLeft, rotateRight; sideUp: 1..6;
- * ver. 1.0.1  2023-07-16 kkossev  - (dev. branch) - sideUp # event is now sent before the flipToSide action; added second fingerprint (@stephen_nutt); skipped duplicated 'sideUp' events; added 'throw' action; 
+ * ver. 1.0.1  2023-07-16 kkossev  - (dev. branch) - sideUp # event is now sent before the flipToSide action; added second fingerprint; skipped duplicated 'sideUp' events; added 'throw' action; added button events
  *
- *                                   TODO: 
  *                                   TODO: send action flipToSide when side is changed when the cube is lifted and put down quickly @AlanB
- *                                   TODO: 'sideUp' events also be detected as a button presses @Sebastien
+ *                                   TODO: add 'angle' event on rotation
 */
 
 def aqaraCubeT1ProLibVersion()   {"1.0.1"}
-def aqaraCubeT1ProLibTimeStamp() {"2023/07/16 4:47 PM"}
+def aqaraCubeT1ProLibTimeStamp() {"2023/07/16 7:15 PM"}
 
 metadata {
     attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String>
@@ -30,11 +29,17 @@ metadata {
     attribute "angle", "number"
     attribute "sideUp", "number"
     
+    command "push", [[name: "sent when the cube side is flipped", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
+    command "doubleTap", [[name: "sent when the cube side is shaken", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
+    command "release", [[name: "sent when the cube is rotated right", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
+    command "hold", [[name: "sent when the cube is rotated left", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
 	 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0012,0006", outClusters:"0000,0003,0019", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006", outClusters:"0000,0003", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"                        // https://community.hubitat.com/t/alpha-aqara-cube-t1-pro-c-7/121604/11?u=kkossev
     preferences {
         input name: 'cubeOperationMode', type: 'enum', title: '<b>Cube Operation Mode</b>', options: AqaraCubeModeOpts.options, defaultValue: AqaraCubeModeOpts.defaultValue, required: true, description: '<i>Operation Mode.<br>Press LINK button 5 times to toggle between action mode and scene mode</i>'
+        input name: 'sendButtonEvent', type: 'enum', title: '<b>Send Button Event</b>', options: SendButtonEventOpts.options, defaultValue: SendButtonEventOpts.defaultValue, required: true, description: '<i>Send button events on cube actions</i>'
+        
     }
 }
 
@@ -53,15 +58,15 @@ metadata {
         1: 'shake',           // activated when the cube is shaken
         2: 'hold',            // activated if user picks up the cube and holds it
         3: 'sideUp',          // activated when the cube is resting on a surface
-        4: 'inactivity',
-        5: 'flipToSide',      // activated when the cube is flipped on a surface
+        4: 'inactivity',      // (not used!)
+        5: 'flipToSide',      // (not used!) activated when the cube is flipped on a surface
         6: 'rotateLeft',      // activated when the cube is rotated left on a surface
         7: 'rotateRight',     // activated when the cube is rotated right on a surface
         8: 'throw'            // activated after a throw motion
     ]
 ]
 
-/////////////////////// action mode ////////////////////
+//------------------- action mode -----------------
 @Field static final Map AqaraCubeActionModeOpts = [
     defaultValue: 0,
     options     : [
@@ -85,7 +90,12 @@ metadata {
         4: 'sideUp'                // Upfacing side of current scene
     ]
 ]          
-          
+
+@Field static final Map SendButtonEventOpts = [
+    defaultValue: 0,
+    options     : [0: 'disabled', 1: 'enabled']
+]
+
 
 def refreshAqaraCube() {
     List<String> cmds = []
@@ -102,6 +112,14 @@ def refreshAqaraCube() {
 def initVarsAqaraCube(boolean fullInit=false) {
     logDebug "initVarsAqaraCube(${fullInit})"
     if (fullInit || settings?.cubeOperationMode == null) device.updateSetting('cubeOperationMode', [value: AqaraCubeModeOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.sendButtonEvent == null) device.updateSetting('sendButtonEvent', [value: SendButtonEventOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true)        // overwrite the defailt false setting
+}
+
+void initEventsAqaraCube(boolean fullInit=false) {
+    sendNumberOfButtonsEvent(6)
+    def supportedValues = ["pushed", "double", "held", "released", "tested"]
+    sendSupportedButtonValuesEvent(supportedValues)
 }
 
 /*
@@ -197,7 +215,13 @@ void parseMultistateInputClusterAqaraCube(final Map descMap) {
         }
         eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${sideStr} ${eventMap.unit}"
         sendEvent(eventMap)
-        logInfo "${eventMap.descriptionText}"     
+        logInfo "${eventMap.descriptionText}"   
+        if (action == "shake") {
+            if (settings?.sendButtonEvent){
+                side = device.currentValue('sideUp', true) as Integer
+                sendButtonEvent(side, "doubleTapped", isDigital=true)
+            }
+        }
     }
     else {
         logWarn "parseMultistateInputClusterAqaraCube: unknown action: ${action} xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -250,7 +274,10 @@ def sendAqaraCubeSideUpEvent(final Integer value) {
         eventMap.isStateChange = true
         eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
         sendEvent(eventMap)
-        logInfo "${eventMap.descriptionText}"        
+        logInfo "${eventMap.descriptionText}"
+        if (settings?.sendButtonEvent){
+            sendButtonEvent((value + 1) as Integer, "pushed", isDigital=true)
+        }
     }
     else {
         logWarn "invalid Aqara Cube side facing up value=${value}"
@@ -302,7 +329,11 @@ void sendAqaraCubeRotateEvent(final Integer degrees) {
     eventMap.data = [degrees: degrees]
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${degrees} ${eventMap.unit}"
     sendEvent(eventMap)
-    logInfo "${eventMap.descriptionText}"        
+    logInfo "${eventMap.descriptionText}"
+    if (settings?.sendButtonEvent){
+        def side = device.currentValue('sideUp', true) as Integer
+        sendButtonEvent(side, leftRight == "rotateLeft" ? "held" : "released", isDigital=true)
+    }
 }
 
 /*

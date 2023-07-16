@@ -23,7 +23,7 @@
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
- * ver. 2.1.1  2023-07-16 kkossev  - (dev. branch) - Aqara Cube T1 Pro fixes and improvements
+ * ver. 2.1.1  2023-07-16 kkossev  - (dev. branch) - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  *
  *                                   TODO: implement Configure device only
  *                                   TODO: implement LOAD ALL DEFAUTS
@@ -46,7 +46,7 @@
  */
 
 static String version() { "2.1.1" }
-static String timeStamp() {"2023/07/16 4:47 PM"}
+static String timeStamp() {"2023/07/16 7:15 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -56,6 +56,7 @@ import hubitat.device.Protocol
 import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
+import groovy.json.JsonOutput
 
 /*
  *    To switch between driver types :
@@ -194,7 +195,7 @@ metadata {
             //command "switchLevelCommand"
             //attribute "switchAttribute", "number"  
         }
-        if (deviceType in  ["Button", "ButtonDimmer"]) {
+        if (deviceType in  ["Button", "ButtonDimmer", "AqaraCube"]) {
             capability "PushableButton"
             capability "DoubleTapableButton"
             capability "HoldableButton"
@@ -281,7 +282,6 @@ metadata {
                 
             }
         }
-        // mode - in aqaraCubeT1ProLib.groovy
         
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: "<i>These advanced options should be already automatically set in an optimal way for your device...</i>", defaultValue: false
         if (advancedOptions == true || advancedOptions == true) {
@@ -1621,7 +1621,7 @@ def buttonDebounce(/*button*/) {
     state.states["lastButtonNumber"] = 0
 }
 
-def buttonEvent(buttonNumber, buttonState, isDigital=false) {
+def sendButtonEvent(buttonNumber, buttonState, isDigital=false) {
     def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital==true ? 'digital' : 'physical']
     if (txtEnable) {log.info "${device.displayName} $event.descriptionText"}
     sendEvent(event)
@@ -1650,20 +1650,29 @@ def switchMode( mode ) {
 
 
 def push(buttonNumber) {
-    buttonEvent(buttonNumber, "pushed", isDigital=true)
+    sendButtonEvent(buttonNumber, "pushed", isDigital=true)
 }
 
 def doubleTap(buttonNumber) {
-    buttonEvent(buttonNumber, "doubleTapped", isDigital=true)
+    sendButtonEvent(buttonNumber, "doubleTapped", isDigital=true)
 }
 
 def hold(buttonNumber) {
-    buttonEvent(buttonNumber, "held", isDigital=true)
+    sendButtonEvent(buttonNumber, "held", isDigital=true)
 }
 
 def release(buttonNumber) {
-    buttonEvent(buttonNumber, "released", isDigital=true)
+    sendButtonEvent(buttonNumber, "released", isDigital=true)
 }
+
+void sendNumberOfButtonsEvent(numberOfButtons) {
+    sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true, type: "digital")
+}
+
+void sendSupportedButtonValuesEvent(supportedValues) {
+    sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true, type: "digital")
+}
+
 
 /*
  * -----------------------------------------------------------------------------
@@ -2958,7 +2967,7 @@ void logsOff() {
 }
 
 @Field static final Map ConfigureOpts = [
-    "Configure the device only"  : [key:2, function: 'configureHelp'],
+    "Configure the device only"  : [key:2, function: 'configure'],
     "           --            "  : [key:3, function: 'configureHelp'],
     "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
     "Delete All Current States"  : [key:5, function: 'deleteAllCurrentStates'],
@@ -2966,7 +2975,7 @@ void logsOff() {
     "Delete All State Variables" : [key:7, function: 'deleteAllStates'],
     "Delete All Child Devices"   : [key:8, function: 'deleteAllChildDevices'],
     "           -             "  : [key:1, function: 'configureHelp'],
-    "*** LOAD ALL DEFAULTS ***"  : [key:0, function: 'configureHelp']
+    "*** LOAD ALL DEFAULTS ***"  : [key:0, function: 'loadAllDefaults']
 ]
 
 def configure(command) {
@@ -2996,6 +3005,17 @@ def configureHelp( val ) {
     logWarn "configureHelp: select one of the commands in this list!"             
 }
 
+def loadAllDefaults() {
+    logWarn "loadAllDefaults() !!!"
+    deleteAllSettings()
+    deleteAllCurrentStates()
+    deleteAllScheduledJobs()
+    deleteAllStates()
+    deleteAllChildDevices()
+    initialize()
+    configure()
+    sendInfoEvent("All Defaults Loaded!")
+}
 
 /**
  * Send configuration parameters to the device
@@ -3013,6 +3033,7 @@ def configure() {
     cmds += initializeDevice()
     cmds += configureDevice()
     sendZigbeeCommands(cmds)
+    sendInfoEvent("sent device configuration")
 }
 
 /**
@@ -3151,12 +3172,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
-    if (DEVICE_TYPE in ["AirQuality"]) {
-        if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    }
-    if (DEVICE_TYPE in  ["Fingerbot"]) {
-        initVarsFingerbot(fullInit)
-    }
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
@@ -3170,8 +3185,16 @@ void initializeVars( boolean fullInit = false ) {
         if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:"number"])
         if (fullInit || settings?.illuminanceCoeff == null) device.updateSetting("illuminanceCoeff", [value:1.00, type:"decimal"])
     }
+    // device specific initialization should be at the end
+    if (DEVICE_TYPE in ["AirQuality"]) {
+        if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
+    }
+    if (DEVICE_TYPE in  ["Fingerbot"]) {
+        initVarsFingerbot(fullInit)
+    }
     if (DEVICE_TYPE in  ["AqaraCube"]) {
         initVarsAqaraCube(fullInit)
+        initEventsAqaraCube(fullInit)
     }
 
     //updateTuyaVersion()
