@@ -53,7 +53,8 @@
  *  ver. 1.7.4 2023-04-22 kkossev - added TS011F _TZ3000_1hwjutgo _TZ3000_lnggrqqi Tuya Circuit Breaker 2P; TS0601 _TZE200_hkdl5fmv circuit breaker w/ energy: power, energy, voltage, amperage; polling and energyMode are set automatically depending on the device type; automatic reporting configuration thresholds bug fix;
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
- *  ver. 1.7.7 2023-06-10 kkossev - (dev.branch) isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
+ *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
+ *  ver. 1.7.8 2023-07-19 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv
  *
  *
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
@@ -75,8 +76,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.7" }
-def timeStamp() {"2023/06/10 11:21 PM"}
+def version() { "1.7.8" }
+def timeStamp() {"2023/07/19 10:58 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -163,7 +164,9 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qeuvnohg", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // https://www.aliexpress.com/item/1005004747066832.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_8bxrzyxz", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cayepv1a", deviceJoinName: "Tongou TO-Q-SY2-JZT DIN Rail Switch"    //
-        
+
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3000_kqvb5akv", deviceJoinName: "Tuya Switch Module w/ Measurements"    //
+
         // NOT WORKING WITH HE !
         /*
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0006,0003,0004,0005,E001,0B04,0702", outClusters:"", model:"TS011F", manufacturer:"_TZ3000_okaz9tjs", deviceJoinName: "Lonsonho US Plug 20A Power Monitor"   // NOT WORKING WITH HE!
