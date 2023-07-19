@@ -42,7 +42,7 @@
  * ver. 1.3.4  2023-05-19 kkossev  - added _TZE204_sxm7l9xa mmWave radar to TS0601_YXZBRB58_RADAR group; isRadar() bug fix;
  * ver. 1.3.5  2023-05-28 kkossev  - fixes for _TZE200_lu01t0zlTS0601_RADAR_MIR-TY-FALL mmWave radar (only the basic Motion and radarSensitivity is supported for now).
  * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
- * ver. 1.3.7  2023-06-25 kkossev  - (dev. branch) fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR
+ * ver. 1.3.7  2023-07-19 kkossev  - (dev. branch) fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR; added TS0202 _TZ3040_bb6xaihh _TZ3040_wqmtjsyk;
  *
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
  *                                   TODO: ignore invalid humidity reprots (>100 %)
@@ -56,7 +56,7 @@
 */
 
 def version() { "1.3.7" }
-def timeStamp() {"2023/06/25 9:54 PM"}
+def timeStamp() {"2023/07/19 10:34 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -66,7 +66,6 @@ import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
-
 
 @Field static final Boolean _DEBUG = false
 
@@ -127,7 +126,6 @@ metadata {
                 }
             }
         }      
-        
     }
     
     preferences {
@@ -349,7 +347,11 @@ def isSXM7L9XAradar()              { return getModelGroup().contains("TS0601_SXM
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-b3ov3nor", deviceJoinName: "Zemismart RH3040 Motion Sensor"],                                          // vendor: 'Nedis', model: 'ZBSM10WT'
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500", model:"RH3040", manufacturer:"TUYATEC-2gn2zf9e", deviceJoinName: "TUYATEC RH3040 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05", outClusters:"0019", model:"TY0202", manufacturer:"_TZ1800_fcdjzz3s", deviceJoinName: "Lidl TY0202 Motion Sensor"],
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05,FCC0", outClusters:"0019,FCC0", model:"TY0202", manufacturer:"_TZ3000_4ggd8ezp", deviceJoinName: "Bond motion sensor ZX-BS-J11W"]         // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0500,0B05,FCC0", outClusters:"0019,FCC0", model:"TY0202", manufacturer:"_TZ3000_4ggd8ezp", deviceJoinName: "Bond motion sensor ZX-BS-J11W"],        // https://community.hubitat.com/t/what-driver-to-use-for-this-motion-sensor-zx-bs-j11w-or-ty0202/103953/4
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0500,0000", outClusters:"0004,0006,1000,0019,000A", model:"TS0202", manufacturer:"_TZ3040_bb6xaihh", deviceJoinName: "Tuya TS0202 Motion Sensor"],  // https://github.com/Koenkk/zigbee2mqtt/issues/17364
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0500,0000", outClusters:"0004,0006,1000,0019,000A", model:"TS0202", manufacturer:"_TZ3040_wqmtjsyk", deviceJoinName: "Tuya TS0202 Motion Sensor"],  // not tested
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0500,0000", outClusters:"0004,0006,1000,0019,000A", model:"TS0202", manufacturer:"_TZ3000_h4wnrtck", deviceJoinName: "Tuya TS0202 Motion Sensor"]   // not tested
+                
             ],
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             capabilities  : ["motion": true, "battery": true],
@@ -1679,7 +1681,7 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        if (txtEnable==true) log.debug "${device.displayName} updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         unschedule('pollPresence')    // now replaced with deviceHealthCheck
         scheduleDeviceHealthCheck()
         updateTuyaVersion()
