@@ -17,7 +17,7 @@
  *                                 added capability 'Chime'; setVolume; volumeUp, volumeDown; playSound; beepVolume; playSoundVolume; playSoundDuration; unschedule() is called when preferences are updated.
  * ver. 1.1.1 2022-12-27 kkossev  - bug fix: playing a sound from RM rule without specifying the volume level was making the device freeze; debug logs cleanup; sounds titles improvements;
  * ver. 1.1.2 2022-12-31 kkossev  - bug fix: the sounds titles changes in the previous version could make the siren freeze!; Import button changed to the development branch
- * ver. 1.2.0 2023-01-22 kkossev  - (dev. branch) _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
+ * ver. 1.2.0 2023-01-22 kkossev  - _TZE200_d0yu2xgi (NEO) experimental support including temperature and humidity; added separate preferences for alarm and Melody, Volume and Duration
  * ver. 1.2.1 2023-05-26 kkossev  - added _TZE204_t1blo2bj in Neo group; installed() bug fix;
  * ver. 1.2.2 2023-07-19 kkossev  - fix: moved _TZE204_t1blo2bj in Tuya group;
  *
@@ -28,8 +28,8 @@
  *
 */
 
-def version() { "1.2.1" }
-def timeStamp() {"2023/05/26 8:13 AM"}
+def version() { "1.2.2" }
+def timeStamp() {"2023/07/19 9:30 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
