@@ -1,5 +1,5 @@
 /**
- *  VINDSTYRKA Air Quality Monitor - Device Driver for Hubitat Elevation
+ *  Tuya Zigbee IR Blaster - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -24,9 +24,10 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-21 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; 
+ * ver. 2.1.2  2023-07-21 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library;
  *
  *                                   TODO: fix the exponential 3E+1 temperature representation bug!
+ *                                   TODO: Configure: add custom Notes
  *                                   TODO: Aqara TVOC: implement battery level/percentage for 
  *                                   TODO: add minReportingTime for capability TemperatureMeasurement and Humidity
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
@@ -48,7 +49,7 @@
  */
 
 static String version() { "2.1.2" }
-static String timeStamp() {"2023/07/21 10:20 PM"}
+static String timeStamp() {"2023/07/22 10:54 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -75,9 +76,9 @@ import groovy.json.JsonOutput
 //deviceType = "Device"
 //@Field static final String DEVICE_TYPE = "Device"
 //#include kkossev.zigbeeScenes
-deviceType = "AirQuality"
-@Field static final String DEVICE_TYPE = "AirQuality"
-#include kkossev.airQualityLib
+//deviceType = "AirQuality"
+//@Field static final String DEVICE_TYPE = "AirQuality"
+//#include kkossev.airQualityLib
 //deviceType = "Fingerbot"
 //@Field static final String DEVICE_TYPE = "Fingerbot"
 //#include kkossev.tuyaFingerbotLib
@@ -105,13 +106,16 @@ deviceType = "AirQuality"
 //deviceType = "AqaraCube"
 //@Field static final String DEVICE_TYPE = "AqaraCube"
 //#include kkossev.aqaraCubeT1ProLib
+deviceType = "IRBlaster"
+@Field static final String DEVICE_TYPE = "IRBlaster"
+#include kkossev.irBlasterLib
 
 @Field static final Boolean _THREE_STATE = true
 
 metadata {
     definition (
         //name: 'Tuya Zigbee Device',
-        name: 'VINDSTYRKA Air Quality Monitor',
+        //name: 'VINDSTYRKA Air Quality Monitor',
         //name: 'Aqara TVOC Air Quality Monitor',
         //name: 'Tuya Zigbee Fingerbot',
         //name: 'Aqara E1 Thermostat',
@@ -123,8 +127,9 @@ metadata {
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
         //name: 'Aqara Cube T1 Pro',
+        name: 'Tuya Zigbee IR Blaster',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya%20Zigbee%20Fingerbot.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
@@ -134,6 +139,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_IR_Blaster/Tuya_Zigbee_IR_Blaster_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -175,10 +181,10 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat", "AqaraCube"]) {
             capability "Sensor"
         }
-        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb"]) {
+        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb", "IRBlaster"]) {
             capability "Actuator"
         }
-        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube"]) {
+        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube", "IRBlaster"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -1128,7 +1134,7 @@ void parseGroupsCluster(final Map descMap) {
     logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}"
     if (state.zigbeeGroups == null) state.zigbeeGroups = [:]    
     switch (descMap.command as Integer) {
-        case 0x00: // Add group    0x0001 ñ 0xfff7
+        case 0x00: // Add group    0x0001 ‚Äì 0xfff7
             final List<String> data = descMap.data as List<String>
             final int statusCode = hexStrToUnsignedInt(data[0])
             final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
@@ -2304,7 +2310,7 @@ def handleHeatingSetpointEvent( temperature ) {
 
 //  ThermostatHeatingSetpoint command
 //  sends TuyaCommand and checks after 4 seconds
-//  1∞C steps. (0.5∞C setting on the TRV itself, rounded for zigbee interface)
+//  1¬∞C steps. (0.5¬∞C setting on the TRV itself, rounded for zigbee interface)
 def setHeatingSetpoint( temperature ) {
     def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0
     double tempDouble
@@ -2628,14 +2634,13 @@ def initializeDevice() {
     logInfo 'initializeDevice...'
     
     // start with the device-specific initialization first.
-    if (DEVICE_TYPE in  ["AirQuality"]) {
-        return initializeDeviceAirQuality()
-    }
-    
+    if (DEVICE_TYPE in  ["AirQuality"]) { return initializeDeviceAirQuality() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
+  
  
     // not specific device type - do some generic initializations
     if (DEVICE_TYPE in  ["THSensor"]) {
-        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1?*/)                // 402 - temperature
+        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1ÎèÑ*/)                // 402 - temperature
         cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
     }
     //
@@ -2659,6 +2664,7 @@ def configureDevice() {
     if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() }
     if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() }
     if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureIrBlaster() }
         
     if (cmds == []) {
         cmds = ["delay 299",]
@@ -2684,6 +2690,7 @@ def refresh() {
     else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() }
     else {
         // generic refresh handling, based on teh device capabilities 
         if (device.hasCapability("Battery")) {
@@ -2914,9 +2921,8 @@ void updated() {
         unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
         log.info "Health Check is disabled!"
     }
-    if (DEVICE_TYPE in ["AirQuality"])  {
-        updatedAirQuality()
-    }
+    if (DEVICE_TYPE in ["AirQuality"])  { updatedAirQuality() }
+    if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() }
         
     configureDevice()    // sends Zigbee commands
     
@@ -3135,8 +3141,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!! if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!!if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
+    //if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
+    i//f (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
@@ -3154,7 +3160,8 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit) }
     if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }        // none
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }            // none
+    if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
 
     //updateTuyaVersion()
     
@@ -3301,10 +3308,9 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    def hasC = device.hasCommand("zigbeeScenesVersion")
-    log.warn "zigbeeScenesVersion=${zigbeeScenesVersion()}  device.hasCommand(zigbeeScenesVersion)=${hasC} "
+    handleTemperatureEvent(30.0)
     
-    sendZigbeeCommands(cmds)    
+   // sendZigbeeCommands(cmds)    
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
