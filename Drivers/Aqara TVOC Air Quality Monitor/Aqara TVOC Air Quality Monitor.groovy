@@ -745,7 +745,7 @@ void parseXiaomiCluster(final Map descMap) {
         case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterTags(tags)
-            if (true) {
+            if (isAqaraCube()) {
                 sendZigbeeCommands(refreshAqaraCube())
             }
             break
