@@ -22,13 +22,14 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-07-13 kkossev  - (dev. branch) - Libraries introduction for the Tuya Zigbee Fingerbot driver;
+ * ver. 1.0.1  2023-07-23 kkossev  - (dev. branch) - added _TZ3210_dse8ogfy fingerprint
  *
  *                                   TODO: 
 */
 
 
-def tuyaFingerbotLibVersion()   {"1.0.0"}
-def tuyaFingerbotLibStamp() {"2023/07/13 1:03 PM"}
+def tuyaFingerbotLibVersion()   {"1.0.1"}
+def tuyaFingerbotLibStamp() {"2023/07/23 11:11 AM"}
 
 metadata {
     attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String>
@@ -37,7 +38,8 @@ metadata {
     attribute "dnPosition", "number"
     attribute "upPosition", "number"
         
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot"
+    
     preferences {
         input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>'
         input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>'
