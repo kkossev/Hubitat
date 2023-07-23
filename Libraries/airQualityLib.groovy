@@ -12,19 +12,22 @@ library (
 /*
  * airQualityLib -Air Quality Library
  *
- * ver. 1.0.0  2023-07-22 kkossev  - Libraries introduction for the VINDSTIRKA driver;
+ * ver. 1.0.0  2023-07-23 kkossev  - Libraries introduction for the VINDSTIRKA driver;
  *
  *                                   TODO: 
 */
 
 def airQualityLibVersion()   {"1.0.0"}
-def airQualityimeStamp() {"2023/07/22 8:46 AM"}
+def airQualityimeStamp() {"2023/07/23 9:02 AM"}
 
 metadata {
     attribute "pm25", "number"
     attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ 
-    
-    //command "push", [[name: "sent when the cube side is flipped", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
+
+    if (isAqaraTVOC()) {
+            capability "Battery"
+            attribute "batteryVoltage", "number"
+    }
 	 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E", outClusters:"0003,0019,0020,0202", model:"VINDSTYRKA", manufacturer:"IKEA of Sweden", deviceJoinName: "VINDSTYRKA Air Quality Monitor E2112" 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor" 
@@ -237,6 +240,9 @@ def refreshAirQuality() {
 def initVarsAirQuality(boolean fullInit=false) {
     logDebug "initVarsAirQuality(${fullInit})"
     if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
+    
 }
 
 void initEventsAirQuality(boolean fullInit=false) {

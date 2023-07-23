@@ -24,11 +24,9 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-21 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; 
+ * ver. 2.1.2  2023-07-23 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  *
- *                                   TODO: fix the exponential 3E+1 temperature representation bug!
- *                                   TODO: Aqara TVOC: implement battery level/percentage for 
- *                                   TODO: add minReportingTime for capability TemperatureMeasurement and Humidity
+ *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
  *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
  *                                   TODO: add pingSuccess and pingFailure in health stats
@@ -36,19 +34,18 @@
  *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
  *                                   TODO: calculate and store the average ping RTT
- *                                   TODO: Fingerbot: add the  fingerprint
  *                                   TODO: Fingerbot: add Momentary capability
  *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
  *                                   TODO: state timesamps in human readable form
- *                                   TODO: process the min/max reporting times preferences for temperature and humidity;
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
  *                                   TODO: battery min/max voltage preferences
+ *                                   TODO: Configure: add custom Notes
  */
 
 static String version() { "2.1.2" }
-static String timeStamp() {"2023/07/21 10:20 PM"}
+static String timeStamp() {"2023/07/23 9:24 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -105,6 +102,9 @@ deviceType = "AirQuality"
 //deviceType = "AqaraCube"
 //@Field static final String DEVICE_TYPE = "AqaraCube"
 //#include kkossev.aqaraCubeT1ProLib
+//deviceType = "IRBlaster"
+//@Field static final String DEVICE_TYPE = "IRBlaster"
+//#include kkossev.irBlasterLib
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -123,6 +123,7 @@ metadata {
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
         //name: 'Aqara Cube T1 Pro',
+        //name: 'Tuya Zigbee IR Blaster',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
@@ -134,6 +135,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_IR_Blaster/Tuya_Zigbee_IR_Blaster_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -175,10 +177,10 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat", "AqaraCube"]) {
             capability "Sensor"
         }
-        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb"]) {
+        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb", "IRBlaster"]) {
             capability "Actuator"
         }
-        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube"]) {
+        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor",/* "AirQuality",*/ "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube", "IRBlaster"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -2076,8 +2078,8 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     else {
         eventMap.unit = "\u00B0"+"C"
     }
-    def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset ?: 0)
-    eventMap.value  =  Math.round(tempCorrected * 10) / 10.0
+    def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float
+    eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float
     eventMap.type = isDigital == true ? "digital" : "physical"
     //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
@@ -2628,10 +2630,9 @@ def initializeDevice() {
     logInfo 'initializeDevice...'
     
     // start with the device-specific initialization first.
-    if (DEVICE_TYPE in  ["AirQuality"]) {
-        return initializeDeviceAirQuality()
-    }
-    
+    if (DEVICE_TYPE in  ["AirQuality"]) { return initializeDeviceAirQuality() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
+  
  
     // not specific device type - do some generic initializations
     if (DEVICE_TYPE in  ["THSensor"]) {
@@ -2659,6 +2660,7 @@ def configureDevice() {
     if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() }
     if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() }
     if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureIrBlaster() }
         
     if (cmds == []) {
         cmds = ["delay 299",]
@@ -2684,6 +2686,7 @@ def refresh() {
     else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() }
     else {
         // generic refresh handling, based on teh device capabilities 
         if (device.hasCapability("Battery")) {
@@ -2914,9 +2917,8 @@ void updated() {
         unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
         log.info "Health Check is disabled!"
     }
-    if (DEVICE_TYPE in ["AirQuality"])  {
-        updatedAirQuality()
-    }
+    if (DEVICE_TYPE in ["AirQuality"])  { updatedAirQuality() }
+    if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() }
         
     configureDevice()    // sends Zigbee commands
     
@@ -3135,8 +3137,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!! if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!!if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
@@ -3154,7 +3154,8 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit) }
     if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }        // none
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }            // none
+    if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
 
     //updateTuyaVersion()
     
@@ -3301,10 +3302,9 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    def hasC = device.hasCommand("zigbeeScenesVersion")
-    log.warn "zigbeeScenesVersion=${zigbeeScenesVersion()}  device.hasCommand(zigbeeScenesVersion)=${hasC} "
+    handleTemperatureEvent(safeToDouble(par) as float)
     
-    sendZigbeeCommands(cmds)    
+   // sendZigbeeCommands(cmds)    
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
@@ -3325,237 +3325,243 @@ library ( // library marker kkossev.airQualityLib, line 1
 /* // library marker kkossev.airQualityLib, line 12
  * airQualityLib -Air Quality Library // library marker kkossev.airQualityLib, line 13
  * // library marker kkossev.airQualityLib, line 14
- * ver. 1.0.0  2023-07-22 kkossev  - Libraries introduction for the VINDSTIRKA driver; // library marker kkossev.airQualityLib, line 15
+ * ver. 1.0.0  2023-07-23 kkossev  - Libraries introduction for the VINDSTIRKA driver; // library marker kkossev.airQualityLib, line 15
  * // library marker kkossev.airQualityLib, line 16
  *                                   TODO:  // library marker kkossev.airQualityLib, line 17
 */ // library marker kkossev.airQualityLib, line 18
 
 def airQualityLibVersion()   {"1.0.0"} // library marker kkossev.airQualityLib, line 20
-def airQualityimeStamp() {"2023/07/22 8:46 AM"} // library marker kkossev.airQualityLib, line 21
+def airQualityimeStamp() {"2023/07/23 9:02 AM"} // library marker kkossev.airQualityLib, line 21
 
 metadata { // library marker kkossev.airQualityLib, line 23
     attribute "pm25", "number" // library marker kkossev.airQualityLib, line 24
     attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/  // library marker kkossev.airQualityLib, line 25
 
-    //command "push", [[name: "sent when the cube side is flipped", type: "NUMBER", description: "simulates a button press", defaultValue : ""]] // library marker kkossev.airQualityLib, line 27
+    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 27
+            capability "Battery" // library marker kkossev.airQualityLib, line 28
+            attribute "batteryVoltage", "number" // library marker kkossev.airQualityLib, line 29
+    } // library marker kkossev.airQualityLib, line 30
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E", outClusters:"0003,0019,0020,0202", model:"VINDSTYRKA", manufacturer:"IKEA of Sweden", deviceJoinName: "VINDSTYRKA Air Quality Monitor E2112"  // library marker kkossev.airQualityLib, line 29
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor"  // library marker kkossev.airQualityLib, line 30
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E", outClusters:"0003,0019,0020,0202", model:"VINDSTYRKA", manufacturer:"IKEA of Sweden", deviceJoinName: "VINDSTYRKA Air Quality Monitor E2112"  // library marker kkossev.airQualityLib, line 32
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor"  // library marker kkossev.airQualityLib, line 33
 
-    preferences { // library marker kkossev.airQualityLib, line 32
-        if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 33
-            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>' // library marker kkossev.airQualityLib, line 34
-        } // library marker kkossev.airQualityLib, line 35
-        else  if (isAqaraTRV()) { // library marker kkossev.airQualityLib, line 36
-            input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>' // library marker kkossev.airQualityLib, line 37
-            input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>' // library marker kkossev.airQualityLib, line 38
-        } // library marker kkossev.airQualityLib, line 39
-    } // library marker kkossev.airQualityLib, line 40
-} // library marker kkossev.airQualityLib, line 41
+    preferences { // library marker kkossev.airQualityLib, line 35
+        if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 36
+            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>' // library marker kkossev.airQualityLib, line 37
+        } // library marker kkossev.airQualityLib, line 38
+        else  if (isAqaraTRV()) { // library marker kkossev.airQualityLib, line 39
+            input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>' // library marker kkossev.airQualityLib, line 40
+            input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>' // library marker kkossev.airQualityLib, line 41
+        } // library marker kkossev.airQualityLib, line 42
+    } // library marker kkossev.airQualityLib, line 43
+} // library marker kkossev.airQualityLib, line 44
 
-@Field static final Map AirQualityIndexCheckIntervalOpts = [        // used by airQualityIndexCheckInterval // library marker kkossev.airQualityLib, line 43
-    defaultValue: 60, // library marker kkossev.airQualityLib, line 44
-    options     : [0: 'Disabled', 10: 'Every 10 seconds', 30: 'Every 30 seconds', 60: 'Every 1 minute', 300: 'Every 5 minutes', 900: 'Every 15 minutes', 3600: 'Every 1 hour'] // library marker kkossev.airQualityLib, line 45
-] // library marker kkossev.airQualityLib, line 46
+@Field static final Map AirQualityIndexCheckIntervalOpts = [        // used by airQualityIndexCheckInterval // library marker kkossev.airQualityLib, line 46
+    defaultValue: 60, // library marker kkossev.airQualityLib, line 47
+    options     : [0: 'Disabled', 10: 'Every 10 seconds', 30: 'Every 30 seconds', 60: 'Every 1 minute', 300: 'Every 5 minutes', 900: 'Every 15 minutes', 3600: 'Every 1 hour'] // library marker kkossev.airQualityLib, line 48
+] // library marker kkossev.airQualityLib, line 49
 
-@Field static final Map TemperatureScaleOpts = [            // bit 7 // library marker kkossev.airQualityLib, line 48
-    defaultValue: 0, // library marker kkossev.airQualityLib, line 49
-    options     : [0: 'Celsius', 1: 'Fahrenheit'] // library marker kkossev.airQualityLib, line 50
-] // library marker kkossev.airQualityLib, line 51
+@Field static final Map TemperatureScaleOpts = [            // bit 7 // library marker kkossev.airQualityLib, line 51
+    defaultValue: 0, // library marker kkossev.airQualityLib, line 52
+    options     : [0: 'Celsius', 1: 'Fahrenheit'] // library marker kkossev.airQualityLib, line 53
+] // library marker kkossev.airQualityLib, line 54
 
-@Field static final Map TvocUnitOpts = [                    // bit 0 // library marker kkossev.airQualityLib, line 53
-    defaultValue: 1, // library marker kkossev.airQualityLib, line 54
-    options     : [0: 'mg/m³', 1: 'ppb'] // library marker kkossev.airQualityLib, line 55
-] // library marker kkossev.airQualityLib, line 56
+@Field static final Map TvocUnitOpts = [                    // bit 0 // library marker kkossev.airQualityLib, line 56
+    defaultValue: 1, // library marker kkossev.airQualityLib, line 57
+    options     : [0: 'mg/m³', 1: 'ppb'] // library marker kkossev.airQualityLib, line 58
+] // library marker kkossev.airQualityLib, line 59
 
 
-/* // library marker kkossev.airQualityLib, line 59
- * ----------------------------------------------------------------------------- // library marker kkossev.airQualityLib, line 60
- * airQualityIndex // library marker kkossev.airQualityLib, line 61
- * ----------------------------------------------------------------------------- // library marker kkossev.airQualityLib, line 62
-*/ // library marker kkossev.airQualityLib, line 63
-void parseAirQualityIndexCluster(final Map descMap) { // library marker kkossev.airQualityLib, line 64
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.airQualityLib, line 65
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.airQualityLib, line 66
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.airQualityLib, line 67
-	Float floatValue = Float.intBitsToFloat(value.intValue())     // library marker kkossev.airQualityLib, line 68
-    handleAirQualityIndexEvent(floatValue as Integer) // library marker kkossev.airQualityLib, line 69
-} // library marker kkossev.airQualityLib, line 70
+/* // library marker kkossev.airQualityLib, line 62
+ * ----------------------------------------------------------------------------- // library marker kkossev.airQualityLib, line 63
+ * airQualityIndex // library marker kkossev.airQualityLib, line 64
+ * ----------------------------------------------------------------------------- // library marker kkossev.airQualityLib, line 65
+*/ // library marker kkossev.airQualityLib, line 66
+void parseAirQualityIndexCluster(final Map descMap) { // library marker kkossev.airQualityLib, line 67
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.airQualityLib, line 68
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.airQualityLib, line 69
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.airQualityLib, line 70
+	Float floatValue = Float.intBitsToFloat(value.intValue())     // library marker kkossev.airQualityLib, line 71
+    handleAirQualityIndexEvent(floatValue as Integer) // library marker kkossev.airQualityLib, line 72
+} // library marker kkossev.airQualityLib, line 73
 
-void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) { // library marker kkossev.airQualityLib, line 72
-    def eventMap = [:] // library marker kkossev.airQualityLib, line 73
-    if (state.stats != null) state.stats['tVocCtr'] = (state.stats['tVocCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.airQualityLib, line 74
-    Integer tVocCorrected= safeToDouble(tVoc) + safeToDouble(settings?.tVocOffset ?: 0) // library marker kkossev.airQualityLib, line 75
-    if (tVocCorrected < 0 || tVocCorrected > 999) { // library marker kkossev.airQualityLib, line 76
-        logWarn "ignored invalid tVoc ${tVoc} (${tVocCorrected})" // library marker kkossev.airQualityLib, line 77
-        return // library marker kkossev.airQualityLib, line 78
-    } // library marker kkossev.airQualityLib, line 79
-    if (safeToInt((device.currentState("airQualityIndex")?.value ?: -1)) == tVocCorrected) { // library marker kkossev.airQualityLib, line 80
-        logDebug "ignored duplicated tVoc ${tVoc} (${tVocCorrected})" // library marker kkossev.airQualityLib, line 81
-        return // library marker kkossev.airQualityLib, line 82
-    } // library marker kkossev.airQualityLib, line 83
-    eventMap.value = tVocCorrected as Integer // library marker kkossev.airQualityLib, line 84
-    eventMap.name = "airQualityIndex" // library marker kkossev.airQualityLib, line 85
-    eventMap.unit = "" // library marker kkossev.airQualityLib, line 86
-    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.airQualityLib, line 87
-    eventMap.descriptionText = "${eventMap.name} is ${tVocCorrected} ${eventMap.unit}" // library marker kkossev.airQualityLib, line 88
-    Integer timeElapsed = ((now() - (state.lastRx['tVocTime'] ?: now() -10000 ))/1000) as Integer // library marker kkossev.airQualityLib, line 89
-    Integer minTime = settings?.minReportingTimetVoc ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.airQualityLib, line 90
-    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.airQualityLib, line 91
-    if (timeElapsed >= minTime) { // library marker kkossev.airQualityLib, line 92
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.airQualityLib, line 93
-        unschedule("sendDelayedtVocEvent") // library marker kkossev.airQualityLib, line 94
-        state.lastRx['tVocTime'] = now() // library marker kkossev.airQualityLib, line 95
-        sendEvent(eventMap) // library marker kkossev.airQualityLib, line 96
-        sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value))) // library marker kkossev.airQualityLib, line 97
-    } // library marker kkossev.airQualityLib, line 98
-    else { // library marker kkossev.airQualityLib, line 99
-    	eventMap.type = "delayed" // library marker kkossev.airQualityLib, line 100
-        //logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.airQualityLib, line 101
-        runIn(timeRamaining, 'sendDelayedtVocEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.airQualityLib, line 102
-    } // library marker kkossev.airQualityLib, line 103
-} // library marker kkossev.airQualityLib, line 104
+void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) { // library marker kkossev.airQualityLib, line 75
+    def eventMap = [:] // library marker kkossev.airQualityLib, line 76
+    if (state.stats != null) state.stats['tVocCtr'] = (state.stats['tVocCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.airQualityLib, line 77
+    Integer tVocCorrected= safeToDouble(tVoc) + safeToDouble(settings?.tVocOffset ?: 0) // library marker kkossev.airQualityLib, line 78
+    if (tVocCorrected < 0 || tVocCorrected > 999) { // library marker kkossev.airQualityLib, line 79
+        logWarn "ignored invalid tVoc ${tVoc} (${tVocCorrected})" // library marker kkossev.airQualityLib, line 80
+        return // library marker kkossev.airQualityLib, line 81
+    } // library marker kkossev.airQualityLib, line 82
+    if (safeToInt((device.currentState("airQualityIndex")?.value ?: -1)) == tVocCorrected) { // library marker kkossev.airQualityLib, line 83
+        logDebug "ignored duplicated tVoc ${tVoc} (${tVocCorrected})" // library marker kkossev.airQualityLib, line 84
+        return // library marker kkossev.airQualityLib, line 85
+    } // library marker kkossev.airQualityLib, line 86
+    eventMap.value = tVocCorrected as Integer // library marker kkossev.airQualityLib, line 87
+    eventMap.name = "airQualityIndex" // library marker kkossev.airQualityLib, line 88
+    eventMap.unit = "" // library marker kkossev.airQualityLib, line 89
+    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.airQualityLib, line 90
+    eventMap.descriptionText = "${eventMap.name} is ${tVocCorrected} ${eventMap.unit}" // library marker kkossev.airQualityLib, line 91
+    Integer timeElapsed = ((now() - (state.lastRx['tVocTime'] ?: now() -10000 ))/1000) as Integer // library marker kkossev.airQualityLib, line 92
+    Integer minTime = settings?.minReportingTimetVoc ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.airQualityLib, line 93
+    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.airQualityLib, line 94
+    if (timeElapsed >= minTime) { // library marker kkossev.airQualityLib, line 95
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.airQualityLib, line 96
+        unschedule("sendDelayedtVocEvent") // library marker kkossev.airQualityLib, line 97
+        state.lastRx['tVocTime'] = now() // library marker kkossev.airQualityLib, line 98
+        sendEvent(eventMap) // library marker kkossev.airQualityLib, line 99
+        sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value))) // library marker kkossev.airQualityLib, line 100
+    } // library marker kkossev.airQualityLib, line 101
+    else { // library marker kkossev.airQualityLib, line 102
+    	eventMap.type = "delayed" // library marker kkossev.airQualityLib, line 103
+        //logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.airQualityLib, line 104
+        runIn(timeRamaining, 'sendDelayedtVocEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.airQualityLib, line 105
+    } // library marker kkossev.airQualityLib, line 106
+} // library marker kkossev.airQualityLib, line 107
 
-private void sendDelayedtVocEvent(Map eventMap) { // library marker kkossev.airQualityLib, line 106
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.airQualityLib, line 107
-    state.lastRx['tVocTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.airQualityLib, line 108
-	sendEvent(eventMap) // library marker kkossev.airQualityLib, line 109
-    sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value))) // library marker kkossev.airQualityLib, line 110
-} // library marker kkossev.airQualityLib, line 111
+private void sendDelayedtVocEvent(Map eventMap) { // library marker kkossev.airQualityLib, line 109
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.airQualityLib, line 110
+    state.lastRx['tVocTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.airQualityLib, line 111
+	sendEvent(eventMap) // library marker kkossev.airQualityLib, line 112
+    sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value))) // library marker kkossev.airQualityLib, line 113
+} // library marker kkossev.airQualityLib, line 114
 
-// https://github.com/zigpy/zigpy/discussions/691  // library marker kkossev.airQualityLib, line 113
-String airQualityIndexToLevel(final Integer index) // library marker kkossev.airQualityLib, line 114
-{ // library marker kkossev.airQualityLib, line 115
-    String level // library marker kkossev.airQualityLib, line 116
-    if (index <0 )        { level = 'unknown' } // library marker kkossev.airQualityLib, line 117
-    else if (index < 50)  { level = 'Good' } // library marker kkossev.airQualityLib, line 118
-    else if (index < 100) { level = 'Moderate' } // library marker kkossev.airQualityLib, line 119
-    else if (index < 150) { level = 'Unhealthy for Sensitive Groups' } // library marker kkossev.airQualityLib, line 120
-    else if (index < 200) { level = 'Unhealthy' } // library marker kkossev.airQualityLib, line 121
-    else if (index < 300) { level = 'Very Unhealthy' } // library marker kkossev.airQualityLib, line 122
-    else if (index < 501) { level = 'Hazardous' } // library marker kkossev.airQualityLib, line 123
-    else                  { level = 'Hazardous Out of Range' } // library marker kkossev.airQualityLib, line 124
+// https://github.com/zigpy/zigpy/discussions/691  // library marker kkossev.airQualityLib, line 116
+String airQualityIndexToLevel(final Integer index) // library marker kkossev.airQualityLib, line 117
+{ // library marker kkossev.airQualityLib, line 118
+    String level // library marker kkossev.airQualityLib, line 119
+    if (index <0 )        { level = 'unknown' } // library marker kkossev.airQualityLib, line 120
+    else if (index < 50)  { level = 'Good' } // library marker kkossev.airQualityLib, line 121
+    else if (index < 100) { level = 'Moderate' } // library marker kkossev.airQualityLib, line 122
+    else if (index < 150) { level = 'Unhealthy for Sensitive Groups' } // library marker kkossev.airQualityLib, line 123
+    else if (index < 200) { level = 'Unhealthy' } // library marker kkossev.airQualityLib, line 124
+    else if (index < 300) { level = 'Very Unhealthy' } // library marker kkossev.airQualityLib, line 125
+    else if (index < 501) { level = 'Hazardous' } // library marker kkossev.airQualityLib, line 126
+    else                  { level = 'Hazardous Out of Range' } // library marker kkossev.airQualityLib, line 127
 
-    return level // library marker kkossev.airQualityLib, line 126
-} // library marker kkossev.airQualityLib, line 127
+    return level // library marker kkossev.airQualityLib, line 129
+} // library marker kkossev.airQualityLib, line 130
 
-private void sendAirQualityLevelEvent(String level) { // library marker kkossev.airQualityLib, line 129
-    if (level == null || level == '') { return } // library marker kkossev.airQualityLib, line 130
-    def descriptionText = "Air Quality Level is ${level}" // library marker kkossev.airQualityLib, line 131
-    logInfo "${descriptionText}" // library marker kkossev.airQualityLib, line 132
-    sendEvent(name: "airQualityLevel", value: level, descriptionText: descriptionText, unit: "", isDigital: true)         // library marker kkossev.airQualityLib, line 133
-} // library marker kkossev.airQualityLib, line 134
+private void sendAirQualityLevelEvent(String level) { // library marker kkossev.airQualityLib, line 132
+    if (level == null || level == '') { return } // library marker kkossev.airQualityLib, line 133
+    def descriptionText = "Air Quality Level is ${level}" // library marker kkossev.airQualityLib, line 134
+    logInfo "${descriptionText}" // library marker kkossev.airQualityLib, line 135
+    sendEvent(name: "airQualityLevel", value: level, descriptionText: descriptionText, unit: "", isDigital: true)         // library marker kkossev.airQualityLib, line 136
+} // library marker kkossev.airQualityLib, line 137
 
-/** // library marker kkossev.airQualityLib, line 136
- * Schedule a  Air Quality Index check // library marker kkossev.airQualityLib, line 137
- * @param intervalMins interval in seconds // library marker kkossev.airQualityLib, line 138
- */ // library marker kkossev.airQualityLib, line 139
-private void scheduleAirQualityIndexCheck(final int intervalSecs) { // library marker kkossev.airQualityLib, line 140
-    String cron = getCron( intervalSecs ) // library marker kkossev.airQualityLib, line 141
-    schedule(cron, 'autoPoll') // library marker kkossev.airQualityLib, line 142
-} // library marker kkossev.airQualityLib, line 143
+/** // library marker kkossev.airQualityLib, line 139
+ * Schedule a  Air Quality Index check // library marker kkossev.airQualityLib, line 140
+ * @param intervalMins interval in seconds // library marker kkossev.airQualityLib, line 141
+ */ // library marker kkossev.airQualityLib, line 142
+private void scheduleAirQualityIndexCheck(final int intervalSecs) { // library marker kkossev.airQualityLib, line 143
+    String cron = getCron( intervalSecs ) // library marker kkossev.airQualityLib, line 144
+    schedule(cron, 'autoPoll') // library marker kkossev.airQualityLib, line 145
+} // library marker kkossev.airQualityLib, line 146
 
-private void unScheduleAirQualityIndexCheck() { // library marker kkossev.airQualityLib, line 145
-    unschedule('autoPoll') // library marker kkossev.airQualityLib, line 146
-} // library marker kkossev.airQualityLib, line 147
+private void unScheduleAirQualityIndexCheck() { // library marker kkossev.airQualityLib, line 148
+    unschedule('autoPoll') // library marker kkossev.airQualityLib, line 149
+} // library marker kkossev.airQualityLib, line 150
 
-def configureDeviceAirQuality() { // library marker kkossev.airQualityLib, line 149
-    ArrayList<String> cmds = [] // library marker kkossev.airQualityLib, line 150
-    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 151
-        logDebug 'configureDeviceAirQuality() AqaraTVOC' // library marker kkossev.airQualityLib, line 152
-        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21 // library marker kkossev.airQualityLib, line 153
-        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue // library marker kkossev.airQualityLib, line 154
-        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue // library marker kkossev.airQualityLib, line 155
-        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})" // library marker kkossev.airQualityLib, line 156
-        int cfg = tUnit // library marker kkossev.airQualityLib, line 157
-        cfg |= (tScale << 4) // library marker kkossev.airQualityLib, line 158
-        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200) // library marker kkossev.airQualityLib, line 159
-        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)     // library marker kkossev.airQualityLib, line 160
-    } // library marker kkossev.airQualityLib, line 161
-    else if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 162
-        logDebug 'configureDeviceAirQuality() VINDSTYRKA (nothig to configure)' // library marker kkossev.airQualityLib, line 163
+def configureDeviceAirQuality() { // library marker kkossev.airQualityLib, line 152
+    ArrayList<String> cmds = [] // library marker kkossev.airQualityLib, line 153
+    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 154
+        logDebug 'configureDeviceAirQuality() AqaraTVOC' // library marker kkossev.airQualityLib, line 155
+        // https://forum.phoscon.de/t/aqara-tvoc-zhaairquality-data/1160/21 // library marker kkossev.airQualityLib, line 156
+        final int tScale = (settings.temperatureScale as Integer) ?: TemperatureScaleOpts.defaultValue // library marker kkossev.airQualityLib, line 157
+        final int tUnit =  (settings.tVocUnut as Integer) ?: TvocUnitOpts.defaultValue // library marker kkossev.airQualityLib, line 158
+        logDebug "setting temperatureScale to ${TemperatureScaleOpts.options[tScale]} (${tScale})" // library marker kkossev.airQualityLib, line 159
+        int cfg = tUnit // library marker kkossev.airQualityLib, line 160
+        cfg |= (tScale << 4) // library marker kkossev.airQualityLib, line 161
+        cmds += zigbee.writeAttribute(0xFCC0, 0x0114, DataType.UINT8, cfg, [mfgCode: 0x115F], delay=200) // library marker kkossev.airQualityLib, line 162
+        cmds += zigbee.readAttribute(0xFCC0, 0x0114, [mfgCode: 0x115F], delay=200)     // library marker kkossev.airQualityLib, line 163
     } // library marker kkossev.airQualityLib, line 164
-    else { // library marker kkossev.airQualityLib, line 165
-        logWarn "configureDeviceAirQuality: unsupported device?" // library marker kkossev.airQualityLib, line 166
+    else if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 165
+        logDebug 'configureDeviceAirQuality() VINDSTYRKA (nothig to configure)' // library marker kkossev.airQualityLib, line 166
     } // library marker kkossev.airQualityLib, line 167
-    return cmds // library marker kkossev.airQualityLib, line 168
-} // library marker kkossev.airQualityLib, line 169
+    else { // library marker kkossev.airQualityLib, line 168
+        logWarn "configureDeviceAirQuality: unsupported device?" // library marker kkossev.airQualityLib, line 169
+    } // library marker kkossev.airQualityLib, line 170
+    return cmds // library marker kkossev.airQualityLib, line 171
+} // library marker kkossev.airQualityLib, line 172
 
 
-def initializeDeviceAirQuality() { // library marker kkossev.airQualityLib, line 172
-    ArrayList<String> cmds = [] // library marker kkossev.airQualityLib, line 173
-    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 174
-        logDebug 'initializeDeviceAirQuality() AqaraTVOC' // library marker kkossev.airQualityLib, line 175
-	    return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+ // library marker kkossev.airQualityLib, line 176
-			zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+ // library marker kkossev.airQualityLib, line 177
-			zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000) + // library marker kkossev.airQualityLib, line 178
-			zigbee.readAttribute(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE) + // library marker kkossev.airQualityLib, line 179
-			zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) + // library marker kkossev.airQualityLib, line 180
-			zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) + // library marker kkossev.airQualityLib, line 181
-			zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) +  // library marker kkossev.airQualityLib, line 182
-			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)     // library marker kkossev.airQualityLib, line 183
-    }  // library marker kkossev.airQualityLib, line 184
-    else if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 185
-        logDebug 'initializeDeviceAirQuality() VINDSTYRKA' // library marker kkossev.airQualityLib, line 186
-        // Ikea VINDSTYRKA : bind clusters 402, 405, 42A (PM2.5) // library marker kkossev.airQualityLib, line 187
-        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                 // 402 - temperature // library marker kkossev.airQualityLib, line 188
-        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)    // 405 - humidity // library marker kkossev.airQualityLib, line 189
-        cmds += zigbee.configureReporting(0x042a, 0, 0x39, 30, 60, 1)    // 405 - pm2.5 // library marker kkossev.airQualityLib, line 190
-        //cmds += zigbee.configureReporting(0xfc7e, 0, 0x39, 10, 60, 50)     // provides a measurement in the range of 0-500 that correlates with the tVOC trend display on the unit itself. // library marker kkossev.airQualityLib, line 191
-        cmds += ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0xfc7e {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.airQualityLib, line 192
+def initializeDeviceAirQuality() { // library marker kkossev.airQualityLib, line 175
+    ArrayList<String> cmds = [] // library marker kkossev.airQualityLib, line 176
+    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 177
+        logDebug 'initializeDeviceAirQuality() AqaraTVOC' // library marker kkossev.airQualityLib, line 178
+	    return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+ // library marker kkossev.airQualityLib, line 179
+			zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+ // library marker kkossev.airQualityLib, line 180
+			zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000) + // library marker kkossev.airQualityLib, line 181
+			zigbee.readAttribute(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE) + // library marker kkossev.airQualityLib, line 182
+			zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) + // library marker kkossev.airQualityLib, line 183
+			zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) + // library marker kkossev.airQualityLib, line 184
+			zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) +  // library marker kkossev.airQualityLib, line 185
+			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)     // library marker kkossev.airQualityLib, line 186
+    }  // library marker kkossev.airQualityLib, line 187
+    else if (isVINDSTYRKA()) { // library marker kkossev.airQualityLib, line 188
+        logDebug 'initializeDeviceAirQuality() VINDSTYRKA' // library marker kkossev.airQualityLib, line 189
+        // Ikea VINDSTYRKA : bind clusters 402, 405, 42A (PM2.5) // library marker kkossev.airQualityLib, line 190
+        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                 // 402 - temperature // library marker kkossev.airQualityLib, line 191
+        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)    // 405 - humidity // library marker kkossev.airQualityLib, line 192
+        cmds += zigbee.configureReporting(0x042a, 0, 0x39, 30, 60, 1)    // 405 - pm2.5 // library marker kkossev.airQualityLib, line 193
+        //cmds += zigbee.configureReporting(0xfc7e, 0, 0x39, 10, 60, 50)     // provides a measurement in the range of 0-500 that correlates with the tVOC trend display on the unit itself. // library marker kkossev.airQualityLib, line 194
+        cmds += ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0xfc7e {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.airQualityLib, line 195
 
-    } // library marker kkossev.airQualityLib, line 194
-    else { // library marker kkossev.airQualityLib, line 195
-        logWarn "initializeDeviceAirQuality: unsupported device?" // library marker kkossev.airQualityLib, line 196
     } // library marker kkossev.airQualityLib, line 197
-    return cmds // library marker kkossev.airQualityLib, line 198
-} // library marker kkossev.airQualityLib, line 199
+    else { // library marker kkossev.airQualityLib, line 198
+        logWarn "initializeDeviceAirQuality: unsupported device?" // library marker kkossev.airQualityLib, line 199
+    } // library marker kkossev.airQualityLib, line 200
+    return cmds // library marker kkossev.airQualityLib, line 201
+} // library marker kkossev.airQualityLib, line 202
 
-void updatedAirQuality() { // library marker kkossev.airQualityLib, line 201
-    if (!(isAqaraTVOC())) { // library marker kkossev.airQualityLib, line 202
-        final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0 // library marker kkossev.airQualityLib, line 203
-        if (intervalAirQuality > 0) { // library marker kkossev.airQualityLib, line 204
-            logInfo "updatedAirQuality: scheduling Air Quality Index check every ${intervalAirQuality} seconds" // library marker kkossev.airQualityLib, line 205
-            scheduleAirQualityIndexCheck(intervalAirQuality) // library marker kkossev.airQualityLib, line 206
-        } // library marker kkossev.airQualityLib, line 207
-        else { // library marker kkossev.airQualityLib, line 208
-            unScheduleAirQualityIndexCheck() // library marker kkossev.airQualityLib, line 209
-            logInfo "updatedAirQuality: Air Quality Index polling is disabled!" // library marker kkossev.airQualityLib, line 210
-        } // library marker kkossev.airQualityLib, line 211
+void updatedAirQuality() { // library marker kkossev.airQualityLib, line 204
+    if (!(isAqaraTVOC())) { // library marker kkossev.airQualityLib, line 205
+        final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0 // library marker kkossev.airQualityLib, line 206
+        if (intervalAirQuality > 0) { // library marker kkossev.airQualityLib, line 207
+            logInfo "updatedAirQuality: scheduling Air Quality Index check every ${intervalAirQuality} seconds" // library marker kkossev.airQualityLib, line 208
+            scheduleAirQualityIndexCheck(intervalAirQuality) // library marker kkossev.airQualityLib, line 209
+        } // library marker kkossev.airQualityLib, line 210
+        else { // library marker kkossev.airQualityLib, line 211
+            unScheduleAirQualityIndexCheck() // library marker kkossev.airQualityLib, line 212
+            logInfo "updatedAirQuality: Air Quality Index polling is disabled!" // library marker kkossev.airQualityLib, line 213
+        } // library marker kkossev.airQualityLib, line 214
 
-    } // library marker kkossev.airQualityLib, line 213
-    else { // library marker kkossev.airQualityLib, line 214
-        logDebug "updatedAirQuality: skipping airQuality polling" // library marker kkossev.airQualityLib, line 215
     } // library marker kkossev.airQualityLib, line 216
-} // library marker kkossev.airQualityLib, line 217
+    else { // library marker kkossev.airQualityLib, line 217
+        logDebug "updatedAirQuality: skipping airQuality polling" // library marker kkossev.airQualityLib, line 218
+    } // library marker kkossev.airQualityLib, line 219
+} // library marker kkossev.airQualityLib, line 220
 
-def refreshAirQuality() { // library marker kkossev.airQualityLib, line 219
-    List<String> cmds = [] // library marker kkossev.airQualityLib, line 220
-    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 221
-            // TODO - check what is available for VINDSTYRKA // library marker kkossev.airQualityLib, line 222
-	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance // library marker kkossev.airQualityLib, line 223
-	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.airQualityLib, line 224
-    } // library marker kkossev.airQualityLib, line 225
-        else if (false) { // library marker kkossev.airQualityLib, line 226
-            // TODO - check what is available for Aqara  // library marker kkossev.airQualityLib, line 227
-        } // library marker kkossev.airQualityLib, line 228
-        else { // library marker kkossev.airQualityLib, line 229
-            // TODO - unknown AirQuaility sensor - try all ?? // library marker kkossev.airQualityLib, line 230
+def refreshAirQuality() { // library marker kkossev.airQualityLib, line 222
+    List<String> cmds = [] // library marker kkossev.airQualityLib, line 223
+    if (isAqaraTVOC()) { // library marker kkossev.airQualityLib, line 224
+            // TODO - check what is available for VINDSTYRKA // library marker kkossev.airQualityLib, line 225
+	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance // library marker kkossev.airQualityLib, line 226
+	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.airQualityLib, line 227
+    } // library marker kkossev.airQualityLib, line 228
+        else if (false) { // library marker kkossev.airQualityLib, line 229
+            // TODO - check what is available for Aqara  // library marker kkossev.airQualityLib, line 230
         } // library marker kkossev.airQualityLib, line 231
+        else { // library marker kkossev.airQualityLib, line 232
+            // TODO - unknown AirQuaility sensor - try all ?? // library marker kkossev.airQualityLib, line 233
+        } // library marker kkossev.airQualityLib, line 234
 
-    logDebug "refreshAirQuality() : ${cmds}" // library marker kkossev.airQualityLib, line 233
-    return cmds // library marker kkossev.airQualityLib, line 234
-} // library marker kkossev.airQualityLib, line 235
+    logDebug "refreshAirQuality() : ${cmds}" // library marker kkossev.airQualityLib, line 236
+    return cmds // library marker kkossev.airQualityLib, line 237
+} // library marker kkossev.airQualityLib, line 238
 
-def initVarsAirQuality(boolean fullInit=false) { // library marker kkossev.airQualityLib, line 237
-    logDebug "initVarsAirQuality(${fullInit})" // library marker kkossev.airQualityLib, line 238
-    if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.airQualityLib, line 239
-} // library marker kkossev.airQualityLib, line 240
+def initVarsAirQuality(boolean fullInit=false) { // library marker kkossev.airQualityLib, line 240
+    logDebug "initVarsAirQuality(${fullInit})" // library marker kkossev.airQualityLib, line 241
+    if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.airQualityLib, line 242
+    if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.airQualityLib, line 243
+    if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.airQualityLib, line 244
 
-void initEventsAirQuality(boolean fullInit=false) { // library marker kkossev.airQualityLib, line 242
-//    sendNumberOfButtonsEvent(6) // library marker kkossev.airQualityLib, line 243
-//    def supportedValues = ["pushed", "double", "held", "released", "tested"] // library marker kkossev.airQualityLib, line 244
-//    sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.airQualityLib, line 245
 } // library marker kkossev.airQualityLib, line 246
+
+void initEventsAirQuality(boolean fullInit=false) { // library marker kkossev.airQualityLib, line 248
+//    sendNumberOfButtonsEvent(6) // library marker kkossev.airQualityLib, line 249
+//    def supportedValues = ["pushed", "double", "held", "released", "tested"] // library marker kkossev.airQualityLib, line 250
+//    sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.airQualityLib, line 251
+} // library marker kkossev.airQualityLib, line 252
 
 // ~~~~~ end include (134) kkossev.airQualityLib ~~~~~
