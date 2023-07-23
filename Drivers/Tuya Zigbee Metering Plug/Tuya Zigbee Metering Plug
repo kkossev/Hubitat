@@ -54,7 +54,7 @@
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
- *  ver. 1.7.8 2023-07-19 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv
+ *  ver. 1.7.8 2023-07-23 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly;
  *
  *
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
@@ -77,7 +77,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.8" }
-def timeStamp() {"2023/07/19 10:58 AM"}
+def timeStamp() {"2023/07/23 12:04 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -291,7 +291,6 @@ metadata {
             command "pulseConfiguration", [[name: "PulseConfiguration", type: "NUMBER", description: "test", defaultValue : 1000]]
             input (name: "pulseConfiguration", type: "number", title: "<b>Frient Energy Monitor Pulse Configuration</b>", description: "<i>Frient Energy Monitor Pulse Configuration</i>", range: "10..100000", defaultValue: 1000)
             input (name: "frientEnergyMeterMode", type: "enum", title: "<b>Energy Reporting Mode</b>", description:"<i>Select Frient Energy Reporting Mode</i>", defaultValue: "0", options: develcoInterfaceMode)
-            //command "setEnergyMeterMode", [[name: "SetEnergyMeterMode*",   type: "ENUM", constraints: develcoInterfaceMode]]
        }        
         input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
     }
@@ -328,9 +327,6 @@ metadata {
     options     : [0: 'not set', 1: 'Over Current Threshold', 2: 'Over Power Threshold', 3: 'Over Voltage Threshold', 4: 'Under Voltage Threshold']
 ]
 
-//@Field static final Map UnitOpts = [ 0: '-', 1: 'A', 3: 'V', 4: 'V', ]
-
-
 @Field static final Map develcoInterfaceMode = [   
     '0': 'electricity',
     '1': 'gas',
@@ -341,7 +337,6 @@ metadata {
     '259': 'DSMR-2.3',
     '260': 'DSMR-4.0'
 ]
-
 
 private boolean isEnergyEnabled() {energyMode != "DISABLED"}
 
@@ -472,6 +467,9 @@ def parse(String description) {
                     logWarn "null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
                     return null
                 }
+                else if (it.cluster == "0006" && (descMap.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"])) {
+                    parseOnOffAttributes(it)
+                }                
                 else if (it.cluster == "0B04" && it.attrId == "050B") {
                     if (descMap.command == "0A" && safeToInt(zigbee.convertHexToInt(it.value)) == 0 && safeToInt(device.currentValue("power", true)) != 0  && device.currentValue("switch", true)=="on") {
                         logWarn "${device.displayName} ignoring potentially false zero power automatic report!"
@@ -2129,9 +2127,9 @@ def logsOff(){
 }
 
 @Field static final Map powerOnBehaviourOptions = [   
-    '0': 'closed',
-    '1': 'open',
-    '2': 'last state'
+    '0': 'switch off',
+    '1': 'switch on',
+    '2': 'switch last state'
 ]
 
 @Field static final Map switchTypeOptions = [   
@@ -2175,14 +2173,14 @@ boolean isTuyaE00xCluster( String description )
     return true    // processed
 }
 
-
 // return true if further processing in the main parse method should be cancelled !
 boolean otherTuyaOddities( String description ) {
-  
+  /*
     if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) {
         if (logEnable) log.debug "${device.displayName} skipping Tuya parse of  cluster 0 attrId 4"             // parseDescriptionAsMap throws exception when processing Tuya cluster 0 attrId 4 
         return true
     }
+*/
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
@@ -2193,10 +2191,12 @@ boolean otherTuyaOddities( String description ) {
     }
     //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}        
     if (descMap.attrId == null ) {
-        //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping"
+        logDebug "otherTuyaOddities: descMap = ${descMap}"
+        if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping"
         return false
     }
     boolean bWasAtLeastOneAttributeProcessed = false
+    boolean bWasThereAnyStandardAttribite = false
     // attribute report received
     List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
     descMap.additionalAttrs.each {
@@ -2212,11 +2212,7 @@ boolean otherTuyaOddities( String description ) {
         }
         switch (it.cluster) {
             case "0000" :
-                if (it.attrId in ["0001"]) {
-                    logDebug "Check-in Cluster 0 attrId 1 (application version is ${it.value})"
-                    bWasAtLeastOneAttributeProcessed = true
-                }
-                else if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
+                if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) {
                     logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})"
                     bWasAtLeastOneAttributeProcessed = true
                 }
@@ -2226,15 +2222,7 @@ boolean otherTuyaOddities( String description ) {
                 }
                 else {
                     logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
-                }
-                break
-            case "0006" :
-                if (it.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"]) {
-                    parseOnOffAttributes(it)
-                    bWasAtLeastOneAttributeProcessed = true
-                }
-                else {
-                    //if (settings?.logEnable) log.warn "${device.displayName} unprocessed On/Off Cluster ${it.cluster} attrId ${it.attrId} value ${it.value}"
+                    bWasThereAnyStandardAttribite = true
                 }
                 break
             default :
@@ -2242,7 +2230,7 @@ boolean otherTuyaOddities( String description ) {
                 break
         } // switch
     } // for each attribute
-    return bWasAtLeastOneAttributeProcessed
+    return bWasAtLeastOneAttributeProcessed && !bWasThereAnyStandardAttribite
 }
 
 
