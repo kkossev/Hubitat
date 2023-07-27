@@ -31,7 +31,7 @@
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
- *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure() and ping() commands.
+ *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands.
  * 
  *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
@@ -47,7 +47,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/07/27 7:59 AM"}
+def timeStamp() {"2023/07/27 7:12 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -920,7 +920,8 @@ def ping() {
 
 def sendRttEvent() {
     def now = new Date().getTime()
-    def timeRunning = now.toInteger() - state.lastTx["pingTime"].toInteger()
+    if (state.lastTx == null ) state.lastTx = [:]
+    def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
     sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
@@ -1185,6 +1186,7 @@ void scheduleDeviceHealthCheck() {
 
 // called when any event was received from the Zigbee device in parse() method..
 def setHealthStatusOnline() {
+    if (state.states == null) { state.states = [:] }
     state.states["notPresentCtr"]  = 0
     if (!((device.currentValue('healthStatus', true) ?: "unknown") in ['online'])) {   
         sendHealthStatusEvent('online')
@@ -1194,6 +1196,7 @@ def setHealthStatusOnline() {
 }
 
 def deviceHealthCheck() {
+    if (state.states == null) { state.states = [:] }
     def ctr = state.states["notPresentCtr"] ?: 0
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
@@ -1228,6 +1231,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay=200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
+    if (state.stats == null ) { state.stats = [:] }
     state.stats["TxCtr"] = state.stats["TxCtr"] != null ? state.stats["TxCtr"] + 1 : 1
     return cmds
 }
@@ -1320,6 +1324,52 @@ def logWarn(msg) {
         log.warn "${device.displayName} " + msg
     }
 }
+
+
+/*
+    https://github.com/zigpy/zha-device-handlers/issues/1571#issuecomment-1132516457
+
+    attributes = TuyaMCUCluster.attributes.copy()
+    attributes.update(
+        {
+            0xEF01: ("time_left", t.uint32_t, True),
+            0xEF02: ("state", t.enum8, True),
+            0xEF03: ("last_valve_open_duration", t.uint32_t, True),
+            0xEF04: ("dp_6", t.uint32_t, True),
+        }
+    )
+
+*/
+
+/*
+https://github.com/zigpy/zha-device-handlers/issues/1556#issuecomment-1127443288
+
+            0xef01: ("timer", t.uint32_t, True),
+            0xef02: ("timer_time_left", t.uint32_t, True),
+            0xef03: ("frost_lock", t.Bool, True),
+            0xef04: ("frost_lock_reset", t.Bool, True),  # 0 resets frost lock
+?????????????????????????????????????????
+
+
+*/
+
+/*
+https://github.com/simonbaudart/zha-device-handlers/blob/6cb86ce2980abbe8eb0a7670e440282a2ab5b022/zhaquirks/tuya/ts0601_garden.py
+
+    cluster_id = 0x043E
+    name = "Timer"
+    ep_attribute = "timer"
+
+    attributes = {
+        0x000C: ("state", t.uint16_t),
+        0x000B: ("time_left", t.uint16_t),
+        0x000F: ("last_valve_open_duration", t.uint16_t),
+    }
+
+https://github.com/simonbaudart/zha-device-handlers/blob/cae7400682fc2a1ffcb697e96684f607566cf123/zhaquirks/tuya/ts0601_valve.py
+
+*/
+
 def setIrrigationTimer( timer ) {
     ArrayList<String> cmds = []
     def timerSec = safeToInt(timer, -1)
