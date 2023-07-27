@@ -30,6 +30,7 @@
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
+ *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
  * 
  *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
@@ -44,8 +45,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.4" }
-def timeStamp() {"2023/04/09 10:55 PM"}
+def version() { "1.2.5" }
+def timeStamp() {"2023/05/22 10:29 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -72,7 +73,7 @@ metadata {
         attribute "irrigationDuration", "number"
         attribute "irrigationCapacity", "number"
         
-        command "setIrrigationTimer", [[name:"timer, seconds", type: "NUMBER", description: "Set Irrigation Duration timer, seconds", constraints: ["0..86400"]]]
+        command "setIrrigationTimer", [[name:"timer, in seconds (Saswell) or minutes (GiEX)", type: "NUMBER", description: "Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX)", constraints: ["0..86400"]]]
         command "setIrrigationCapacity", [[name:"capacity, liters", type: "NUMBER", description: "Set Irrigation Capacity, litres", constraints: ["0..9999"]]]
         command "setIrrigationMode", [[name:"select the mode", type: "ENUM", description: "Set Irrigation Mode", constraints: ['--select--', 'duration', 'capacity']]]
         
@@ -101,8 +102,8 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "powerOnBehaviour", type: "enum", title: "<b>Power-On Behaviour</b>", description:"<i>Select Power-On Behaviour</i>", defaultValue: "2", options: powerOnBehaviourOptions)
         if (isSASWELL() || isGIEX()) {
-       		input (name: "autoOffTimer", type: "number", title: "<b>Auto off timer</b>", description: "<i>Automatically turn off after how many seconds?</i>", defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
-       		input (name: "irrigationCapacity", type: "number", title: "<b>Irrigation Capacity</b>", description: "<i>Automatically turn off agter how many liters</i>", defaultValue: DEFAULT_CAPACITY, required: false)
+       		input (name: "autoOffTimer", type: "number", title: "<b>Auto off timer</b>", description: "<i>Automatically turn off after how many seconds(Saswell) or minutes(GiEX)?</i>", defaultValue: DEFAULT_AUTOOFF_TIMER, required: false)
+       		input (name: "irrigationCapacity", type: "number", title: "<b>Irrigation Capacity</b>", description: "<i>Automatically turn off agter how many liters?</i>", defaultValue: DEFAULT_CAPACITY, required: false)
         }
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>These options should have been set automatically by the driver<br>Manually changes may not always work!</i>", defaultValue: false)
         if (advancedOptions == true) {
@@ -199,11 +200,11 @@ metadata {
 
     "TS0601_SASWELL_VALVE"    : [
             model         : "TS0601",
-            manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy", "_TZE200_htnnfasr"],    // TODO - remove _TZE200_htnnfasr - only on/off and timer?
+            manufacturers : ["_TZE200_akjefhj5", "_TZE200_81isopgh", "_TZE200_2wg5qrjy"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_akjefhj5"],     // SASWELL SAS980SWT-7-Z01 (RTX ZVG1 ) (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_81isopgh"],     // not tested // SASWELL SAS980SWT-7 Solenoid valve and watering programmer 
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019", model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"]      // not tested // 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",      model:"TS0601", manufacturer:"_TZE200_akjefhj5"],     // SASWELL SAS980SWT-7-Z01 (RTX ZVG1 ) (_TZE200_akjefhj5, TS0601) https://github.com/zigpy/zha-device-handlers/discussions/1660 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",                outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_81isopgh"],     // "SAS980SWT-7-Z01(EU)" // https://community.hubitat.com/t/release-tuya-zigbee-valve-driver-w-healthstatus/92788/184?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,EF00", outClusters:"0019",      model:"TS0601", manufacturer:"_TZE200_2wg5qrjy"]      // not tested // 
             ],
             deviceJoinName: "Saswell Zigbee Irrigation Valve",
             instructions  : "https://fccid.io/2AOIFSAS980SWT/User-Manual/User-Manual-5361734.pdf",
@@ -859,7 +860,6 @@ def close() {
         Short paramVal = 0
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -880,7 +880,6 @@ def open() {
         Short paramVal = 1
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -1446,18 +1445,22 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
 
-def updateTuyaVersion() {
+void updateTuyaVersion() {
     def application = device.getDataValue("application") 
     if (application != null) {
-        def ver = zigbee.convertHexToInt(application)
+        Integer ver
+        try {
+            ver = zigbee.convertHexToInt(application)
+        }
+        catch (e) {
+            logWarn "exception caught while converting application version ${application} to tuyaVersion"
+            return
+        }
         def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
         if (device.getDataValue("tuyaVersion") != str) {
             device.updateDataValue("tuyaVersion", str)
             logInfo "tuyaVersion set to $str"
         }
-    }
-    else {
-        return null
     }
 }
 
