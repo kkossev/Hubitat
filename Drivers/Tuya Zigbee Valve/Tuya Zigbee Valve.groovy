@@ -31,10 +31,10 @@
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
- *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed;
+ *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one;
  * 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
- *                                  TODO: clear the old states on update; add rejoinCtr;  set deviceProfile preference to match the automatically selected one;
+ *                                  TODO: clear the old states on update; add rejoinCtr;  
  *                                  
  *
  *
@@ -44,7 +44,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/07/27 8:35 PM"}
+def timeStamp() {"2023/07/27 8:59 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1055,6 +1055,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
     if (currentModelMap != null) {
         state.deviceProfile = currentModelMap
         logInfo "deviceProfile was set to ${currentModelMap}"
+        device.updateSetting("forcedProfile", [value:currentModelMap, type:"enum"])
     }
     //
     return [deviceName, currentModelMap]
