@@ -31,7 +31,7 @@
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
- *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated();
+ *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed;
  * 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
  *                                  TODO: clear the old states on update; add rejoinCtr;  set deviceProfile preference to match the automatically selected one;
@@ -44,7 +44,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/07/27 7:50 PM"}
+def timeStamp() {"2023/07/27 8:35 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1051,6 +1051,12 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
     } else {
         logWarn "device model ${deviceModel} manufacturer ${deviceManufacturer} was not found!"
     }
+    // TODO !! patch !
+    if (currentModelMap != null) {
+        state.deviceProfile = currentModelMap
+        logInfo "deviceProfile was set to ${currentModelMap}"
+    }
+    //
     return [deviceName, currentModelMap]
 }
 
@@ -1094,9 +1100,9 @@ void initializeVars( boolean fullInit = true ) {
         state.clear()
         unschedule()
         resetStats()
+        logInfo "all states and scheduled jobs cleared!"
         setDeviceNameAndProfile()
         state.comment = 'Works with Tuya TS0001 TS0011 TS011F TS0601 shutoff valves; Tuya, GiEX, Saswell, Lidl irrigation valves'
-        logInfo "all states and scheduled jobs cleared!"
         state.driverVersion = driverVersionAndTimeStamp()    
     }
     
@@ -1478,10 +1484,12 @@ void updateTuyaVersion() {
 }
 
 def test( description ) {
-   // catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
-    log.warn "testing <b>${description}</b>"
-    parse(description)
+//    catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
+//    log.warn "testing <b>${description}</b>"
+//    parse(description)
 //    log.trace "getPowerSource()=${getPowerSource()}"
+    
+    setDeviceNameAndProfile()
     
 }
 
