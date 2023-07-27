@@ -31,13 +31,10 @@
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
- *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands.
+ *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated();
  * 
- *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
- *                                  TODO: scheduleDeviceHealthCheck() on preference change
- *                                  TODO: clear the old states on update; add rejoinCtr; set deviceProfile preference to match the automatically selected one';
- *                                  TODO: duration in minutes ? 
+ *                                  TODO: clear the old states on update; add rejoinCtr;  set deviceProfile preference to match the automatically selected one;
  *                                  
  *
  *
@@ -47,7 +44,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/07/27 7:12 PM"}
+def timeStamp() {"2023/07/27 7:50 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -75,8 +72,8 @@ metadata {
         attribute "irrigationCapacity", "number"
         
         command "setIrrigationTimer", [[name:"timer, in seconds (Saswell) or minutes (GiEX)", type: "NUMBER", description: "Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX)", constraints: ["0..86400"]]]
-        command "setIrrigationCapacity", [[name:"capacity, liters", type: "NUMBER", description: "Set Irrigation Capacity, litres", constraints: ["0..9999"]]]
-        command "setIrrigationMode", [[name:"select the mode", type: "ENUM", description: "Set Irrigation Mode", constraints: ['--select--', 'duration', 'capacity']]]
+        command "setIrrigationCapacity", [[name:"capacity, liters (Saswell and GiEX)", type: "NUMBER", description: "Set Irrigation Capacity, litres", constraints: ["0..9999"]]]
+        command "setIrrigationMode", [[name:"select the mode (Saswell and GiEX)", type: "ENUM", description: "Set Irrigation Mode", constraints: ['--select--', 'duration', 'capacity']]]
         
         if (_DEBUG == true) {        
             command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]
@@ -855,6 +852,7 @@ private String getAttributeString(ArrayList _data) {
 }
 
 def close() {
+    if (state.states == null) { state.states = [:] }
     state.states["isDigital"] = true
     //def cmds
     ArrayList<String> cmds = []
@@ -876,6 +874,7 @@ def close() {
 }
 
 def open() {
+    if (state.states == null) { state.states = [:] }
     state.states["isDigital"] = true
     ArrayList<String> cmds = []
     if (isGIEX()) {
@@ -902,13 +901,14 @@ def open() {
 def sendBatteryEvent( roundedPct, isDigital=false ) {
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )
     if (isDigital==false) {
+        if (state.states == null) { state.states = [:] }
         state.states["lastBattery"] = roundedPct.toString()
     }
 }
 
-def clearIsDigital() { state.states["isDigital"] = false }
-def switchDebouncingClear() { state.states["debounce"] = false }
-def isRefreshRequestClear() { state.states["isRefresh"] = false }
+def clearIsDigital()        { if (state.states == null) { state.states = [:] }; state.states["isDigital"] = false }
+def switchDebouncingClear() { if (state.states == null) { state.states = [:] }; state.states["debounce"]  = false }
+def isRefreshRequestClear() { if (state.states == null) { state.states = [:] }; state.states["isRefresh"] = false }
 
 def ping() {
     logInfo 'ping...'
@@ -920,7 +920,7 @@ def ping() {
 
 def sendRttEvent() {
     def now = new Date().getTime()
-    if (state.lastTx == null ) state.lastTx = [:]
+    if (state.lastTx == null ) { state.lastTx = [:] }
     def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} (ms)"
     logInfo "${descriptionText}"
@@ -940,6 +940,7 @@ def refresh() {
     logDebug "refresh()..."
     checkDriverVersion()
     List<String> cmds = []
+    if (state.states == null) { state.states = [:] }    
     state.states["isRefresh"] = true
     if (device.getDataValue("model") != 'TS0601') {
         cmds = zigbee.onOffRefresh()
@@ -971,7 +972,6 @@ def refresh() {
 
 def tuyaBlackMagic() {
     List<String> cmds = []
-    if (state.txCounter != null) state.txCounter = state.txCounter + 1
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=150) // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
     cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [:], delay=50)
     return cmds
@@ -1067,6 +1067,7 @@ def updated(){
     else {
         unschedule(logsOff)
     }
+    scheduleDeviceHealthCheck()
     configure()
 }
 
@@ -1146,6 +1147,9 @@ def checkDriverVersion() {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
         scheduleDeviceHealthCheck()
+        if (state.deviceProfile == "UNKNOWN") {
+            setDeviceNameAndProfile()
+        }
         state.driverVersion = driverVersionAndTimeStamp()
     }
 }
@@ -1160,6 +1164,7 @@ def initialize() {
     unschedule()
     initializeVars(fullInit = true)
     updated()            // calls also configure()
+    scheduleDeviceHealthCheck()
     runIn(3, logInitializeRezults, [overwrite: true])
 }
 
