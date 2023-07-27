@@ -30,7 +30,8 @@
  *  ver. 1.2.2 2023-03-12 kkossev - _TZ3000_5ucujjts fingerprint model bug fix; parse exception logs everity changed from warning to debug; refresh() is called w/ 3 seconds delay on configure(); sendIrrigationDuration() exception bug fixed; aded rejoinCtr
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
- *  ver. 1.2.5 2023-05-22 kkossev - (dev. branch) handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
+ *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
+ *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure() and ping() commands.
  * 
  *                                  TODO: scheduleDeviceHealthCheck() is not scheduled on initialize!
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
@@ -45,8 +46,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.2.5" }
-def timeStamp() {"2023/05/22 10:29 PM"}
+def version() { "1.2.6" }
+def timeStamp() {"2023/07/27 7:59 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -387,6 +388,7 @@ def parse(String description) {
                     if (it.attrId == "0001") {
                         if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
                         def now = new Date().getTime()
+                        if (state.lastTx == null) { state.lastTx = [:] }
                         def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
                         if (timeRunning < MAX_PING_MILISECONDS) {
                             sendRttEvent()
@@ -860,7 +862,6 @@ def close() {
         Short paramVal = 0
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -881,7 +882,6 @@ def open() {
         Short paramVal = 1
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
-        //cmds += sendTuyaCommand("02", DP_TYPE_BOOL, dpValHex)
         if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"       
     }
     else if (getModelGroup().contains("TS0601")) {
@@ -913,6 +913,7 @@ def isRefreshRequestClear() { state.states["isRefresh"] = false }
 def ping() {
     logInfo 'ping...'
     scheduleCommandTimeoutCheck()
+    if (state.lastTx == null) { state.lastTx = [:] }
     state.lastTx["pingTime"] = new Date().getTime()
     sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
@@ -1233,6 +1234,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
     if (settings?.logEnable) {log.debug "${device.displayName} <b>sendZigbeeCommands</b> (cmd=$cmd)"}
+    if (state.stats == null) { state.stats = [:] }
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
