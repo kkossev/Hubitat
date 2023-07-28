@@ -31,7 +31,7 @@
  *  ver. 1.2.3 2023-03-26 kkossev - TS0601_VALVE_ONOFF powerSource changed to 'dc'; added _TZE200_yxcgyjf1; added EF01,EF02,EF03,EF04 logs; added _TZE200_d0ypnbvn; fixed TS0601, GiEX and Lidl switch on/off reporting bug
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
- *  ver. 1.2.6 2023-07-27 kkossev - bug fix: fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one;
+ *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  * 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)  
  *                                  TODO: clear the old states on update; add rejoinCtr;  
@@ -44,7 +44,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.2.6" }
-def timeStamp() {"2023/07/27 8:59 PM"}
+def timeStamp() {"2023/07/28 7:28 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -336,6 +336,7 @@ def parse(String description) {
     state.stats["RxCtr"] = (state.stats["RxCtr"] ?: 0) + 1
     state.lastRx["parseTime"] = new Date().getTime()
     setHealthStatusOnline()
+    unschedule('deviceCommandTimeout')
     logDebug "parse: description is $description"
     
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
@@ -854,6 +855,7 @@ private String getAttributeString(ArrayList _data) {
 def close() {
     if (state.states == null) { state.states = [:] }
     state.states["isDigital"] = true
+    scheduleCommandTimeoutCheck()
     //def cmds
     ArrayList<String> cmds = []
     if (isGIEX()) {
@@ -876,6 +878,7 @@ def close() {
 def open() {
     if (state.states == null) { state.states = [:] }
     state.states["isDigital"] = true
+    scheduleCommandTimeoutCheck()
     ArrayList<String> cmds = []
     if (isGIEX()) {
         Short paramVal = 1
@@ -918,13 +921,20 @@ def ping() {
     sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
 
-def sendRttEvent() {
+void sendRttEvent( String value=null) {
     def now = new Date().getTime()
     if (state.lastTx == null ) { state.lastTx = [:] }
     def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
-    def descriptionText = "Round-trip time is ${timeRunning} (ms)"
-    logInfo "${descriptionText}"
-    sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+    def descriptionText = "Round-trip time is ${timeRunning} ms"
+    if (value == null) {
+        logInfo "${descriptionText}"
+        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+    }
+    else {
+        descriptionText = "Round-trip time : ${value}"
+        logInfo "${descriptionText}"
+        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, isDigital: true)    
+    }
 }
 
 private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
@@ -933,12 +943,14 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
+    sendRttEvent("timeout")
 }
 
 // refresh() 
 def refresh() {
     logDebug "refresh()..."
     checkDriverVersion()
+    scheduleCommandTimeoutCheck()
     List<String> cmds = []
     if (state.states == null) { state.states = [:] }    
     state.states["isRefresh"] = true
