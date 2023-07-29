@@ -54,11 +54,10 @@
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
- *  ver. 1.7.8 2023-07-28 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly;
+ *  ver. 1.7.8 2023-07-29 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
  *
  *
- *                                 TODO: Unprocessed attribute report: cluster=0000 attrId=0001 value=48 status=null data=null  Unprocessed attribute report: cluster=0000 attrId=FFE2 value=38 status=null data=null  Unprocessed attribute report: cluster=0000 attrId=FFE4 value=00 status=null data=null
- *                                 TODO: add setSwitchType configuration command
+ *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv 
  *                                 TODO: add rtt measurement in ping()
  *                                 TODO: add toggle() command
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
@@ -80,7 +79,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.8" }
-def timeStamp() {"2023/07/28 5:15 PM"}
+def timeStamp() {"2023/07/29 4:50 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -409,7 +408,7 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        logWarn "parse: exception caught while parsing description:  ${description}"
+        logWarn "parse: exception caught while trying to getEvent... description: ${description}"
         //return null
     }
     if (event) {
@@ -468,8 +467,14 @@ def parse(String description) {
                     disableUnsupportedAttribute(descMap.cluster, it.attrId)
                 }
                 if (it.value == null ) {
-                    logWarn "null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
+                    logDebug "null value attribute report: cluster=${it.cluster} attrId=${it.attrId} status=${it.status} data=${descMap.data}"
                     return null
+                }
+                else if (it.cluster == "0000" && (descMap.attrId in ["0000", "0001", "0004", "0005", "0007"])) {
+                    logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                }                  
+                else if (it.cluster == "0000" && (descMap.attrId in ["FFE2", "FFE4", "FFDE", "FFFE"])) {
+                    logDebug "attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
                 }
                 else if (it.cluster == "0006" && (descMap.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"])) {
                     parseOnOffAttributes(it)
