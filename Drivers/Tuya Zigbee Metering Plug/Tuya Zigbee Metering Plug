@@ -54,14 +54,17 @@
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
- *  ver. 1.7.8 2023-07-23 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly;
+ *  ver. 1.7.8 2023-07-28 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly;
  *
  *
+ *                                 TODO: Unprocessed attribute report: cluster=0000 attrId=0001 value=48 status=null data=null  Unprocessed attribute report: cluster=0000 attrId=FFE2 value=38 status=null data=null  Unprocessed attribute report: cluster=0000 attrId=FFE4 value=00 status=null data=null
+ *                                 TODO: add setSwitchType configuration command
+ *                                 TODO: add rtt measurement in ping()
+ *                                 TODO: add toggle() command
  *                                 TODO: configure the temperature reproting (be able to switch if off!)
  *                                 TODO: if a plug is offline, do not refreh all parameters but ping() instead
  *                                 TODO: Tongou D010_RestartStatus: 2 [ENUMERATION_8_BIT]    https://github.com/sprut/Hub/issues/2263
  *                                 TODO: add _TZ3000_qeuvnohg (Tongou) default settings - disable polling, but enable automatic reporting for energy; skip the temperatre reading (fake!); TODO: check whether power-on-behaviour options are working for Tongou!
- *                                 TODO: add rtt measurement in ping()
  *                                 TODO: healthCheck not started if polling is disabled!
  *                                 TODO: trap for Markus's checkPresence() - unschedule the job!
  *                                 TODO: RCBO: send temperature event only when changed; raname Hoch to RCBO; revise configure/initialize sequence; 
@@ -77,7 +80,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.7.8" }
-def timeStamp() {"2023/07/23 12:04 PM"}
+def timeStamp() {"2023/07/28 5:15 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -109,7 +112,8 @@ metadata {
         command "initialize", [[name: "Manually initialize the plug after switching drivers.\n\r ***** Will load device default values! *****" ]]
         command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["--- Select ---", "off", "on"]]]
         command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["--- Select ---", "Disabled", "Lit when On", "Lit when Off", "Freeze", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]]
-        command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
+        command "setPowerOnState", [[name:"Select 'Power On State' and click on the button", type: "ENUM", description: "Select Power On State", constraints: ["--- Select ---", "off", "on", "Last state"]]]
+        command "setSwitchType",   [[name:"Select 'Switch Type' and click on the button", type: "ENUM", description: "Select 'Switch Type", constraints: ["--- Select ---"] + switchTypeOptions.values() as List<String>]]
         command "setEnergyPrice", [[name:"setEnergyPrice", type: "STRING", description: "Set the energy cost (rate) for 1 KWh. The value is shown in the Preferences section", constraints: ["STRING"], defaultValue : "0.12"]]
         command "resetEnergy", [[name: "Reset the accumulated Energy value" ]]
         
@@ -2284,7 +2288,7 @@ def ledMode( mode ) {
     }
 }
 
-def powerOnState( mode ) {
+def setPowerOnState( mode ) {
     ArrayList<String> cmds = []
     String value = null
     Integer attribute = 0
@@ -2307,6 +2311,25 @@ def powerOnState( mode ) {
     }
     else {
         if (settings?.logEnable) log.warn "${device.displayName} please select a Power On State option"
+    }
+}
+
+
+def setSwitchType( mode ) {
+    ArrayList<String> cmds = []
+    if (state.model == "TS0601") {
+        if (settings?.txtEnable) log.warn "${device.displayName} Set Switch Type not implemented for TS0601: ${mode}"
+        // continue anyway ..
+    }
+    String value = switchTypeOptions.find { it.value == mode }?.key
+    Integer attribute = 0xD030
+    if (value != null) {
+        cmds += zigbee.writeAttribute(0xE001, attribute, DataType.ENUM8, value.toInteger())
+        if (settings?.logEnable) log.trace "${device.displayName} sending Switch Type : ${mode}"
+        sendZigbeeCommands( cmds )    
+    }
+    else {
+        if (settings?.txtEnable) log.warn "${device.displayName} please select a Switch Type"
     }
 }
 
