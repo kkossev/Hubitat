@@ -34,18 +34,20 @@
  * ver. 1.3.3  2023-04-23 kkossev - _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
  * ver. 1.3.4  2023-04-24 kkossev - send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
  * ver. 1.3.5  2023-05-28 kkossev - sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group; fingerprint correction; battery reports are capped to 100% and not ignored;
+ * ver. 1.3.6  2023-06-10 kkossev - added _TZE200_yjjdcqsq to TS0601_Tuya group; 
+ * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
  *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
  *                                  TODO:  add Sonoff SNZB-02D (CR2450 battery, C/F)
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
- *                                  TODO: add Batteryreporting time configuration (like in TS004F driver)
+ *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
  *
 */
 
-def version() { "1.3.5" }
-def timeStamp() {"2023/05/28 9:59 PM"}
+def version() { "1.3.7" }
+def timeStamp() {"2023/08/02 11:39 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -104,11 +106,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qyflbnbj", deviceJoinName: "Tuya Temperature Humidity sensor MIR-TE100-TY"            // https://www.aliexpress.com/item/1005002836127648.html
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_myd45weu", deviceJoinName: "Tuya Temperature Humidity Soil Monitoring Sensor"          // https://www.aliexpress.com/item/1005004979025740.html
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ga1maeof", deviceJoinName: "Tuya Temperature Humidity Soil Monitoring Sensor"          // https://www.aliexpress.com/item/1005004979025740.html
         // model: 'ZG-227ZL',
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qoy0ekbd", deviceJoinName: "Tuya Temperature Humidity LCD Display"      // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_a8sdabtg", deviceJoinName: "Tuya Temperature Humidity (no screen)"      // https://community.hubitat.com/t/new-temp-humidity-device-not-working-correctly-generic-zigbee-th-driver/109725?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_cirvgep4", deviceJoinName: "Tuya Temperature Humidity LCD Display with a Clock" //https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/308?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_znbl8dj5", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yjjdcqsq", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_bguser20", deviceJoinName: "Tuya Temperature Humidity sensor WSD500A" 
@@ -209,6 +213,7 @@ metadata {
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
     '_TZE200_9yapgbuv'  : 'TS0601_Tuya',         // not tested
     '_TZE200_cirvgep4'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005005198387789.html
+    '_TZE200_yjjdcqsq'  : 'TS0601_Tuya',         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/389?u=kkossev
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
     '_TZE200_nnrfa68v'  : 'TS0601_Haozee',       // not tested NOUS E6 https://noussmart.pl/product/e6.html 
@@ -235,6 +240,7 @@ metadata {
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
+    '_TZE200_ga1maeof'  : 'TS0601_Soil',        // Soil monitoring sensor
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
