@@ -19,6 +19,7 @@
  *  ver. 1.0.3 2022-12-15 kkossev - added _TZE200_e2bedvo9
  *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
+ *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
  *
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
@@ -30,8 +31,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.1.1" }
-def timeStamp() {"2022/04/29 10:56 PM"}
+def version() { "1.1.2" }
+def timeStamp() {"2022/08/01 9:35 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -73,6 +74,11 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_5d3vhjro"    // 'SA12IZL'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_aycxwiau"    // TuyaIasZone ?
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_vzekyi4c"    // TuyaIasZone ?
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_m9skfctm"    // https://community.hubitat.com/t/release-tuya-zigbee-smoke-detector/104159/52?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_dq1mfjug"    // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ux5v4dbd"    // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ytibqbra"    // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_dnz6yvl2"    // not tested
   
     }
     
@@ -102,7 +108,7 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
-def isTS0601() { return device.getDataValue('model') in ['TS0001'] }
+def isTS0601() { return device.getDataValue('model') in ['TS0601'] }
 
 def parse(String description) {
     if (logEnable==true) {log.debug "${device.displayName} description is $description"}
@@ -278,15 +284,17 @@ def parseZHAcommand( Map descMap) {
                         switch (cmd) {
                             case "01" : // smoke alarm for all models
                                 if (txtEnable==true) log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}"
-                                sendSmokeAlarmEvent( value )
+                                sendSmokeAlarmEvent( value)
+                                break
+                            case "02" : // raw data from _TZE200_m9skfctm '_TZE200_e2bedvo9', '_TZE200_dnz6yvl2'
+                                if (txtEnable==true) log.info "${device.displayName} smoke concentration  (dp=${cmd}) is: ${value/10}ppm (${value})"
                                 break
                             case "04" : // "TamperAlert" for all models
                                 if (txtEnable==true) log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}"
                                 sendTamperAlertEvent( value )
                                 break
-                            case "0B" : // (11) "Fault Alarm" for _TZE200_yh7aoahi
-                                if (txtEnable==true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
-                                sendBatteryStateEvent( value )
+                            case "0B" : // (11) "Fault Alarm" for _TZE200_yh7aoahi _TZE200_m9skfctm
+                                if (txtEnable==true) log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}"
                                 break
                             case "0E" : // (14) "battery level state" ['low', 'middle', 'high'] dp14 0=25% 1=50% 2=90% also for _TZE200_yh7aoahi 
                                 if (txtEnable==true) log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}"
@@ -296,9 +304,21 @@ def parseZHAcommand( Map descMap) {
                                 if (txtEnable==true) log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%"
                                 // TODO - send batteryLevel event!
                                 break
-                            case "10" : // (16) "silence" for _TZE200_yh7aoahi
+                            case "10" : // (16) "silence" for _TZE200_yh7aoahi _TZE200_ytibqbra
                                 if (txtEnable==true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
-                                sendBatteryStateEvent( value )
+                                break
+                            case "11" : // (17) "alarm" for  _TZE200_ytibqbra
+                                if (txtEnable==true) log.info "${device.displayName} 'alarm' state (dp=${cmd}) is: ${value}"
+                                break
+                            case "65" : // (101) test for _TZE200_m9skfctm; alarm for _TZE200_dq1mfjug
+                                if (device.getDataValue('manufacturer') in ['_TZE200_m9skfctm']) {
+                                    if (txtEnable==true) log.info "${device.displayName} test (dp=${cmd}) is: ${value}"
+                                    sendSmokeAlarmEvent(2)
+                                }
+                                else {
+                                    if (txtEnable==true) log.info "${device.displayName} smoke alarm  (dp=${cmd}) is: ${value}"
+                                    sendSmokeAlarmEvent(value)
+                                }
                                 break
                             default :
                                 if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
