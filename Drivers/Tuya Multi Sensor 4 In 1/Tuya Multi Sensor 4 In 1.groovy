@@ -58,7 +58,7 @@
 */
 
 def version() { "1.3.8" }
-def timeStamp() {"2023/08/02 10:26 PM"}
+def timeStamp() {"2023/08/02 11:27 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -223,7 +223,10 @@ metadata {
     "fadingTime"       : [ min: 0.5,  scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
     "minimumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
     "maximumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance'],
-    "resetSetting"     : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'resetSetting']
+    "resetSetting"     : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'resetSetting'],
+    "moveSelfTest"     : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'moveSelfTest'],
+    "microMoveSelfTest": [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'microMoveSelfTest'],
+    "breatheSelfTest"  : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'breatheSelfTest']
 ]
 
 @Field static final String UNKNOWN =  'UNKNOWN'
@@ -237,6 +240,7 @@ metadata {
 @Field static final Map blackRadarLedOptions =      [ "0" : "Off", "1" : "On" ]      // HumanPresenceSensorAIR
 @Field static final Map radarSelfCheckingStatus =  [ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
 
+@Field static final Map TS0225SelfCheckingStatus =  [ "0":"check_success", "1":"checking", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
 @Field static final Map TS0225humanMotionState = [ "0": "none", "1": "moving", "2": "small_move", "3": "stationary"  ]
 @Field static final Map TS0225alarmVolume = [ "0": "Low", "1": "Middle", "2": "High", "3": "Mute"  ]
 @Field static final Map TS0225quickSetup = [ "0": "Living Room", "1": "Bedroom", "2": "Washroom", "3": "Aisle", "4": "Kitchen"  ]
@@ -1256,10 +1260,10 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isSBYX0LM6radar()) {
                     logDebug "radar status_indication DP=0x6D (109) fncmd = ${fncmd}"
-                    // TODO - make it preference !
                 } 
                 else if (isTS0225radar()) {
                     logDebug "TS0225 Radar Time dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    sendEvent(name : "checkingTime", value : fncmd)   
                 }
                 else if (isHumanPresenceSensorFall()) {
                     if (settings?.logEnable) log.info "${device.displayName} radar hw_version_code (dp=109) is ${fncmd}"
@@ -1281,6 +1285,8 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isTS0225radar()) {
                     logDebug "TS0225 Radar Micro Move Self-Test dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || (TS0225SelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${TS0225SelfCheckingStatus[fncmd.toString()]} (${fncmd})"}
+                    sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else if (isSBYX0LM6radar()) {
                     logDebug "radar status_indication DP=0x6E (110) fncmd = ${fncmd}"
@@ -1314,7 +1320,9 @@ def processTuyaCluster( descMap ) {
                     sendEvent(name : "detectionDelay", value : value)
                 }
                 else if (isTS0225radar()) {
-                    logDebug "TS0225 Radar Breathe Self-Test dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    logDebug "TS0225 Radar Breathe Self-Test : ${}(dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
+                    if (settings?.logEnable == true || (TS0225SelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${TS0225SelfCheckingStatus[fncmd.toString()]} (${fncmd})"}
+                    sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else if (isSBYX0LM6radar()) {
                     logDebug "radar breaker_polarity DP=0x6F (111) fncmd = ${fncmd}"
@@ -1376,6 +1384,8 @@ def processTuyaCluster( descMap ) {
                 } 
                 else if (isTS0225radar()) {
                     logDebug "TS0225 Radar Move Self-Test dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || (TS0225SelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${TS0225SelfCheckingStatus[fncmd.toString()]} (${fncmd})"}
+                    sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else {
                     if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion direction 0x72 fncmd = ${fncmd}"
@@ -2320,9 +2330,6 @@ def logWarn(msg) {
 }
 
 
-def setParSelectHelp( val ) {
-    logWarn "setPar: select one of the parameters in this list depending on your device"             
-}
 
 def setReportingTime4in1( val ) {
     if (is4in1()) { 
@@ -2443,6 +2450,33 @@ def resetSetting(val) {
     else { logWarn "resetSetting: unsupported model!"; return null }
 }
 
+def moveSelfTest(val) {
+    if (isTS0225radar()) {
+        def value = val ? "01" : "00"
+        logDebug " radar moveSelfTest (raw=${value})"                
+        return sendTuyaCommand( "72", DP_TYPE_BOOL, value)
+    }
+    else { logWarn "moveSelfTest: unsupported model!"; return null }
+}
+
+def microMoveSelfTest(val) {
+    if (isTS0225radar()) {
+        def value = val ? "01" : "00"
+        logDebug " radar microMoveSelfTest (raw=${value})"                
+        return sendTuyaCommand( "6E", DP_TYPE_BOOL, value)
+    }
+    else { logWarn "microMoveSelfTest: unsupported model!"; return null }
+}
+
+def breatheSelfTest(val) {
+    if (isTS0225radar()) {
+        def value = val ? "01" : "00"
+        logDebug " radar breatheSelfTest (raw=${value})"                
+        return sendTuyaCommand( "6F", DP_TYPE_BOOL, value)
+    }
+    else { logWarn "breatheSelfTest: unsupported model!"; return null }
+}
+
 
 def setPar( par=null, val=null )
 {
@@ -2475,6 +2509,10 @@ def setPar( par=null, val=null )
 
     logDebug "executed <b>$func</b>(<b>$val</b>)"
     sendZigbeeCommands( cmds )
+}
+
+def setParSelectHelp( val ) {
+    logWarn "setPar: select one of the parameters in this list depending on your device"             
 }
 
 void updateTuyaVersion() {
