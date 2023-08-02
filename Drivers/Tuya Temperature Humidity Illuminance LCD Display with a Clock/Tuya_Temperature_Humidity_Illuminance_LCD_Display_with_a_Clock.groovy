@@ -34,7 +34,8 @@
  * ver. 1.3.3  2023-04-23 kkossev - _TZE200_znbl8dj5 inClusters correction; ignored invalid humidity values; implemented ping() and rtt (round-trip-time) attribute;
  * ver. 1.3.4  2023-04-24 kkossev - send rtt 'timeout' if ping() fails; added resetStats command; added individual stat.stats counters for T/H/I/battery; configuration possible loop bug fix; 
  * ver. 1.3.5  2023-05-28 kkossev - sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group; fingerprint correction; battery reports are capped to 100% and not ignored;
- * ver. 1.3.6  2023-06-10 kkossev - (dev.branch) added _TZE200_yjjdcqsq to TS0601_Tuya group; 
+ * ver. 1.3.6  2023-06-10 kkossev - added _TZE200_yjjdcqsq to TS0601_Tuya group; 
+ * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -45,8 +46,8 @@
  *
 */
 
-def version() { "1.3.6" }
-def timeStamp() {"2023/06/10 9:01 AM"}
+def version() { "1.3.7" }
+def timeStamp() {"2023/08/02 11:39 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
