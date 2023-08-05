@@ -43,7 +43,7 @@
  * ver. 1.3.5  2023-05-28 kkossev  - fixes for _TZE200_lu01t0zlTS0601_RADAR_MIR-TY-FALL mmWave radar (only the basic Motion and radarSensitivity is supported for now).
  * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
  * ver. 1.3.7  2023-07-27 kkossev  - fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR; added TS0202 _TZ3040_bb6xaihh _TZ3040_wqmtjsyk; added _TZE204_qasjif9e radar; 
- * ver. 1.3.8  2023-08-02 kkossev  - added basic support for the new TS0225 _TZE200_hl0ss9oa new Tuya 24GHz radar TS0225_HL0SS9OA_RADAR; added  basic support for the new TS0601 _TZE204_sbyx0lm6 radar w/ relay; added Hive MOT003
+ * ver. 1.4.0  2023-08-05 kkossev  - added basic support for the new TS0225 _TZE200_hl0ss9oa new Tuya 24GHz radar TS0225_HL0SS9OA_RADAR; added  basic support for the new TS0601 _TZE204_sbyx0lm6 radar w/ relay; added Hive MOT003; added sendCommand;
  *
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
@@ -57,8 +57,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.3.8" }
-def timeStamp() {"2023/08/02 11:27 PM"}
+def version() { "1.4.0" }
+def timeStamp() {"2023/08/05 6:31 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -112,6 +112,7 @@ metadata {
                 [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List],
                 [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
         ]
+        command "sendCommand", [[name: "sendCommand", type: "ENUM", constraints: radarCommandsMap.keySet() as List, description: "send Tuya Radar commands"]]
         if (_DEBUG == true) {
             command "testTuyaCmd", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -182,8 +183,8 @@ metadata {
             input ("moveMinimumDistance", "decimal", title: "<b>Move Minimum Distance (0.0..10.0),m</b>", description: "<i>Motion(movement) minimum distance.</i>", range: "0.0..10.0", defaultValue: 0.0)
             input ("motionDetectionDistance", "decimal", title: "<b>Motion Detection Distance (0.0..10.0),m</b>", description: "<i>Motion(movement) maximum distance.</i>", range: "0.0..10.0", defaultValue: 8.0)
             input ("motionDetectionSensitivity", "number", title: "<b>Motion Detection Sensitivity (0..10)</b>", description: "<i>Motion(movement) sensitivity.</i>",  range: "0..10", defaultValue: 7)   
-            //input ("smallMotionDetectionDistance", "decimal", title: "<b>Small Motion Detection Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
-            //input ("smallMotionDetectionSensitivity", "number", title: "<b>Small Motion Detection Sensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7)   
+            input ("smallMotionDetectionDistance", "decimal", title: "<b>Small Motion Detection Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
+            input ("smallMotionDetectionSensitivity", "number", title: "<b>Small Motion Detection Sensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7)   
             //input ("staticDetectionDistance", "decimal", title: "<b>Static Detection Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
             //input ("staticDetectionSensitivity", "number", title: "<b>StaticDetectionSensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7) 
         }
@@ -215,19 +216,43 @@ metadata {
     }
 }
 
+def restrictTo4In1Only()        { is4in1() }
+def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() }
+def restrictToTS0225RadarOnly() { isTS0225radar() }
+
 @Field static final Map settableParsMap = [
-    "--- Select ---"   : [ min: null, scale: 0, max: null,  step: 1,    type: 'number',  defaultValue: 7   , function: 'setParSelectHelp'],
-    "reportingTime4in1": [ min: 0,    scale: 0, max: 7200,  step: 1,   type: 'number',   defaultValue: 10  , function: 'setReportingTime4in1'],
-    "radarSensitivity" : [ min: 1,    scale: 0, max: 9,     step: 1,   type: 'number',   defaultValue: 7   , function: 'setRadarSensitivity'],
-    "detectionDelay"   : [ min: 0.0,  scale: 0, max: 120.0, step: 0.1, type: 'decimal',  defaultValue: 0.2 , function: 'setRadarDetectionDelay'],
-    "fadingTime"       : [ min: 0.5,  scale: 0, max: 500.0, step: 1.0, type: 'decimal',  defaultValue: 60.0, function: 'setRadarFadingTime'],
-    "minimumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue: 0.25, function: 'setRadarMinimumDistance'],
-    "maximumDistance"  : [ min: 0.0,  scale: 0, max:   9.5, step: 0.1, type: 'decimal',  defaultValue:  8.0, function: 'setRadarMaximumDistance'],
-    "resetSetting"     : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'resetSetting'],
-    "moveSelfTest"     : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'moveSelfTest'],
-    "microMoveSelfTest": [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'microMoveSelfTest'],
-    "breatheSelfTest"  : [ min: null, scale: 0, max: null,  step: 0.1, type: 'none',     defaultValue: null, function: 'breatheSelfTest']
+    "--- Select ---"   :               [ type: 'none', function: 'setParSelectHelp'],
+    "???? (4-in-1 only) ????"  :       [ type: 'none', function: 'setParSelectHelp'],
+    "reportingTime4in1":               [ type: 'number',  min: 0,    scale: 1, max: 7200,  step: 1,   defaultValue: 10,    function: 'setReportingTime4in1',    restrictions: 'restrictTo4In1Only'],
+    "???? (5.8 GHz radars only) ????": [ type: 'none', function: 'setParSelectHelp'],
+    "radarSensitivity" :               [ type: 'number',  min: 1,    scale: 1, max: 9,     step: 1,   defaultValue: 7,     function: 'setRadarSensitivity',      restrictions: 'restrictToTuyaRadarOnly'],
+    "detectionDelay"   :               [ type: 'decimal', min: 0.0,  scale: 1, max: 120.0, step: 0.1, defaultValue: 0.2,   function: 'setRadarDetectionDelay',   restrictions: 'restrictToTuyaRadarOnly'],
+    "fadingTime"       :               [ type: 'decimal', min: 0.5,  scale: 1, max: 500.0, step: 1.0, defaultValue: 60.0,  function: 'setRadarFadingTime',       restrictions: 'restrictToTuyaRadarOnly'],
+    "minimumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 0.25,  function: 'setRadarMinimumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
+    "maximumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 8.0,   function: 'setRadarMaximumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
+    "???? (24 GHz radars only) ????" : [ type: 'none', function: 'setParSelectHelp'],
+    "radarFadingTime":                 [ type: 'number',  min: 0,    scale: 1, max: 28800,  step: 1,  defaultValue: 10,    function: 'setRadarFadingTime',       restrictions: 'restrictToTS0225RadarOnly'],
+    "radarLedIndicator":               [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: false, function: 'setRadarLedIndicator',     restrictions: 'restrictToTS0225RadarOnly'],
+    "motionFalseDetection":            [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: true,  function: 'setMotionFalseDetection',  restrictions: 'restrictToTS0225RadarOnly'],
+    "breatheFalseDetection":           [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: false, function: 'setBreatheFalseDetection', restrictions: 'restrictToTS0225RadarOnly'],
+    
+    "motionDetectionDistance":         [ type: 'decimal', min: 0.0,  scale: 1, max: 10.0,  step: 1,   defaultValue: 8.0,   function: 'setMotionDetectionDistance',         restrictions: 'restrictToTS0225RadarOnly'],
+    "moveMinimumDistance":             [ type: 'decimal', min: 0.0,  scale: 1, max: 10.0,  step: 1,   defaultValue: 0.0,   function: 'setMoveMinimumDistance',             restrictions: 'restrictToTS0225RadarOnly'],
+    "motionDetectionSensitivity":      [ type: 'number',  min: 0,    scale: 0, max: 10,    step: 1,   defaultValue: 7,     function: 'setMotionDetectionSensitivity',      restrictions: 'restrictToTS0225RadarOnly'],
+    
+    "smallMotionDetectionDistance":    [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setSmallMotionDetectionDistance',    restrictions: 'restrictToTS0225RadarOnly'],
+    "smallMotionDetectionSensitivity": [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,      unction: 'setSmallMotionDetectionSensitivity', restrictions: 'restrictToTS0225RadarOnly']
 ]
+
+
+@Field static final Map radarCommandsMap = [
+    "--- Select ---"   : [ function: 'sendCommandHelp', supported: ["TS0225_HL0SS9OA_RADAR"]],
+    "resetSetting"     : [ function: 'resetSetting',    supported: ["TS0225_HL0SS9OA_RADAR"]],
+    "moveSelfTest"     : [ function: 'moveSelfTest',    supported: ["TS0225_HL0SS9OA_RADAR"]],
+    "microMoveSelfTest": [ function: 'microMoveSelfTest', supported: ["TS0225_HL0SS9OA_RADAR"]],
+    "breatheSelfTest"  : [ function: 'breatheSelfTest', supported: ["TS0225_HL0SS9OA_RADAR"]]
+]
+
 
 @Field static final String UNKNOWN =  'UNKNOWN'
 @Field static final Map inductionStateOptions = [ "0":"Occupied", "1":"Vacancy" ]
@@ -992,6 +1017,8 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x0E : // (14)    // isTS0225radar() 
                 logDebug "TS0225 Radar Small Motion Detection Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                if (settings?.logEnable == true || (safeToInt(settings?.smallMotionDetectionDistance)*100 != fncmd)) {logInfo "received Small Motion Detection Distance  : ${fncmd/100} m"}
+                device.updateSetting("smallMotionDetectionDistance", [value:fncmd/100, type:"decimal"])
                 break
             case 0x0F : // (15)    // isTS0225radar() 
                 logDebug "TS0225 Radar Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -1000,9 +1027,12 @@ def processTuyaCluster( descMap ) {
                 break
             case 0x10 : // (16)    // isTS0225radar() 
                 logDebug "TS0225 Radar Small Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                if (settings?.logEnable == true || settings?.smallMotionDetectionSensitivity != (fncmd as int)) { logInfo "received smallMotionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.smallMotionDetectionSensitivity} == ${fncmd as int}"}
+                device.updateSetting("smallMotionDetectionSensitivity", [value:fncmd as int , type:"number"])
+            
                 break
             case 0x14 : // (20)    // isTS0225radar() 
-                illuminanceEvent( fncmd * 10)    // illuminance for TS0225 radar
+                illuminanceEventLux( Math.round(fncmd / 10))    // illuminance for TS0225 radar
                 break
             case 0x18 : // (24)    // isTS0225radar() 
                 if (settings?.logEnable) { logInfo "TS0225 Radar Indicator is ${fncmd?'On':'Off'} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})" }
@@ -1814,6 +1844,9 @@ def updated() {
             cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
             cmds += setMoveMinimumDistance( settings?.moveMinimumDistance )
             cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
+            cmds += setSmallMotionDetectionDistance( settings?.smallMotionDetectionDistance )
+            cmds += setSmallMotionDetectionSensitivity( settings?.smallMotionDetectionSensitivity )
+            
             
             
         }
@@ -1903,6 +1936,8 @@ def refresh() {
     if (is4in1()) {
         cmds += zigbee.command(0xEF00, 0x07, "00")    // Fantem Tuya Magic
     }
+    cmds += zigbee.command(0xEF00, 0x03)
+
     sendZigbeeCommands( cmds ) 
 }
 
@@ -2387,111 +2422,177 @@ def setRadarSensitivity( val ) {
 }
 
 def setRadarLedIndicator( val ) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug "changing radar ledIndicator to ${val} seconds (raw=${value})"                
-        return sendTuyaCommand( "18", DP_TYPE_BOOL,value)
-    }
-    else { logWarn "setRadarLedIndicator: unsupported model!"; return null }
+    def value = val ? "01" : "00"
+    setRadarParameter("radaradarLedIndicator", "18", DP_TYPE_BOOL, value)
 }
 
 def setMotionFalseDetection( val ) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug "changing radar motionFalseDetection to ${val?'On':'Off'} (raw=${value})"                
-        return sendTuyaCommand( "70", DP_TYPE_BOOL,value)
-    }
-    else { logWarn "setMotionFalseDetection: unsupported model!"; return null }
+    def value = val ? "01" : "00"
+    setRadarParameter("motionFalseDetection", "70", DP_TYPE_BOOL, value)
 }
 
 def setBreatheFalseDetection( val ) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug "changing radar breatheFalseDetection to ${val?'On':'Off'} (raw=${value})"                
-        return sendTuyaCommand( "73", DP_TYPE_BOOL,value)
-    }
-    else { logWarn "setBreatheFalseDetection: unsupported model!"; return null }
+    def value = val ? "01" : "00"
+    setRadarParameter("breatheFalseDetection", "73", DP_TYPE_BOOL, value)
 }
 
 def setMotionDetectionDistance( val ) {
-    if (isTS0225radar()) {
-        def value = Math.round(val * 100)
-        logDebug "changing radar MotionDetectionDistance to ${val} (raw=${value})"                
-        return sendTuyaCommand( "0D", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
-    }
-    else { logWarn "setMotionDetectionDistance: unsupported model!"; return null }
+    def value = Math.round(val * 100)
+    setRadarParameter("motionDetectionDistance", "0D", DP_TYPE_VALUE, value)
 }
 
-
 def setMoveMinimumDistance( val ) {
-    if (isTS0225radar()) {
-        def value = Math.round(val * 100)
-        logDebug "changing radar MoveMinimumDistance to ${val} (raw=${value})"                
-        return sendTuyaCommand( "6A", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
-    }
-    else { logWarn "setMoveMinimumDistance: unsupported model!"; return null }
+    def value = Math.round(val * 100)
+    setRadarParameter("moveMinimumDistance", "6A", DP_TYPE_VALUE, value)
 }
 
 def setMotionDetectionSensitivity( val ) {
-    if (isTS0225radar()) {
-        def value = val
-        logDebug "changing radar MotionDetectionSensitivity to ${val} (raw=${value})"                
-        return sendTuyaCommand( "0F", DP_TYPE_ENUM, zigbee.convertToHexString(value as int, 2))
-    }
-    else { logWarn "setMotionDetectionSensitivity: unsupported model!"; return null }
+    def value = val as int
+    setRadarParameter("motionDetectionSensitivity", "0F", DP_TYPE_ENUM, value)
 }
 
-def resetSetting(val) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug " radar resetSetting (raw=${value})"                
-        return sendTuyaCommand( "71", DP_TYPE_BOOL, value)
-    }
-    else { logWarn "resetSetting: unsupported model!"; return null }
+def setSmallMotionDetectionDistance( val ) {
+    def value = Math.round(val * 100)
+    setRadarParameter("smallMotionDetectionDistance", "0E", DP_TYPE_VALUE, value)
 }
 
-def moveSelfTest(val) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug " radar moveSelfTest (raw=${value})"                
-        return sendTuyaCommand( "72", DP_TYPE_BOOL, value)
-    }
-    else { logWarn "moveSelfTest: unsupported model!"; return null }
+def setSmallMotionDetectionSensitivity( val ) {
+    def value = val as int
+    setRadarParameter("smallMotionDetectionSensitivity", "10", DP_TYPE_ENUM, value)
 }
 
-def microMoveSelfTest(val) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug " radar microMoveSelfTest (raw=${value})"                
-        return sendTuyaCommand( "6E", DP_TYPE_BOOL, value)
+
+
+
+def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
+    ArrayList<String> cmds = []
+    if (!isTS0225radar()) {
+        logWarn "${parName}: unsupported model ${state.deviceProfile} !"
+        return null 
     }
-    else { logWarn "microMoveSelfTest: unsupported model!"; return null }
+    def value
+    switch (DPType) {
+        case DP_TYPE_BOOL :
+        case DP_TYPE_ENUM :
+            value = zigbee.convertToHexString(DPval as int, 2)
+        case DP_TYPE_VALUE : 
+            value = zigbee.convertToHexString(DPval as int, 8)
+            break
+        default :
+            logWarn "${command}: unsupported DPType ${DPType} !"
+            return null
+    }
+    cmds = sendTuyaCommand( DPcommand, DPType, value)
+    logDebug "sending radar parameter ${parName} raw=${value}"                
+    return cmds
 }
 
-def breatheSelfTest(val) {
-    if (isTS0225radar()) {
-        def value = val ? "01" : "00"
-        logDebug " radar breatheSelfTest (raw=${value})"                
-        return sendTuyaCommand( "6F", DP_TYPE_BOOL, value)
+
+
+
+def resetSetting(val)      { return radarCommand("resetSetting", "71", DP_TYPE_BOOL) }
+def moveSelfTest(val)      { return radarCommand("moveSelfTest", "72", DP_TYPE_BOOL) }
+def microMoveSelfTest(val) { return radarCommand("microMoveSelfTest", "6E", DP_TYPE_BOOL) }
+def breatheSelfTest(val)   { return radarCommand("breatheSelfTest", "6F", DP_TYPE_BOOL) }
+
+def radarCommand( String command, String DPcommand, String DPType) {
+    ArrayList<String> cmds = []
+    if (!isTS0225radar()) {
+        logWarn "${command}: unsupported model ${state.deviceProfile} !"
+        return null 
     }
-    else { logWarn "breatheSelfTest: unsupported model!"; return null }
+    def value
+    switch (DPType) {
+        case DP_TYPE_BOOL :
+        case DP_TYPE_ENUM :
+        case DP_TYPE_VALUE : 
+            value = "00"
+            cmds = sendTuyaCommand( DPcommand, DPType, value)
+            break
+        default :
+            logWarn "${command}: unsupported DPType ${DPType} !"
+            return null
+    }
+    logDebug "sending radarCommand breatheSelfTest (raw=${value})"                
+    return cmds
 }
 
+def sendCommand( command=null, val=null )
+{
+    logInfo "sending command ${command}"
+    ArrayList<String> cmds = []
+    def value
+    Boolean supported = false
+    if (command == null || !(command in (radarCommandsMap.keySet() as List))) {
+        logWarn "sendCommand: the command <b>${command}</b> must be one of these : ${radarCommandsMap.keySet() as List}"
+        return
+    }
+    supported = state.deviceProfile in radarCommandsMap[command]?.supported
+    if (!supported) {
+        log.warn "sendCommand: <b>command</b> is supported by <b>${radarCommandsMap[command]?.supported}</b> radars only!"
+        return
+    }
+    //
+    def func
+    try {
+        func = radarCommandsMap[command]?.function
+        cmds = "$func"(value)
+    }
+    catch (e) {
+        logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
+        return
+    }
+
+    logDebug "executed <b>$func</b>(<b>$val</b>)"
+    sendZigbeeCommands( cmds )
+}
+
+def sendCommandHelp( val ) {
+    logWarn "sendCommand: select one of the commands in this list suported by your device"             
+}
+
+def getValidParsPerModel() {
+    List<String> validPars = []
+    settableParsMap.each { key, value -> 
+        if (value.type != 'none') {
+            def func
+            def isAllowed = false
+            try {
+                func = value.restrictions
+                isAllowed = "$func"()
+            }
+            catch (e) {
+                logWarn "Exception caught while processing <b>$func</b>()"
+            }
+            if (isAllowed) {
+                validPars.add(key)
+            }
+        }
+    }
+    return validPars
+}
 
 def setPar( par=null, val=null )
 {
-    logInfo "setting parameter ${par} to ${val}"
+    //logInfo "setting parameter ${par} to ${val}"
     ArrayList<String> cmds = []
     def value
     Boolean validated = false
-    if (par == null || !(par in (settableParsMap.keySet() as List))) {
-        logWarn "setPar: parameter <b>${par}</b> must be one of these : ${settableParsMap.keySet() as List}"
+    if (par == null || !(par in (settableParsMap.keySet() as List)) || settableParsMap[par]?.type == 'none') {
+        logWarn "setPar: invalid parameter name <b>${par}</b>"
+        logWarn "must be one of these : ${getValidParsPerModel()}"
         return
     }
     value = settableParsMap[par]?.type == "number" ? safeToInt(val, -1) : safeToDouble(val, -1.0)
     if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
     if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
-        log.warn "setPar: parameter <b>par</b> value <b>${val}</b> must be within ${settableParsMap[par]?.min} and  ${settableParsMap[par]?.max} "
+        if (val == null) { 
+            log.warn "setPar: missing ${par} parameter <b>value</b>" 
+        }
+        else {
+            log.warn "setPar: invalid ${par} parameter value <b>${val}</b>" 
+        }
+        log.warn "value must be within ${settableParsMap[par]?.min} and ${settableParsMap[par]?.max}"
         return
     }
     //
@@ -2507,7 +2608,7 @@ def setPar( par=null, val=null )
         return
     }
 
-    logDebug "executed <b>$func</b>(<b>$val</b>)"
+    logInfo "executed setPar <b>$func</b>(<b>$val</b>)"
     sendZigbeeCommands( cmds )
 }
 
@@ -2614,6 +2715,10 @@ def testParse(description) {
 }
 
 def test( val ) {
-    zigbee.command(0xEF00, 0x07, "00")
+    //zigbee.command(0xEF00, 0x07, "00")
+    //zigbee.command(0xEF00, 0x28, "01 02")
+    zigbee.command(0xEF00, 0x03)
+    //zigbee.command(0xEF00, 0x09, PACKET_ID + "00")  
+    //zigbee.command(0xEF00, 0x28, "00 01")  
 }
 
