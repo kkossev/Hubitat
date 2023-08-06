@@ -58,7 +58,7 @@
 */
 
 def version() { "1.4.0" }
-def timeStamp() {"2023/08/05 6:31 PM"}
+def timeStamp() {"2023/08/05 8:14 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -185,8 +185,10 @@ metadata {
             input ("motionDetectionSensitivity", "number", title: "<b>Motion Detection Sensitivity (0..10)</b>", description: "<i>Motion(movement) sensitivity.</i>",  range: "0..10", defaultValue: 7)   
             input ("smallMotionDetectionDistance", "decimal", title: "<b>Small Motion Detection Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
             input ("smallMotionDetectionSensitivity", "number", title: "<b>Small Motion Detection Sensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7)   
-            //input ("staticDetectionDistance", "decimal", title: "<b>Static Detection Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
-            //input ("staticDetectionSensitivity", "number", title: "<b>StaticDetectionSensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7) 
+            input ("microMotionMinimumDistance", "decimal", title: "<b>Micro Motion Minimum Distance (0.0..6.0)m</b>", description: "", range: "0.0..6.0", defaultValue: 5.0)
+            
+            input ("staticDetectionDistance", "decimal", title: "<b>Static Detection Distance (0.0..6.0),m</b>", description: "<i>Static detection distance.</i>", range: "0.0..6.0", defaultValue: 6.0)
+            input ("staticDetectionSensitivity", "number", title: "<b>StaticDetectionSensitivity (0..10)</b>", description: "",  range: "0..10", defaultValue: 7) 
         }
         if (isHumanPresenceSensorAIR()) {
             input (name: "vacancyDelay", type: "number", title: "Vacancy Delay", description: "Select vacancy delay (0..1000), seconds", range: "0..1000", defaultValue: 10)   
@@ -241,7 +243,13 @@ def restrictToTS0225RadarOnly() { isTS0225radar() }
     "motionDetectionSensitivity":      [ type: 'number',  min: 0,    scale: 0, max: 10,    step: 1,   defaultValue: 7,     function: 'setMotionDetectionSensitivity',      restrictions: 'restrictToTS0225RadarOnly'],
     
     "smallMotionDetectionDistance":    [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setSmallMotionDetectionDistance',    restrictions: 'restrictToTS0225RadarOnly'],
-    "smallMotionDetectionSensitivity": [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,      unction: 'setSmallMotionDetectionSensitivity', restrictions: 'restrictToTS0225RadarOnly']
+    "smallMotionDetectionSensitivity": [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,     function: 'setSmallMotionDetectionSensitivity', restrictions: 'restrictToTS0225RadarOnly'],
+
+    "microMotionMinimumDistance":      [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setMicroMotionMinimumDistance',     restrictions: 'restrictToTS0225RadarOnly'],
+
+    "staticDetectionDistance":         [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setStaticDetectionDistance',        restrictions: 'restrictToTS0225RadarOnly'],
+    "staticDetectionSensitivity":      [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,     function: 'setStaticDetectionSensitivity',     restrictions: 'restrictToTS0225RadarOnly']
+    
 ]
 
 
@@ -1029,7 +1037,6 @@ def processTuyaCluster( descMap ) {
                 logDebug "TS0225 Radar Small Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 if (settings?.logEnable == true || settings?.smallMotionDetectionSensitivity != (fncmd as int)) { logInfo "received smallMotionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.smallMotionDetectionSensitivity} == ${fncmd as int}"}
                 device.updateSetting("smallMotionDetectionSensitivity", [value:fncmd as int , type:"number"])
-            
                 break
             case 0x14 : // (20)    // isTS0225radar() 
                 illuminanceEventLux( Math.round(fncmd / 10))    // illuminance for TS0225 radar
@@ -1114,6 +1121,8 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isTS0225radar()) {
                     logDebug "TS0225 Radar Static Detection Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || (safeToInt(settings?.staticDetectionDistance)*100 != fncmd)) {logInfo "received staticDetectionDistance  : ${fncmd/100} m"}
+                    device.updateSetting("staticDetectionDistance", [value:fncmd/100, type:"decimal"])
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported <b>Vacancy Delay</b> ${fncmd} s"
@@ -1139,6 +1148,8 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isTS0225radar()) {
                     logDebug "TS0225 Radar Static Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (fncmd as int)) { logInfo "received staticDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${fncmd as int}"}
+                    device.updateSetting("staticDetectionSensitivity", [value:fncmd as int , type:"number"])
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Detection Mode <b>${detectionModeOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -1234,7 +1245,9 @@ def processTuyaCluster( descMap ) {
                     // TODO - make it preference !
                 } 
                 else if (isTS0225radar()) {
-                    logDebug "TS0225 Radar Micro Minimum Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    logDebug "TS0225 Radar Micro Motion Minimum Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || (safeToInt(settings?.microMotionMinimumDistance)*100 != fncmd)) {logInfo "received Radar Micro Motion Minimum Distance  : ${fncmd/100} m"}
+                    device.updateSetting("microMotionMinimumDistance", [value:fncmd/100, type:"decimal"])
                 }
                 else if (isHumanPresenceSensorFall()) {
                     if (settings?.logEnable) log.info "${device.displayName} radar_check_end_code (dp=107) is ${fncmd}"
@@ -1845,9 +1858,9 @@ def updated() {
             cmds += setMoveMinimumDistance( settings?.moveMinimumDistance )
             cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
             cmds += setSmallMotionDetectionDistance( settings?.smallMotionDetectionDistance )
-            cmds += setSmallMotionDetectionSensitivity( settings?.smallMotionDetectionSensitivity )
-            
-            
+            cmds += setMicroMotionMinimumDistance( settings?.microMotionMinimumDistance )
+            cmds += setStaticDetectionDistance( settings?.staticDetectionDistance )
+            cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
             
         }
 
@@ -2031,8 +2044,10 @@ void initializeVars( boolean fullInit = false ) {
         if (fullInit == true || settings.motionDetectionSensitivity == null) device.updateSetting("motionDetectionSensitivity", [value:7, type:"number"])
         if (fullInit == true || settings.smallMotionDetectionDistance == null) device.updateSetting("smallMotionDetectionDistance", [value:5.0, type:"decimal"])
         if (fullInit == true || settings.smallMotionDetectionSensitivity == null) device.updateSetting("smallMotionDetectionSensitivity", [value:7, type:"number"])
+        if (fullInit == true || settings.microMotionDetectionDistance == null) device.updateSetting("microMotionDetectionDistance", [value:5.0, type:"decimal"])
         if (fullInit == true || settings.staticDetectionDistance == null) device.updateSetting("staticDetectionDistance", [value:5.0, type:"decimal"])
         if (fullInit == true || settings.staticDetectionSensitivity == null) device.updateSetting("staticDetectionSensitivity", [value:7, type:"number"])
+        
         if (fullInit == true || settings.presenceKeepTime == null) device.updateSetting("presenceKeepTime", [value:30, type:"number"])
         if (fullInit == true || settings.ledIndicator == null) device.updateSetting("ledIndicator", false)
         if (fullInit == true || settings.motionFalseDetection == null) device.updateSetting("motionFalseDetection", true)
@@ -2461,6 +2476,22 @@ def setSmallMotionDetectionSensitivity( val ) {
     setRadarParameter("smallMotionDetectionSensitivity", "10", DP_TYPE_ENUM, value)
 }
 
+def setMicroMotionMinimumDistance( val ) {
+    def value = Math.round(val * 100)
+    setRadarParameter("microMotionDetectionDistance", "6B", DP_TYPE_VALUE, value)
+}
+
+// no MicroMotionDetectionSensitivity !
+
+def setStaticDetectionDistance( val ) {
+    def value = Math.round(val * 100)
+    setRadarParameter("staticDetectionDistance", "67", DP_TYPE_VALUE, value)
+}
+
+def setStaticDetectionSensitivity( val ) {
+    def value = val as int
+    setRadarParameter("staticDetectionSensitivity", "68", DP_TYPE_ENUM, value)
+}
 
 
 
@@ -2583,7 +2614,30 @@ def setPar( par=null, val=null )
         logWarn "must be one of these : ${getValidParsPerModel()}"
         return
     }
-    value = settableParsMap[par]?.type == "number" ? safeToInt(val, -1) : safeToDouble(val, -1.0)
+    if (settableParsMap[par]?.type == "number") {
+        value = safeToInt(val, -1)
+    }
+    else if (settableParsMap[par]?.type == "decimal") {
+        value = safeToDouble(val, -1.0)
+    }
+    else if (settableParsMap[par]?.type == "bool") {
+        if (val == '0' || val == 'false') {
+            value = 0
+        }
+        else if (val == '1' || val == 'true') {
+            value = 1
+        }
+        else {
+            logWarn "setPar: bool parameter <b>${val}</b>"
+            log.warn "value must be one of <b>0 1 false true</b>"
+            return
+        }
+    }
+    else {
+        logWarn "setPar: unsupported parameter type <b>${settableParsMap[par]?.type}</b>"
+        return
+    }
+    
     if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
     if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
         if (val == null) { 
