@@ -54,7 +54,8 @@
  *  ver. 1.7.5 2023-05-12 kkossev - added Tongou TO-Q-SY1-JZT DIN Rail Switch TS011F _TZ3000_qeuvnohg; added toggles for enabling Frequency, Power Factor and temperature (if device supports it); added _TZE200_fsb6zw01; 
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
- *  ver. 1.7.8 2023-07-29 kkossev - (dev. branch) added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
+ *  ver. 1.7.8 2023-07-29 kkossev - added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
+ *  ver. 1.8.0 2023-08-07 kkossev - (dev. branch) added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail
  *
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv 
@@ -78,8 +79,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.7.8" }
-def timeStamp() {"2023/07/29 4:50 PM"}
+def version() { "1.8.0" }
+def timeStamp() {"2023/08/07 1:04 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -166,7 +167,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_7dndcnnb", deviceJoinName: "LELLKI Smart Switch 25A Energy Monitor" // https://www.aliexpress.com/item/1005004564755069.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qeuvnohg", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // https://www.aliexpress.com/item/1005004747066832.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_8bxrzyxz", deviceJoinName: "Tongou TO-Q-SY1-JZT DIN Rail Switch"    // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cayepv1a", deviceJoinName: "Tongou TO-Q-SY2-JZT DIN Rail Switch"    //
+        
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_cayepv1a", deviceJoinName: "Tongou TO-Q-SY2-JZT DIN Rail Switch"        //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_lepzuhto", deviceJoinName: "EARU EAKCB-T-M-Z Smart circuit breaker"     // SY2 clone not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qystbcjg", deviceJoinName: "Somgoms ZigBee MCB Circuit Breaker DIN Rail" //https://www.aliexpress.com/item/1005005647599064.html
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E000,E001,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3000_kqvb5akv", deviceJoinName: "Tuya Switch Module w/ Measurements"    //
 
@@ -284,7 +288,7 @@ metadata {
                     input (name: "overCurrentBreaker", type:  "bool", title: "<b>Over Current Protection</b>",  description: "<i>Disable or enable the Over Current Protection</i>", defaultValue: false)
                     input (name: "overCurrentBreakerThreshold", type: "number", title: "<b>Over Current Protection Threshold, A</b>", description: "<i>The Over Current Protection Threshold, (1..64) A</i>", range: "1..64", defaultValue: 64)
                     input (name: "overVoltageBreaker", type:  "bool", title: "<b>Over Voltage Protection</b>",  description: "<i>Disable or enable the Over Voltage Protection</i>", defaultValue: false)
-                    input (name: "overVoltageBreakerThreshold", type: "number", title: "<b>Over Voltage Protection Threshold, V</b>", description: "<i>The Over Voltage Protection Threshold, (100..255) V</i>", range: "100..255", defaultValue: 64)
+                    input (name: "overVoltageBreakerThreshold", type: "number", title: "<b>Over Voltage Protection Threshold, V</b>", description: "<i>The Over Voltage Protection Threshold, (100..255) V</i>", range: "100..255", defaultValue: 250)
                     input (name: "underVoltageBreaker", type:  "bool", title: "<b>Under Voltage Protection</b>",  description: "<i>Disable or enable the Under Voltage Protection</i>", defaultValue: false)
                     input (name: "underVoltageBreakerThreshold", type: "number", title: "<b>Under Voltage Protection Threshold, V</b>", description: "<i>The Under Voltage Protection Threshold, (50..240) V</i>", range: "50..240", defaultValue: 64)
                 }
@@ -353,7 +357,7 @@ private boolean isDinRail()             { device.getDataValue("manufacturer") in
 private boolean isHEProblematic()       { device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
 private boolean isHoch()                { device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"] }
 private boolean isTongouSY1()           { (device?.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_qeuvnohg", "_TZ3000_8bxrzyxz"] }    // TS011F
-private boolean isTongouSY2()           { (device?.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_cayepv1a"] }
+private boolean isTongouSY2()           { (device?.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_cayepv1a", "_TZ3000_lepzuhto", "_TZ3000_qystbcjg"] }    // Din rail switch with power monitoring and threshold settings
 
 private boolean isSmartThingsOutlet() { (device.getDataValue("manufacturer") in ["SmartThings"]) || (device.getDataValue("model") in ["outletv4"])}
 private boolean isSengledOutlet() { device.getDataValue("model") == "E1C-NB7" }
@@ -1980,7 +1984,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.overCurrentBreaker == null) device.updateSetting("overCurrentBreaker", false)
     if (fullInit == true || settings?.overCurrentBreakerThreshold == null) device.updateSetting("overCurrentBreakerThreshold", [value:64, type:"number"])
     if (fullInit == true || settings?.overVoltageBreaker == null) device.updateSetting("overVoltageBreaker", false)
-    if (fullInit == true || settings?.overVoltageBreakerThreshold == null) device.updateSetting("overVoltageBreakerThreshold", [value:64, type:"number"])
+    if (fullInit == true || settings?.overVoltageBreakerThreshold == null) device.updateSetting("overVoltageBreakerThreshold", [value:250, type:"number"])
     if (fullInit == true || settings?.underVoltageBreaker == null) device.updateSetting("underVoltageBreaker", false)
     if (fullInit == true || settings?.underVoltageBreakerThreshold == null) device.updateSetting("underVoltageBreakerThreshold", [value:64, type:"number"])
     
