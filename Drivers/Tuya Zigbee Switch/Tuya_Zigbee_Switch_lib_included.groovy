@@ -24,11 +24,10 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-21 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; 
+ * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
+ * ver. 2.1.3  2023-08-09 kkossev  - (dev. branch)
  *
- *                                   TODO: fix the exponential 3E+1 temperature representation bug!
- *                                   TODO: Aqara TVOC: implement battery level/percentage for 
- *                                   TODO: add minReportingTime for capability TemperatureMeasurement and Humidity
+ *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
  *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
  *                                   TODO: add pingSuccess and pingFailure in health stats
@@ -36,19 +35,18 @@
  *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
  *                                   TODO: calculate and store the average ping RTT
- *                                   TODO: Fingerbot: add the  fingerprint
  *                                   TODO: Fingerbot: add Momentary capability
  *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
  *                                   TODO: state timesamps in human readable form
- *                                   TODO: process the min/max reporting times preferences for temperature and humidity;
  *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
  *                                   TODO: battery min/max voltage preferences
+ *                                   TODO: Configure: add custom Notes
  */
 
 static String version() { "2.1.2" }
-static String timeStamp() {"2023/07/21 10:20 PM"}
+static String timeStamp() {"2023/08/09 11:39 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -77,6 +75,7 @@ import groovy.json.JsonOutput
 //#include kkossev.zigbeeScenes
 //deviceType = "AirQuality"
 //@Field static final String DEVICE_TYPE = "AirQuality"
+//#include kkossev.airQualityLib
 //deviceType = "Fingerbot"
 //@Field static final String DEVICE_TYPE = "Fingerbot"
 //#include kkossev.tuyaFingerbotLib
@@ -104,6 +103,9 @@ deviceType = "Switch"
 //deviceType = "AqaraCube"
 //@Field static final String DEVICE_TYPE = "AqaraCube"
 //#include kkossev.aqaraCubeT1ProLib
+//deviceType = "IRBlaster"
+//@Field static final String DEVICE_TYPE = "IRBlaster"
+//#include kkossev.irBlasterLib
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -122,6 +124,7 @@ metadata {
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
         //name: 'Aqara Cube T1 Pro',
+        //name: 'Tuya Zigbee IR Blaster',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
@@ -133,6 +136,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_IR_Blaster/Tuya_Zigbee_IR_Blaster_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -174,10 +178,10 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat", "AqaraCube"]) {
             capability "Sensor"
         }
-        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb"]) {
+        if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb", "IRBlaster"]) {
             capability "Actuator"
         }
-        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor", "AirQuality", "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube"]) {
+        if (deviceType in  ["Device", "THSensor", "LightSensor", "MotionSensor",/* "AirQuality",*/ "Thermostat", "Fingerbot", "ButtonDimmer", "AqaraCube", "IRBlaster"]) {
             capability "Battery"
             attribute "batteryVoltage", "number"
         }
@@ -340,7 +344,7 @@ metadata {
 
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
-def isVINDSTIRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
+def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
@@ -742,7 +746,7 @@ void parseXiaomiCluster(final Map descMap) {
         case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterTags(tags)
-            if (true) {
+            if (isAqaraCube()) {
                 sendZigbeeCommands(refreshAqaraCube())
             }
             break
@@ -2075,8 +2079,8 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     else {
         eventMap.unit = "\u00B0"+"C"
     }
-    def tempCorrected = temperature + safeToDouble(settings?.temperatureOffset ?: 0)
-    eventMap.value  =  Math.round(tempCorrected * 10) / 10.0
+    def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float
+    eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float
     eventMap.type = isDigital == true ? "digital" : "physical"
     //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
@@ -2149,6 +2153,43 @@ private void sendDelayedHumidityEvent(Map eventMap) {
     state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
 	sendEvent(eventMap)
 }
+
+/*
+ * -----------------------------------------------------------------------------
+ * Electrical Measurement Cluster 0x0702
+ * -----------------------------------------------------------------------------
+*/
+
+void parseElectricalMeasureCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseElectricalMeasureClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseElectricalMeasureCluster is NOT implemented1"
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Metering Cluster 0x0B04
+ * -----------------------------------------------------------------------------
+*/
+
+void parseMeteringCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseMeteringClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseMeteringCluster is NOT implemented1"
+    }
+}
+
 
 /*
  * -----------------------------------------------------------------------------
@@ -2627,10 +2668,9 @@ def initializeDevice() {
     logInfo 'initializeDevice...'
     
     // start with the device-specific initialization first.
-    if (DEVICE_TYPE in  ["AirQuality"]) {
-        return initializeDeviceAirQuality()
-    }
-    
+    if (DEVICE_TYPE in  ["AirQuality"]) { return initializeDeviceAirQuality() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
+  
  
     // not specific device type - do some generic initializations
     if (DEVICE_TYPE in  ["THSensor"]) {
@@ -2658,6 +2698,7 @@ def configureDevice() {
     if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() }
     if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() }
     if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() }
+    if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureIrBlaster() }
         
     if (cmds == []) {
         cmds = ["delay 299",]
@@ -2683,6 +2724,7 @@ def refresh() {
     else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() }
     else {
         // generic refresh handling, based on teh device capabilities 
         if (device.hasCapability("Battery")) {
@@ -2730,7 +2772,7 @@ def refresh() {
     }
 }
 
-def clearRefreshRequest() { state.states["isRefresh"] = false }
+def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false }
 
 void sendInfoEvent(String info=null) {
     if (info == null) {
@@ -2745,7 +2787,7 @@ void sendInfoEvent(String info=null) {
 
 def ping() {
     if (!(isAqaraTVOC())) {
-        logInfo 'ping...'
+        logDebug 'ping...'
         scheduleCommandTimeoutCheck()
         if (state.lastTx == nill ) state.lastTx = [:] 
         state.lastTx["pingTime"] = new Date().getTime()
@@ -2913,9 +2955,8 @@ void updated() {
         unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
         log.info "Health Check is disabled!"
     }
-    if (DEVICE_TYPE in ["AirQuality"])  {
-        updatedAirQuality()
-    }
+    if (DEVICE_TYPE in ["AirQuality"])  { updatedAirQuality() }
+    if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() }
         
     configureDevice()    // sends Zigbee commands
     
@@ -3040,9 +3081,9 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.stats != null) state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 else state.stats=[:]
+            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] }
     }
-    if (state.lastTx != null) state.lastTx['cmdTime'] = now() else state.lastTx=[:]
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] }
     sendHubCommand(allActions)
 }
 
@@ -3134,8 +3175,6 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!! if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
-    // TODO !!!! move to AirQualityLib !!!!!!!!!!if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
@@ -3153,7 +3192,8 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit) }
     if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }        // none
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }            // none
+    if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
 
     //updateTuyaVersion()
     
@@ -3300,10 +3340,9 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    def hasC = device.hasCommand("zigbeeScenesVersion")
-    log.warn "zigbeeScenesVersion=${zigbeeScenesVersion()}  device.hasCommand(zigbeeScenesVersion)=${hasC} "
+    handleTemperatureEvent(safeToDouble(par) as float)
     
-    sendZigbeeCommands(cmds)    
+   // sendZigbeeCommands(cmds)    
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
@@ -3325,80 +3364,103 @@ library ( // library marker kkossev.tuyaZigbeeSwitchLib, line 1
  * tuyaZigbeeSwitchLib - Tuya Zigbee Switch Library // library marker kkossev.tuyaZigbeeSwitchLib, line 13
  * // library marker kkossev.tuyaZigbeeSwitchLib, line 14
  * ver. 1.0.0  2023-07-21 kkossev  - Libraries introduction for the Tuya Zigbee Switch driver; // library marker kkossev.tuyaZigbeeSwitchLib, line 15
- * // library marker kkossev.tuyaZigbeeSwitchLib, line 16
- *                                   TODO: // library marker kkossev.tuyaZigbeeSwitchLib, line 17
-*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 18
+ * ver. 1.0.1  2023-08-09 kkossev  - (dev. branch) Dummy methods for 0x0702 and 0x0B04 clusters // library marker kkossev.tuyaZigbeeSwitchLib, line 16
+ * // library marker kkossev.tuyaZigbeeSwitchLib, line 17
+ *                                   TODO: // library marker kkossev.tuyaZigbeeSwitchLib, line 18
+*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 19
 
-def tuyaZigbeeSwitchLibVersion()   {"1.0.0"} // library marker kkossev.tuyaZigbeeSwitchLib, line 20
-def tuyaZigbeeSwitchLibTimeStamp() {"2023/07/21 10:20 PM"} // library marker kkossev.tuyaZigbeeSwitchLib, line 21
+def tuyaZigbeeSwitchLibVersion()   {"1.0.1"} // library marker kkossev.tuyaZigbeeSwitchLib, line 21
+def tuyaZigbeeSwitchLibTimeStamp() {"2023/08/09 10:20 PM"} // library marker kkossev.tuyaZigbeeSwitchLib, line 22
 
-metadata { // library marker kkossev.tuyaZigbeeSwitchLib, line 23
-    //attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String> // library marker kkossev.tuyaZigbeeSwitchLib, line 24
+metadata { // library marker kkossev.tuyaZigbeeSwitchLib, line 24
+    //attribute "operationMode", "enum", AqaraCubeModeOpts.options.values() as List<String> // library marker kkossev.tuyaZigbeeSwitchLib, line 25
 
-    //command "push", [[name: "sent when the cube side is flipped", type: "NUMBER", description: "simulates a button press", defaultValue : ""]] // library marker kkossev.tuyaZigbeeSwitchLib, line 26
+    //command "push", [[name: "sent when the cube side is flipped", type: "NUMBER", description: "simulates a button press", defaultValue : ""]] // library marker kkossev.tuyaZigbeeSwitchLib, line 27
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3000_ajv2vfow", deviceJoinName: "EARU 3-Phase Circuit Breaker" // library marker kkossev.tuyaZigbeeSwitchLib, line 28
-    preferences { // library marker kkossev.tuyaZigbeeSwitchLib, line 29
-        //input name: 'cubeOperationMode', type: 'enum', title: '<b>Cube Operation Mode</b>', options: AqaraCubeModeOpts.options, defaultValue: AqaraCubeModeOpts.defaultValue, required: true, description: '<i>Operation Mode.<br>Press LINK button 5 times to toggle between action mode and scene mode</i>' // library marker kkossev.tuyaZigbeeSwitchLib, line 30
-    } // library marker kkossev.tuyaZigbeeSwitchLib, line 31
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 32
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3000_ajv2vfow", deviceJoinName: "EARU 3-Phase Circuit Breaker" // library marker kkossev.tuyaZigbeeSwitchLib, line 29
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_qystbcjg", deviceJoinName: "Somgoms ZigBee MCB Circuit Breaker DIN Rail" //https://www.aliexpress.com/item/1005005647599064.html // library marker kkossev.tuyaZigbeeSwitchLib, line 30
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,E000,E001,0000", outClusters:"0019,000A", model:"ASKVADER on/off switch", manufacturer:"IKEA of Sweden", deviceJoinName: "Ikea ASKVADER on/off switch" // library marker kkossev.tuyaZigbeeSwitchLib, line 31
 
-/* // library marker kkossev.tuyaZigbeeSwitchLib, line 34
-@Field static final Map AqaraCubeModeOpts = [ // library marker kkossev.tuyaZigbeeSwitchLib, line 35
-    defaultValue: 1, // library marker kkossev.tuyaZigbeeSwitchLib, line 36
-    options     : [0: 'action', 1: 'scene'] // library marker kkossev.tuyaZigbeeSwitchLib, line 37
-] // library marker kkossev.tuyaZigbeeSwitchLib, line 38
-*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 39
+    preferences { // library marker kkossev.tuyaZigbeeSwitchLib, line 33
+        //input name: 'cubeOperationMode', type: 'enum', title: '<b>Cube Operation Mode</b>', options: AqaraCubeModeOpts.options, defaultValue: AqaraCubeModeOpts.defaultValue, required: true, description: '<i>Operation Mode.<br>Press LINK button 5 times to toggle between action mode and scene mode</i>' // library marker kkossev.tuyaZigbeeSwitchLib, line 34
+    } // library marker kkossev.tuyaZigbeeSwitchLib, line 35
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 36
 
-
-def refreshSwitch() { // library marker kkossev.tuyaZigbeeSwitchLib, line 42
-    List<String> cmds = [] // library marker kkossev.tuyaZigbeeSwitchLib, line 43
-    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 44
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership // library marker kkossev.tuyaZigbeeSwitchLib, line 45
-    logDebug "refreshSwitch() : ${cmds}" // library marker kkossev.tuyaZigbeeSwitchLib, line 46
-    return cmds // library marker kkossev.tuyaZigbeeSwitchLib, line 47
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 48
-
-def initVarsSwitch(boolean fullInit=false) { // library marker kkossev.tuyaZigbeeSwitchLib, line 50
-    logDebug "initVarsSwitch(${fullInit})" // library marker kkossev.tuyaZigbeeSwitchLib, line 51
-/*     // library marker kkossev.tuyaZigbeeSwitchLib, line 52
-    if (fullInit || settings?.cubeOperationMode == null) device.updateSetting('cubeOperationMode', [value: AqaraCubeModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaZigbeeSwitchLib, line 53
-    if (fullInit || settings?.sendButtonEvent == null) device.updateSetting('sendButtonEvent', [value: SendButtonEventOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaZigbeeSwitchLib, line 54
-    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true)        // overwrite the defailt false setting // library marker kkossev.tuyaZigbeeSwitchLib, line 55
-*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 56
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 57
-
-void initEventsSwitch(boolean fullInit=false) { // library marker kkossev.tuyaZigbeeSwitchLib, line 59
-/*     // library marker kkossev.tuyaZigbeeSwitchLib, line 60
-    sendNumberOfButtonsEvent(6) // library marker kkossev.tuyaZigbeeSwitchLib, line 61
-    def supportedValues = ["pushed", "double", "held", "released", "tested"] // library marker kkossev.tuyaZigbeeSwitchLib, line 62
-    sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.tuyaZigbeeSwitchLib, line 63
-*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 64
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 65
+/* // library marker kkossev.tuyaZigbeeSwitchLib, line 38
+@Field static final Map AqaraCubeModeOpts = [ // library marker kkossev.tuyaZigbeeSwitchLib, line 39
+    defaultValue: 1, // library marker kkossev.tuyaZigbeeSwitchLib, line 40
+    options     : [0: 'action', 1: 'scene'] // library marker kkossev.tuyaZigbeeSwitchLib, line 41
+] // library marker kkossev.tuyaZigbeeSwitchLib, line 42
+*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 43
 
 
-def configureDeviceSwitch() { // library marker kkossev.tuyaZigbeeSwitchLib, line 68
-    List<String> cmds = [] // library marker kkossev.tuyaZigbeeSwitchLib, line 69
-/* // library marker kkossev.tuyaZigbeeSwitchLib, line 70
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 71
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 72
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 73
+def refreshSwitch() { // library marker kkossev.tuyaZigbeeSwitchLib, line 46
+    List<String> cmds = [] // library marker kkossev.tuyaZigbeeSwitchLib, line 47
+    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 48
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership // library marker kkossev.tuyaZigbeeSwitchLib, line 49
+    logDebug "refreshSwitch() : ${cmds}" // library marker kkossev.tuyaZigbeeSwitchLib, line 50
+    return cmds // library marker kkossev.tuyaZigbeeSwitchLib, line 51
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 52
 
-    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 75
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 76
-    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)    // library marker kkossev.tuyaZigbeeSwitchLib, line 77
-    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)    // library marker kkossev.tuyaZigbeeSwitchLib, line 78
-*/     // library marker kkossev.tuyaZigbeeSwitchLib, line 79
-    logDebug "configureDeviceSwitch() : ${cmds}" // library marker kkossev.tuyaZigbeeSwitchLib, line 80
-    return cmds     // library marker kkossev.tuyaZigbeeSwitchLib, line 81
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 82
+def initVarsSwitch(boolean fullInit=false) { // library marker kkossev.tuyaZigbeeSwitchLib, line 54
+    logDebug "initVarsSwitch(${fullInit})" // library marker kkossev.tuyaZigbeeSwitchLib, line 55
+/*     // library marker kkossev.tuyaZigbeeSwitchLib, line 56
+    if (fullInit || settings?.cubeOperationMode == null) device.updateSetting('cubeOperationMode', [value: AqaraCubeModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaZigbeeSwitchLib, line 57
+    if (fullInit || settings?.sendButtonEvent == null) device.updateSetting('sendButtonEvent', [value: SendButtonEventOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaZigbeeSwitchLib, line 58
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true)        // overwrite the defailt false setting // library marker kkossev.tuyaZigbeeSwitchLib, line 59
+*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 60
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 61
+
+void initEventsSwitch(boolean fullInit=false) { // library marker kkossev.tuyaZigbeeSwitchLib, line 63
+/*     // library marker kkossev.tuyaZigbeeSwitchLib, line 64
+    sendNumberOfButtonsEvent(6) // library marker kkossev.tuyaZigbeeSwitchLib, line 65
+    def supportedValues = ["pushed", "double", "held", "released", "tested"] // library marker kkossev.tuyaZigbeeSwitchLib, line 66
+    sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.tuyaZigbeeSwitchLib, line 67
+*/ // library marker kkossev.tuyaZigbeeSwitchLib, line 68
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 69
 
 
-void parseOnOffClusterSwitch(final Map descMap) { // library marker kkossev.tuyaZigbeeSwitchLib, line 85
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.tuyaZigbeeSwitchLib, line 86
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.tuyaZigbeeSwitchLib, line 87
-    logDebug "parseOnOffClusterSwitch: (0x0006)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.tuyaZigbeeSwitchLib, line 88
-} // library marker kkossev.tuyaZigbeeSwitchLib, line 89
+def configureDeviceSwitch() { // library marker kkossev.tuyaZigbeeSwitchLib, line 72
+    List<String> cmds = [] // library marker kkossev.tuyaZigbeeSwitchLib, line 73
+/* // library marker kkossev.tuyaZigbeeSwitchLib, line 74
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 75
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 76
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.tuyaZigbeeSwitchLib, line 77
+
+    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 79
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200) // library marker kkossev.tuyaZigbeeSwitchLib, line 80
+    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)    // library marker kkossev.tuyaZigbeeSwitchLib, line 81
+    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)    // library marker kkossev.tuyaZigbeeSwitchLib, line 82
+*/     // library marker kkossev.tuyaZigbeeSwitchLib, line 83
+    logDebug "configureDeviceSwitch() : ${cmds}" // library marker kkossev.tuyaZigbeeSwitchLib, line 84
+    return cmds     // library marker kkossev.tuyaZigbeeSwitchLib, line 85
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 86
+
+// TODO! // library marker kkossev.tuyaZigbeeSwitchLib, line 88
+void parseOnOffClusterSwitch(final Map descMap) { // library marker kkossev.tuyaZigbeeSwitchLib, line 89
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.tuyaZigbeeSwitchLib, line 90
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.tuyaZigbeeSwitchLib, line 91
+    logDebug "parseOnOffClusterSwitch: (0x0006)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.tuyaZigbeeSwitchLib, line 92
+    logWarn "NOT IMPLEMENTED YET!" // library marker kkossev.tuyaZigbeeSwitchLib, line 93
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 94
+
+// TODO! // library marker kkossev.tuyaZigbeeSwitchLib, line 96
+void parseElectricalMeasureClusterSwitch(final Map descMap) { // library marker kkossev.tuyaZigbeeSwitchLib, line 97
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.tuyaZigbeeSwitchLib, line 98
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.tuyaZigbeeSwitchLib, line 99
+    logDebug "parseElectricalMeasureClusterSwitch: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.tuyaZigbeeSwitchLib, line 100
+    logWarn "NOT IMPLEMENTED YET!" // library marker kkossev.tuyaZigbeeSwitchLib, line 101
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 102
+
+// TODO! // library marker kkossev.tuyaZigbeeSwitchLib, line 104
+void parseMeteringClusterSwitch(final Map descMap) { // library marker kkossev.tuyaZigbeeSwitchLib, line 105
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.tuyaZigbeeSwitchLib, line 106
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.tuyaZigbeeSwitchLib, line 107
+    logDebug "parseMeteringClusterSwitch: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}" // library marker kkossev.tuyaZigbeeSwitchLib, line 108
+    logWarn "NOT IMPLEMENTED YET!" // library marker kkossev.tuyaZigbeeSwitchLib, line 109
+} // library marker kkossev.tuyaZigbeeSwitchLib, line 110
+
+
 
 
 // ~~~~~ end include (133) kkossev.tuyaZigbeeSwitchLib ~~~~~
