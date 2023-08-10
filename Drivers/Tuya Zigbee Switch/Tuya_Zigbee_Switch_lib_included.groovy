@@ -25,8 +25,9 @@
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
- * ver. 2.1.3  2023-08-09 kkossev  - (dev. branch)
+ * ver. 2.1.3  2023-08-09 kkossev  - (dev. branch) ping() improvements
  *
+ *                                   TODO: Count ping timeouts
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
  *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
@@ -45,8 +46,8 @@
  *                                   TODO: Configure: add custom Notes
  */
 
-static String version() { "2.1.2" }
-static String timeStamp() {"2023/08/09 11:39 AM"}
+static String version() { "2.1.3" }
+static String timeStamp() {"2023/08/09 10:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -975,14 +976,27 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
  */
 void parseBasicCluster(final Map descMap) {
     def now = new Date().getTime()
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.states == null) { state.states = [:] }
+    if (state.stats == null) { state.stats = [:] }
     state.lastRx["checkInTime"] = now
     switch (descMap.attrInt as Integer) {
         case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism
-            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
-            if (state.lastTx == null) state.lastTx = [:]
-            def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
-            if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                sendRttEvent()
+            boolean isPing = state.states["isPing"] ?: false
+            if (isPing) {
+                def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                    sendRttEvent()
+                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+                }
+                else {
+                    logWarn "unexpected ping timeRunning=${timeRunning} "
+                }
+                state.states["isPing"] = false
+            }
+            else {
+                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
             }
             break
         case 0x0004:
@@ -2787,11 +2801,13 @@ void sendInfoEvent(String info=null) {
 
 def ping() {
     if (!(isAqaraTVOC())) {
-        logDebug 'ping...'
-        scheduleCommandTimeoutCheck()
         if (state.lastTx == nill ) state.lastTx = [:] 
         state.lastTx["pingTime"] = new Date().getTime()
+        if (state.states == nill ) state.states = [:] 
+        state.states["isPing"] = true
+        scheduleCommandTimeoutCheck()
         sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+        logDebug 'ping...'
     }
     else {
         // Aqara TVOC is sleepy or does not respond to the ping.
@@ -2844,6 +2860,7 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent("timeout")
+    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
 }
 
 /**
