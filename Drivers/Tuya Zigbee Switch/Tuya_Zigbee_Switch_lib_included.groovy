@@ -25,9 +25,8 @@
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
- * ver. 2.1.3  2023-08-12 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); 
+ * ver. 2.1.3  2023-08-12 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version;
  *
- *                                   TODO: add hum model and platform version to driverVersiob
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
@@ -45,7 +44,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2023/08/12 10:31 AM"}
+static String timeStamp() {"2023/08/12 1:17 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -125,12 +124,12 @@ metadata {
         //name: 'Aqara Cube T1 Pro',
         //name: 'Tuya Zigbee IR Blaster',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya%20Zigbee%20Fingerbot.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara_TVOC_Air_Quality_Monitor_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Plug/Tuya%20Zigbee%20Plug%20V2.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya%20Zigbee%20Switch.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
@@ -325,13 +324,6 @@ metadata {
     defaultValue: 0,
     options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
-/*
-@Field static final Map ConfigureOpts = [
-    defaultValue: 0,
-    options     : [0: 'LOAD ALL DEFAULTS', 1: 'Configure the device only', 2: 'Delete All Preferences', 3: 'Delete All Current States', 4:'Delete All Scheduled Jobs',\
-                   5:'Delete All State Variables',  6:'Delete All Child Devices']
-]
-*/
 @Field static final Map SwitchModeOpts = [
     defaultValue: 1,
     options     : [0: 'dimmer', 1: 'scene']
@@ -3088,6 +3080,8 @@ void installed() {
 void initialize() {
     logInfo 'initialize...'
     initializeVars(fullInit = true)
+    updateTuyaVersion()
+    updateAqaraVersion()
 }
 
 
@@ -3116,7 +3110,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     sendHubCommand(allActions)
 }
 
-static def driverVersionAndTimeStamp() {version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!)" : " ")}
+def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!) " : " ") + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString}) "}
 
 def getDeviceInfo() {
     return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>"
@@ -3132,12 +3126,37 @@ def checkDriverVersion() {
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(fullInit = false)
+        updateTuyaVersion()
+        updateAqaraVersion()
     }
     else {
         // no driver version change
     }
 }
 
+// credits @thebearmay
+String getModel(){
+    try{
+        String model = getHubVersion() // requires >=2.2.8.141
+    } catch (ignore){
+        try{
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
+                model = res.data.device.modelName
+            return model
+            }        
+        } catch(ignore_again) {
+            return ""
+        }
+    }
+}
+
+// credits @thebearmay
+boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 )
+    String model = getModel()            // <modelName>Rev C-7</modelName>
+    String[] tokens = model.split('-')
+    String revision = tokens.last()
+    return (Integer.parseInt(revision) >= minLevel)
+}
 
 /**
  * called from TODO
@@ -3230,8 +3249,6 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }            // none
     if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
 
-    //updateTuyaVersion()
-    
     def mm = device.getDataValue("model")
     if ( mm != null) {
         logDebug " model = ${mm}"
@@ -3369,6 +3386,65 @@ def getCron( timeInSeconds ) {
         }
     }
     return cron
+}
+
+boolean isTuya() {
+    def model = device.getDataValue("model") 
+    def manufacturer = device.getDataValue("manufacturer") 
+    if (model.startsWith("TS") && manufacturer.startsWith("_TZ")) {
+        return true
+    }
+    return false
+}
+
+void updateTuyaVersion() {
+    if (!isTuya()) {
+        logDebug "not Tuya"
+        return
+    }
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        Integer ver
+        try {
+            ver = zigbee.convertHexToInt(application)
+        }
+        catch (e) {
+            logWarn "exception caught while converting application version ${application} to tuyaVersion"
+            return
+        }
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
+        if (device.getDataValue("tuyaVersion") != str) {
+            device.updateDataValue("tuyaVersion", str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+}
+
+boolean isAqara() {
+    def model = device.getDataValue("model") 
+    def manufacturer = device.getDataValue("manufacturer") 
+    if (model.startsWith("lumi")) {
+        return true
+    }
+    return false
+}
+
+def updateAqaraVersion() {
+    if (!isAqara()) {
+        logDebug "not Aqara"
+        return
+    }    
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));
+        if (device.getDataValue("aqaraVersion") != str) {
+            device.updateDataValue("aqaraVersion", str)
+            logInfo "aqaraVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
 }
 
 def test(par) {
