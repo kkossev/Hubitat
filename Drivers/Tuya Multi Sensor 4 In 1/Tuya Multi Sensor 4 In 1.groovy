@@ -44,6 +44,7 @@
  * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
  * ver. 1.3.7  2023-07-27 kkossev  - fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR; added TS0202 _TZ3040_bb6xaihh _TZ3040_wqmtjsyk; added _TZE204_qasjif9e radar; 
  * ver. 1.4.0  2023-08-06 kkossev  - added new TS0225 _TZE200_hl0ss9oa 24GHz radar (TS0225_HL0SS9OA_RADAR); added  basic support for the new TS0601 _TZE204_sbyx0lm6 radar w/ relay; added Hive MOT003; added sendCommand; added TS0202 _TZ3040_6ygjfyll
+ * ver. 1.4.1  2023-08-12 kkossev  - (dev. branch) TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports;
  *
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
@@ -57,8 +58,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.4.0" }
-def timeStamp() {"2023/08/06 9:29 AM"}
+def version() { "1.4.1" }
+def timeStamp() {"2023/08/12 7:11 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -261,6 +262,7 @@ def restrictToTS0225RadarOnly() { isTS0225radar() }
     "breatheSelfTest"  : [ function: 'breatheSelfTest', supported: ["TS0225_HL0SS9OA_RADAR"]]
 ]
 
+@Field static final Boolean _IGNORE_ZCL_REPORTS = true
 
 @Field static final String UNKNOWN =  'UNKNOWN'
 @Field static final Map inductionStateOptions = [ "0":"Occupied", "1":"Vacancy" ]
@@ -723,7 +725,13 @@ def parse(String description) {
     //logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         logDebug "parse: zone status: $description"
-        parseIasMessage(description)    // TS0202 Motion sensor
+        if (isTS0225radar() && _IGNORE_ZCL_REPORTS == true) {
+            logDebug "ignored IAS zone status"
+            return
+        }
+        else {
+            parseIasMessage(description)    // TS0202 Motion sensor
+        }
     }
     else if (description?.startsWith('enroll request')) {
         logDebug "parse: enroll request: $description"
@@ -754,7 +762,13 @@ def parse(String description) {
         }     
 		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
             def rawLux = Integer.parseInt(descMap.value,16)
-            illuminanceEvent( rawLux )
+            if (isTS0225radar() && _IGNORE_ZCL_REPORTS == true) {
+                logDebug "ignored ZCL illuminance report (raw:Lux=${rawLux})"
+                return
+            }
+            else {
+                illuminanceEvent( rawLux )
+            }
 		}  
 		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value,16)
@@ -912,7 +926,7 @@ def processTuyaCluster( descMap ) {
         String clusterCmd = descMap?.data[0]
         def status = descMap?.data[1]            
         if (settings?.logEnable) log.debug "${device.displayName} device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
-        if (status != "00") {
+        if (status != "00" && !isTS0225radar()) {
             if (settings?.logEnable) log.warn "${device.displayName} ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
