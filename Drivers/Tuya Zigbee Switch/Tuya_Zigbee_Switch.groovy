@@ -24,8 +24,11 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-23 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
+ * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
+ * ver. 2.1.3  2023-08-12 kkossev  - (dev. branch) ping() improvements; added ping OK and Fail counters; added clearStatistics(); 
  *
+ *                                   TODO: ping min max average
+ *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
  *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
@@ -44,8 +47,8 @@
  *                                   TODO: Configure: add custom Notes
  */
 
-static String version() { "2.1.2" }
-static String timeStamp() {"2023/07/23 9:24 AM"}
+static String version() { "2.1.3" }
+static String timeStamp() {"2023/08/12 9:29 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -251,13 +254,8 @@ metadata {
     }
 
     preferences {
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
-             '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: \
-             '<i>Turns on debug logging for 24 hours.</i>'
-        if (deviceType in  ["Fingerbot"]) {
-            // Fingerbot settings moved 
-        }
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("TemperatureMeasurement") || device.hasCapability("RelativeHumidityMeasurement") || device.hasCapability("IlluminanceMeasurement")) {
                 input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
@@ -974,14 +972,27 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
  */
 void parseBasicCluster(final Map descMap) {
     def now = new Date().getTime()
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.states == null) { state.states = [:] }
+    if (state.stats == null) { state.stats = [:] }
     state.lastRx["checkInTime"] = now
     switch (descMap.attrInt as Integer) {
         case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism
-            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
-            if (state.lastTx == null) state.lastTx = [:]
-            def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
-            if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                sendRttEvent()
+            boolean isPing = state.states["isPing"] ?: false
+            if (isPing) {
+                def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                    sendRttEvent()
+                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+                }
+                else {
+                    logWarn "unexpected ping timeRunning=${timeRunning} "
+                }
+                state.states["isPing"] = false
+            }
+            else {
+                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
             }
             break
         case 0x0004:
@@ -2155,6 +2166,43 @@ private void sendDelayedHumidityEvent(Map eventMap) {
 
 /*
  * -----------------------------------------------------------------------------
+ * Electrical Measurement Cluster 0x0702
+ * -----------------------------------------------------------------------------
+*/
+
+void parseElectricalMeasureCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseElectricalMeasureClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseElectricalMeasureCluster is NOT implemented1"
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Metering Cluster 0x0B04
+ * -----------------------------------------------------------------------------
+*/
+
+void parseMeteringCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseMeteringClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseMeteringCluster is NOT implemented1"
+    }
+}
+
+
+/*
+ * -----------------------------------------------------------------------------
  * pm2.5
  * -----------------------------------------------------------------------------
 */
@@ -2734,7 +2782,7 @@ def refresh() {
     }
 }
 
-def clearRefreshRequest() { state.states["isRefresh"] = false }
+def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false }
 
 void sendInfoEvent(String info=null) {
     if (info == null) {
@@ -2749,11 +2797,13 @@ void sendInfoEvent(String info=null) {
 
 def ping() {
     if (!(isAqaraTVOC())) {
-        logInfo 'ping...'
-        scheduleCommandTimeoutCheck()
         if (state.lastTx == nill ) state.lastTx = [:] 
         state.lastTx["pingTime"] = new Date().getTime()
+        if (state.states == nill ) state.states = [:] 
+        state.states["isPing"] = true
+        scheduleCommandTimeoutCheck()
         sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+        logDebug 'ping...'
     }
     else {
         // Aqara TVOC is sleepy or does not respond to the ping.
@@ -2806,6 +2856,7 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent("timeout")
+    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
 }
 
 /**
@@ -2935,6 +2986,7 @@ void logsOff() {
 
 @Field static final Map ConfigureOpts = [
     "Configure the device only"  : [key:2, function: 'configure'],
+    "Reset Statistics"           : [key:9, function: 'resetStatistics'],
     "           --            "  : [key:3, function: 'configureHelp'],
     "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
     "Delete All Current States"  : [key:5, function: 'deleteAllCurrentStates'],
@@ -2969,7 +3021,7 @@ def configure(command) {
 }
 
 def configureHelp( val ) {
-    logWarn "configureHelp: select one of the commands in this list!"             
+    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
 }
 
 def loadAllDefaults() {
@@ -3043,9 +3095,9 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.stats != null) state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 else state.stats=[:]
+            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] }
     }
-    if (state.lastTx != null) state.lastTx['cmdTime'] = now() else state.lastTx=[:]
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] }
     sendHubCommand(allActions)
 }
 
@@ -3087,11 +3139,17 @@ def deleteAllStatesAndJobs() {
 }
 
 
+def resetStatistics() {
+    runIn(1, "resetStats")
+    sendInfoEvent("Statistics are reset. Refresh the web page")
+}
+
 /**
  * called from TODO
  * 
  */
 def resetStats() {
+    logDebug "resetStats..."
     state.stats = [:]
     state.states = [:]
     state.lastRx = [:]
