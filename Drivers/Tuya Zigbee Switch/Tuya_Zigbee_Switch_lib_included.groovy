@@ -25,17 +25,15 @@
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
- * ver. 2.1.3  2023-08-09 kkossev  - (dev. branch) ping() improvements
+ * ver. 2.1.3  2023-08-12 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); 
  *
- *                                   TODO: Count ping timeouts
+ *                                   TODO: add hum model and platform version to driverVersiob
+ *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
  *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
- *                                   TODO: add pingSuccess and pingFailure in health stats
- *                                   TODO: add clearStatistics toggle in Preferences
  *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
- *                                   TODO: calculate and store the average ping RTT
  *                                   TODO: Fingerbot: add Momentary capability
  *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: implement Get Device Info command
@@ -47,7 +45,7 @@
  */
 
 static String version() { "2.1.3" }
-static String timeStamp() {"2023/08/09 10:47 PM"}
+static String timeStamp() {"2023/08/12 10:31 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -253,13 +251,8 @@ metadata {
     }
 
     preferences {
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
-             '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: \
-             '<i>Turns on debug logging for 24 hours.</i>'
-        if (deviceType in  ["Fingerbot"]) {
-            // Fingerbot settings moved 
-        }
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("TemperatureMeasurement") || device.hasCapability("RelativeHumidityMeasurement") || device.hasCapability("IlluminanceMeasurement")) {
                 input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
@@ -306,6 +299,7 @@ metadata {
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
+@Field static final Integer INFO_AUTO_CLEAR_PERIOD = 30      // automatically clear the Info attribute after 30 seconds
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
     defaultValue: 1,
@@ -963,6 +957,15 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
     return results
 }
 
+@Field static final int ROLLING_AVERAGE_N = 10
+double approxRollingAverage (double avg, double new_sample) {
+    if (avg == null || avg == 0) { avg = new_sample}
+    avg -= avg / ROLLING_AVERAGE_N
+    avg += new_sample / ROLLING_AVERAGE_N
+    // TOSO: try Method II : New average = old average * (n-1)/n + new value /n
+    return avg
+}
+
 /*
  * -----------------------------------------------------------------------------
  * Standard clusters reporting handlers
@@ -987,8 +990,11 @@ void parseBasicCluster(final Map descMap) {
             if (isPing) {
                 def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
                 if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                    sendRttEvent()
                     state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
+                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']),safeToDouble(timeRunning)) as int
+                    sendRttEvent()
                 }
                 else {
                     logWarn "unexpected ping timeRunning=${timeRunning} "
@@ -2788,14 +2794,19 @@ def refresh() {
 
 def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false }
 
+void clearInfoEvent() {
+    sendInfoEvent('clear')
+}
+
 void sendInfoEvent(String info=null) {
-    if (info == null) {
+    if (info == null || info == "clear") {
         logDebug "clearing the Info event"
-        device.deleteCurrentState("$it")
+        sendEvent(name: "Info", value: " ", isDigital: true)
     }
     else {
         logInfo "${info}"
-        sendEvent(name: "Info", value: info, isDigital: true)    
+        sendEvent(name: "Info", value: info, isDigital: true)
+        runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute
     }
 }
 
@@ -2826,7 +2837,7 @@ void sendRttEvent( String value=null) {
     def now = new Date().getTime()
     if (state.lastTx == null ) state.lastTx = [:]
     def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
-    def descriptionText = "Round-trip time is ${timeRunning} ms"
+    def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats["pingsMin"]} max=${state.stats["pingsMax"]} average=${state.stats["pingsAvg"]})"
     if (value == null) {
         logInfo "${descriptionText}"
         sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
@@ -2990,6 +3001,7 @@ void logsOff() {
 
 @Field static final Map ConfigureOpts = [
     "Configure the device only"  : [key:2, function: 'configure'],
+    "Reset Statistics"           : [key:9, function: 'resetStatistics'],
     "           --            "  : [key:3, function: 'configureHelp'],
     "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
     "Delete All Current States"  : [key:5, function: 'deleteAllCurrentStates'],
@@ -3024,7 +3036,7 @@ def configure(command) {
 }
 
 def configureHelp( val ) {
-    logWarn "configureHelp: select one of the commands in this list!"             
+    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
 }
 
 def loadAllDefaults() {
@@ -3142,11 +3154,17 @@ def deleteAllStatesAndJobs() {
 }
 
 
+def resetStatistics() {
+    runIn(1, "resetStats")
+    sendInfoEvent("Statistics are reset. Refresh the web page")
+}
+
 /**
  * called from TODO
  * 
  */
 def resetStats() {
+    logDebug "resetStats..."
     state.stats = [:]
     state.states = [:]
     state.lastRx = [:]
