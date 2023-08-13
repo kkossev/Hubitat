@@ -61,7 +61,7 @@
 */
 
 def version() { "1.4.1" }
-def timeStamp() {"2023/08/13 8:11 AM"}
+def timeStamp() {"2023/08/13 9:13 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1122,7 +1122,7 @@ def processTuyaCluster( descMap ) {
                 }                    
                 else if (isTS0225radar()) {
                     logInfo "TS0225 Radar received Alarm Volume ${TS0225alarmVolume.options[fncmd]} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
-                    device.updateSetting("radarAlarmMode", [value:TS0225alarmVolume.defaultValue.toString(), type:"enum"])
+                    device.updateSetting("radarAlarmVolume", [value:fncmd.toString(), type:"enum"])
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -1209,7 +1209,7 @@ def processTuyaCluster( descMap ) {
                 }
                 else if (isTS0225radar()) {    // disarmed armed alarming
                     logInfo "TS0225 Radar received Alarm Mode ${TS0225alarmMode.options[fncmd]} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
-                    device.updateSetting("radarAlarmMode", [value:TS0225alarmMode.defaultValue.toString(), type:"enum"])
+                    device.updateSetting("radarAlarmMode", [type:"enum", value:fncmd.toString()])
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unacknowledgedTime ${fncmd} s"
@@ -2829,10 +2829,7 @@ def testParse(description) {
 }
 
 def test( val ) {
-    //zigbee.command(0xEF00, 0x07, "00")
-    //zigbee.command(0xEF00, 0x28, "01 02")
-    zigbee.command(0xEF00, 0x03)
-    //zigbee.command(0xEF00, 0x09, PACKET_ID + "00")  
-    //zigbee.command(0xEF00, 0x28, "00 01")  
+    //zigbee.command(0xEF00, 0x03)
+device.updateSetting("radarAlarmMode", [value:"1", type:"enum"])
 }
 
