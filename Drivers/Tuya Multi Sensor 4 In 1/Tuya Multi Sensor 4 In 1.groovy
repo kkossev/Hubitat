@@ -44,8 +44,10 @@
  * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
  * ver. 1.3.7  2023-07-27 kkossev  - fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR; added TS0202 _TZ3040_bb6xaihh _TZ3040_wqmtjsyk; added _TZE204_qasjif9e radar; 
  * ver. 1.4.0  2023-08-06 kkossev  - added new TS0225 _TZE200_hl0ss9oa 24GHz radar (TS0225_HL0SS9OA_RADAR); added  basic support for the new TS0601 _TZE204_sbyx0lm6 radar w/ relay; added Hive MOT003; added sendCommand; added TS0202 _TZ3040_6ygjfyll
- * ver. 1.4.1  2023-08-12 kkossev  - (dev. branch) TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode
+ * ver. 1.4.1  2023-08-13 kkossev  - (dev. branch) TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance
  *
+ *                                   TODO: TS0225_HL0SS9OA_RADAR - add presets
+ *                                   TODO: TS0225_HL0SS9OA_RADAR - add enum type pars in setPars !
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
  *                                   TODO: ignore invalid humidity reprots (>100 %)
@@ -59,7 +61,7 @@
 */
 
 def version() { "1.4.1" }
-def timeStamp() {"2023/08/12 11:28 PM"}
+def timeStamp() {"2023/08/13 8:11 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -161,7 +163,7 @@ metadata {
         }
         if (advancedOptions == true || advancedOptions == false) { 
             if (isLuxMeter()) {
-                input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 1)   
+                input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 5)   
             }
         }
         if (isHumanPresenceSensorFall() || isHumanPresenceSensorScene()) {
@@ -179,25 +181,25 @@ metadata {
             input ("presenceKeepTime", "number", title: "<b>Presence Keep Time (0..28800), seconds</b>", description: "<i>Fading time</i>",  range: "0..28800", defaultValue: 30) 
             input (name:"ledIndicator", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected</i>", defaultValue: false)
             input (name: "radarAlarmMode", type: "enum", title: "<b>Radar Alarm Mode</b>", description:"Select radar alarm mode", options: TS0225alarmMode.options, defaultValue: TS0225alarmMode.defaultValue)
+            input (name: "radarAlarmVolume", type: "enum", title: "<b>Radar Alarm Volume</b>", description:"Select radar alarm volume", options: TS0225alarmVolume.options, defaultValue: TS0225alarmVolume.defaultValue)
+            input ("radarAlarmTime", "number", title: "<b>Radar Alarm Time</b>", description: "<i>Alarm sounding duration, (1..60)seconds</i>",  range: "1..60", defaultValue: 2)   
 
-//
-            
             input (name: 'text', type: 'text', title: "<b>Motion Detection Settigs :</b>", description: "<b>Settings for movement types such as walking, trotting, fast running, circling, jumping and other movements </b>")        
             input (name:"motionFalseDetection", type: "bool", title: "<b>Motion False Detection</b>", description: "<i>Disable/Enable motion false detection</i>", defaultValue: true)
-            input ("motionDetectionSensitivity", "number", title: "<b>Motion Detection Sensitivity (0..10)</b>", description: "<i>Motion(movement) sensitivity.</i>",  range: "0..10", defaultValue: 7)   
-            input ("motionMinimumDistance", "decimal", title: "<b>Motion Minimum Distance (0.0..10.0),m</b>", description: "<i>Motion(movement) minimum distance.</i>", range: "0.0..10.0", defaultValue: 0.0)
-            input ("motionDetectionDistance", "decimal", title: "<b>Motion Detection Distance (0.0..10.0),m</b>", description: "<i>Motion(movement) maximum distance.</i>", range: "0.0..10.0", defaultValue: 8.0)
+            input ("motionDetectionSensitivity", "number", title: "<b>Motion Detection Sensitivity</b>", description: "<i>Motion(movement) sensitivity, (0..10)</i>",  range: "0..10", defaultValue: 7)   
+            input ("motionMinimumDistance", "decimal", title: "<b>Motion Minimum Distance</b>", description: "<i>Motion(movement) minimum distance, (0.0..10.0) meters</i>", range: "0.0..10.0", defaultValue: 0.0)
+            input ("motionDetectionDistance", "decimal", title: "<b>Motion Detection Distance</b>", description: "<i>Motion(movement) maximum distance  (0.0..10.0) meters.</i>", range: "0.0..10.0", defaultValue: 8.0)
 
             input (name: 'text', type: 'text', title: "<b>Small Motion Detection Settigs :</b>", description: "<b>Settings for small movement types such as tilting the head, waving, raising the hand, flicking the body, playing with the mobile phone, turning over the book, etc.. </b>")        
-            input ("smallMotionDetectionSensitivity", "number", title: "<b>Small Motion Detection Sensitivity (0..10)</b>", description: "<i>Small motion detection sensitivity</i>",  range: "0..10", defaultValue: 7)   
-            input ("smallMotionMinimumDistance", "decimal", title: "<b>Small Motion Minimum Distance (0.0..6.0)m</b>", description: "<i>Small motion minimum distance</i>", range: "0.0..6.0", defaultValue: 5.0)
-            input ("smallMotionDetectionDistance", "decimal", title: "<b>Small Motion Detection Distance (0.0..6.0)m</b>", description: "<i>Small motion detection maximum distance </i>", range: "0.0..6.0", defaultValue: 5.0)
+            input ("smallMotionDetectionSensitivity", "number", title: "<b>Small Motion Detection Sensitivity</b>", description: "<i>Small motion detection sensitivity, (0..10)</i>",  range: "0..10", defaultValue: 7)   
+            input ("smallMotionMinimumDistance", "decimal", title: "<b>Small Motion Minimum Distance</b>", description: "<i>Small motion minimum distance, (0.0..6.0) meters</i>", range: "0.0..6.0", defaultValue: 5.0)
+            input ("smallMotionDetectionDistance", "decimal", title: "<b>Small Motion Detection Distance</b>", description: "<i>Small motion detection maximum distance, (0.0..6.0) meters </i>", range: "0.0..6.0", defaultValue: 5.0)
             
             input (name: 'text', type: 'text', title: "<b>Static Detection Settigs :</b>", description: "<b>The sensor can detect breathing within a certain range to determine people presence in the detection area (for example, while sleeping or reading).</b>")        
             input (name:"breatheFalseDetection", type: "bool", title: "<b>Breathe False Detection</b>", description: "<i>Disable/Enable breathe false detection</i>", defaultValue: false)
-            input ("staticDetectionSensitivity", "number", title: "<b>Static Detection Sensitivity (0..10)</b>", description: "<i>Static Detection sensitivity</i>",  range: "0..10", defaultValue: 7) 
-            input ("staticDetectionMinimumDistance", "decimal", title: "<b>Static Detection Minimum Distance (0.0..6.0),m</b>", description: "<i>Static detection minimum distance.</i>", range: "0.0..6.0", defaultValue: 0.0)
-            input ("staticDetectionDistance", "decimal", title: "<b>Static Detection Distance (0.0..6.0),m</b>", description: "<i>Static detection maximum distance.</i>", range: "0.0..6.0", defaultValue: 6.0)
+            input ("staticDetectionSensitivity", "number", title: "<b>Static Detection Sensitivity</b>", description: "<i>Static Detection sensitivity, (0..10)</i>",  range: "0..10", defaultValue: 7) 
+            input ("staticDetectionMinimumDistance", "decimal", title: "<b>Static Detection Minimum Distance</b>", description: "<i>Static detection minimum distance, (0.0..6.0) meters</i>", range: "0.0..6.0", defaultValue: 0.0)
+            input ("staticDetectionDistance", "decimal", title: "<b>Static Detection Distance</b>", description: "<i>Static detection maximum distance,  (0.0..6.0) meters</i>", range: "0.0..6.0", defaultValue: 6.0)
         }
         if (isHumanPresenceSensorAIR()) {
             input (name: "vacancyDelay", type: "number", title: "Vacancy Delay", description: "Select vacancy delay (0..1000), seconds", range: "0..1000", defaultValue: 10)   
@@ -286,7 +288,7 @@ def restrictToTS0225RadarOnly() { isTS0225radar() }
 @Field static final Map TS0225SelfCheckingStatus =  [ "0":"check_success", "1":"checking", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault",  ] 
 @Field static final Map TS0225humanMotionState = [ "0": "none", "1": "moving", "2": "small_move", "3": "stationary"  ]
 @Field static final Map TS0225alarmMode =   [ defaultValue: 1, options: [0: "Armed", 1: "Disarmed", 2: "Alarm"]]
-@Field static final Map TS0225alarmVolume = [ "0": "Low", "1": "Middle", "2": "High", "3": "Mute"  ]
+@Field static final Map TS0225alarmVolume = [ defaultValue: 3, options: [0: "Low", 1: "Middle", 2: "High", 3: "Mute" ]]
 @Field static final Map TS0225quickSetup = [ "0": "Living Room", "1": "Bedroom", "2": "Washroom", "3": "Aisle", "4": "Kitchen"  ]
 /*
                                LivingRoom    Bedroom    Washroom    Aisle    Kitchen
@@ -1086,7 +1088,10 @@ def processTuyaCluster( descMap ) {
                     sendEvent(name : "detectionDelay", value : value)
                 }
                 else if (isTS0225radar()) {
-                    logDebug "TS0225 Radar Alarm Time dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    logInfo "TS0225 Radar Alarm Time is ${fncmd} seconds (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
+                    if (settings?.logEnable || (settings?.radarAlarmTime ?: 1) != (fncmd as int)) { logInfo "received radar Alarm Time : ${fncmd}"} else {logDebug "skipped ${settings?.radarAlarmTime} == ${fncmd as int}"}
+                    device.updateSetting("radarAlarmTime", [value:fncmd as int , type:"number"])
+                    
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -1116,7 +1121,8 @@ def processTuyaCluster( descMap ) {
                     sendEvent(name : "fadingTime", value : value, unit : "s")
                 }                    
                 else if (isTS0225radar()) {
-                    logDebug "TS0225 Radar Alarm Volume dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    logInfo "TS0225 Radar received Alarm Volume ${TS0225alarmVolume.options[fncmd]} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
+                    device.updateSetting("radarAlarmMode", [value:TS0225alarmVolume.defaultValue.toString(), type:"enum"])
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -1879,6 +1885,8 @@ def updated() {
             cmds += setRadarFadingTime( settings?.presenceKeepTime )               // TS0225 radar presenceKeepTime (in seconds)
             cmds += setRadarLedIndicator( settings?.ledIndicator )
             cmds += setRadarAlarmMode( settings?.radarAlarmMode )
+            cmds += setRadarAlarmVolume( settings?.radarAlarmVolume )
+            cmds += setRadarAlarmTime( settings?.radarAlarmTime )
             cmds += setMotionFalseDetection( settings?.motionFalseDetection )
             cmds += setBreatheFalseDetection( settings?.breatheFalseDetection )
             cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
@@ -2062,14 +2070,16 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.fadingTime == null) device.updateSetting("fadingTime", [value:60.0, type:"decimal"])
     if (fullInit == true || settings.minimumDistance == null) device.updateSetting("minimumDistance", [value:0.25, type:"decimal"])
     if (fullInit == true || settings.maximumDistance == null) device.updateSetting("maximumDistance",[value:8.0, type:"decimal"])
-    if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:1, type:"number"])
+    if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:5, type:"number"])
     if (fullInit == true || settings.parEvents == null) device.updateSetting("parEvents", true)
     if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", is2in1() ? true : false)
     if (fullInit == true || settings.reportingTime4in1 == null) device.updateSetting("reportingTime4in1", [value:DEFAULT_REPORTING_4IN1, type:"number"])
     
     if (isTS0225radar()) {
-        //radarAlarmMode TS0225alarmMode.options, defaultValue: TS0225alarmMode.defaultValue
         if (fullInit == true || settings.radarAlarmMode == null) device.updateSetting("radarAlarmMode", [value:TS0225alarmMode.defaultValue.toString(), type:"enum"])
+        if (fullInit == true || settings.radarAlarmVolume == null) device.updateSetting("radarAlarmVolume", [value:TS0225alarmVolume.defaultValue.toString(), type:"enum"])
+        if (fullInit == true || settings.radarAlarmTime == null) device.updateSetting("radarAlarmTime", [value:2, type:"number"])
+        
         if (fullInit == true || settings.motionMinimumDistance == null) device.updateSetting("motionMinimumDistance", [value:0.0, type:"decimal"])
         if (fullInit == true || settings.motionDetectionDistance == null) device.updateSetting("motionDetectionDistance", [value:8.0, type:"decimal"])
         if (fullInit == true || settings.motionDetectionSensitivity == null) device.updateSetting("motionDetectionSensitivity", [value:7, type:"number"])
@@ -2474,7 +2484,17 @@ def setRadarLedIndicator( val ) {
 
 def setRadarAlarmMode( val ) {
     def value = val as int
-    setRadarParameter("radaradarLedIndicator", "69", DP_TYPE_ENUM, value)
+    setRadarParameter("radarAlarmMode", "69", DP_TYPE_ENUM, value)
+}
+
+def setRadarAlarmVolume( val ) {
+    def value = val as int
+    setRadarParameter("radarAlarmVolume", "66", DP_TYPE_ENUM, value)
+}
+
+def setRadarAlarmTime( val ) {
+    def value = val as int
+    setRadarParameter("setRadarAlarmTime", "65", DP_TYPE_VALUE, value)
 }
 
 
