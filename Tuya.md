@@ -21,7 +21,7 @@
 |Tuya ZigBee PIR Motion Sensor ![image](https://user-images.githubusercontent.com/6189950/180646422-4db28a30-a67f-4eb9-a076-bad21951691b.png) | Zigbee ID: TS0202 __TZ3000_bsvqrxru <br>AliExpress: [link](https://www.aliexpress.com/item/1005003371197737.html)|
 | Tuya Ceiling Mounted Motion & Illuminance Sensor (PIR) ![image](https://user-images.githubusercontent.com/6189950/167108614-63b33209-50a4-49fa-b185-32c375e92e10.png) | Zigbee ID: "TS0601"; "__TZE200_auin8mzr" <br>Price range: mid  <br>  AliExpress: [(link)](https://www.aliexpress.com/item/1005003370183540.html) |
 |Tuya ZigBee Celling-mounted Smart PIR Detector ![image](https://user-images.githubusercontent.com/6189950/180646119-65b6a9f5-14e5-42a0-80b0-e93146cd21e4.png)| AliExpress: [link](https://www.aliexpress.com/item/1005004296422003.html)<br>Price range: mid/High|
-
+| PIR Motion Sensor Detector With Light Sensor Scene Switch<br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/386c4047-5dd0-44d7-9fca-0d6eea98bbaf)| Model : TS0202 <br>Manufacturer : _TZ3210_cwamkvua <br><br>AliExpres: [link](https://www.aliexpress.com/item/1005005302253176.html)<br>AliExpress: [link](https://www.aliexpress.com/item/1005004644107072.html)|
 
 ### Tuya mmWave Human Presence Radars
 
@@ -33,7 +33,7 @@
 |  Tuya/Zigbee Smart Body Human Presence Sensor Millimeter Radar <br> ![image](https://user-images.githubusercontent.com/6189950/172944587-975c553e-6fb1-43bf-a8b4-e43f2394c218.png) | AliExpress: [(link)](https://www.aliexpress.com/item/1005004374487938.html)   |
 | Tuya Square Black 24GHz radar w/ LED  <br> ![image](https://user-images.githubusercontent.com/6189950/184286533-1637eddf-872f-4dc5-9539-4af54c342503.png) | <br> Price Range: Mid <br> AliExpress:  [(link)](https://www.aliexpress.com/item/1005004532077450.html)) |
 | ![image](https://user-images.githubusercontent.com/6189950/184812511-ff85832a-787d-4859-bf7e-deb26da0b0c5.png) | |
-|---|---|
+|Tuya 24GHz Radar With Siren Alarm Motion Lux <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/95729606-28ce-4229-9a4d-c7943fc946ba) | Model: TS0225 <br>Manufacturer: _TZE200_hl0ss9oa  <br><br>AliExpress: [link](https://www.aliexpress.com/item/1005005761971083.html) <br> AliExpres: [link](https://www.aliexpress.com/item/1005005767446349.html) <br> AliExpres: [link](https://www.aliexpress.com/item/1005005781125119.html)|
 
 -----------------------------
 
