@@ -76,7 +76,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Field static final Boolean _DEBUG = false
 
 metadata {
-    definition (name: "Tuya Motion Sensor and Scene Switch", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
+    definition (name: "Tuya Motion Sensor and Scene Switch", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_Motion_Sensor_and_Scene_Switch.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "Configuration"
         capability "Battery"
