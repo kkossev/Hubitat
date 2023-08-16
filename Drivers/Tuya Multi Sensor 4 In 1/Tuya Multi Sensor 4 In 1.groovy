@@ -44,7 +44,9 @@
  * ver. 1.3.6  2023-06-25 kkossev  - chatty radars excessive debug logging bug fix
  * ver. 1.3.7  2023-07-27 kkossev  - fixes for _TZE204_sooucan5; moved _TZE204_sxm7l9xa to a new Device Profile TS0601_SXM7L9XA_RADAR; added TS0202 _TZ3040_bb6xaihh _TZ3040_wqmtjsyk; added _TZE204_qasjif9e radar; 
  * ver. 1.4.0  2023-08-06 kkossev  - added new TS0225 _TZE200_hl0ss9oa 24GHz radar (TS0225_HL0SS9OA_RADAR); added  basic support for the new TS0601 _TZE204_sbyx0lm6 radar w/ relay; added Hive MOT003; added sendCommand; added TS0202 _TZ3040_6ygjfyll
- * ver. 1.4.1  2023-08-15 kkossev  - (dev. branch) TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
+ * ver. 1.4.1  2023-08-15 kkossev  - TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
+ * ver. 1.4.2  2023-08-15 kkossev  - 'Tuya Motion Sensor and Scene Switch' driver clone (Button capabilities enabled)
+ * ver. 1.4.3  2023-08-16 kkossev  - (dev. branch) TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; 
  *
  *                                   TODO: TS0225_HL0SS9OA_RADAR - add presets
  *                                   TODO: TS0225_HL0SS9OA_RADAR - add enum type pars in setPars !
@@ -60,8 +62,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.4.1" }
-def timeStamp() {"2023/08/15 4:02 PM"}
+def version() { "1.4.3" }
+def timeStamp() {"2023/08/16 8:31 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -139,7 +141,7 @@ metadata {
         if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
             input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>", defaultValue: true)
             input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>", defaultValue: true)
-            if (!(isRadar() || isAWARHUSBradar() || isHL0SS9OAradar() ||isSBYX0LM6radar() ||isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene() || isBlackSquareRadar() || isOWONRadar())) {
+            if (!(isRadar() || isLINPTECHradar() || isHL0SS9OAradar() ||isSBYX0LM6radar() ||isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene() || isBlackSquareRadar() || isOWONRadar())) {
                 input (name: "motionReset", type: "bool", title: "<b>Reset Motion to Inactive</b>", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
                 if (motionReset.value == true) {
     		        input ("motionResetTimer", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
@@ -169,7 +171,7 @@ metadata {
         if (isHumanPresenceSensorFall() || isHumanPresenceSensorScene()) {
             input ("radarSensitivity", "number", title: "<b>Radar sensitivity (0..10)</b>", description: "", range: "0..10", defaultValue: 7)   
         }
-        if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) {    // TODO: isAWARHUSBradar()
+        if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) {    // TODO: isLINPTECHradar()
             input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
 	        input ("radarSensitivity", "number", title: "<b>Radar sensitivity (1..9)</b>", description: "", range: "0..9", defaultValue: 7)   
 	        input ("detectionDelay", "decimal", title: "<b>Detection delay, seconds</b>", description: "", range: "0.0..120.0", defaultValue: 0.2)   
@@ -219,10 +221,10 @@ metadata {
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>", 
                    options: getDeviceProfilesMap())
-            if (!(isRadar() || isAWARHUSBradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene())) {
+            if (!(isRadar() || isLINPTECHradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene())) {
                 input (name: "batteryDelay", type: "enum", title: "<b>Battery Events Delay</b>", description:"<i>Select the Battery Events Delay<br>(default is <b>no delay</b>)</i>", options: delayBatteryOpts.options, defaultValue: delayBatteryOpts.defaultValue)
             }
-            if (!(isRadar() || isAWARHUSBradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene())) {
+            if (!(isRadar() || isLINPTECHradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene())) {
                input (name: "invertMotion", type: "bool", title: "<b>Invert Motion Active/Not Active</b>", description: "<i>Some Tuya motion sensors may report the motion active/inactive inverted...</i>", defaultValue: false)
             }
         }
@@ -231,7 +233,7 @@ metadata {
 
 def restrictTo4In1Only()        { is4in1() }
 def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() }
-def restrictToTS0225RadarOnly() { isHL0SS9OAradar() }    // TODO: check isAWARHUSBradar()
+def restrictToTS0225RadarOnly() { isHL0SS9OAradar() }    // TODO: check isLINPTECHradar()
 
 @Field static final Map settableParsMap = [
     "--- Select ---"   :               [ type: 'none', function: 'setParSelectHelp'],
@@ -334,11 +336,11 @@ def isChattyRadarDistanceReport(descMap) {
     }
 }
 
-def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isEGNGMRZHradar() || isAWARHUSBradar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
+def isTS0601_PIR() { return (device.getDataValue('model') in ['TS0601']) && !(isRadar() || isEGNGMRZHradar() || isLINPTECHradar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
 
 def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 def isLuxMeter() { return (is2in1() || is3in1() || is4in1() || isRadar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() || isHumanPresenceSensorScene() || isHumanPresenceSensorFall() || isBlackSquareRadar()) }
-// TODO ^^^isAWARHUSBradar() ^^^^
+// TODO ^^^isLINPTECHradar() ^^^^
 
 def isRadar()             { return getModelGroup().contains("TS0601_TUYA_RADAR") } 
 def isBlackPIRsensor()    { return getModelGroup().contains("TS0601_PIR_PRESENCE") }     
@@ -352,7 +354,7 @@ def isYXZBRB58radar()              { return getModelGroup().contains("TS0601_YXZ
 def isSXM7L9XAradar()              { return getModelGroup().contains("TS0601_SXM7L9XA_RADAR") }
 def isHL0SS9OAradar()              { return getModelGroup().contains("TS0225_HL0SS9OA_RADAR") }
 def isSBYX0LM6radar()              { return getModelGroup().contains("TS0601_SBYX0LM6_RADAR") }
-def isAWARHUSBradar()              { return getModelGroup().contains("TS0225_AWARHUSB_RADAR") }
+def isLINPTECHradar()              { return getModelGroup().contains("TS0225_LINPTECH_RADAR") }    // was isAWARHUSBradar() 
 def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGNGMRZH_RADAR") }
 
 
@@ -643,13 +645,13 @@ def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGN
             ]
     ],    
     
-    "TS0225_AWARHUSB_RADAR"   : [
-            description   : "Tuya TS0225_AWARHUSB 24GHz Radar",        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/646?u=kkossev
+    "TS0225_LINPTECH_RADAR"   : [
+            description   : "Tuya TS0225_LINPTECH 24GHz Radar",        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/646?u=kkossev
             models        : ["TS0225"],                                // DPs are unknown
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_AWARHUSB 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
-            deviceJoinName: "Tuya TS0225_AWARHUSB 24Ghz Human Presence Detector",
+            deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector",
             capabilities  : ["motion": true, "battery": true],
             attributes    : ["healthStatus": "unknown", "powerSource": "dc"],
             configuration : ["battery": false],
@@ -761,10 +763,11 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
 // Parse incoming device messages to generate events
 def parse(String description) {
+    Map descMap = [:]
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
     setPresent()
-    //logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
+    logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) description = ${description}"
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
         logDebug "parse: zone status: $description"
         if (isHL0SS9OAradar() && _IGNORE_ZCL_REPORTS == true) {
@@ -784,7 +787,13 @@ def parse(String description) {
         sendZigbeeCommands( cmds )  
     }    
     else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
-        Map descMap = zigbee.parseDescriptionAsMap(description)
+        try  {
+            descMap = zigbee.parseDescriptionAsMap(description)
+        }
+        catch (e) {
+            logWarn "exception caught while processing description ${description}"
+            return
+        }
         if (isChattyRadarDistanceReport(descMap) && (settings?.ignoreDistance == true)) {
             // do not even log these spammy distance reports ...
             return
@@ -827,6 +836,10 @@ def parse(String description) {
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
         }
+        else if (descMap.cluster  == "E002") {
+            logDebug "Cluster E002"
+            processE002Cluster( descMap )
+        }
         else if (descMap.profileId == "0000") {    // zdo
             parseZDOcommand(descMap)
         } 
@@ -840,7 +853,7 @@ def parse(String description) {
             //def value = descMap?.value == "00" ? "battery" : descMap?.value == "01" ? "mains" : descMap?.value == "03" ? "battery" : descMap?.value == "04" ? "dc" : "unknown" 
             def powerSourceReported = powerSourceOpts.options[descMap?.value as int]
             logInfo "reported Power source <b>${powerSourceReported}</b> (${descMap?.value})"
-            if (is4in1() || isRadar() || isEGNGMRZHradar() || isAWARHUSBradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor())  {     // for radars force powerSource 'dc'
+            if (is4in1() || isRadar() || isEGNGMRZHradar() || isLINPTECHradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() ||isBlackSquareRadar() || isBlackPIRsensor())  {     // for radars force powerSource 'dc'
                 powerSourceReported = powerSourceOpts.options[04]    // force it to dc !
                 logDebug "forcing the powerSource to <b>${powerSourceReported}</b>"
             }
@@ -909,6 +922,22 @@ def parse(String description) {
             if (settings?.logEnable) log.debug "${device.displayName} <b> NOT PARSED </b> : descMap = ${descMap}"
         }
     } // if 'catchall:' or 'read attr -'
+    else if (description.startsWith('raw')) {
+        // description=raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
+        descMap = [:]
+        descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry ->
+            def pair = entry.split(':')
+            [(pair.first().trim()): pair.last().trim()]
+        }        
+        //log.trace "descMap=${descMap}"
+        logDebug "parsed row : cluster=${descMap.cluster} attrId=${descMap.attrId}"
+        if (descMap.cluster  ==  "E002") {
+            processE002Cluster( descMap )
+        }
+        else {
+            logWarn "<b>UNPROCESSED RAW cluster ${descMap?.cluster}</b> description = ${description}"
+        }
+    }
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
@@ -943,6 +972,31 @@ def parseZDOcommand( Map descMap ) {
             break
         default :
             if (settings?.logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+    }
+}
+
+def processE002Cluster( descMap ) {
+    // raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
+    def value = zigbee.convertHexToInt(descMap.value) 
+    switch (descMap.attrId) {
+        case "E001" :    // value:0000, 0003 000B 0047 0083
+            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            break
+        case "E004" :    // value:05
+            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            break
+        case "E005" :    // value:05
+            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            break
+        case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054
+            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            break
+        case "E00B" :    // value:value:0258
+            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            break
+        default : 
+            logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
+            break
     }
 }
 
@@ -1865,7 +1919,7 @@ def updated() {
     logInfo "Debug logging is <b>${logEnable}</b>; Description text logging is <b>${txtEnable}</b>"
     if (logEnable==true) {
         runIn(86400, logsOff, [overwrite: true])    // turn off debug logging after 24 hours
-        logInfo "Debug logging is will be turned off after 24 hours"
+        logInfo "Debug logging will be turned off after 24 hours"
     }
     else {
         unschedule(logsOff)
@@ -2201,7 +2255,7 @@ def configure() {
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"    // OWON motion/occupancy cluster
     }
-    else if (!(isRadar() || isAWARHUSBradar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || is2in1())) {    // skip the binding for all the radars!                // TODO: check EPs !!!
+    else if (!(isRadar() || isLINPTECHradar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || is2in1())) {    // skip the binding for all the radars!                // TODO: check EPs !!!
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
         cmds += "delay 200"
