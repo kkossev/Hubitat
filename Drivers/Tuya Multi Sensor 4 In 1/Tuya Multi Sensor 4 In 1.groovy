@@ -47,7 +47,7 @@
  * ver. 1.4.1  2023-08-15 kkossev  - TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
  * ver. 1.4.2  2023-08-15 kkossev  - 'Tuya Motion Sensor and Scene Switch' driver clone (Button capabilities enabled)
  * ver. 1.4.3  2023-08-17 kkossev  - TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; added TS0601 _TZE204_ijxvkhd0 to TS0601_IJXVKHD0_RADAR; added _TZE204_dtzziy1e, _TZE200_ypprdwsl _TZE204_xsm7l9xa; YXZBRB58 radar illuminance and fadingTime bug fixes; added new TS0225_2AAELWXK_RADAR profile
- * ver. 1.4.4  2023-08-17 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( 
+ * ver. 1.4.4  2023-08-17 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); 
  *
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences - send events
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences configuration
@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/17 5:08 PM"}
+def timeStamp() {"2023/08/17 11:01 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -827,7 +827,7 @@ def parse(String description) {
     }    
     else if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
         try  {
-            descMap = zigbee.parseDescriptionAsMap(description)
+            descMap = myParseDescriptionAsMap(description)
         }
         catch (e) {
             logWarn "exception caught while processing description ${description}"
@@ -838,7 +838,7 @@ def parse(String description) {
             return
         }
         //
-        logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${zigbee.parseDescriptionAsMap(description)}"
+        logDebug "parse (${device.getDataValue('manufacturer')}, ${driverVersionAndTimeStamp()}) descMap = ${descMap}"
         //
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
             if (descMap.attrInt == 0x0021) {
@@ -855,6 +855,9 @@ def parse(String description) {
             if ((isHL0SS9OAradar() || is2AAELWXKradar()) && _IGNORE_ZCL_REPORTS == true) {
                 logDebug "ignored ZCL illuminance report (raw:Lux=${rawLux})"
                 return
+            }
+            else if (isLINPTECHradar()) {
+                illuminanceEvent( rawLux )
             }
             else {
                 illuminanceEvent( rawLux )
@@ -980,6 +983,37 @@ def parse(String description) {
     else {
         if (settings?.logEnable) log.debug "${device.displayName} <b> UNPROCESSED </b> description = ${description} descMap = ${zigbee.parseDescriptionAsMap(description)}"
     }
+}
+
+Map myParseDescriptionAsMap( String description )
+{
+    def descMap = [:]
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+        return descMap    // all OK!
+    }
+    catch (e1) {
+        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}"
+        // try alternative custom parsing
+        descMap = [:]
+        try {
+            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry ->
+                def pair = entry.split(':')
+                [(pair.first().trim()): pair.last().trim()]
+            } 
+            log.trace "descMap.value = ${descMap.value}"
+            if (descMap.value != null) {
+                descMap.value = zigbee.swapOctets(descMap.value)
+                log.trace "swapped = ${descMap.value}"
+            }
+        }
+        catch (e2) {
+            logWarn "exception ${e2} caught while parsing using an alternative method <b>myParseDescriptionAsMap</b> description:  ${description}"
+            return [:]
+        }
+        logDebug "alternative method parsing success: descMap=${descMap}"
+    }
+    return descMap
 }
 
 
@@ -1781,7 +1815,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else {
-                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar motion speed 0x73 fncmd = ${fncmd}"
+                    logDebug "non-radar motion speed 0x73 fncmd = ${fncmd}"
                 }
                 break
             case 0x74 : // (116)
@@ -1799,7 +1833,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else {
-                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar fall down status 0x74 fncmd = ${fncmd}"
+                    logDebug "non-radar fall down status 0x74 fncmd = ${fncmd}"
                 }
                 break
             case 0x75 : // (117)
@@ -1814,7 +1848,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd) {
                     device.updateSetting("radarAlarmMode", [type:"enum", value:fncmd.toString()])
                 }
                 else {
-                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar static dwell alarm 0x75 fncmd = ${fncmd}"
+                    logDebug "${device.displayName} non-radar static dwell alarm 0x75 fncmd = ${fncmd}"
                 }
                 break
             case 0x76 : // (118)
@@ -1830,65 +1864,55 @@ void processTuyaDP(descMap, dp, dp_id, fncmd) {
                     sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else if (isEGNGMRZHradar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
+                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else if (isBlackPIRsensor()) {
-                    if (settings?.logEnable) log.debug "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
+                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else {
-                    if (settings?.txtEnable) log.warn "${device.displayName} non-radar fall sensitivity  0x76 fncmd = ${fncmd}"
+                    logDebug "non-radar fall sensitivity  0x76 fncmd = ${fncmd}"
                 }
                 break
             case 0x77 : // (119)
                 if (isEGNGMRZHradar()) {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
+                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
-                else if (is2AAELWXKradar()) {    // not sure 
+                else if (is2AAELWXKradar()) {    // not sure this is the DP
                     logDebug "TS0225 Radar Breathe Self-Test : ${}(dp_id=${dp_id} dp=${dp} fncmd=${fncmd})"
                     if (settings?.logEnable == true || (TS0225SelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${TS0225SelfCheckingStatus[fncmd.toString()]} (${fncmd})"}
                     sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else {
                     //if (isBlackPIRsensor()) {
-                        if (settings?.logEnable) log.info "${device.displayName} (0x77) motion state is ${fncmd}"
+                        if (settings?.logEnable) logInfo "(0x77) motion state is ${fncmd}"
                         handleMotion(motionActive=fncmd)
                     //}
                 }
                 break
             case 0x78 : // (120)
-                if (is2AAELWXKradar()) {    // not sure 
+                if (is2AAELWXKradar()) {    // not sure this is the DP
                     logDebug "TS0225 Radar Move Self-Test dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     if (settings?.logEnable == true || (TS0225SelfCheckingStatus[fncmd.toString()] != device.currentValue("radarStatus"))) {logInfo "Radar self checking status : ${TS0225SelfCheckingStatus[fncmd.toString()]} (${fncmd})"}
                     sendEvent(name : "radarStatus", value : TS0225SelfCheckingStatus[fncmd.toString()])                    
                 }
                 else {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
+                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
-                break
-            case 0x93 : // (147)
-            case 0xA8 : // (168)
-            case 0xA4 : // (164)
-            case 0x8C : // (140)
-            case 0x7A : // (122)
-            case 0xAD : // (173)
-            case 0xAE : // (174)
-            case 0xAA : // (170)
-                if (settings?.logEnable) log.debug "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 break
             case 0x8D : // (141)
                 //if (isBlackPIRsensor()) {
                     def strMotionType = blackSensorMotionTypeOptions[fncmd.toString()]
                     if (strMotionType == null) strMotionType = "???"
-                    if (settings?.txtEnable) log.debug "${device.displayName} motion type reported is ${strMotionType} (${fncmd})"
+                    ilogDebug "motion type reported is ${strMotionType} (${fncmd})"
                     sendEvent(name : "motionType", value : strMotionType, type: "physical")
                 //}
                 break
             default :
-                if (settings?.logEnable) log.warn "${device.displayName} <b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
-
 }
+
 
 private int getTuyaAttributeValue(ArrayList _data) {
     int retValue = 0
@@ -3152,6 +3176,6 @@ def testParse(description) {
 
 def test( val ) {
     //zigbee.command(0xEF00, 0x03)
-device.updateSetting("radarAlarmMode", [value:"1", type:"enum"])
+  illuminanceEvent( safeToInt(val))
 }
 
