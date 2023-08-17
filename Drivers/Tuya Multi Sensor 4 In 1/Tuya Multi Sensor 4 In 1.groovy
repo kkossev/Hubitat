@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/17 11:14 PM"}
+def timeStamp() {"2023/08/17 11:39 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1001,10 +1001,8 @@ Map myParseDescriptionAsMap( String description )
                 def pair = entry.split(':')
                 [(pair.first().trim()): pair.last().trim()]
             } 
-            log.trace "descMap.value = ${descMap.value}"
             if (descMap.value != null) {
                 descMap.value = zigbee.swapOctets(descMap.value)
-                log.trace "swapped = ${descMap.value}"
             }
         }
         catch (e2) {
