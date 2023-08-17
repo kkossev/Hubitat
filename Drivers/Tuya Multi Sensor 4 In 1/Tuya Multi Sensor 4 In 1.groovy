@@ -47,7 +47,7 @@
  * ver. 1.4.1  2023-08-15 kkossev  - TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
  * ver. 1.4.2  2023-08-15 kkossev  - 'Tuya Motion Sensor and Scene Switch' driver clone (Button capabilities enabled)
  * ver. 1.4.3  2023-08-17 kkossev  - TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; added TS0601 _TZE204_ijxvkhd0 to TS0601_IJXVKHD0_RADAR; added _TZE204_dtzziy1e, _TZE200_ypprdwsl _TZE204_xsm7l9xa; YXZBRB58 radar illuminance and fadingTime bug fixes; added new TS0225_2AAELWXK_RADAR profile
- * ver. 1.4.4  2023-08-17 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); 
+ * ver. 1.4.4  2023-08-17 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates()
  *
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences - send events
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences configuration
@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/17 11:01 PM"}
+def timeStamp() {"2023/08/17 11:14 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -2375,10 +2375,20 @@ def logInitializeRezults() {
     if (settings?.txtEnable) log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})"
 }
 
+// delete all attributes
+void deleteAllCurrentStates() {
+    device.properties.supportedAttributes.each { it->
+        log.debug "deleting $it"
+        device.deleteCurrentState("$it")
+    }
+    logInfo "All current states (attributes) DELETED"
+}
+
 // called by initialize() button
 void initializeVars( boolean fullInit = false ) {
     logInfo "${device.displayName} InitializeVars( fullInit = ${fullInit} )..."
     if (fullInit == true) {
+        deleteAllCurrentStates()
         state.clear()
         state.driverVersion = driverVersionAndTimeStamp()
         state.motionStarted = now()
