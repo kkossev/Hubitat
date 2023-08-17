@@ -36,6 +36,7 @@
  * ver. 1.3.5  2023-05-28 kkossev - sendRttEvent exception fixed; added _TZE200_cirvgep4 in TS0601_Tuya group; fingerprint correction; battery reports are capped to 100% and not ignored;
  * ver. 1.3.6  2023-06-10 kkossev - added _TZE200_yjjdcqsq to TS0601_Tuya group; 
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
+ * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -46,8 +47,8 @@
  *
 */
 
-def version() { "1.3.7" }
-def timeStamp() {"2023/08/02 11:39 PM"}
+def version() { "1.3.8" }
+def timeStamp() {"2023/08/17 12:38 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -93,6 +94,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_a476raq2", deviceJoinName: "Tuya Temperature Humidity LCD display" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_ftdkanlj", deviceJoinName: "MOES ZSS-ZK-THL"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB"
@@ -122,6 +124,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_dowj6gyi", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_8ybe88nf", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/262?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_rdhukkmi", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/55?u=kkossev
         //        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0402,0405", outClusters:"0003,0402,0405", model:"RH3052", manufacturer:"TUYATEC-gqhxixyk", deviceJoinName: "TUYATEC RH3052 Motion Sensor"                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
@@ -129,6 +132,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0020,0000,0003,0402", outClusters:"0003", model:"THS317-ET", manufacturer:"OWON", deviceJoinName: "OWON Temperature sensor"                                             //https://community.hubitat.com/t/newbie-help-with-owon-ths317-et-multi-sensor/122671/5?u=kkossev
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -136,7 +140,7 @@ metadata {
         input (name: "txtEnable", type: "bool", title: "Description text logging", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
         input (name: "modelGroupPreference", type: "enum", title: "Model Group", description:"Recommended value is <b>Auto detect</b></i>", defaultValue: 0, options:
                ["Auto detect":"Auto detect", "TS0601_Tuya":"TS0601_Tuya", "TS0601_Haozee":"TS0601_Haozee", "TS0601_AUBESS":"TS0601_AUBESS", "TS0201":"TS0201", "TS0222":"TS0222", 'TS0201_LCZ030': 'TS0201_LCZ030',
-                "TS0222_2":"TS0222_2", "TS0201_TH":"TS0201_TH", "TS0601_Soil":"TS0601_Soil", "Zigbee NON-Tuya":"Zigbee NON-Tuya"])
+                "TS0222_2":"TS0222_2", "TS0201_TH":"TS0201_TH", "TS0601_Soil":"TS0601_Soil", "Zigbee NON-Tuya":"Zigbee NON-Tuya", "OWON":"OWON"])
         input (name: "advancedOptions", type: "bool", title: "Advanced options", description: "May not be supported by all devices!", defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
@@ -232,9 +236,11 @@ metadata {
     '_TZ3000_6uzkisv2'  : 'TS0201',
     '_TZ3000_dowj6gyi'  : 'TS0201',
     '_TZ3000_8ybe88nf'  : 'TS0201',
+    '_TZ3000_rdhukkmi'  : 'TS0201',
     'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
+    '_TYZB01_ftdkanlj'  : 'TS0222',             // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/419?u=kkossev 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
@@ -244,6 +250,7 @@ metadata {
     'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
     'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
+    'OWON'              : 'OWON',               // model:"THS317-ET", manufacturer:"OWON"
     ''                  : 'UNKNOWN',
     'ALL'               : 'ALL',
     'TEST'              : 'TEST'
@@ -970,7 +977,9 @@ def updated() {
     if (getModelGroup() in ['TS0601_Haozee']) {
         // TODO - write attribute 0xF001, cluster 0x400
     }
-
+    if (getModelGroup() in ['OWON']) {
+        cmds += initializeDevice()
+    }
     if (isConfigurableSleepyDevice()) {    // ["Zigbee NON-Tuya", "TS0201_TH"]
        
         lastTxMap.tempCfg = (settings?.minReportingTimeTemp as int).toString() + "," + (settings?.maxReportingTimeTemp as int).toString() + "," + ((settings?.temperatureSensitivity * 100) as int).toString()
@@ -1257,6 +1266,36 @@ void initializeVars(boolean fullInit = true ) {
     
 }
 
+/**
+ * initializes the device
+ * Invoked from configure()
+ * @return zigbee commands
+ */
+def initializeDevice() {
+    ArrayList<String> cmds = []
+    logInfo 'initializeDevice...'
+    if (getModelGroup() == 'OWON') {    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/e8750f6f2a34a3a6ae87f61e989a00964fb1107f/devices/owon.js
+        // It seem this device have 2 version, one using the endpoint 0x01 and one other using the endpoint 0x03
+        // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5738#issuecomment-1579521543 
+        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67°C if the real sensor temperature is near -20°C e.g. in a fridge.
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 200",]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 200",]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0001 {${device.zigbeeId}} {}", "delay 200",]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0402 {${device.zigbeeId}} {}", "delay 200",]
+        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 60, 3600, 0x01, [:], 200)
+        cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, 60, 300, 0x32, [:], 200)    // or delta =  0x14
+        cmds += zigbee.reportingConfiguration(0x0001, 0x0021, [:], 250)
+        cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
+    }
+
+    //
+    if (cmds == []) {
+        cmds = ["delay 299",]
+    }
+    return cmds
+}
+
+
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
@@ -1268,6 +1307,7 @@ def configure() {
     if (settings?.txtEnable) log.info "${device.displayName} configure().."
     List<String> cmds = []
     cmds += tuyaBlackMagic()
+    cmds += initializeDevice()
     sendZigbeeCommands(cmds)
     runIn(1, updated) // send the default or previously configured preference parameters during the Zigbee pairing process..
 }
