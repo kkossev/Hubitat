@@ -48,7 +48,7 @@
 */
 
 def version() { "1.3.8" }
-def timeStamp() {"2023/08/17 12:33 PM"}
+def timeStamp() {"2023/08/17 12:38 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -94,6 +94,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0402,0405", outClusters:"0019",      model:"TS0201", manufacturer:"_TZ2000_a476raq2", deviceJoinName: "Tuya Temperature Humidity LCD display" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400,E002", outClusters:"0019,000A", model:"TS0201", manufacturer:"_TZ3000_qaaysllp", deviceJoinName: "NAS-TH02B LCZ030 T/H/I/LCD"  // Neo Coolcam ?  // NOT TESTED!
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_kvwjujy9", deviceJoinName: "MOES ZSS-ZK-THL"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0400",      outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_ftdkanlj", deviceJoinName: "MOES ZSS-ZK-THL"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222_2"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TZ3000_lfa05ajd", deviceJoinName: "Zemismart ZXZTH"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pisltm67", deviceJoinName: "AUBESS Light Sensor S-LUX-ZB"
