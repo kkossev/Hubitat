@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/18 2:42 PM"}
+def timeStamp() {"2023/08/18 2:44 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -240,15 +240,15 @@ def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    //
 
 @Field static final Map settableParsMap = [
     "--- Select ---"   :               [ type: 'none', function: 'setParSelectHelp'],
-    "???? (4-in-1 only) ????"  :       [ type: 'none', function: 'setParSelectHelp'],
+    "\u2193\u2193\u2193\u2193 (4-in-1 only) \u2193\u2193\u2193\u2193"  :       [ type: 'none', function: 'setParSelectHelp'],
     "reportingTime4in1":               [ type: 'number',  min: 0,    scale: 1, max: 7200,  step: 1,   defaultValue: 10,    function: 'setReportingTime4in1',    restrictions: 'restrictTo4In1Only'],
-    "???? (5.8 GHz radars only) ????": [ type: 'none', function: 'setParSelectHelp'],
+    "\u2193\u2193\u2193\u2193 (5.8 GHz radars only) \u2193\u2193\u2193\u2193": [ type: 'none', function: 'setParSelectHelp'],
     "radarSensitivity" :               [ type: 'number',  min: 1,    scale: 1, max: 9,     step: 1,   defaultValue: 7,     function: 'setRadarSensitivity',      restrictions: 'restrictToTuyaRadarOnly'],
     "detectionDelay"   :               [ type: 'decimal', min: 0.0,  scale: 1, max: 120.0, step: 0.1, defaultValue: 0.2,   function: 'setRadarDetectionDelay',   restrictions: 'restrictToTuyaRadarOnly'],
     "fadingTime"       :               [ type: 'decimal', min: 0.5,  scale: 1, max: 500.0, step: 1.0, defaultValue: 60.0,  function: 'setRadarFadingTime',       restrictions: 'restrictToTuyaRadarOnly'],
     "minimumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 0.25,  function: 'setRadarMinimumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
     "maximumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 8.0,   function: 'setRadarMaximumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
-    "???? (24 GHz radars only) ????" : [ type: 'none', function: 'setParSelectHelp'],
+    "\u2193\u2193\u2193\u2193 (24 GHz radars only) \u2193\u2193\u2193\u2193" : [ type: 'none', function: 'setParSelectHelp'],
     "radarFadingTime":                 [ type: 'number',  min: 0,    scale: 1, max: 28800,  step: 1,  defaultValue: 10,    function: 'setRadarFadingTime',       restrictions: 'restrictToTS0225RadarOnly'],
     "radarLedIndicator":               [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: false, function: 'setRadarLedIndicator',     restrictions: 'restrictToTS0225RadarOnly'],
     
