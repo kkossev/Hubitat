@@ -47,7 +47,7 @@
  * ver. 1.4.1  2023-08-15 kkossev  - TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
  * ver. 1.4.2  2023-08-15 kkossev  - 'Tuya Motion Sensor and Scene Switch' driver clone (Button capabilities enabled)
  * ver. 1.4.3  2023-08-17 kkossev  - TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; added TS0601 _TZE204_ijxvkhd0 to TS0601_IJXVKHD0_RADAR; added _TZE204_dtzziy1e, _TZE200_ypprdwsl _TZE204_xsm7l9xa; YXZBRB58 radar illuminance and fadingTime bug fixes; added new TS0225_2AAELWXK_RADAR profile
- * ver. 1.4.4  2023-08-18 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration; 
+ * ver. 1.4.4  2023-08-18 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration and commands
  *
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences - send events
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences configuration
@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/18 1:06 PM"}
+def timeStamp() {"2023/08/18 2:42 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -270,11 +270,11 @@ def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    //
 
 
 @Field static final Map radarCommandsMap = [
-    "--- Select ---"   : [ function: 'sendCommandHelp', supported: ["TS0225_HL0SS9OA_RADAR"]],
-    "resetSetting"     : [ function: 'resetSetting',    supported: ["TS0225_HL0SS9OA_RADAR"]],
-    "moveSelfTest"     : [ function: 'moveSelfTest',    supported: ["TS0225_HL0SS9OA_RADAR"]],
-    "smallMoveSelfTest": [ function: 'smallMoveSelfTest', supported: ["TS0225_HL0SS9OA_RADAR"]],
-    "breatheSelfTest"  : [ function: 'breatheSelfTest', supported: ["TS0225_HL0SS9OA_RADAR"]]
+    "--- Select ---"   : [ function: 'sendCommandHelp', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
+    "resetSettings"    : [ function: 'resetSettings',    supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
+    "moveSelfTest"     : [ function: 'moveSelfTest',    supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
+    "smallMoveSelfTest": [ function: 'smallMoveSelfTest', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
+    "breatheSelfTest"  : [ function: 'breatheSelfTest', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]]
 ]
 
 @Field static final Boolean _IGNORE_ZCL_REPORTS = true
@@ -2939,14 +2939,14 @@ def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
 
 
 
-def resetSetting(val)      { return radarCommand("resetSetting", "71", DP_TYPE_BOOL) }
-def moveSelfTest(val)      { return radarCommand("moveSelfTest", "72", DP_TYPE_BOOL) }
-def smallMoveSelfTest(val) { return radarCommand("smallMoveSelfTest", "6E", DP_TYPE_BOOL) }
-def breatheSelfTest(val)   { return radarCommand("breatheSelfTest", "6F", DP_TYPE_BOOL) }
+def resetSettings(val)     { return radarCommand("resetSettings", isHL0SS9OAradar() ? "71" : "70", DP_TYPE_BOOL) }
+def moveSelfTest(val)      { return radarCommand("moveSelfTest", isHL0SS9OAradar() ? "72" : "76", DP_TYPE_BOOL) }        // check!
+def smallMoveSelfTest(val) { return radarCommand("smallMoveSelfTest", isHL0SS9OAradar() ? "6E" : "77", DP_TYPE_BOOL) }   // check!
+def breatheSelfTest(val)   { return radarCommand("breatheSelfTest", isHL0SS9OAradar() ? "6F" : "78", DP_TYPE_BOOL) }     // check!
 
 def radarCommand( String command, String DPcommand, String DPType) {
     ArrayList<String> cmds = []
-    if (!isHL0SS9OAradar()) {
+    if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {
         logWarn "${command}: unsupported model ${state.deviceProfile} !"
         return null 
     }
@@ -2962,7 +2962,7 @@ def radarCommand( String command, String DPcommand, String DPType) {
             logWarn "${command}: unsupported DPType ${DPType} !"
             return null
     }
-    logDebug "sending radarCommand breatheSelfTest (raw=${value})"                
+    logDebug "sending ${state.deviceProfile} radarCommand ${command} dp=${DPcommand} (${zigbee.convertHexToInt(DPcommand)})"                
     return cmds
 }
 
@@ -2984,6 +2984,7 @@ def sendCommand( command=null, val=null )
     //
     def func
     try {
+        //log.warn "so far so good..."
         func = radarCommandsMap[command]?.function
         cmds = "$func"(value)
     }
@@ -2991,8 +2992,8 @@ def sendCommand( command=null, val=null )
         logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
         return
     }
-
-    logDebug "executed <b>$func</b>(<b>$val</b>)"
+    if (val == null)  { logDebug "executed <b>$func</b>()" } 
+    else              { logDebug "executed <b>$func</b>(<b>$val</b>)"} 
     sendZigbeeCommands( cmds )
 }
 
