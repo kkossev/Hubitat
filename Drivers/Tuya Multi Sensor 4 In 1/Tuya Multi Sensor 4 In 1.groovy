@@ -47,7 +47,7 @@
  * ver. 1.4.1  2023-08-15 kkossev  - TS0225_HL0SS9OA_RADAR ignoring ZCL illuminance and IAS motion reports; added radarAlarmMode, radarAlarmVolume, radarAlarmTime, Radar Static Detection Minimum Distance; added TS0225_AWARHUSB_RADAR TS0225_EGNGMRZH_RADAR 
  * ver. 1.4.2  2023-08-15 kkossev  - 'Tuya Motion Sensor and Scene Switch' driver clone (Button capabilities enabled)
  * ver. 1.4.3  2023-08-17 kkossev  - TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; added TS0601 _TZE204_ijxvkhd0 to TS0601_IJXVKHD0_RADAR; added _TZE204_dtzziy1e, _TZE200_ypprdwsl _TZE204_xsm7l9xa; YXZBRB58 radar illuminance and fadingTime bug fixes; added new TS0225_2AAELWXK_RADAR profile
- * ver. 1.4.4  2023-08-17 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates()
+ * ver. 1.4.4  2023-08-18 kkossev  - (dev. branch) Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration; 
  *
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences - send events
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences configuration
@@ -66,7 +66,7 @@
 */
 
 def version() { "1.4.4" }
-def timeStamp() {"2023/08/17 11:39 PM"}
+def timeStamp() {"2023/08/18 1:06 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -236,7 +236,7 @@ metadata {
 
 def restrictTo4In1Only()        { is4in1() }
 def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() }
-def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    // TODO: check isLINPTECHradar() isIJXVKHD0radar()
+def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    // TODO: check isIJXVKHD0radar()
 
 @Field static final Map settableParsMap = [
     "--- Select ---"   :               [ type: 'none', function: 'setParSelectHelp'],
@@ -625,8 +625,8 @@ def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGN
             ]
     ],    
     
-    "TS0601_IJXVKHD0_RADAR"   : [                                       // isIJXVKHD0radar() 
-            description   : "Tuya Human Presence Detector IJXVKHD0",    //
+    "TS0601_IJXVKHD0_RADAR"   : [                                       // isIJXVKHD0radar() - TODO!
+            description   : "Tuya Human Presence Detector IJXVKHD0",    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5acadaf16b0e85c1a8401223ddcae3d31ce970eb/src/devices/tuya.ts#L5747
             models        : ["TS0601"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ijxvkhd0", deviceJoinName: "Tuya Human Presence Detector IJXVKHD0"]       // 
@@ -637,8 +637,9 @@ def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGN
             configuration : ["battery": false],
             preferences   : [
             ]
-    ],    
-
+    ],
+    
+    // the new 24GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - pedestal mount form-factor
     "TS0225_HL0SS9OA_RADAR"   : [
             description   : "Tuya TS0225_HL0SS9OA 24GHz Radar",        // https://www.aliexpress.com/item/1005005761971083.html 
             models        : ["TS0225"],
@@ -653,8 +654,8 @@ def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGN
             ]
     ],    
 
-    
-    "TS0225_2AAELWXK _RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
+    // the new 24GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor
+    "TS0225_2AAELWXK_RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : "Tuya TS0225_2AAELWXK 24GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
             models        : ["TS0225"],                                // ZG-205Z
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
@@ -684,10 +685,10 @@ def isEGNGMRZHradar()              { return getModelGroup().contains("TS0225_EGN
             ]
     ],    
     
-    "TS0225_LINPTECH_RADAR"   : [
+    "TS0225_LINPTECH_RADAR"   : [                                      // https://home.miot-spec.com/spec/linp.sensor_occupy.hb01 
             description   : "Tuya TS0225_LINPTECH 24GHz Radar",        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/646?u=kkossev
             models        : ["TS0225"],                                // DPs are unknown
-            fingerprints  : [
+            fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
             deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector",
@@ -1336,7 +1337,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd) {
                     logDebug "TS0225 Radar Presence Keep Time dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     if (settings?.logEnable == true || settings?.presenceKeepTime != (fncmd as int)) { logInfo "received presenceKeepTime : ${fncmd}"} else {logDebug "skipped ${settings?.presenceKeepTime} == ${fncmd as int}"}
                     device.updateSetting("presenceKeepTime", [value:fncmd as int , type:"number"])                    
-                    //presenceKeepTime
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported O_Sensitivity <b>${oSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -2151,6 +2151,7 @@ def updated() {
         if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
             logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
             state.deviceProfile = getProfileKey(settings?.forcedProfile)
+            initializeVars( fullInit = false ) 
             logInfo "press F5 to refresh the page"
         }
     }
@@ -2220,13 +2221,13 @@ def updated() {
         if (true) {    
             if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
                 cmds += setRadarDetectionDelay( settings?.detectionDelay )        // radar detection delay
-                cmds += setRadarFadingTime( settings?.fadingTime )                // radar fading time
+                cmds += setRadarFadingTime( settings?.fadingTime ?: 30)                // radar fading time
                 cmds += setRadarMinimumDistance( settings?.minimumDistance )      // radar minimum distance
                 cmds += setRadarMaximumDistance( settings?.maximumDistance )      // radar maximum distance
             }
         }
-        if (isHL0SS9OAradar()) {
-            cmds += setRadarFadingTime( settings?.presenceKeepTime )               // TS0225 radar presenceKeepTime (in seconds)
+        if (isHL0SS9OAradar() || is2AAELWXKradar()) {
+            cmds += setRadarFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
             cmds += setRadarLedIndicator( settings?.ledIndicator )
             cmds += setRadarAlarmMode( settings?.radarAlarmMode )
             cmds += setRadarAlarmVolume( settings?.radarAlarmVolume )
@@ -2429,7 +2430,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", is2in1() ? true : false)
     if (fullInit == true || settings.reportingTime4in1 == null) device.updateSetting("reportingTime4in1", [value:DEFAULT_REPORTING_4IN1, type:"number"])
     
-    if (isHL0SS9OAradar()) {
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {
         if (fullInit == true || settings.radarAlarmMode == null) device.updateSetting("radarAlarmMode", [value:TS0225alarmMode.defaultValue.toString(), type:"enum"])
         if (fullInit == true || settings.radarAlarmVolume == null) device.updateSetting("radarAlarmVolume", [value:TS0225alarmVolume.defaultValue.toString(), type:"enum"])
         if (fullInit == true || settings.radarAlarmTime == null) device.updateSetting("radarAlarmTime", [value:2, type:"number"])
@@ -2437,12 +2438,15 @@ void initializeVars( boolean fullInit = false ) {
         if (fullInit == true || settings.motionMinimumDistance == null) device.updateSetting("motionMinimumDistance", [value:0.0, type:"decimal"])
         if (fullInit == true || settings.motionDetectionDistance == null) device.updateSetting("motionDetectionDistance", [value:8.0, type:"decimal"])
         if (fullInit == true || settings.motionDetectionSensitivity == null) device.updateSetting("motionDetectionSensitivity", [value:7, type:"number"])
+        
         if (fullInit == true || settings.smallMotionDetectionDistance == null) device.updateSetting("smallMotionDetectionDistance", [value:5.0, type:"decimal"])
         if (fullInit == true || settings.smallMotionDetectionSensitivity == null) device.updateSetting("smallMotionDetectionSensitivity", [value:7, type:"number"])
-        if (fullInit == true || settings.smallMotionDetectionDistance == null) device.updateSetting("smallMotionDetectionDistance", [value:5.0, type:"decimal"])
+        if (fullInit == true || settings.smallMotionMinimumDistance == null) device.updateSetting("smallMotionMinimumDistance", [value:5.0, type:"decimal"])
+        
         if (fullInit == true || settings.staticDetectionDistance == null) device.updateSetting("staticDetectionDistance", [value:5.0, type:"decimal"])
         if (fullInit == true || settings.staticDetectionSensitivity == null) device.updateSetting("staticDetectionSensitivity", [value:7, type:"number"])
-        
+        if (fullInit == true || settings.staticDetectionMinimumDistance == null) device.updateSetting("staticDetectionMinimumDistance", [value:5.0, type:"decimal"])
+                
         if (fullInit == true || settings.presenceKeepTime == null) device.updateSetting("presenceKeepTime", [value:30, type:"number"])
         if (fullInit == true || settings.ledIndicator == null) device.updateSetting("ledIndicator", false)
         if (fullInit == true || settings.motionFalseDetection == null) device.updateSetting("motionFalseDetection", true)
@@ -2800,10 +2804,11 @@ def setRadarFadingTime( val ) {
         logDebug "changing radar fading time to ${val} seconds (raw=${value})"                
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar())  ? "6E" : "66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
-    else if (isHL0SS9OAradar()) {
+    else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
+        logWarn "val=${val}"
         def value = val as int
         logDebug "changing radar Presence Keep Time to ${val} seconds (raw=${value})"                
-        return sendTuyaCommand( "0C", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
+        return sendTuyaCommand( isHL0SS9OAradar() ? "0C" : "66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
     else { logWarn "setRadarFadingTime: unsupported model!"; return null }
 }
@@ -2833,85 +2838,84 @@ def setRadarSensitivity( val ) {
 
 def setRadarLedIndicator( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("radaradarLedIndicator", "18", DP_TYPE_BOOL, value)
+    setRadarParameter("radaradarLedIndicator", isHL0SS9OAradar() ? "18" : "6B", DP_TYPE_BOOL, value)
 }
 
 def setRadarAlarmMode( val ) {
     def value = val as int
-    setRadarParameter("radarAlarmMode", "69", DP_TYPE_ENUM, value)
+    setRadarParameter("radarAlarmMode", isHL0SS9OAradar() ? "69" : "75", DP_TYPE_ENUM, value)
 }
 
 def setRadarAlarmVolume( val ) {
     def value = val as int
-    setRadarParameter("radarAlarmVolume", "66", DP_TYPE_ENUM, value)
+    setRadarParameter("radarAlarmVolume", isHL0SS9OAradar() ? "66" : "74", DP_TYPE_ENUM, value)
 }
 
 def setRadarAlarmTime( val ) {
     def value = val as int
-    setRadarParameter("setRadarAlarmTime", "65", DP_TYPE_VALUE, value)
+    setRadarParameter("setRadarAlarmTime", isHL0SS9OAradar() ? "65" : "73", DP_TYPE_VALUE, value)
 }
-
 
 def setMotionFalseDetection( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("motionFalseDetection", "70", DP_TYPE_BOOL, value)
+    setRadarParameter("motionFalseDetection", isHL0SS9OAradar() ? "70" : "67", DP_TYPE_BOOL, value)
 }
 
 def setBreatheFalseDetection( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("breatheFalseDetection", "73", DP_TYPE_BOOL, value)
+    setRadarParameter("breatheFalseDetection", isHL0SS9OAradar() ? "73" : "71", DP_TYPE_BOOL, value)
 }
 
 def setMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("motionDetectionDistance", "0D", DP_TYPE_VALUE, value)
+    setRadarParameter("motionDetectionDistance", isHL0SS9OAradar() ? "0D" : "04", DP_TYPE_VALUE, value)
 }
 
 def setMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("motionMinimumDistance", "6A", DP_TYPE_VALUE, value)
+    setRadarParameter("motionMinimumDistance", isHL0SS9OAradar() ? "6A" : "03", DP_TYPE_VALUE, value)
 }
 
 def setMotionDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("motionDetectionSensitivity", "0F", DP_TYPE_ENUM, value)
+    setRadarParameter("motionDetectionSensitivity", isHL0SS9OAradar() ? "0F" : "02", DP_TYPE_ENUM, value)
 }
 
 def setSmallMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("smallMotionDetectionDistance", "0E", DP_TYPE_VALUE, value)
+    setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "0E" : "68", DP_TYPE_VALUE, value)
 }
 
 def setSmallMotionDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("smallMotionDetectionSensitivity", "10", DP_TYPE_ENUM, value)
+    setRadarParameter("smallMotionDetectionSensitivity", isHL0SS9OAradar() ? "10" : "69" , DP_TYPE_ENUM, value)
 }
 
 def setSmallMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("smallMotionDetectionDistance", "6B", DP_TYPE_VALUE, value)
+    setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "6B" : "6E", DP_TYPE_VALUE, value)
 }
 
 def setStaticDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("staticDetectionDistance", "67", DP_TYPE_VALUE, value)
+    setRadarParameter("staticDetectionDistance", isHL0SS9OAradar() ? "67" : "6C", DP_TYPE_VALUE, value)
 }
 
 def setStaticDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("staticDetectionSensitivity", "68", DP_TYPE_ENUM, value)
+    setRadarParameter("staticDetectionSensitivity", isHL0SS9OAradar() ? "68" : "6D", DP_TYPE_ENUM, value)
 }
 
 def setStaticDetectionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("smallMotionDetectionDistance", "6C", DP_TYPE_VALUE, value)
+    setRadarParameter("staticDetectionMinimumDistance", isHL0SS9OAradar() ? "6C" : "6F", DP_TYPE_VALUE, value)
 }
 
 
 
 def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
     ArrayList<String> cmds = []
-    if (!isHL0SS9OAradar()) {
+    if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {
         logWarn "${parName}: unsupported model ${state.deviceProfile} !"
         return null 
     }
@@ -2928,7 +2932,7 @@ def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
             return null
     }
     cmds = sendTuyaCommand( DPcommand, DPType, value)
-    logDebug "sending radar parameter ${parName} raw=${value}"                
+    logDebug "sending radar parameter ${parName} value ${DPval} (raw=${value}) Tuya dp=${DPcommand} (${zigbee.convertHexToInt(DPcommand)})"                
     return cmds
 }
 
@@ -3184,6 +3188,7 @@ def testParse(description) {
 
 def test( val ) {
     //zigbee.command(0xEF00, 0x03)
-  illuminanceEvent( safeToInt(val))
+  //illuminanceEvent( safeToInt(val))
+    log.warn "is2AAELWXKradar()=${is2AAELWXKradar()}"
 }
 
