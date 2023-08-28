@@ -24,17 +24,15 @@
  * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-23 kkossev  - (dev. branch) VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
+ * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
+ * ver. 2.1.3  2023-08-28 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  *
+ *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
  *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
- *                                   TODO: add timeout for auto-clearing of the Info event and rtt event after 1 minute
- *                                   TODO: add pingSuccess and pingFailure in health stats
- *                                   TODO: add clearStatistics toggle in Preferences
  *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
- *                                   TODO: calculate and store the average ping RTT
- *                                   TODO: Fingerbot: add Momentary capability
+ *                                   TODO: add rejonCtr to statistics
  *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
@@ -44,8 +42,8 @@
  *                                   TODO: Configure: add custom Notes
  */
 
-static String version() { "2.1.2" }
-static String timeStamp() {"2023/07/23 9:24 AM"}
+static String version() { "2.1.3" }
+static String timeStamp() {"2023/08/28 11:16 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -105,6 +103,9 @@ deviceType = "Fingerbot"
 //deviceType = "IRBlaster"
 //@Field static final String DEVICE_TYPE = "IRBlaster"
 //#include kkossev.irBlasterLib
+//deviceType = "Radar"
+//@Field static final String DEVICE_TYPE = "Radar"
+//#include kkossev.tuyaRadarLib
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -124,18 +125,20 @@ metadata {
         //name: 'Tuya Zigbee Plug V2',
         //name: 'Aqara Cube T1 Pro',
         //name: 'Tuya Zigbee IR Blaster',
+        //name: 'Tuya mmWave Radar',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Device%20Driver/VINDSTYRKA%20Air%20Quality%20Monitor.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara%20TVOC%20Air%20Quality%20Monitor.groovy',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya%20Zigbee%20Fingerbot.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara_TVOC_Air_Quality_Monitor_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Plug/Tuya%20Zigbee%20Plug%20V2.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya%20Zigbee%20Switch.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20TS004F/Tuya%20Zigbee%20Button%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_IR_Blaster/Tuya_Zigbee_IR_Blaster_lib_included.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_mmWave_Radar.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
@@ -174,8 +177,11 @@ metadata {
                 [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
             ]
         }        
-        if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat", "AqaraCube"]) {
+        if (deviceType in  ["Device", "THSensor", "MotionSensor", "LightSensor", "AirQuality", "Thermostat", "AqaraCube", "Radar"]) {
             capability "Sensor"
+        }
+        if (deviceType in  ["Device", "MotionSensor", "Radar"]) {
+            capability "MotionSensor"
         }
         if (deviceType in  ["Device", "Switch", "Relay", "Plug", "Outlet", "Thermostat", "Fingerbot", "Dimmer", "Bulb", "IRBlaster"]) {
             capability "Actuator"
@@ -199,11 +205,19 @@ metadata {
         if (deviceType in ["Dimmer", "ButtonDimmer"]) {
             capability "SwitchLevel"
         }
+        /*
+        if (deviceType in  ["Fingerbot"]) {
+            capability "PushableButton"
+        }
+        */
         if (deviceType in  ["Button", "ButtonDimmer", "AqaraCube"]) {
             capability "PushableButton"
             capability "DoubleTapableButton"
             capability "HoldableButton"
    	        capability "ReleasableButton"
+        }
+        if (deviceType in  ["Device", "Fingerbot"]) {
+            capability "Momentary"
         }
         if (deviceType in ["ButtonDimmer"]) {
             attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
@@ -215,18 +229,11 @@ metadata {
         if (deviceType in  ["Device", "THSensor", "AirQuality"]) {
             capability "RelativeHumidityMeasurement"            
         }
-        if (deviceType in  ["Device", "LightSensor"]) {
+        if (deviceType in  ["Device", "LightSensor", "Radar"]) {
             capability "IlluminanceMeasurement"
         }
         if (deviceType in  ["AirQuality"]) {
             capability "AirQuality"            // Attributes: airQualityIndex - NUMBER, range:0..500
-            // airQuality attribites moved to airQualityLib
-        }
-        if (deviceType in  ["Fingerbot"]) {
-            // Fingerbot attributes moved to tuyaFingerbotLib
-        }
-        if (deviceType in  ["AqaraCube"]) {
-            // defined in aqaraCubeT1ProLib //attribute "mode", "enum", AqaraCubeModeOpts.options.values() as List<String>
         }
 
         // trap for Hubitat F2 bug
@@ -251,13 +258,8 @@ metadata {
     }
 
     preferences {
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
-             '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: \
-             '<i>Turns on debug logging for 24 hours.</i>'
-        if (deviceType in  ["Fingerbot"]) {
-            // Fingerbot settings moved 
-        }
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("TemperatureMeasurement") || device.hasCapability("RelativeHumidityMeasurement") || device.hasCapability("IlluminanceMeasurement")) {
                 input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
@@ -304,6 +306,7 @@ metadata {
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
+@Field static final Integer INFO_AUTO_CLEAR_PERIOD = 30      // automatically clear the Info attribute after 30 seconds
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
     defaultValue: 1,
@@ -329,13 +332,6 @@ metadata {
     defaultValue: 0,
     options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
-/*
-@Field static final Map ConfigureOpts = [
-    defaultValue: 0,
-    options     : [0: 'LOAD ALL DEFAULTS', 1: 'Configure the device only', 2: 'Delete All Preferences', 3: 'Delete All Current States', 4:'Delete All Scheduled Jobs',\
-                   5:'Delete All State Variables',  6:'Delete All Child Devices']
-]
-*/
 @Field static final Map SwitchModeOpts = [
     defaultValue: 1,
     options     : [0: 'dimmer', 1: 'scene']
@@ -360,10 +356,29 @@ void parse(final String description) {
     if (state.stats != null) state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 else state.stats=[:]
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
+    
+    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
+        logDebug "parse: zone status: $description"
+        if (true /*isHL0SS9OAradar() && _IGNORE_ZCL_REPORTS == true*/) {    // TODO!
+            logDebug "ignored IAS zone status"
+            return
+        }
+        else {
+            parseIasMessage(description)    // TODO!
+        }
+    }
+    else if (description?.startsWith('enroll request')) {
+        logDebug "parse: enroll request: $description"
+        /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
+        if (settings?.logEnable) logInfo "Sending IAS enroll response..."
+        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        logDebug "enroll response: ${cmds}"
+        sendZigbeeCommands( cmds )  
+    } 
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return
     }        
-    final Map descMap = zigbee.parseDescriptionAsMap(description)
+    final Map descMap = myParseDescriptionAsMap(description)
     
     if (descMap.profileId == '0000') {
         parseZdoClusters(descMap)
@@ -432,6 +447,10 @@ void parse(final String description) {
             parseMeteringCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseMeteringCluster(descMap + map) }
             break
+        case 0xE002 :
+            parseE002Cluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseE002Cluster(descMap + map) }
+            break
         case 0xEF00 :                                       // Tuya famous cluster
             parseTuyaCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseTuyaCluster(descMap + map) }
@@ -445,7 +464,7 @@ void parse(final String description) {
             break
         default:
             if (settings.logEnable) {
-                logWarn "zigbee received unknown message cluster:${descMap.clusterInt as Integer} (${descMap})"
+                logWarn "zigbee received <b>unknown cluster:${descMap.cluster}</b> message (${descMap})"
             }
             break
     }
@@ -961,6 +980,15 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
     return results
 }
 
+@Field static final int ROLLING_AVERAGE_N = 10
+double approxRollingAverage (double avg, double new_sample) {
+    if (avg == null || avg == 0) { avg = new_sample}
+    avg -= avg / ROLLING_AVERAGE_N
+    avg += new_sample / ROLLING_AVERAGE_N
+    // TOSO: try Method II : New average = old average * (n-1)/n + new value /n
+    return avg
+}
+
 /*
  * -----------------------------------------------------------------------------
  * Standard clusters reporting handlers
@@ -974,14 +1002,30 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
  */
 void parseBasicCluster(final Map descMap) {
     def now = new Date().getTime()
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.states == null) { state.states = [:] }
+    if (state.stats == null) { state.stats = [:] }
     state.lastRx["checkInTime"] = now
     switch (descMap.attrInt as Integer) {
         case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism
-            logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
-            if (state.lastTx == null) state.lastTx = [:]
-            def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
-            if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                sendRttEvent()
+            boolean isPing = state.states["isPing"] ?: false
+            if (isPing) {
+                def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
+                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']),safeToDouble(timeRunning)) as int
+                    sendRttEvent()
+                }
+                else {
+                    logWarn "unexpected ping timeRunning=${timeRunning} "
+                }
+                state.states["isPing"] = false
+            }
+            else {
+                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
             }
             break
         case 0x0004:
@@ -1508,6 +1552,30 @@ def sendSwitchEvent( switchValue ) {
     '2': 'momentary'
 ]
 
+Map myParseDescriptionAsMap( String description )
+{
+    def descMap = [:]
+    try {
+        descMap = zigbee.parseDescriptionAsMap(description)
+    }
+    catch (e1) {
+        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}"
+        // try alternative custom parsing
+        descMap = [:]
+        try {
+            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry ->
+                def pair = entry.split(':')
+                [(pair.first().trim()): pair.last().trim()]
+            }        
+        }
+        catch (e2) {
+            logWarn "exception ${e2} caught while parsing using an alternative method <b>myParseDescriptionAsMap</b> description:  ${description}"
+            return [:]
+        }
+        logDebug "alternative method parsing success: descMap=${descMap}"
+    }
+    return descMap
+}
 
 boolean isTuyaE00xCluster( String description )
 {
@@ -1556,14 +1624,26 @@ boolean otherTuyaOddities( String description ) {
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
     }
-    catch ( e ) {
-        if (logEnable) log.warn "${device.displayName} exception caught while parsing <b>otherTuyaOddities</b> descMap:  ${descMap}"
-        return true
+    catch (e1) {
+        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>otherTuyaOddities</b> description:  ${description}"
+        // try alternative custom parsing
+        descMap = [:]
+        try {
+            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry ->
+                def pair = entry.split(':')
+                [(pair.first().trim()): pair.last().trim()]
+            }        
+        }
+        catch (e2) {
+            logWarn "exception ${e2} caught while parsing using an alternative method <b>otherTuyaOddities</b> description:  ${description}"
+            return true
+        }
+        logDebug "alternative method parsing success: descMap=${descMap}"
     }
     //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}        
     if (descMap.attrId == null ) {
-        logDebug "otherTuyaOddities: descMap = ${descMap}"
-        if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping"
+        //logDebug "otherTuyaOddities: descMap = ${descMap}"
+        //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping"
         return false
     }
     boolean bWasAtLeastOneAttributeProcessed = false
@@ -1798,8 +1878,14 @@ def switchMode( mode ) {
     }
 }
 
+def push() {                // Momentary capability
+    logDebug "push momentary"
+    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(); return }    
+    logWarn "push() not implemented for ${(DEVICE_TYPE)}"
+}
 
-def push(buttonNumber) {
+def push(buttonNumber) {    //pushableButton capability
+    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(buttonNumber); return }    
     sendButtonEvent(buttonNumber, "pushed", isDigital=true)
 }
 
@@ -2155,6 +2241,43 @@ private void sendDelayedHumidityEvent(Map eventMap) {
 
 /*
  * -----------------------------------------------------------------------------
+ * Electrical Measurement Cluster 0x0702
+ * -----------------------------------------------------------------------------
+*/
+
+void parseElectricalMeasureCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseElectricalMeasureClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseElectricalMeasureCluster is NOT implemented1"
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Metering Cluster 0x0B04
+ * -----------------------------------------------------------------------------
+*/
+
+void parseMeteringCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    if (DEVICE_TYPE in  ["Switch"]) {
+        parseMeteringClusterSwitch(descMap)
+    }
+    else {
+        logWarn "parseMeteringCluster is NOT implemented1"
+    }
+}
+
+
+/*
+ * -----------------------------------------------------------------------------
  * pm2.5
  * -----------------------------------------------------------------------------
 */
@@ -2351,6 +2474,13 @@ private void sendHeatingSetpointEvent(Map eventMap) {
 
 // -------------------------------------------------------------------------------------------------------------------------
 
+def parseE002Cluster( descMap ) {
+    if (DEVICE_TYPE in ["Radar"])     { parseE002ClusterRadar(descMap) }    
+    else {
+        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
+    }
+}
+
 
 /*
  * -----------------------------------------------------------------------------
@@ -2425,7 +2555,9 @@ void parseTuyaCluster(final Map descMap) {
     }
 }
 
-void processTuyaDP( descMap, dp, dp_id, fncmd) {
+void processTuyaDP(descMap, dp, dp_id, fncmd) {
+    if (DEVICE_TYPE in ["Radar"])         { processTuyaDpRadar(descMap, dp, dp_id, fncmd); return }    
+    if (DEVICE_TYPE in ["Fingerbot"])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }    
     switch (dp) {
         case 0x01 : // on/off
             if (DEVICE_TYPE in  ["LightSensor"]) {
@@ -2435,21 +2567,6 @@ void processTuyaDP( descMap, dp, dp_id, fncmd) {
                 sendSwitchEvent(fncmd)
             }
             break
-/*
-Switch1 		    1
-Mode			    101
-Degree of declining	code: 102
-Duration 		    103
-Switch Reverse		104
-Battery Power		105
-Increase		    106
-Tact Switch 		107
-Click 			    108
-Custom Program		109
-Producion Test		110
-Sports Statistics	111
-Custom Timing		112
-*/
         case 0x02 :
             if (DEVICE_TYPE in  ["LightSensor"]) {
                 handleIlluminanceEvent(fncmd)
@@ -2461,96 +2578,11 @@ Custom Timing		112
         case 0x04 : // battery
             sendBatteryPercentageEvent(fncmd)
             break
-        
-        case 0x65 : // (101)
-            if (isFingerbot()) {
-                def value = FingerbotModeOpts.options[fncmd as int]
-                def descriptionText = "Fingerbot mode is ${value} (${fncmd})"
-                sendEvent(name: "fingerbotMode", value: value, descriptionText: descriptionText)
-                logInfo "${descriptionText}"
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x66 : // (102)
-            if (isFingerbot()) {
-                def value = fncmd as int
-                def descriptionText = "Fingerbot Down Position is ${value} %"
-                sendEvent(name: "dnPosition", value: value, descriptionText: descriptionText)
-                logInfo "${descriptionText}"
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x67 : // (103)
-            if (isFingerbot()) {
-                def value = fncmd as int
-                def descriptionText = "Fingerbot push time (duration) is ${value} seconds"
-                sendEvent(name: "pushTime", value: value, descriptionText: descriptionText)
-                logInfo "${descriptionText}"
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x68 : // (104)
-            if (isFingerbot()) {
-                def value = FingerbotDirectionOpts.options[fncmd as int]
-                def descriptionText = "Fingerbot switch direction is ${value} (${fncmd})"
-                sendEvent(name: "direction", value: value, descriptionText: descriptionText)
-                logInfo "${descriptionText}"
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x69 : // (105)
-            if (isFingerbot()) {
-                //logInfo "Fingerbot Battery Power is ${fncmd}"
-                sendBatteryPercentageEvent(fncmd) 
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x6A : // (106)
-            if (isFingerbot()) {
-                def value = fncmd as int
-                def descriptionText = "Fingerbot Up Position is ${value} %"
-                sendEvent(name: "upPosition", value: value, descriptionText: descriptionText)
-                logInfo "${descriptionText}"
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            }
-            break
-        case 0x6B : // (107)
-            logInfo "Fingerbot Tact Switch is ${fncmd}"
-            break
-        case 0x6C : // (108)
-            logInfo "Fingerbot Click is ${fncmd}"
-            break
-        case 0x6D : // (109)
-            logInfo "Fingerbot Custom Program is ${fncmd}"
-            break
-        case 0x6E : // (110)
-            logInfo "Fingerbot Producion Test is ${fncmd}"
-            break
-        case 0x6F : // (111)
-            logInfo "Fingerbot Sports Statistics is ${fncmd}"
-            break
-        case 0x70 : // (112)
-            logInfo "Fingerbot Custom Timing is ${fncmd}"
-            break
         default :
             logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
             break            
     }
 }
-
-
 
 private int getTuyaAttributeValue(ArrayList _data, index) {
     int retValue = 0
@@ -2630,8 +2662,9 @@ def initializeDevice() {
     logInfo 'initializeDevice...'
     
     // start with the device-specific initialization first.
-    if (DEVICE_TYPE in  ["AirQuality"]) { return initializeDeviceAirQuality() }
-    if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
+    if (DEVICE_TYPE in  ["AirQuality"])      { return initializeDeviceAirQuality() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
+    else if (DEVICE_TYPE in  ["Radar"])      { return initializeDeviceRadar() }
   
  
     // not specific device type - do some generic initializations
@@ -2657,10 +2690,11 @@ def configureDevice() {
     logInfo 'configureDevice...'
 
     if (DEVICE_TYPE in  ["AirQuality"]) { cmds += configureDeviceAirQuality() }
-    if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() }
-    if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() }
-    if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() }
-    if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureIrBlaster() }
+    else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() }
+    else if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() }
+    else if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureDeviceIrBlaster() }
+    else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() }
         
     if (cmds == []) {
         cmds = ["delay 299",]
@@ -2675,7 +2709,7 @@ def configureDevice() {
 */
 
 def refresh() {
-    logInfo "refresh()..."
+    logInfo "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
     checkDriverVersion()
     List<String> cmds = []
     if (state.states == null) state.states = [:]
@@ -2687,6 +2721,7 @@ def refresh() {
     else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() }
     else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() }
+    else if (DEVICE_TYPE in  ["Radar"])      { cmds += refreshRadar() }
     else {
         // generic refresh handling, based on teh device capabilities 
         if (device.hasCapability("Battery")) {
@@ -2734,26 +2769,33 @@ def refresh() {
     }
 }
 
-def clearRefreshRequest() { state.states["isRefresh"] = false }
+def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false }
+
+void clearInfoEvent() {
+    sendInfoEvent('clear')
+}
 
 void sendInfoEvent(String info=null) {
-    if (info == null) {
+    if (info == null || info == "clear") {
         logDebug "clearing the Info event"
-        device.deleteCurrentState("$it")
+        sendEvent(name: "Info", value: " ", isDigital: true)
     }
     else {
         logInfo "${info}"
-        sendEvent(name: "Info", value: info, isDigital: true)    
+        sendEvent(name: "Info", value: info, isDigital: true)
+        runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute
     }
 }
 
 def ping() {
     if (!(isAqaraTVOC())) {
-        logInfo 'ping...'
-        scheduleCommandTimeoutCheck()
         if (state.lastTx == nill ) state.lastTx = [:] 
         state.lastTx["pingTime"] = new Date().getTime()
+        if (state.states == nill ) state.states = [:] 
+        state.states["isPing"] = true
+        scheduleCommandTimeoutCheck()
         sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+        logDebug 'ping...'
     }
     else {
         // Aqara TVOC is sleepy or does not respond to the ping.
@@ -2772,7 +2814,7 @@ void sendRttEvent( String value=null) {
     def now = new Date().getTime()
     if (state.lastTx == null ) state.lastTx = [:]
     def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger()
-    def descriptionText = "Round-trip time is ${timeRunning} ms"
+    def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats["pingsMin"]} max=${state.stats["pingsMax"]} average=${state.stats["pingsAvg"]})"
     if (value == null) {
         logInfo "${descriptionText}"
         sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
@@ -2806,6 +2848,7 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent("timeout")
+    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
 }
 
 /**
@@ -2935,6 +2978,7 @@ void logsOff() {
 
 @Field static final Map ConfigureOpts = [
     "Configure the device only"  : [key:2, function: 'configure'],
+    "Reset Statistics"           : [key:9, function: 'resetStatistics'],
     "           --            "  : [key:3, function: 'configureHelp'],
     "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
     "Delete All Current States"  : [key:5, function: 'deleteAllCurrentStates'],
@@ -2969,7 +3013,7 @@ def configure(command) {
 }
 
 def configureHelp( val ) {
-    logWarn "configureHelp: select one of the commands in this list!"             
+    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
 }
 
 def loadAllDefaults() {
@@ -3021,6 +3065,8 @@ void installed() {
 void initialize() {
     logInfo 'initialize...'
     initializeVars(fullInit = true)
+    updateTuyaVersion()
+    updateAqaraVersion()
 }
 
 
@@ -3043,13 +3089,13 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
             allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.stats != null) state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 else state.stats=[:]
+            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] }
     }
-    if (state.lastTx != null) state.lastTx['cmdTime'] = now() else state.lastTx=[:]
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] }
     sendHubCommand(allActions)
 }
 
-static def driverVersionAndTimeStamp() {version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!)" : " ")}
+def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!) " : " ") + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString}) "}
 
 def getDeviceInfo() {
     return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>"
@@ -3065,12 +3111,37 @@ def checkDriverVersion() {
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(fullInit = false)
+        updateTuyaVersion()
+        updateAqaraVersion()
     }
     else {
         // no driver version change
     }
 }
 
+// credits @thebearmay
+String getModel(){
+    try{
+        String model = getHubVersion() // requires >=2.2.8.141
+    } catch (ignore){
+        try{
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
+                model = res.data.device.modelName
+            return model
+            }        
+        } catch(ignore_again) {
+            return ""
+        }
+    }
+}
+
+// credits @thebearmay
+boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 )
+    String model = getModel()            // <modelName>Rev C-7</modelName>
+    String[] tokens = model.split('-')
+    String revision = tokens.last()
+    return (Integer.parseInt(revision) >= minLevel)
+}
 
 /**
  * called from TODO
@@ -3087,11 +3158,17 @@ def deleteAllStatesAndJobs() {
 }
 
 
+def resetStatistics() {
+    runIn(1, "resetStats")
+    sendInfoEvent("Statistics are reset. Refresh the web page")
+}
+
 /**
  * called from TODO
  * 
  */
 def resetStats() {
+    logDebug "resetStats..."
     state.stats = [:]
     state.states = [:]
     state.lastRx = [:]
@@ -3152,13 +3229,12 @@ void initializeVars( boolean fullInit = false ) {
     }
     // device specific initialization should be at the end
     if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) }
-    if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit) }
+    if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) }
     if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit); initEventsSwitch(fullInit) }            // none
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit);    initEventsSwitch(fullInit) }         // none
     if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
+    if (DEVICE_TYPE in ["Radar"])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none
 
-    //updateTuyaVersion()
-    
     def mm = device.getDataValue("model")
     if ( mm != null) {
         logDebug " model = ${mm}"
@@ -3213,6 +3289,7 @@ def logWarn(msg) {
     }
 }
 
+// _DEBUG mode only
 void getAllProperties() {
     log.trace 'Properties:'    
     device.properties.each { it->
@@ -3228,8 +3305,7 @@ void getAllProperties() {
 // delete all Preferences
 void deleteAllSettings() {
     settings.each { it->
-        log.debug "deleting ${it.key}"
-        //this.removeSetting("${it.key}")
+        logDebug "deleting ${it.key}"
         device.removeSetting("${it.key}")
     }
     logInfo  "All settings (preferences) DELETED"
@@ -3238,7 +3314,7 @@ void deleteAllSettings() {
 // delete all attributes
 void deleteAllCurrentStates() {
     device.properties.supportedAttributes.each { it->
-        log.debug "deleting $it"
+        logDebug "deleting $it"
         device.deleteCurrentState("$it")
     }
     logInfo "All current states (attributes) DELETED"
@@ -3247,7 +3323,7 @@ void deleteAllCurrentStates() {
 // delete all State Variables
 void deleteAllStates() {
     state.each { it->
-        log.debug "deleting state ${it.key}"
+        logDebug "deleting state ${it.key}"
     }
     state.clear()
     logInfo "All States DELETED"
@@ -3259,7 +3335,7 @@ void deleteAllScheduledJobs() {
 }
 
 void deleteAllChildDevices() {
-    logWarn "deleteAllChildDevices : not implemented!"
+    logDebug "deleteAllChildDevices : not implemented!"
 }
 
 def parseTest(par) {
@@ -3298,6 +3374,65 @@ def getCron( timeInSeconds ) {
     return cron
 }
 
+boolean isTuya() {
+    def model = device.getDataValue("model") 
+    def manufacturer = device.getDataValue("manufacturer") 
+    if (model.startsWith("TS") && manufacturer.startsWith("_TZ")) {
+        return true
+    }
+    return false
+}
+
+void updateTuyaVersion() {
+    if (!isTuya()) {
+        logDebug "not Tuya"
+        return
+    }
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        Integer ver
+        try {
+            ver = zigbee.convertHexToInt(application)
+        }
+        catch (e) {
+            logWarn "exception caught while converting application version ${application} to tuyaVersion"
+            return
+        }
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString()
+        if (device.getDataValue("tuyaVersion") != str) {
+            device.updateDataValue("tuyaVersion", str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+}
+
+boolean isAqara() {
+    def model = device.getDataValue("model") 
+    def manufacturer = device.getDataValue("manufacturer") 
+    if (model.startsWith("lumi")) {
+        return true
+    }
+    return false
+}
+
+def updateAqaraVersion() {
+    if (!isAqara()) {
+        logDebug "not Aqara"
+        return
+    }    
+    def application = device.getDataValue("application") 
+    if (application != null) {
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));
+        if (device.getDataValue("aqaraVersion") != str) {
+            device.updateDataValue("aqaraVersion", str)
+            logInfo "aqaraVersion set to $str"
+        }
+    }
+    else {
+        return null
+    }
+}
+
 def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
@@ -3334,80 +3469,204 @@ library ( // library marker kkossev.tuyaFingerbotLib, line 1
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.tuyaFingerbotLib, line 21
  *  for the specific language governing permissions and limitations under the License. // library marker kkossev.tuyaFingerbotLib, line 22
  * // library marker kkossev.tuyaFingerbotLib, line 23
- * ver. 1.0.0  2023-07-13 kkossev  - (dev. branch) - Libraries introduction for the Tuya Zigbee Fingerbot driver; // library marker kkossev.tuyaFingerbotLib, line 24
- * ver. 1.0.1  2023-07-23 kkossev  - (dev. branch) - added _TZ3210_dse8ogfy fingerprint // library marker kkossev.tuyaFingerbotLib, line 25
- * // library marker kkossev.tuyaFingerbotLib, line 26
- *                                   TODO:  // library marker kkossev.tuyaFingerbotLib, line 27
-*/ // library marker kkossev.tuyaFingerbotLib, line 28
+ * ver. 1.0.0  2023-07-13 kkossev  - Libraries introduction for the Tuya Zigbee Fingerbot driver; // library marker kkossev.tuyaFingerbotLib, line 24
+ * ver. 1.0.1  2023-07-23 kkossev  - added _TZ3210_dse8ogfy fingerprint // library marker kkossev.tuyaFingerbotLib, line 25
+ * ver. 1.0.2  2023-08-28 kkossev  - (dev. branch) processTuyaDpFingerbot; added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;  // library marker kkossev.tuyaFingerbotLib, line 26
+ * // library marker kkossev.tuyaFingerbotLib, line 27
+ *                                   TODO: Update preferences values w/ the received parameters when the battery is re-inserted. // library marker kkossev.tuyaFingerbotLib, line 28
+*/ // library marker kkossev.tuyaFingerbotLib, line 29
 
 
-def tuyaFingerbotLibVersion()   {"1.0.1"} // library marker kkossev.tuyaFingerbotLib, line 31
-def tuyaFingerbotLibStamp() {"2023/07/23 11:11 AM"} // library marker kkossev.tuyaFingerbotLib, line 32
+def tuyaFingerbotLibVersion()   {"1.0.2"} // library marker kkossev.tuyaFingerbotLib, line 32
+def tuyaFingerbotLibStamp() {"2023/08/28 11:16 PM"} // library marker kkossev.tuyaFingerbotLib, line 33
 
-metadata { // library marker kkossev.tuyaFingerbotLib, line 34
-    attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 35
-    attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 36
-    attribute "pushTime", "number" // library marker kkossev.tuyaFingerbotLib, line 37
-    attribute "dnPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 38
-    attribute "upPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 39
+metadata { // library marker kkossev.tuyaFingerbotLib, line 35
+    attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 36
+    attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 37
+    attribute "pushTime", "number" // library marker kkossev.tuyaFingerbotLib, line 38
+    attribute "dnPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 39
+    attribute "upPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 40
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot" // library marker kkossev.tuyaFingerbotLib, line 41
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot" // library marker kkossev.tuyaFingerbotLib, line 42
 
-    preferences { // library marker kkossev.tuyaFingerbotLib, line 43
-        input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>' // library marker kkossev.tuyaFingerbotLib, line 44
-        input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>' // library marker kkossev.tuyaFingerbotLib, line 45
-        input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 46
-        input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 47
-        input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100   // library marker kkossev.tuyaFingerbotLib, line 48
-    } // library marker kkossev.tuyaFingerbotLib, line 49
-} // library marker kkossev.tuyaFingerbotLib, line 50
+    preferences { // library marker kkossev.tuyaFingerbotLib, line 44
+        input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>' // library marker kkossev.tuyaFingerbotLib, line 45
+        input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>' // library marker kkossev.tuyaFingerbotLib, line 46
+        input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 47
+        input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 48
+        input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100   // library marker kkossev.tuyaFingerbotLib, line 49
+        input name: 'fingerbotButton', type: 'enum', title: '<b>Fingerbot Button</b>', options: FingerbotButtonOpts.options, defaultValue: FingerbotButtonOpts.defaultValue, required: true, description: '<i>Disable or enable the Fingerbot touch button</i>' // library marker kkossev.tuyaFingerbotLib, line 50
+    } // library marker kkossev.tuyaFingerbotLib, line 51
+} // library marker kkossev.tuyaFingerbotLib, line 52
 
-@Field static final Map FingerbotModeOpts = [ // library marker kkossev.tuyaFingerbotLib, line 52
-    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 53
-    options     : [0: 'push', 1: 'switch'] // library marker kkossev.tuyaFingerbotLib, line 54
-] // library marker kkossev.tuyaFingerbotLib, line 55
-@Field static final Map FingerbotDirectionOpts = [ // library marker kkossev.tuyaFingerbotLib, line 56
-    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 57
-    options     : [0: 'normal', 1: 'reverse'] // library marker kkossev.tuyaFingerbotLib, line 58
-]          // library marker kkossev.tuyaFingerbotLib, line 59
+@Field static final Map FingerbotModeOpts = [ // library marker kkossev.tuyaFingerbotLib, line 54
+    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 55
+    options     : [0: 'push', 1: 'switch'] // library marker kkossev.tuyaFingerbotLib, line 56
+] // library marker kkossev.tuyaFingerbotLib, line 57
+@Field static final Map FingerbotDirectionOpts = [ // library marker kkossev.tuyaFingerbotLib, line 58
+    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 59
+    options     : [0: 'normal', 1: 'reverse'] // library marker kkossev.tuyaFingerbotLib, line 60
+]          // library marker kkossev.tuyaFingerbotLib, line 61
+@Field static final Map FingerbotButtonOpts = [ // library marker kkossev.tuyaFingerbotLib, line 62
+    defaultValue: 1, // library marker kkossev.tuyaFingerbotLib, line 63
+    options     : [0: 'disabled', 1: 'enabled'] // library marker kkossev.tuyaFingerbotLib, line 64
+] // library marker kkossev.tuyaFingerbotLib, line 65
 
-def configureDeviceFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 61
-    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 62
+def pushFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 67
+    logDebug "pushFingerbot: on" // library marker kkossev.tuyaFingerbotLib, line 68
+    on() // library marker kkossev.tuyaFingerbotLib, line 69
+} // library marker kkossev.tuyaFingerbotLib, line 70
 
-    final int mode = (settings.fingerbotMode as Integer) ?: FingerbotModeOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 64
-    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode]} (${mode})" // library marker kkossev.tuyaFingerbotLib, line 65
-    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 66
-    final int duration = (settings.pushTime as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 67
-    logDebug "setting pushTime to ${duration} seconds)" // library marker kkossev.tuyaFingerbotLib, line 68
-    cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 69
-    final int dnPos = (settings.dnPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 70
-    logDebug "setting dnPosition to ${dnPos} %)" // library marker kkossev.tuyaFingerbotLib, line 71
-    cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 72
-    final int upPos = (settings.upPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 73
-    logDebug "setting upPosition to ${upPos} %)" // library marker kkossev.tuyaFingerbotLib, line 74
-    cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 75
-    final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 76
-    logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})" // library marker kkossev.tuyaFingerbotLib, line 77
-    cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 78
+def pushFingerbot(buttonNumber) {    //pushableButton capability // library marker kkossev.tuyaFingerbotLib, line 72
+    pushFingerbot() // library marker kkossev.tuyaFingerbotLib, line 73
+} // library marker kkossev.tuyaFingerbotLib, line 74
 
-    logDebug "configureDeviceFingerbot() : ${cmds}" // library marker kkossev.tuyaFingerbotLib, line 80
-    return cmds     // library marker kkossev.tuyaFingerbotLib, line 81
-} // library marker kkossev.tuyaFingerbotLib, line 82
 
-def initVarsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 84
-    logDebug "initVarsFingerbot(${fullInit})" // library marker kkossev.tuyaFingerbotLib, line 85
-    if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 86
-    if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 87
-    if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 88
-    if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 89
-} // library marker kkossev.tuyaFingerbotLib, line 90
+def configureDeviceFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 77
+    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 78
 
-def refreshFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 92
-    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 93
-    // TODO // library marker kkossev.tuyaFingerbotLib, line 94
-    logDebug "refreshFingerbot() : ${cmds}" // library marker kkossev.tuyaFingerbotLib, line 95
-    return cmds // library marker kkossev.tuyaFingerbotLib, line 96
-} // library marker kkossev.tuyaFingerbotLib, line 97
+    def mode = settings.fingerbotMode != null ? settings.fingerbotMode : FingerbotModeOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 80
+    //logWarn "mode=${mode}  settings=${(settings.fingerbotMode)}" // library marker kkossev.tuyaFingerbotLib, line 81
+    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})" // library marker kkossev.tuyaFingerbotLib, line 82
+    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 83
+
+    final int duration = (settings.pushTime as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 85
+    logDebug "setting pushTime to ${duration} seconds)" // library marker kkossev.tuyaFingerbotLib, line 86
+    cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 87
+
+    final int dnPos = (settings.dnPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 89
+    logDebug "setting dnPosition to ${dnPos} %" // library marker kkossev.tuyaFingerbotLib, line 90
+    cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 91
+    final int upPos = (settings.upPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 92
+    logDebug "setting upPosition to ${upPos} %" // library marker kkossev.tuyaFingerbotLib, line 93
+    cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 94
+
+    final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 96
+    logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})" // library marker kkossev.tuyaFingerbotLib, line 97
+    cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 98
+    /* // library marker kkossev.tuyaFingerbotLib, line 99
+    */ // library marker kkossev.tuyaFingerbotLib, line 100
+    def button = settings.fingerbotButton != null ? settings.fingerbotButton : FingerbotButtonOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 101
+    //logWarn "button=${button}  settings=${(settings.fingerbotButton)}" // library marker kkossev.tuyaFingerbotLib, line 102
+    logDebug "setting fingerbotButton to ${FingerbotButtonOpts.options[button as int]} (${button})" // library marker kkossev.tuyaFingerbotLib, line 103
+    cmds += sendTuyaCommand("6B", DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 104
+
+    logDebug "configureDeviceFingerbot() : ${cmds}" // library marker kkossev.tuyaFingerbotLib, line 106
+    return cmds     // library marker kkossev.tuyaFingerbotLib, line 107
+} // library marker kkossev.tuyaFingerbotLib, line 108
+
+def initVarsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 110
+    logDebug "initVarsFingerbot(${fullInit})" // library marker kkossev.tuyaFingerbotLib, line 111
+    if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 112
+    if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 113
+    if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 114
+    if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 115
+    if (fullInit || settings?.direction == null) device.updateSetting('direction', [value: FingerbotDirectionOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 116
+    if (fullInit || settings?.fingerbotButton == null) device.updateSetting('fingerbotButton', [value: FingerbotButtonOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 117
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true) // library marker kkossev.tuyaFingerbotLib, line 118
+
+} // library marker kkossev.tuyaFingerbotLib, line 120
+
+void initEventsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 122
+/*  not needed? // library marker kkossev.tuyaFingerbotLib, line 123
+    sendNumberOfButtonsEvent(1) // library marker kkossev.tuyaFingerbotLib, line 124
+    sendSupportedButtonValuesEvent("pushed") // library marker kkossev.tuyaFingerbotLib, line 125
+*/ // library marker kkossev.tuyaFingerbotLib, line 126
+} // library marker kkossev.tuyaFingerbotLib, line 127
+
+/* // library marker kkossev.tuyaFingerbotLib, line 129
+Switch1 		    1 // library marker kkossev.tuyaFingerbotLib, line 130
+Mode			    101 // library marker kkossev.tuyaFingerbotLib, line 131
+Degree of declining	code: 102 // library marker kkossev.tuyaFingerbotLib, line 132
+Duration 		    103 // library marker kkossev.tuyaFingerbotLib, line 133
+Switch Reverse		104 // library marker kkossev.tuyaFingerbotLib, line 134
+Battery Power		105 // library marker kkossev.tuyaFingerbotLib, line 135
+Increase		    106 // library marker kkossev.tuyaFingerbotLib, line 136
+Tact Switch 		107 // library marker kkossev.tuyaFingerbotLib, line 137
+Click 			    108 // library marker kkossev.tuyaFingerbotLib, line 138
+Custom Program		109 // library marker kkossev.tuyaFingerbotLib, line 139
+Producion Test		110 // library marker kkossev.tuyaFingerbotLib, line 140
+Sports Statistics	111 // library marker kkossev.tuyaFingerbotLib, line 141
+Custom Timing		112 // library marker kkossev.tuyaFingerbotLib, line 142
+*/ // library marker kkossev.tuyaFingerbotLib, line 143
+
+void processTuyaDpFingerbot(descMap, dp, dp_id, fncmd) { // library marker kkossev.tuyaFingerbotLib, line 145
+
+    switch (dp) { // library marker kkossev.tuyaFingerbotLib, line 147
+        case 0x01 : // on/off // library marker kkossev.tuyaFingerbotLib, line 148
+            sendSwitchEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 149
+            break // library marker kkossev.tuyaFingerbotLib, line 150
+        case 0x02 : // library marker kkossev.tuyaFingerbotLib, line 151
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 152
+            break // library marker kkossev.tuyaFingerbotLib, line 153
+        case 0x04 : // battery // library marker kkossev.tuyaFingerbotLib, line 154
+            sendBatteryPercentageEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 155
+            break // library marker kkossev.tuyaFingerbotLib, line 156
+
+        case 0x65 : // (101) // library marker kkossev.tuyaFingerbotLib, line 158
+            def value = FingerbotModeOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 159
+            def descriptionText = "Fingerbot mode is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 160
+            sendEvent(name: "fingerbotMode", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 161
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 162
+            break // library marker kkossev.tuyaFingerbotLib, line 163
+        case 0x66 : // (102) // library marker kkossev.tuyaFingerbotLib, line 164
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 165
+            def descriptionText = "Fingerbot Down Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 166
+            sendEvent(name: "dnPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 167
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 168
+            break // library marker kkossev.tuyaFingerbotLib, line 169
+        case 0x67 : // (103) // library marker kkossev.tuyaFingerbotLib, line 170
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 171
+            def descriptionText = "Fingerbot push time (duration) is ${value} seconds" // library marker kkossev.tuyaFingerbotLib, line 172
+            sendEvent(name: "pushTime", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 173
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 174
+            break // library marker kkossev.tuyaFingerbotLib, line 175
+        case 0x68 : // (104) // library marker kkossev.tuyaFingerbotLib, line 176
+            def value = FingerbotDirectionOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 177
+            def descriptionText = "Fingerbot switch direction is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 178
+            sendEvent(name: "direction", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 179
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 180
+            break // library marker kkossev.tuyaFingerbotLib, line 181
+        case 0x69 : // (105) // library marker kkossev.tuyaFingerbotLib, line 182
+            //logInfo "Fingerbot Battery Power is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 183
+            sendBatteryPercentageEvent(fncmd)  // library marker kkossev.tuyaFingerbotLib, line 184
+            break // library marker kkossev.tuyaFingerbotLib, line 185
+        case 0x6A : // (106) // library marker kkossev.tuyaFingerbotLib, line 186
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 187
+            def descriptionText = "Fingerbot Up Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 188
+            sendEvent(name: "upPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 189
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 190
+            break // library marker kkossev.tuyaFingerbotLib, line 191
+        case 0x6B : // (107) // library marker kkossev.tuyaFingerbotLib, line 192
+            logInfo "Fingerbot Tact Switch is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 193
+            break // library marker kkossev.tuyaFingerbotLib, line 194
+        case 0x6C : // (108) // library marker kkossev.tuyaFingerbotLib, line 195
+            logInfo "Fingerbot Click is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 196
+            break // library marker kkossev.tuyaFingerbotLib, line 197
+        case 0x6D : // (109) // library marker kkossev.tuyaFingerbotLib, line 198
+            logInfo "Fingerbot Custom Program is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 199
+            break // library marker kkossev.tuyaFingerbotLib, line 200
+        case 0x6E : // (110) // library marker kkossev.tuyaFingerbotLib, line 201
+            logInfo "Fingerbot Producion Test is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 202
+            break // library marker kkossev.tuyaFingerbotLib, line 203
+        case 0x6F : // (111) // library marker kkossev.tuyaFingerbotLib, line 204
+            logInfo "Fingerbot Sports Statistics is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 205
+            break // library marker kkossev.tuyaFingerbotLib, line 206
+        case 0x70 : // (112) // library marker kkossev.tuyaFingerbotLib, line 207
+            logInfo "Fingerbot Custom Timing is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 208
+            break // library marker kkossev.tuyaFingerbotLib, line 209
+        default : // library marker kkossev.tuyaFingerbotLib, line 210
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 211
+            break             // library marker kkossev.tuyaFingerbotLib, line 212
+    } // library marker kkossev.tuyaFingerbotLib, line 213
+} // library marker kkossev.tuyaFingerbotLib, line 214
+
+
+def refreshFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 217
+    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 218
+    logDebug "refreshFingerbot() (n/a) : ${cmds} " // library marker kkossev.tuyaFingerbotLib, line 219
+    return cmds // library marker kkossev.tuyaFingerbotLib, line 220
+} // library marker kkossev.tuyaFingerbotLib, line 221
 
 
 
