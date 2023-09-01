@@ -26,7 +26,7 @@
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
- * ver. 2.1.4  2023-09-01 kkossev  - (dev. branch) buttonDimmerLib library; added IKEA Styrbar
+ * ver. 2.1.4  2023-09-01 kkossev  - (dev. branch) buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster;
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -43,7 +43,7 @@
  */
 
 static String version() { "2.1.4" }
-static String timeStamp() {"2023/09/01 9:36 PM"}
+static String timeStamp() {"2023/09/01 11:52 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -1438,6 +1438,20 @@ void parseOnOffCluster(final Map descMap) {
 def clearIsDigital()        { state.states["isDigital"] = false }
 def switchDebouncingClear() { state.states["debounce"]  = false }
 def isRefreshRequestClear() { state.states["isRefresh"] = false }
+
+def toggle() {
+    def descriptionText = "central button switch is "
+    def state = ""
+    if ((device.currentState('switch')?.value ?: 'n/a') == 'off' ) {
+        state = "on"
+    }
+    else {
+        state = "off"
+    }
+    descriptionText += state
+    sendEvent(name: "switch", value: state, descriptionText: descriptionText, type: "physical", isStateChange: true)
+    logInfo "${descriptionText}"
+}
 
 def off() {
     if ((settings?.alwaysOn ?: false) == true) {

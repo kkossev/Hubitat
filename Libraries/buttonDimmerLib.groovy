@@ -22,7 +22,7 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002;
- * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; 
+ * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; added "IKEA remote control E1810"  
  *
  *                                   TODO: add IKEA RODRET E2201  keys processing !
  *                                   TODO: verify Ikea reporting configuration (WireShark) 1
@@ -36,9 +36,10 @@ library (
 
 
 def buttonDimmerVersion()   {"1.0.1"}
-def buttonDimmerLibStamp() {"2023/09/01 9:36 PM"}
+def buttonDimmerLibStamp() {"2023/09/01 11:52 PM"}
 
 metadata {
+    capability "Switch"    // IKEA remote control E1810 - central button
     attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
     command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["--- select ---"] + SwitchModeOpts.options.values() as List<String>, description: "Select dimmer or switch mode"]]
         
@@ -50,6 +51,7 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"                                                            // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI on/off switch",   manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA on/off switch E1743"  
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0004,0005,0006,0008,0019,1000", model:"TRADFRI remote control",  manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA remote control E1810"  
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters: "0003,0006,0008,0019,1000",          model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"                   // (stainless)
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000",     model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
@@ -73,6 +75,8 @@ metadata {
 ]
 
 def needsDebouncing() { (((settings.debounce  ?: 0) as int) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
+def isIkeaOnOffSwitch()         { device.getDataValue("model") == "TRADFRI on/off switch" }
+def isIkeaRemoteControl()       { device.getDataValue("model") == "TRADFRI remote control" }
 def isIkeaShortcutButtonE1812() { device.getDataValue("model") == "TRADFRI SHORTCUT Button" }
 def isIkeaStyrbar()             { device.getDataValue("model") == "Remote Control N2" }
 def isIkeaRODRET()              { device.getDataValue("model") == "RODRET Dimmer" }
@@ -83,7 +87,7 @@ def isIkeaRODRET()              { device.getDataValue("model") == "RODRET Dimmer
  * -----------------------------------------------------------------------------
 */
 void parseScenesClusterButtonDimmer(final Map descMap) {
-    if (isIkeaStyrbar() || isIkeaRODRET()) {
+    if (isIkeaStyrbar() || isIkeaRODRET() || isIkeaRemoteControl()) {
         processStyrbarCommand(descMap)
     }
     else {
@@ -104,7 +108,7 @@ void parseOnOffClusterButtonDimmer(final Map descMap) {
     else if (descMap.attrId == "8004") {
         processTS004Fmode(descMap)
     }
-    else if (isIkeaStyrbar() || isIkeaRODRET()) {
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) {
         processStyrbarCommand(descMap)
     }
     else if (isIkeaShortcutButtonE1812() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) {
@@ -133,7 +137,7 @@ void parseLevelControlClusterButtonDimmer(final Map descMap) {
     if (descMap.attrId == "0000" && descMap.command == "FD") {
         processTS004Fcommand(descMap)
     }
-    else if (isIkeaStyrbar() || isIkeaRODRET()) {
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) {
         processStyrbarCommand(descMap)
     }
     else {
@@ -164,9 +168,15 @@ void processStyrbarCommand(final Map descMap) {
         }
     }
     else if (descMap.clusterInt == 0x0006 && descMap.command == "00") {
-        buttonNumber = 4
+        buttonNumber = isIkeaOnOffSwitch() ? 2 :4
         buttonState = "pushed"
     }
+    else if (descMap.clusterInt == 0x0006 && descMap.command == "02") {
+        // IKEA remote control E1810 - central button
+        toggle()
+        buttonNumber = 5
+        buttonState = "pushed"
+    }    
     else if (descMap.clusterInt == 0x0005 && descMap.command == "07" && ((descMap.data as String) == "[01, 01, 0D, 00]")) {
         buttonNumber = 2
         buttonState = "pushed"
@@ -199,12 +209,20 @@ void processStyrbarCommand(final Map descMap) {
         buttonState = "held"
     }
     else if (descMap.clusterInt == 0x0008 && descMap.command == "01") {
-        buttonNumber = 4
+        buttonNumber = isIkeaOnOffSwitch() ? 2 : 4
         buttonState = "held"
     }
-    else if (descMap.clusterInt == 0x0008 && descMap.command == "07") {
+    else if (descMap.clusterInt == 0x0008 && descMap.command in ["07", "03"]) {
         buttonNumber = state.states["lastButtonNumber"] ?: 5
         buttonState = "released"
+    }
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "06") {
+        buttonNumber = 1   // remote
+        buttonState = "pushed"
+    }
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "02") {
+        buttonNumber = 4  // remote
+        buttonState = "pushed"
     }
     
     else {
@@ -451,12 +469,16 @@ void initEventsButtonDimmer(boolean fullInit=false) {
         numberOfButtons = 1
         supportedValues = ["pushed", "held", "released"]
     } 
-    else if (isIkeaRODRET()) {
+    else if (isIkeaRODRET() || isIkeaOnOffSwitch()) {
         numberOfButtons = 2
         supportedValues = ["pushed", "held", "released"]
     }
     else if (isIkeaStyrbar()) {
         numberOfButtons = 4
+        supportedValues = ["pushed", "held", "released"]
+    } 
+    else if (isIkeaRemoteControl()) {
+        numberOfButtons = 5
         supportedValues = ["pushed", "held", "released"]
     } 
     if (numberOfButtons != 0) {
