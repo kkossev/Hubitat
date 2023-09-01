@@ -6,7 +6,7 @@ library (
     name: "buttonDimmerLib",
     namespace: "kkossev",
     importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/buttonDimmerLib.groovy",
-    version: "1.0.0",
+    version: "1.0.1",
     documentationLink: ""
 )
 /*
@@ -21,15 +21,22 @@ library (
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar
+ * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002
+ * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) 
  *
+ *                                   TODO: add IKEA RODRET E2201  keys processing !
+ *                                   TODO: verify Ikea reporting configuration (WireShark) 1
+ *                                   TODO: battery options  (pairing)
+ *                                   TODO: add option 'Level Step'
+ *                                   TODO: increase level on Up/Down key presses  (left-right rotation)  (simulation)
+ *                                   TODO: STYRBAR - battery not repored (bind power cluster)?
  *                                   TODO: add IKEA Tradfri Shortcut Button E1812
  *                                   TODO: debouncing option not initialized?
 */
 
 
-def tuyaFingerbotLibVersion()   {"1.0.0"}
-def tuyaFingerbotLibStamp() {"2023/08/30 11:28 PM"}
+def buttonDimmerVersion()   {"1.0.1"}
+def buttonDimmerLibStamp() {"2023/09/01 2:32 PM"}
 
 metadata {
     attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
@@ -40,11 +47,12 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000,E001", outClusters:"0019,000A,0003,0004,0006,0008,1000", model: "TS004F", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart Wireless Scene Switch"          
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0006", outClusters: "0019", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"                                                            // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
     
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
-	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57", outClusters: "0003,0006,0008,0019,1000", model:"Remote Control N2", manufacturer:"IKEA of Sweden"
-	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000", model:"Remote Control N2", manufacturer:"IKEA of Sweden"        // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
+	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters: "0003,0006,0008,0019,1000",          model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"                   // (stainless)
+	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000",     model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC7C",      outClusters:"0003,0004,0006,0008,0019,1000",      model:"RODRET Dimmer",           manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA RODRET Wireless Dimmer E2201"
 
     
     preferences {
@@ -64,8 +72,9 @@ metadata {
 ]
 
 def needsDebouncing() { (((settings.debounce  ?: 0) as int) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
-def isIkeaShortcutButtonE1812() {device.getDataValue("model") == "TRADFRI SHORTCUT Button"}
-def isIkeaStyrbar()             {device.getDataValue("model") == "Remote Control N2"}
+def isIkeaShortcutButtonE1812() { device.getDataValue("model") == "TRADFRI SHORTCUT Button" }
+def isIkeaStyrbar()             { device.getDataValue("model") == "Remote Control N2" }
+def isIkeaRODRET()              { device.getDataValue("model") == "RODRET Dimmer" }
 
 /*
  * -----------------------------------------------------------------------------
@@ -73,7 +82,7 @@ def isIkeaStyrbar()             {device.getDataValue("model") == "Remote Control
  * -----------------------------------------------------------------------------
 */
 void parseScenesClusterButtonDimmer(final Map descMap) {
-    if (isIkeaStyrbar()) {
+    if (isIkeaStyrbar() || isIkeaRODRET()) {
         processStyrbarCommand(descMap)
     }
     else {
@@ -94,8 +103,7 @@ void parseOnOffClusterButtonDimmer(final Map descMap) {
     else if (descMap.attrId == "8004") {
         processTS004Fmode(descMap)
     }
-    else if (isIkeaStyrbar()) {
-        logWarn "xx"
+    else if (isIkeaStyrbar() || isIkeaRODRET()) {
         processStyrbarCommand(descMap)
     }
     else if (isIkeaShortcutButtonE1812() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) {
@@ -124,7 +132,7 @@ void parseLevelControlClusterButtonDimmer(final Map descMap) {
     if (descMap.attrId == "0000" && descMap.command == "FD") {
         processTS004Fcommand(descMap)
     }
-    else if (isIkeaStyrbar()) {
+    else if (isIkeaStyrbar() || isIkeaRODRET()) {
         processStyrbarCommand(descMap)
     }
     else {
@@ -391,6 +399,7 @@ def refreshButtonDimmer() {
     List<String> cmds = []
     logDebug "refreshButtonDimmer() (n/a) : ${cmds} "
     // TODO !! 
+    if (cmds == []) { cmds = ["delay 299",] }
     return cmds
 }
 
@@ -404,10 +413,40 @@ def configureDeviceButtonDimmer() {
 */
     
     logDebug "configureDeviceButtonDimmer() : ${cmds}"
+    if (cmds == []) { cmds = ["delay 299",] }
     return cmds    
 }
 
-def initVarsButtonDimmer(boolean fullInit=false) {
+def initializeDeviceButtonDimmer()
+{
+    List<String> cmds = []
+    
+    //cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", "delay 251", ]        // poll control
+    
+    int intMinTime = 300
+    int intMaxTime = 3600
+    
+    //cmds += ["he cr 0x${device.deviceNetworkId} 0x01 1 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // power cluster
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 5 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // scene cluster
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 6 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // on/off cluster
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 8 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // level cluster
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x20 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // poll control
+    
+    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, intMinTime, intMaxTime, 0x01, [:], delay=150)    // TODO - check !!
+    intMaxTime = 2700
+    cmds += zigbee.configureReporting(0x0001, 0x0021, 0x20 /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=150)    // TODO - check !!
+    
+    logDebug "initializeDeviceButtonDimmer() : ${cmds}"
+    if (cmds == []) { cmds = ["delay 299",] }
+    return cmds        
+}
+
+
+void initVarsButtonDimmer(boolean fullInit=false) {
     logDebug "initVarsButtonDimmer(${fullInit})"
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
@@ -421,6 +460,10 @@ void initEventsButtonDimmer(boolean fullInit=false) {
         numberOfButtons = 1
         supportedValues = ["pushed", "held", "released"]
     } 
+    else if (isIkeaRODRET()) {
+        numberOfButtons = 2
+        supportedValues = ["pushed", "held", "released"]
+    }
     else if (isIkeaStyrbar()) {
         numberOfButtons = 4
         supportedValues = ["pushed", "held", "released"]

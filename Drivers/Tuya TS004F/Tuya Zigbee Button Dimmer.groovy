@@ -26,7 +26,7 @@
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
- * ver. 2.1.4  2023-08-31 kkossev  - (dev. branch) buttonDimmerLib library; added IKEA Styrbar
+ * ver. 2.1.4  2023-09-01 kkossev  - (dev. branch) buttonDimmerLib library; added IKEA Styrbar
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -34,7 +34,6 @@
  *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
  *                                   TODO: measure PTT for on/off commands
  *                                   TODO: add rejonCtr to statistics
- *                                   TODO: Fingerbot: touch button (on top) enable/disable option
  *                                   TODO: implement Get Device Info command
  *                                   TODO: continue the work on the 'device' capability (this project main goal!)
  *                                   TODO: state timesamps in human readable form
@@ -44,7 +43,7 @@
  */
 
 static String version() { "2.1.4" }
-static String timeStamp() {"2023/08/30 11:28 PM"}
+static String timeStamp() {"2023/09/01 2:32 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -2538,9 +2537,10 @@ def initializeDevice() {
     logInfo 'initializeDevice...'
     
     // start with the device-specific initialization first.
-    if (DEVICE_TYPE in  ["AirQuality"])      { return initializeDeviceAirQuality() }
-    else if (DEVICE_TYPE in  ["IRBlaster"])  { return initializeDeviceIrBlaster() }
-    else if (DEVICE_TYPE in  ["Radar"])      { return initializeDeviceRadar() }
+    if (DEVICE_TYPE in  ["AirQuality"])          { return initializeDeviceAirQuality() }
+    else if (DEVICE_TYPE in  ["IRBlaster"])      { return initializeDeviceIrBlaster() }
+    else if (DEVICE_TYPE in  ["Radar"])          { return initializeDeviceRadar() }
+    else if (DEVICE_TYPE in  ["ButtonDimmer"])   { return initializeDeviceButtonDimmer() }
   
  
     // not specific device type - do some generic initializations
