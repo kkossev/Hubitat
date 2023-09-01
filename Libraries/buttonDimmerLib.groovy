@@ -21,8 +21,8 @@ library (
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002
- * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) 
+ * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002;
+ * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; 
  *
  *                                   TODO: add IKEA RODRET E2201  keys processing !
  *                                   TODO: verify Ikea reporting configuration (WireShark) 1
@@ -36,7 +36,7 @@ library (
 
 
 def buttonDimmerVersion()   {"1.0.1"}
-def buttonDimmerLibStamp() {"2023/09/01 2:32 PM"}
+def buttonDimmerLibStamp() {"2023/09/01 9:36 PM"}
 
 metadata {
     attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
@@ -49,6 +49,7 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0006", outClusters: "0019", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"                                                            // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
     
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI on/off switch",   manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA on/off switch E1743"  
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters: "0003,0006,0008,0019,1000",          model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"                   // (stainless)
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000",     model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
@@ -158,7 +159,6 @@ void processStyrbarCommand(final Map descMap) {
         }
         else {
             def ii = state.states["ignoreButton1"]
-            logWarn "ignoreButton1 = ${ii}"
             buttonNumber = 1
             buttonState = "pushed"
         }
@@ -399,7 +399,7 @@ def refreshButtonDimmer() {
     List<String> cmds = []
     logDebug "refreshButtonDimmer() (n/a) : ${cmds} "
     // TODO !! 
-    if (cmds == []) { cmds = ["delay 299",] }
+    if (cmds == []) { cmds = ["delay 299"] }
     return cmds
 }
 
@@ -413,33 +413,23 @@ def configureDeviceButtonDimmer() {
 */
     
     logDebug "configureDeviceButtonDimmer() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299",] }
+    if (cmds == []) { cmds = ["delay 299"] }    // no , 
     return cmds    
 }
 
 def initializeDeviceButtonDimmer()
 {
     List<String> cmds = []
-    
-    //cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", "delay 251", ]        // poll control
-    
     int intMinTime = 300
     int intMaxTime = 3600
+
+    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=141)    // OK
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 142", ]            // binding is OK            //  Configuring 0x0006 : -> configure reporting error: Unsupported Attribute [86, 00, 00, 00]
+    //error: //cmds += zigbee.configureReporting(0x0020, 0x0000, DataType.INT16 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=143)    // zigbee configure reporting error: Invalid Data Type [8D, 00, 00, 00]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 144", ]            // binding is OK - reporting configuration is not supported
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 145", ]
     
-    //cmds += ["he cr 0x${device.deviceNetworkId} 0x01 1 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // power cluster
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 5 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // scene cluster
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 6 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // on/off cluster
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 8 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // level cluster
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x20 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]        // poll control
-    
-    cmds += zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, intMinTime, intMaxTime, 0x01, [:], delay=150)    // TODO - check !!
-    intMaxTime = 2700
-    cmds += zigbee.configureReporting(0x0001, 0x0021, 0x20 /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=150)    // TODO - check !!
-    
+
     logDebug "initializeDeviceButtonDimmer() : ${cmds}"
     if (cmds == []) { cmds = ["delay 299",] }
     return cmds        
@@ -450,7 +440,8 @@ void initVarsButtonDimmer(boolean fullInit=false) {
     logDebug "initVarsButtonDimmer(${fullInit})"
     if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
-    
+    if (state.states == null) { state.states = [:] } 
+    state.states["ignoreButton1"] = false
 }
 
 void initEventsButtonDimmer(boolean fullInit=false) {
