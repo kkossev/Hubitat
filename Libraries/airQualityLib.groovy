@@ -13,17 +13,18 @@ library (
  * airQualityLib -Air Quality Library
  *
  * ver. 1.0.0  2023-07-23 kkossev  - Libraries introduction for the VINDSTIRKA driver;
- * ver. 1.0.1  2023-09-02 kkossev  - (dev.branch) removed airQualityLevel for VINDSTYRKA; airQualityIndex is deleted if polling is disabled; added pm25Threshold; added airQualityIndexThreshold
+ * ver. 1.0.1  2023-09-02 kkossev  - (dev.branch) removed airQualityLevel for VINDSTYRKA; airQualityIndex is deleted if polling is disabled; added pm25Threshold; added airQualityIndexThreshold; airQualityIndex replaced by sensirionVOCindex
  *
- *                                   TODO: ? change the airQualityIndex to Sensirion VOC index :  voc_index: () => new Numeric('voc_index', access.STATE).withDescription('Sensirion VOC index'), //https://github.com/Koenkk/zigbee-herdsman-converters/blob/920690c6d79dab7f8d24737427c240ab5ffb4968/devices/ikea.js 
+ *                                   TODO:
  *
 */
 
 def airQualityLibVersion()   {"1.0.1"}
-def airQualityimeStamp() {"2023/09/02 8:00 PM"}
+def airQualityimeStamp() {"2023/09/02 9:18 PM"}
 
 metadata {
     attribute "pm25", "number"
+    attribute "sensirionVOCindex", "number"    // VINDSTYRKA used sensirionVOCindex instead of airQualityIndex
     attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ **** for Aqara only! ***
 
     if (isAqaraTVOC()) {
@@ -36,11 +37,13 @@ metadata {
 
     preferences {
         input name: "pm25Threshold", type: "number", title: "<b>PM 2.5 Reporting Threshold</b>", description: "<i>PM 2.5 reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_PM25_THRESHOLD
-        input name: "airQualityIndexThreshold", type: "number", title: "<b>Air Quality Index Reporting Threshold</b>", description: "<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
         if (isVINDSTYRKA()) {
-            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>'
+            //input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>'
+            input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Sensirion VOC index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Sensirion VOC index.</i>'
+            input name: "airQualityIndexThreshold", type: "number", title: "<b>Sensirion VOC index Reporting Threshold</b>", description: "<i>Sensirion VOC index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
         }
-        else  if (isAqaraTRV()) {
+        else  if (isAqaraTVOC()) {
+            input name: "airQualityIndexThreshold", type: "number", title: "<b>Air Quality Index Reporting Threshold</b>", description: "<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
             input name: 'temperatureScale', type: 'enum', title: '<b>Temperaure Scale on the Screen</b>', options: TemperatureScaleOpts.options, defaultValue: TemperatureScaleOpts.defaultValue, required: true, description: '<i>Changes the temperature scale (Celsius, Fahrenheit) on the screen.</i>'
             input name: 'tVocUnut', type: 'enum', title: '<b>tVOC unit on the Screen</b>', options: TvocUnitOpts.options, defaultValue: TvocUnitOpts.defaultValue, required: true, description: '<i>Changes the tVOC unit (mg/m³, ppb) on the screen.</i>'
         }
@@ -140,14 +143,21 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
         return
     }
     eventMap.value = tVocCorrected as Integer
-    eventMap.name = "airQualityIndex"
+    Integer lastAIQ
+    if (isVINDSTYRKA()) {
+        eventMap.name = "sensirionVOCindex"
+        lastAIQ = device.currentValue("sensirionVOCindex") ?: 0    
+    }
+    else {
+        eventMap.name = "airQualityIndex"
+        lastAIQ = device.currentValue("airQualityIndex") ?: 0    
+    }
     eventMap.unit = ""
     eventMap.type = isDigital == true ? "digital" : "physical"
     eventMap.descriptionText = "${eventMap.name} is ${tVocCorrected} ${eventMap.unit}"
     Integer timeElapsed = ((now() - (state.lastRx['tVocTime'] ?: now() -10000 ))/1000) as Integer
     Integer minTime = settings?.minReportingTimetVoc ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
-    Integer lastAIQ = device.currentValue("airQualityIndex") ?: 0    
     Integer delta = Math.abs(lastAIQ - eventMap.value)
     if (delta < ((settings?.airQualityIndexThreshold ?: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD) as int)) {
         logDebug "<b>skipped</b> airQualityIndex ${eventMap.value}, less than delta ${delta} (lastAIQ=${lastAIQ})"
@@ -268,7 +278,7 @@ def initializeDeviceAirQuality() {
 }
 
 void updatedAirQuality() {
-    if (!(isAqaraTVOC())) {
+    if (isVINDSTYRKA()) {
         final int intervalAirQuality = (settings.airQualityIndexCheckInterval as Integer) ?: 0
         if (intervalAirQuality > 0) {
             logInfo "updatedAirQuality: scheduling Air Quality Index check every ${intervalAirQuality} seconds"
@@ -283,7 +293,7 @@ void updatedAirQuality() {
             
     }
     else {
-        logDebug "updatedAirQuality: skipping airQuality polling"
+        logDebug "updatedAirQuality: skipping airQuality polling "
     }
 }
 
@@ -313,8 +323,10 @@ def initVarsAirQuality(boolean fullInit=false) {
     if (fullInit || settings?.pm25Threshold == null) device.updateSetting("pm25Threshold", [value:DEFAULT_PM25_THRESHOLD, type:"number"])
     if (fullInit || settings?.airQualityIndexThreshold == null) device.updateSetting("airQualityIndexThreshold", [value:DEFAULT_AIR_QUALITY_INDEX_THRESHOLD, type:"number"])
 
-    if (isVINDSTYRKA()) { device.deleteCurrentState("airQualityLevel") }     // 09/02/2023 removed airQualityLevel
-
+    if (isVINDSTYRKA()) {     // 09/02/2023 removed airQualityLevel, replaced airQualityIndex w/ sensirionVOCindex
+        device.deleteCurrentState("airQualityLevel") 
+        device.deleteCurrentState("airQualityIndex") 
+    }     
     
 }
 
