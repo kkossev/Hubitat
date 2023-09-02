@@ -27,6 +27,7 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-02 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'
+ * ver. 2.1.5  2023-09-02 kkossev  - (dev. branch) VINDSTYRKA: removed airQualityLevel, added thresholds; 
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -43,7 +44,7 @@
  */
 
 static String version() { "2.1.4" }
-static String timeStamp() {"2023/09/02 11:56 AM"}
+static String timeStamp() {"2023/09/02 8:00 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -311,8 +312,8 @@ metadata {
 
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
-def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
-def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+//def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
+//def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
@@ -2189,53 +2190,23 @@ void parseMeteringCluster(final Map descMap) {
 
 /*
  * -----------------------------------------------------------------------------
- * pm2.5
+ * pm2.5    - cluster 0x042A 
  * -----------------------------------------------------------------------------
 */
 void parsePm25Cluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())
-    //logDebug "pm25 float value = ${floatValue}"
-    handlePm25Event(floatValue as Integer)
-}
-
-void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
-    def eventMap = [:]
-    if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:]
-    double pm25AsDouble = safeToDouble(pm25) + safeToDouble(settings?.pm25Offset ?: 0)
-    if (pm25AsDouble <= 0.0 || pm25AsDouble > 999.0) {
-        logWarn "ignored invalid pm25 ${pm25} (${pm25AsDouble})"
-        return
-    }
-    eventMap.value = Math.round(pm25AsDouble)
-    eventMap.name = "pm25"
-    eventMap.unit = "\u03BCg/m3"    //"mg/m3"
-    eventMap.type = isDigital == true ? "digital" : "physical"
-    eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${pm25AsDouble.round()} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['pm25Time'] ?: now()))/1000)
-    Integer minTime = settings?.minReportingTimePm25 ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer    
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule("sendDelayedPm25Event")
-        state.lastRx['pm25Time'] = now()
-        sendEvent(eventMap)
+    if (DEVICE_TYPE in  ["AirQuality"]) {
+        def value = hexStrToUnsignedInt(descMap.value)
+    	Float floatValue = Float.intBitsToFloat(value.intValue())
+        //logDebug "pm25 float value = ${floatValue}"
+        handlePm25Event(floatValue as Integer)   // in airQualityLib
     }
     else {
-    	eventMap.type = "delayed"
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap])
-    }
+        logWarn "parsePm25Cluster: not handled!"
+    }    
 }
 
-private void sendDelayedPm25Event(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
-}
 
 /*
  * -----------------------------------------------------------------------------
@@ -2691,11 +2662,11 @@ void clearInfoEvent() {
 void sendInfoEvent(String info=null) {
     if (info == null || info == "clear") {
         logDebug "clearing the Info event"
-        sendEvent(name: "Info", value: " ", isDigital: true)
+        sendEvent(name: "Info", value: " ", descriptionText: "Info event", type: "digital")
     }
     else {
         logInfo "${info}"
-        sendEvent(name: "Info", value: info, isDigital: true)
+        sendEvent(name: "Info", value: info, descriptionText: "Info event", type: "digital")
         runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute
     }
 }
@@ -2730,12 +2701,12 @@ void sendRttEvent( String value=null) {
     def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats["pingsMin"]} max=${state.stats["pingsMax"]} average=${state.stats["pingsAvg"]})"
     if (value == null) {
         logInfo "${descriptionText}"
-        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)    
+        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", type: "digital")    
     }
     else {
         descriptionText = "Round-trip time : ${value}"
         logInfo "${descriptionText}"
-        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, isDigital: true)    
+        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, type: "digital")    
     }
 }
 
@@ -2815,7 +2786,7 @@ def deviceHealthCheck() {
 
 void sendHealthStatusEvent(value) {
     def descriptionText = "healthStatus changed to ${value}"
-    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true)
+    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText, isStateChange: true, type: "digital")
     if (value == 'online') {
         logInfo "${descriptionText}"
     }
@@ -2851,7 +2822,7 @@ void autoPoll() {
  */
 void updated() {
     logInfo 'updated...'
-    logInfo"driver version ${driverVersionAndTimeStamp()}"
+    logInfo "driver version ${driverVersionAndTimeStamp()}"
     unschedule()
 
     if (settings.logEnable) {

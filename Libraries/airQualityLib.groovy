@@ -13,16 +13,18 @@ library (
  * airQualityLib -Air Quality Library
  *
  * ver. 1.0.0  2023-07-23 kkossev  - Libraries introduction for the VINDSTIRKA driver;
+ * ver. 1.0.1  2023-09-02 kkossev  - (dev.branch) removed airQualityLevel for VINDSTYRKA; airQualityIndex is deleted if polling is disabled; added pm25Threshold; added airQualityIndexThreshold
  *
- *                                   TODO: 
+ *                                   TODO: ? change the airQualityIndex to Sensirion VOC index :  voc_index: () => new Numeric('voc_index', access.STATE).withDescription('Sensirion VOC index'), //https://github.com/Koenkk/zigbee-herdsman-converters/blob/920690c6d79dab7f8d24737427c240ab5ffb4968/devices/ikea.js 
+ *
 */
 
-def airQualityLibVersion()   {"1.0.0"}
-def airQualityimeStamp() {"2023/07/23 9:02 AM"}
+def airQualityLibVersion()   {"1.0.1"}
+def airQualityimeStamp() {"2023/09/02 8:00 PM"}
 
 metadata {
     attribute "pm25", "number"
-    attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ 
+    attribute "airQualityLevel", "enum", ["Good","Moderate","Unhealthy for Sensitive Groups","Unhealthy","Very Unhealthy","Hazardous"]    // https://www.airnow.gov/aqi/aqi-basics/ **** for Aqara only! ***
 
     if (isAqaraTVOC()) {
             capability "Battery"
@@ -33,6 +35,8 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor" 
 
     preferences {
+        input name: "pm25Threshold", type: "number", title: "<b>PM 2.5 Reporting Threshold</b>", description: "<i>PM 2.5 reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_PM25_THRESHOLD
+        input name: "airQualityIndexThreshold", type: "number", title: "<b>Air Quality Index Reporting Threshold</b>", description: "<i>Air quality index reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>", range: "1..255", defaultValue: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD
         if (isVINDSTYRKA()) {
             input name: 'airQualityIndexCheckInterval', type: 'enum', title: '<b>Air Quality Index check interval</b>', options: AirQualityIndexCheckIntervalOpts.options, defaultValue: AirQualityIndexCheckIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub retreives the Air Quality Index.</i>'
         }
@@ -43,20 +47,71 @@ metadata {
     }
 }
 
+def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
+def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+
+@Field static final Integer DEFAULT_PM25_THRESHOLD = 1
+@Field static final Integer DEFAULT_AIR_QUALITY_INDEX_THRESHOLD = 1
+
 @Field static final Map AirQualityIndexCheckIntervalOpts = [        // used by airQualityIndexCheckInterval
     defaultValue: 60,
     options     : [0: 'Disabled', 10: 'Every 10 seconds', 30: 'Every 30 seconds', 60: 'Every 1 minute', 300: 'Every 5 minutes', 900: 'Every 15 minutes', 3600: 'Every 1 hour']
 ]
-
 @Field static final Map TemperatureScaleOpts = [            // bit 7
     defaultValue: 0,
     options     : [0: 'Celsius', 1: 'Fahrenheit']
 ]
-
 @Field static final Map TvocUnitOpts = [                    // bit 0
     defaultValue: 1,
     options     : [0: 'mg/m³', 1: 'ppb']
 ]
+
+/*
+ * -----------------------------------------------------------------------------
+ * handlePm25Event
+ * -----------------------------------------------------------------------------
+*/
+void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
+    def eventMap = [:]
+    if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:]
+    double pm25AsDouble = safeToDouble(pm25) + safeToDouble(settings?.pm25Offset ?: 0)
+    if (pm25AsDouble <= 0.0 || pm25AsDouble > 999.0) {
+        logWarn "ignored invalid pm25 ${pm25} (${pm25AsDouble})"
+        return
+    }
+    eventMap.value = Math.round(pm25AsDouble)
+    eventMap.name = "pm25"
+    eventMap.unit = "\u03BCg/m3"    //"mg/m3"
+    eventMap.type = isDigital == true ? "digital" : "physical"
+    //eventMap.isStateChange = true
+    eventMap.descriptionText = "${eventMap.name} is ${pm25AsDouble.round()} ${eventMap.unit}"
+    Integer timeElapsed = Math.round((now() - (state.lastRx['pm25Time'] ?: now()))/1000)
+    Integer minTime = settings?.minReportingTimePm25 ?: DEFAULT_MIN_REPORTING_TIME
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastPm25 = device.currentValue("pm25") ?: 0
+    Integer delta = Math.abs(lastPm25 - eventMap.value)
+    if (delta < ((settings?.pm25Threshold ?: DEFAULT_PM25_THRESHOLD) as int)) {
+        logDebug "<b>skipped</b> pm25 report ${eventMap.value}, less than delta ${settings?.pm25Threshold} (lastPm25=${lastPm25})"
+        return
+    }    
+    if (timeElapsed >= minTime) {
+        logInfo "${eventMap.descriptionText}"
+        unschedule("sendDelayedPm25Event")
+        state.lastRx['pm25Time'] = now()
+        sendEvent(eventMap)
+    }
+    else {
+    	eventMap.type = "delayed"
+        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
+        runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedPm25Event(Map eventMap) {
+    logInfo "${eventMap.descriptionText} (${eventMap.type})"
+    state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
+	sendEvent(eventMap)
+}
 
 
 /*
@@ -91,13 +146,21 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
     eventMap.descriptionText = "${eventMap.name} is ${tVocCorrected} ${eventMap.unit}"
     Integer timeElapsed = ((now() - (state.lastRx['tVocTime'] ?: now() -10000 ))/1000) as Integer
     Integer minTime = settings?.minReportingTimetVoc ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer    
+    Integer timeRamaining = (minTime - timeElapsed) as Integer
+    Integer lastAIQ = device.currentValue("airQualityIndex") ?: 0    
+    Integer delta = Math.abs(lastAIQ - eventMap.value)
+    if (delta < ((settings?.airQualityIndexThreshold ?: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD) as int)) {
+        logDebug "<b>skipped</b> airQualityIndex ${eventMap.value}, less than delta ${delta} (lastAIQ=${lastAIQ})"
+        return
+    }
     if (timeElapsed >= minTime) {
         logInfo "${eventMap.descriptionText}"
         unschedule("sendDelayedtVocEvent")
         state.lastRx['tVocTime'] = now()
         sendEvent(eventMap)
-        sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
+        if (isAqaraTVOC()) {
+            sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
+        }
     }
     else {
     	eventMap.type = "delayed"
@@ -110,10 +173,13 @@ private void sendDelayedtVocEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['tVocTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
 	sendEvent(eventMap)
-    sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
+    if (isAqaraTVOC()) {
+        sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
+    }
 }
 
 // https://github.com/zigpy/zigpy/discussions/691 
+// 09/02/2023 - used by Aqara only !
 String airQualityIndexToLevel(final Integer index)
 {
     String level
@@ -211,6 +277,8 @@ void updatedAirQuality() {
         else {
             unScheduleAirQualityIndexCheck()
             logInfo "updatedAirQuality: Air Quality Index polling is disabled!"
+            // 09/02/2023
+            device.deleteCurrentState("airQualityIndex")
         }
             
     }
@@ -242,11 +310,14 @@ def initVarsAirQuality(boolean fullInit=false) {
     if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.pm25Threshold == null) device.updateSetting("pm25Threshold", [value:DEFAULT_PM25_THRESHOLD, type:"number"])
+    if (fullInit || settings?.airQualityIndexThreshold == null) device.updateSetting("airQualityIndexThreshold", [value:DEFAULT_AIR_QUALITY_INDEX_THRESHOLD, type:"number"])
+
+    if (isVINDSTYRKA()) { device.deleteCurrentState("airQualityLevel") }     // 09/02/2023 removed airQualityLevel
+
     
 }
 
 void initEventsAirQuality(boolean fullInit=false) {
-//    sendNumberOfButtonsEvent(6)
-//    def supportedValues = ["pushed", "double", "held", "released", "tested"]
-//    sendSupportedButtonValuesEvent(supportedValues)
+    // nothing to do
 }
