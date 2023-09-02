@@ -43,7 +43,7 @@
  */
 
 static String version() { "2.1.4" }
-static String timeStamp() {"2023/09/02 9:06 AM"}
+static String timeStamp() {"2023/09/02 11:56 AM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -3386,7 +3386,7 @@ library ( // library marker kkossev.buttonDimmerLib, line 1
  *  for the specific language governing permissions and limitations under the License. // library marker kkossev.buttonDimmerLib, line 22
  * // library marker kkossev.buttonDimmerLib, line 23
  * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002; // library marker kkossev.buttonDimmerLib, line 24
- * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; added "IKEA remote control E1810"   // library marker kkossev.buttonDimmerLib, line 25
+ * ver. 1.0.1  2023-09-02 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; added "IKEA remote control E1810"; added IKEA TRADFRI SHORTCUT Button E1812; debounce disabled by default; // library marker kkossev.buttonDimmerLib, line 25
  * // library marker kkossev.buttonDimmerLib, line 26
  *                                   TODO: add IKEA RODRET E2201  keys processing ! // library marker kkossev.buttonDimmerLib, line 27
  *                                   TODO: verify Ikea reporting configuration (WireShark) 1 // library marker kkossev.buttonDimmerLib, line 28
@@ -3399,8 +3399,8 @@ library ( // library marker kkossev.buttonDimmerLib, line 1
 */ // library marker kkossev.buttonDimmerLib, line 35
 
 
-def buttonDimmerVersion()   {"1.0.1"} // library marker kkossev.buttonDimmerLib, line 38
-def buttonDimmerLibStamp() {"2023/09/01 11:52 PM"} // library marker kkossev.buttonDimmerLib, line 39
+def buttonDimmerVersion()   {"1.0.2"} // library marker kkossev.buttonDimmerLib, line 38
+def buttonDimmerLibStamp() {"2023/09/01 11:56 AM"} // library marker kkossev.buttonDimmerLib, line 39
 
 metadata { // library marker kkossev.buttonDimmerLib, line 41
     capability "Switch"    // IKEA remote control E1810 - central button // library marker kkossev.buttonDimmerLib, line 42
@@ -3416,7 +3416,7 @@ metadata { // library marker kkossev.buttonDimmerLib, line 41
 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI on/off switch",   manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA on/off switch E1743"   // library marker kkossev.buttonDimmerLib, line 53
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0004,0005,0006,0008,0019,1000", model:"TRADFRI remote control",  manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA remote control E1810"   // library marker kkossev.buttonDimmerLib, line 54
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812" // library marker kkossev.buttonDimmerLib, line 55
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA TRADFRI SHORTCUT Button E1812" // library marker kkossev.buttonDimmerLib, line 55
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters: "0003,0006,0008,0019,1000",          model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"                   // (stainless) // library marker kkossev.buttonDimmerLib, line 56
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000",     model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev // library marker kkossev.buttonDimmerLib, line 57
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC7C",      outClusters:"0003,0004,0006,0008,0019,1000",      model:"RODRET Dimmer",           manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA RODRET Wireless Dimmer E2201" // library marker kkossev.buttonDimmerLib, line 58
@@ -3434,11 +3434,11 @@ metadata { // library marker kkossev.buttonDimmerLib, line 41
     options     : [0: 'dimmer', 1: 'scene'] // library marker kkossev.buttonDimmerLib, line 70
 ] // library marker kkossev.buttonDimmerLib, line 71
 @Field static final Map DebounceOpts = [ // library marker kkossev.buttonDimmerLib, line 72
-    defaultValue: 1000, // library marker kkossev.buttonDimmerLib, line 73
-    options     : [0: 'disabled', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',] // library marker kkossev.buttonDimmerLib, line 74
+    defaultValue: 0, // library marker kkossev.buttonDimmerLib, line 73
+    options     : [0: 'disabled', 500: '0.5 seconds', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',] // library marker kkossev.buttonDimmerLib, line 74
 ] // library marker kkossev.buttonDimmerLib, line 75
 
-def needsDebouncing() { (((settings.debounce  ?: 0) as int) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))} // library marker kkossev.buttonDimmerLib, line 77
+def needsDebouncing()           { (settings.debounce  ?: 0) as int != 0 } // library marker kkossev.buttonDimmerLib, line 77
 def isIkeaOnOffSwitch()         { device.getDataValue("model") == "TRADFRI on/off switch" } // library marker kkossev.buttonDimmerLib, line 78
 def isIkeaRemoteControl()       { device.getDataValue("model") == "TRADFRI remote control" } // library marker kkossev.buttonDimmerLib, line 79
 def isIkeaShortcutButtonE1812() { device.getDataValue("model") == "TRADFRI SHORTCUT Button" } // library marker kkossev.buttonDimmerLib, line 80
@@ -3452,7 +3452,7 @@ def isIkeaRODRET()              { device.getDataValue("model") == "RODRET Dimmer
 */ // library marker kkossev.buttonDimmerLib, line 88
 void parseScenesClusterButtonDimmer(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 89
     if (isIkeaStyrbar() || isIkeaRODRET() || isIkeaRemoteControl()) { // library marker kkossev.buttonDimmerLib, line 90
-        processStyrbarCommand(descMap) // library marker kkossev.buttonDimmerLib, line 91
+        processIkeaCommand(descMap) // library marker kkossev.buttonDimmerLib, line 91
     } // library marker kkossev.buttonDimmerLib, line 92
     else { // library marker kkossev.buttonDimmerLib, line 93
         logWarn "parseScenesClusterButtonDimmer: unprocessed Scenes cluster attribute ${descMap.attrId}" // library marker kkossev.buttonDimmerLib, line 94
@@ -3472,158 +3472,158 @@ void parseOnOffClusterButtonDimmer(final Map descMap) { // library marker kkosse
     else if (descMap.attrId == "8004") { // library marker kkossev.buttonDimmerLib, line 108
         processTS004Fmode(descMap) // library marker kkossev.buttonDimmerLib, line 109
     } // library marker kkossev.buttonDimmerLib, line 110
-    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) { // library marker kkossev.buttonDimmerLib, line 111
-        processStyrbarCommand(descMap) // library marker kkossev.buttonDimmerLib, line 112
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl() || isIkeaShortcutButtonE1812()) { // library marker kkossev.buttonDimmerLib, line 111
+        processIkeaCommand(descMap) // library marker kkossev.buttonDimmerLib, line 112
     } // library marker kkossev.buttonDimmerLib, line 113
-    else if (isIkeaShortcutButtonE1812() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) { // library marker kkossev.buttonDimmerLib, line 114
-            // TODO !!! // library marker kkossev.buttonDimmerLib, line 115
-            logInfo "IkeaShortcutButtonE1812 - not ready yet!" // library marker kkossev.buttonDimmerLib, line 116
-            // IKEA Tradfri Shortcut Button E1812 // library marker kkossev.buttonDimmerLib, line 117
-            /* // library marker kkossev.buttonDimmerLib, line 118
-            buttonNumber = 1 // library marker kkossev.buttonDimmerLib, line 119
-            if (descMap.clusterInt == 0x0006 && descMap.command == "01") buttonState = "pushed"     // library marker kkossev.buttonDimmerLib, line 120
-            else if (descMap.clusterInt == 0x0008 && descMap.command == "05") buttonState = "held"   // library marker kkossev.buttonDimmerLib, line 121
-            else if (descMap.clusterInt == 0x0008 && descMap.command == "07") buttonState = "released" // library marker kkossev.buttonDimmerLib, line 122
-            else buttonState = "unknown" // library marker kkossev.buttonDimmerLib, line 123
-            */ // library marker kkossev.buttonDimmerLib, line 124
-    }     // library marker kkossev.buttonDimmerLib, line 125
-    else { // library marker kkossev.buttonDimmerLib, line 126
-        logWarn "parseOnOffClusterButtonDimmer: unprocessed OnOff Cluster attribute ${descMap.attrId}" // library marker kkossev.buttonDimmerLib, line 127
-    }     // library marker kkossev.buttonDimmerLib, line 128
-} // library marker kkossev.buttonDimmerLib, line 129
+    else { // library marker kkossev.buttonDimmerLib, line 114
+        logWarn "parseOnOffClusterButtonDimmer: unprocessed OnOff Cluster attribute ${descMap.attrId}" // library marker kkossev.buttonDimmerLib, line 115
+    }     // library marker kkossev.buttonDimmerLib, line 116
+} // library marker kkossev.buttonDimmerLib, line 117
 
-/* // library marker kkossev.buttonDimmerLib, line 131
- * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 132
- *  Button/Dimmer  LevelControl cluster 0x0008 // library marker kkossev.buttonDimmerLib, line 133
- * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 134
-*/ // library marker kkossev.buttonDimmerLib, line 135
-void parseLevelControlClusterButtonDimmer(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 136
-    if (descMap.attrId == "0000" && descMap.command == "FD") { // library marker kkossev.buttonDimmerLib, line 137
-        processTS004Fcommand(descMap) // library marker kkossev.buttonDimmerLib, line 138
-    } // library marker kkossev.buttonDimmerLib, line 139
-    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) { // library marker kkossev.buttonDimmerLib, line 140
-        processStyrbarCommand(descMap) // library marker kkossev.buttonDimmerLib, line 141
-    } // library marker kkossev.buttonDimmerLib, line 142
-    else { // library marker kkossev.buttonDimmerLib, line 143
-        logWarn "parseLevelControlClusterButtonDimmer: unprocessed LevelControl cluster attribute ${descMap.attrId}" // library marker kkossev.buttonDimmerLib, line 144
-    } // library marker kkossev.buttonDimmerLib, line 145
-} // library marker kkossev.buttonDimmerLib, line 146
+/* // library marker kkossev.buttonDimmerLib, line 119
+ * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 120
+ *  Button/Dimmer  LevelControl cluster 0x0008 // library marker kkossev.buttonDimmerLib, line 121
+ * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 122
+*/ // library marker kkossev.buttonDimmerLib, line 123
+void parseLevelControlClusterButtonDimmer(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 124
+    if (descMap.attrId == "0000" && descMap.command == "FD") { // library marker kkossev.buttonDimmerLib, line 125
+        processTS004Fcommand(descMap) // library marker kkossev.buttonDimmerLib, line 126
+    } // library marker kkossev.buttonDimmerLib, line 127
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl() || isIkeaShortcutButtonE1812()) { // library marker kkossev.buttonDimmerLib, line 128
+        processIkeaCommand(descMap) // library marker kkossev.buttonDimmerLib, line 129
+    } // library marker kkossev.buttonDimmerLib, line 130
+    else { // library marker kkossev.buttonDimmerLib, line 131
+        logWarn "parseLevelControlClusterButtonDimmer: unprocessed LevelControl cluster attribute ${descMap.attrId}" // library marker kkossev.buttonDimmerLib, line 132
+    } // library marker kkossev.buttonDimmerLib, line 133
+} // library marker kkossev.buttonDimmerLib, line 134
 
 
-/* // library marker kkossev.buttonDimmerLib, line 149
- * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 150
- * Styrbar // library marker kkossev.buttonDimmerLib, line 151
- * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 152
-*/ // library marker kkossev.buttonDimmerLib, line 153
-void processStyrbarCommand(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 154
-    logDebug "processStyrbarCommand: descMap: $descMap" // library marker kkossev.buttonDimmerLib, line 155
-    def buttonNumber = 0 // library marker kkossev.buttonDimmerLib, line 156
-    def buttonState = "unknown" // library marker kkossev.buttonDimmerLib, line 157
+/* // library marker kkossev.buttonDimmerLib, line 137
+ * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 138
+ * IKEA buttons and remotes handler - clusters 5, 6 and 8 // library marker kkossev.buttonDimmerLib, line 139
+ * ----------------------------------------------------------------------------- // library marker kkossev.buttonDimmerLib, line 140
+*/ // library marker kkossev.buttonDimmerLib, line 141
+void processIkeaCommand(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 142
+    logDebug "processIkeaCommand: descMap: $descMap" // library marker kkossev.buttonDimmerLib, line 143
+    def buttonNumber = 0 // library marker kkossev.buttonDimmerLib, line 144
+    def buttonState = "unknown" // library marker kkossev.buttonDimmerLib, line 145
 
-    if (descMap.clusterInt == 0x0006 && descMap.command == "01") { // library marker kkossev.buttonDimmerLib, line 159
-        if (state.states["ignoreButton1"] == true) { // library marker kkossev.buttonDimmerLib, line 160
-            logWarn "ignoring button 1 ..." // library marker kkossev.buttonDimmerLib, line 161
-            return // library marker kkossev.buttonDimmerLib, line 162
-        } // library marker kkossev.buttonDimmerLib, line 163
-        else { // library marker kkossev.buttonDimmerLib, line 164
-            def ii = state.states["ignoreButton1"] // library marker kkossev.buttonDimmerLib, line 165
-            buttonNumber = 1 // library marker kkossev.buttonDimmerLib, line 166
-            buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 167
-        } // library marker kkossev.buttonDimmerLib, line 168
-    } // library marker kkossev.buttonDimmerLib, line 169
-    else if (descMap.clusterInt == 0x0006 && descMap.command == "00") { // library marker kkossev.buttonDimmerLib, line 170
-        buttonNumber = isIkeaOnOffSwitch() ? 2 :4 // library marker kkossev.buttonDimmerLib, line 171
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 172
-    } // library marker kkossev.buttonDimmerLib, line 173
-    else if (descMap.clusterInt == 0x0006 && descMap.command == "02") { // library marker kkossev.buttonDimmerLib, line 174
-        // IKEA remote control E1810 - central button // library marker kkossev.buttonDimmerLib, line 175
-        toggle() // library marker kkossev.buttonDimmerLib, line 176
-        buttonNumber = 5 // library marker kkossev.buttonDimmerLib, line 177
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 178
-    }     // library marker kkossev.buttonDimmerLib, line 179
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "07" && ((descMap.data as String) == "[01, 01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 180
-        buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 181
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 182
-    } // library marker kkossev.buttonDimmerLib, line 183
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "07" && ((descMap.data as String) == "[00, 01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 184
-        buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 185
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 186
-    } // library marker kkossev.buttonDimmerLib, line 187
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "09" && ((descMap.data as String) == "[00, 00]")) { // library marker kkossev.buttonDimmerLib, line 188
-        // TODO !! // library marker kkossev.buttonDimmerLib, line 189
-        logWarn "button 2 or button 3 was held!" // library marker kkossev.buttonDimmerLib, line 190
-        state.states["ignoreButton1"] = true // library marker kkossev.buttonDimmerLib, line 191
-        runInMillis(DebounceOpts.defaultValue as int, ignoreButton1, [overwrite: true]) // library marker kkossev.buttonDimmerLib, line 192
-        return // library marker kkossev.buttonDimmerLib, line 193
+    if (descMap.clusterInt == 0x0006 && descMap.command == "01") { // library marker kkossev.buttonDimmerLib, line 147
+        if (state.states["ignoreButton1"] == true) { // library marker kkossev.buttonDimmerLib, line 148
+            logWarn "ignoring button 1 ..." // library marker kkossev.buttonDimmerLib, line 149
+            return // library marker kkossev.buttonDimmerLib, line 150
+        } // library marker kkossev.buttonDimmerLib, line 151
+        else { // library marker kkossev.buttonDimmerLib, line 152
+            def ii = state.states["ignoreButton1"] // library marker kkossev.buttonDimmerLib, line 153
+            buttonNumber = 1 // library marker kkossev.buttonDimmerLib, line 154
+            buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 155
+        } // library marker kkossev.buttonDimmerLib, line 156
+    } // library marker kkossev.buttonDimmerLib, line 157
+    else if (descMap.clusterInt == 0x0006 && descMap.command == "00") { // library marker kkossev.buttonDimmerLib, line 158
+        buttonNumber = isIkeaOnOffSwitch() ? 2 :4 // library marker kkossev.buttonDimmerLib, line 159
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 160
+    } // library marker kkossev.buttonDimmerLib, line 161
+    else if (descMap.clusterInt == 0x0006 && descMap.command == "02") { // library marker kkossev.buttonDimmerLib, line 162
+        // IKEA remote control E1810 - central button // library marker kkossev.buttonDimmerLib, line 163
+        toggle() // library marker kkossev.buttonDimmerLib, line 164
+        buttonNumber = 5 // library marker kkossev.buttonDimmerLib, line 165
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 166
+    }     // library marker kkossev.buttonDimmerLib, line 167
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "07" && ((descMap.data as String) == "[01, 01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 168
+        buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 169
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 170
+    } // library marker kkossev.buttonDimmerLib, line 171
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "07" && ((descMap.data as String) == "[00, 01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 172
+        buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 173
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 174
+    } // library marker kkossev.buttonDimmerLib, line 175
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "09" && ((descMap.data as String) == "[00, 00]")) { // library marker kkossev.buttonDimmerLib, line 176
+        // TODO !! // library marker kkossev.buttonDimmerLib, line 177
+        logWarn "button 2 or button 3 was held!" // library marker kkossev.buttonDimmerLib, line 178
+        state.states["ignoreButton1"] = true // library marker kkossev.buttonDimmerLib, line 179
+        runInMillis(DebounceOpts.defaultValue as int, ignoreButton1, [overwrite: true]) // library marker kkossev.buttonDimmerLib, line 180
+        return // library marker kkossev.buttonDimmerLib, line 181
+    } // library marker kkossev.buttonDimmerLib, line 182
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "08" && ((descMap.data as String) == "[01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 183
+        buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 184
+        buttonState = "held" // library marker kkossev.buttonDimmerLib, line 185
+    } // library marker kkossev.buttonDimmerLib, line 186
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "08" && ((descMap.data as String) == "[00, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 187
+        buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 188
+        buttonState = "held" // library marker kkossev.buttonDimmerLib, line 189
+    } // library marker kkossev.buttonDimmerLib, line 190
+    else if (descMap.clusterInt == 0x0005 && descMap.command == "09") { // library marker kkossev.buttonDimmerLib, line 191
+        buttonNumber = state.states["lastButtonNumber"] ?: 5 // library marker kkossev.buttonDimmerLib, line 192
+        buttonState = "released" // library marker kkossev.buttonDimmerLib, line 193
     } // library marker kkossev.buttonDimmerLib, line 194
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "08" && ((descMap.data as String) == "[01, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 195
-        buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 196
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "05") { // library marker kkossev.buttonDimmerLib, line 195
+        buttonNumber = 1 // library marker kkossev.buttonDimmerLib, line 196
         buttonState = "held" // library marker kkossev.buttonDimmerLib, line 197
     } // library marker kkossev.buttonDimmerLib, line 198
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "08" && ((descMap.data as String) == "[00, 0D, 00]")) { // library marker kkossev.buttonDimmerLib, line 199
-        buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 200
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "01") { // library marker kkossev.buttonDimmerLib, line 199
+        buttonNumber = isIkeaOnOffSwitch() ? 2 : 4 // library marker kkossev.buttonDimmerLib, line 200
         buttonState = "held" // library marker kkossev.buttonDimmerLib, line 201
     } // library marker kkossev.buttonDimmerLib, line 202
-    else if (descMap.clusterInt == 0x0005 && descMap.command == "09") { // library marker kkossev.buttonDimmerLib, line 203
+    else if (descMap.clusterInt == 0x0008 && descMap.command in ["07", "03"]) { // library marker kkossev.buttonDimmerLib, line 203
         buttonNumber = state.states["lastButtonNumber"] ?: 5 // library marker kkossev.buttonDimmerLib, line 204
         buttonState = "released" // library marker kkossev.buttonDimmerLib, line 205
     } // library marker kkossev.buttonDimmerLib, line 206
-    else if (descMap.clusterInt == 0x0008 && descMap.command == "05") { // library marker kkossev.buttonDimmerLib, line 207
-        buttonNumber = 1 // library marker kkossev.buttonDimmerLib, line 208
-        buttonState = "held" // library marker kkossev.buttonDimmerLib, line 209
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "06") { // library marker kkossev.buttonDimmerLib, line 207
+        buttonNumber = 1   // remote // library marker kkossev.buttonDimmerLib, line 208
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 209
     } // library marker kkossev.buttonDimmerLib, line 210
-    else if (descMap.clusterInt == 0x0008 && descMap.command == "01") { // library marker kkossev.buttonDimmerLib, line 211
-        buttonNumber = isIkeaOnOffSwitch() ? 2 : 4 // library marker kkossev.buttonDimmerLib, line 212
-        buttonState = "held" // library marker kkossev.buttonDimmerLib, line 213
+    else if (descMap.clusterInt == 0x0008 && descMap.command == "02") { // library marker kkossev.buttonDimmerLib, line 211
+        buttonNumber = 4  // remote // library marker kkossev.buttonDimmerLib, line 212
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 213
     } // library marker kkossev.buttonDimmerLib, line 214
-    else if (descMap.clusterInt == 0x0008 && descMap.command in ["07", "03"]) { // library marker kkossev.buttonDimmerLib, line 215
-        buttonNumber = state.states["lastButtonNumber"] ?: 5 // library marker kkossev.buttonDimmerLib, line 216
-        buttonState = "released" // library marker kkossev.buttonDimmerLib, line 217
-    } // library marker kkossev.buttonDimmerLib, line 218
-    else if (descMap.clusterInt == 0x0008 && descMap.command == "06") { // library marker kkossev.buttonDimmerLib, line 219
-        buttonNumber = 1   // remote // library marker kkossev.buttonDimmerLib, line 220
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 221
-    } // library marker kkossev.buttonDimmerLib, line 222
-    else if (descMap.clusterInt == 0x0008 && descMap.command == "02") { // library marker kkossev.buttonDimmerLib, line 223
-        buttonNumber = 4  // remote // library marker kkossev.buttonDimmerLib, line 224
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 225
-    } // library marker kkossev.buttonDimmerLib, line 226
 
-    else { // library marker kkossev.buttonDimmerLib, line 228
-        logWarn "processStyrbarCommand: unprocessed event from cluster ${descMap.clusterInt} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}" // library marker kkossev.buttonDimmerLib, line 229
-        return // library marker kkossev.buttonDimmerLib, line 230
-    }  // library marker kkossev.buttonDimmerLib, line 231
+    else { // library marker kkossev.buttonDimmerLib, line 216
+        logWarn "processIkeaCommand: unprocessed event from cluster ${descMap.clusterInt} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}" // library marker kkossev.buttonDimmerLib, line 217
+        return // library marker kkossev.buttonDimmerLib, line 218
+    }  // library marker kkossev.buttonDimmerLib, line 219
 
 
-    if (buttonNumber != 0 ) { // library marker kkossev.buttonDimmerLib, line 234
-        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 235
-            if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active! // library marker kkossev.buttonDimmerLib, line 236
-                logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!" // library marker kkossev.buttonDimmerLib, line 237
-                runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])    // restart the debouncing timer again // library marker kkossev.buttonDimmerLib, line 238
-                logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})" // library marker kkossev.buttonDimmerLib, line 239
-                return // library marker kkossev.buttonDimmerLib, line 240
-            } // library marker kkossev.buttonDimmerLib, line 241
-        } // library marker kkossev.buttonDimmerLib, line 242
-        state.states["lastButtonNumber"] = buttonNumber // library marker kkossev.buttonDimmerLib, line 243
+    if (buttonNumber != 0 ) { // library marker kkossev.buttonDimmerLib, line 222
+        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 223
+            if (((state.states["lastButtonNumber"] ?: 0) == buttonNumber) && (state.states["debouncingActive"] == true)) {    // debouncing timer still active! // library marker kkossev.buttonDimmerLib, line 224
+                logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!" // library marker kkossev.buttonDimmerLib, line 225
+                startButtonDebounce() // library marker kkossev.buttonDimmerLib, line 226
+                logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})" // library marker kkossev.buttonDimmerLib, line 227
+                return // library marker kkossev.buttonDimmerLib, line 228
+            } // library marker kkossev.buttonDimmerLib, line 229
+        } // library marker kkossev.buttonDimmerLib, line 230
+        state.states["lastButtonNumber"] = buttonNumber // library marker kkossev.buttonDimmerLib, line 231
+    } // library marker kkossev.buttonDimmerLib, line 232
+    else { // library marker kkossev.buttonDimmerLib, line 233
+        logWarn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}" // library marker kkossev.buttonDimmerLib, line 234
+    } // library marker kkossev.buttonDimmerLib, line 235
+    if (buttonState != "unknown" && buttonNumber != 0) { // library marker kkossev.buttonDimmerLib, line 236
+        def descriptionText = "button $buttonNumber was $buttonState" // library marker kkossev.buttonDimmerLib, line 237
+	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical'] // library marker kkossev.buttonDimmerLib, line 238
+        logInfo "${descriptionText}" // library marker kkossev.buttonDimmerLib, line 239
+		sendEvent(event) // library marker kkossev.buttonDimmerLib, line 240
+        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 241
+            startButtonDebounce() // library marker kkossev.buttonDimmerLib, line 242
+        } // library marker kkossev.buttonDimmerLib, line 243
     } // library marker kkossev.buttonDimmerLib, line 244
     else { // library marker kkossev.buttonDimmerLib, line 245
-        logWarn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}" // library marker kkossev.buttonDimmerLib, line 246
+        logWarn "UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}" // library marker kkossev.buttonDimmerLib, line 246
     } // library marker kkossev.buttonDimmerLib, line 247
-    if (buttonState != "unknown" && buttonNumber != 0) { // library marker kkossev.buttonDimmerLib, line 248
-        def descriptionText = "button $buttonNumber was $buttonState" // library marker kkossev.buttonDimmerLib, line 249
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical'] // library marker kkossev.buttonDimmerLib, line 250
-        logInfo "${descriptionText}" // library marker kkossev.buttonDimmerLib, line 251
-		sendEvent(event) // library marker kkossev.buttonDimmerLib, line 252
-        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 253
-            runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true]) // library marker kkossev.buttonDimmerLib, line 254
-        } // library marker kkossev.buttonDimmerLib, line 255
-    } // library marker kkossev.buttonDimmerLib, line 256
-    else { // library marker kkossev.buttonDimmerLib, line 257
-        logWarn "UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}" // library marker kkossev.buttonDimmerLib, line 258
-    } // library marker kkossev.buttonDimmerLib, line 259
 
 
 
+} // library marker kkossev.buttonDimmerLib, line 251
+
+def startButtonDebounce() { // library marker kkossev.buttonDimmerLib, line 253
+    logDebug "starting timer (${settings.debounce}) for button ${state.states['lastButtonNumber']}" // library marker kkossev.buttonDimmerLib, line 254
+    runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, clearButtonDebounce, [overwrite: true])    // restart the debouncing timer again // library marker kkossev.buttonDimmerLib, line 255
+    state.states["debouncingActive"] = true // library marker kkossev.buttonDimmerLib, line 256
+} // library marker kkossev.buttonDimmerLib, line 257
+
+def clearButtonDebounce() { // library marker kkossev.buttonDimmerLib, line 259
+    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired." // library marker kkossev.buttonDimmerLib, line 260
+    //state.states["lastButtonNumber"] = 0 // library marker kkossev.buttonDimmerLib, line 261
+    state.states["debouncingActive"] = false // library marker kkossev.buttonDimmerLib, line 262
 } // library marker kkossev.buttonDimmerLib, line 263
 
 def ignoreButton1() { // library marker kkossev.buttonDimmerLib, line 265
@@ -3631,226 +3631,211 @@ def ignoreButton1() { // library marker kkossev.buttonDimmerLib, line 265
     state.states["ignoreButton1"] = false // library marker kkossev.buttonDimmerLib, line 267
 } // library marker kkossev.buttonDimmerLib, line 268
 
-
-
-
-void processTS004Fcommand(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 273
-    logDebug "processTS004Fcommand: descMap: $descMap" // library marker kkossev.buttonDimmerLib, line 274
-    def buttonNumber = 0 // library marker kkossev.buttonDimmerLib, line 275
-    def buttonState = "unknown" // library marker kkossev.buttonDimmerLib, line 276
-    Boolean reverseButton = settings.reverseButton ?: false // library marker kkossev.buttonDimmerLib, line 277
-    // when TS004F initialized in Scene switch mode! // library marker kkossev.buttonDimmerLib, line 278
-    if (descMap.clusterInt == 0x0006 && descMap.command == "FD") { // library marker kkossev.buttonDimmerLib, line 279
-        if (descMap.sourceEndpoint == "03") { // library marker kkossev.buttonDimmerLib, line 280
-     	    buttonNumber = reverseButton==true ? 3 : 1 // library marker kkossev.buttonDimmerLib, line 281
+void processTS004Fcommand(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 270
+    logDebug "processTS004Fcommand: descMap: $descMap" // library marker kkossev.buttonDimmerLib, line 271
+    def buttonNumber = 0 // library marker kkossev.buttonDimmerLib, line 272
+    def buttonState = "unknown" // library marker kkossev.buttonDimmerLib, line 273
+    Boolean reverseButton = settings.reverseButton ?: false // library marker kkossev.buttonDimmerLib, line 274
+    // when TS004F initialized in Scene switch mode! // library marker kkossev.buttonDimmerLib, line 275
+    if (descMap.clusterInt == 0x0006 && descMap.command == "FD") { // library marker kkossev.buttonDimmerLib, line 276
+        if (descMap.sourceEndpoint == "03") { // library marker kkossev.buttonDimmerLib, line 277
+     	    buttonNumber = reverseButton==true ? 3 : 1 // library marker kkossev.buttonDimmerLib, line 278
+        } // library marker kkossev.buttonDimmerLib, line 279
+        else if (descMap.sourceEndpoint == "04") { // library marker kkossev.buttonDimmerLib, line 280
+      	    buttonNumber = reverseButton==true  ? 4 : 2 // library marker kkossev.buttonDimmerLib, line 281
         } // library marker kkossev.buttonDimmerLib, line 282
-        else if (descMap.sourceEndpoint == "04") { // library marker kkossev.buttonDimmerLib, line 283
-      	    buttonNumber = reverseButton==true  ? 4 : 2 // library marker kkossev.buttonDimmerLib, line 284
+        else if (descMap.sourceEndpoint == "02") { // library marker kkossev.buttonDimmerLib, line 283
+            buttonNumber = reverseButton==true  ? 2 : 3 // library marker kkossev.buttonDimmerLib, line 284
         } // library marker kkossev.buttonDimmerLib, line 285
-        else if (descMap.sourceEndpoint == "02") { // library marker kkossev.buttonDimmerLib, line 286
-            buttonNumber = reverseButton==true  ? 2 : 3 // library marker kkossev.buttonDimmerLib, line 287
+        else if (descMap.sourceEndpoint == "01") { // library marker kkossev.buttonDimmerLib, line 286
+       	    buttonNumber = reverseButton==true  ? 1 : 4 // library marker kkossev.buttonDimmerLib, line 287
         } // library marker kkossev.buttonDimmerLib, line 288
-        else if (descMap.sourceEndpoint == "01") { // library marker kkossev.buttonDimmerLib, line 289
-       	    buttonNumber = reverseButton==true  ? 1 : 4 // library marker kkossev.buttonDimmerLib, line 290
+	    else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046 // library marker kkossev.buttonDimmerLib, line 289
+   	        buttonNumber = reverseButton==true  ? 5 : 5 // library marker kkossev.buttonDimmerLib, line 290
         } // library marker kkossev.buttonDimmerLib, line 291
-	    else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046 // library marker kkossev.buttonDimmerLib, line 292
-   	        buttonNumber = reverseButton==true  ? 5 : 5 // library marker kkossev.buttonDimmerLib, line 293
-        } // library marker kkossev.buttonDimmerLib, line 294
-        else if (descMap.sourceEndpoint == "06") { // library marker kkossev.buttonDimmerLib, line 295
-       	    buttonNumber = reverseButton==true  ? 6 : 6 // library marker kkossev.buttonDimmerLib, line 296
-        }             // library marker kkossev.buttonDimmerLib, line 297
-        if (descMap.data[0] == "00") { // library marker kkossev.buttonDimmerLib, line 298
-            buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 299
+        else if (descMap.sourceEndpoint == "06") { // library marker kkossev.buttonDimmerLib, line 292
+       	    buttonNumber = reverseButton==true  ? 6 : 6 // library marker kkossev.buttonDimmerLib, line 293
+        }             // library marker kkossev.buttonDimmerLib, line 294
+        if (descMap.data[0] == "00") { // library marker kkossev.buttonDimmerLib, line 295
+            buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 296
+        } // library marker kkossev.buttonDimmerLib, line 297
+        else if (descMap.data[0] == "01") { // library marker kkossev.buttonDimmerLib, line 298
+            buttonState = "doubleTapped" // library marker kkossev.buttonDimmerLib, line 299
         } // library marker kkossev.buttonDimmerLib, line 300
-        else if (descMap.data[0] == "01") { // library marker kkossev.buttonDimmerLib, line 301
-            buttonState = "doubleTapped" // library marker kkossev.buttonDimmerLib, line 302
+        else if (descMap.data[0] == "02") { // library marker kkossev.buttonDimmerLib, line 301
+            buttonState = "held" // library marker kkossev.buttonDimmerLib, line 302
         } // library marker kkossev.buttonDimmerLib, line 303
-        else if (descMap.data[0] == "02") { // library marker kkossev.buttonDimmerLib, line 304
-            buttonState = "held" // library marker kkossev.buttonDimmerLib, line 305
-        } // library marker kkossev.buttonDimmerLib, line 306
-        else { // library marker kkossev.buttonDimmerLib, line 307
-            logWarn "unknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}" // library marker kkossev.buttonDimmerLib, line 308
-            return // library marker kkossev.buttonDimmerLib, line 309
-        }  // library marker kkossev.buttonDimmerLib, line 310
-    } // if command == "FD"} // library marker kkossev.buttonDimmerLib, line 311
-    else if (descMap.clusterInt == 0x0006 && descMap.command == "FC") { // library marker kkossev.buttonDimmerLib, line 312
-        // Smart knob // library marker kkossev.buttonDimmerLib, line 313
-        if (descMap.data[0] == "00") {            // Rotate one click right // library marker kkossev.buttonDimmerLib, line 314
-            buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 315
+        else { // library marker kkossev.buttonDimmerLib, line 304
+            logWarn "unknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}" // library marker kkossev.buttonDimmerLib, line 305
+            return // library marker kkossev.buttonDimmerLib, line 306
+        }  // library marker kkossev.buttonDimmerLib, line 307
+    } // if command == "FD"} // library marker kkossev.buttonDimmerLib, line 308
+    else if (descMap.clusterInt == 0x0006 && descMap.command == "FC") { // library marker kkossev.buttonDimmerLib, line 309
+        // Smart knob // library marker kkossev.buttonDimmerLib, line 310
+        if (descMap.data[0] == "00") {            // Rotate one click right // library marker kkossev.buttonDimmerLib, line 311
+            buttonNumber = 2 // library marker kkossev.buttonDimmerLib, line 312
+        } // library marker kkossev.buttonDimmerLib, line 313
+        else if (descMap.data[0] == "01") {       // Rotate one click left // library marker kkossev.buttonDimmerLib, line 314
+            buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 315
         } // library marker kkossev.buttonDimmerLib, line 316
-        else if (descMap.data[0] == "01") {       // Rotate one click left // library marker kkossev.buttonDimmerLib, line 317
-            buttonNumber = 3 // library marker kkossev.buttonDimmerLib, line 318
-        } // library marker kkossev.buttonDimmerLib, line 319
-        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 320
-    } // library marker kkossev.buttonDimmerLib, line 321
-    else { // library marker kkossev.buttonDimmerLib, line 322
-        logWarn "processTS004Fcommand: unprocessed command" // library marker kkossev.buttonDimmerLib, line 323
-        return // library marker kkossev.buttonDimmerLib, line 324
-    } // library marker kkossev.buttonDimmerLib, line 325
-    if (buttonNumber != 0 ) { // library marker kkossev.buttonDimmerLib, line 326
-        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 327
-            if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active! // library marker kkossev.buttonDimmerLib, line 328
-                logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!" // library marker kkossev.buttonDimmerLib, line 329
-                runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])    // restart the debouncing timer again // library marker kkossev.buttonDimmerLib, line 330
-                logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})" // library marker kkossev.buttonDimmerLib, line 331
-                return // library marker kkossev.buttonDimmerLib, line 332
-            } // library marker kkossev.buttonDimmerLib, line 333
-        } // library marker kkossev.buttonDimmerLib, line 334
-        state.states["lastButtonNumber"] = buttonNumber // library marker kkossev.buttonDimmerLib, line 335
+        buttonState = "pushed" // library marker kkossev.buttonDimmerLib, line 317
+    } // library marker kkossev.buttonDimmerLib, line 318
+    else { // library marker kkossev.buttonDimmerLib, line 319
+        logWarn "processTS004Fcommand: unprocessed command" // library marker kkossev.buttonDimmerLib, line 320
+        return // library marker kkossev.buttonDimmerLib, line 321
+    } // library marker kkossev.buttonDimmerLib, line 322
+    if (buttonNumber != 0 ) { // library marker kkossev.buttonDimmerLib, line 323
+        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 324
+            if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active! // library marker kkossev.buttonDimmerLib, line 325
+                logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!" // library marker kkossev.buttonDimmerLib, line 326
+                startButtonDebounce() // library marker kkossev.buttonDimmerLib, line 327
+                logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})" // library marker kkossev.buttonDimmerLib, line 328
+                return // library marker kkossev.buttonDimmerLib, line 329
+            } // library marker kkossev.buttonDimmerLib, line 330
+        } // library marker kkossev.buttonDimmerLib, line 331
+        state.states["lastButtonNumber"] = buttonNumber // library marker kkossev.buttonDimmerLib, line 332
+    } // library marker kkossev.buttonDimmerLib, line 333
+    else { // library marker kkossev.buttonDimmerLib, line 334
+        logWarn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}" // library marker kkossev.buttonDimmerLib, line 335
     } // library marker kkossev.buttonDimmerLib, line 336
-    else { // library marker kkossev.buttonDimmerLib, line 337
-        logWarn "UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}" // library marker kkossev.buttonDimmerLib, line 338
-    } // library marker kkossev.buttonDimmerLib, line 339
-    if (buttonState != "unknown" && buttonNumber != 0) { // library marker kkossev.buttonDimmerLib, line 340
-        def descriptionText = "button $buttonNumber was $buttonState" // library marker kkossev.buttonDimmerLib, line 341
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical'] // library marker kkossev.buttonDimmerLib, line 342
-        logInfo "${descriptionText}" // library marker kkossev.buttonDimmerLib, line 343
-		sendEvent(event) // library marker kkossev.buttonDimmerLib, line 344
-        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 345
-            runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true]) // library marker kkossev.buttonDimmerLib, line 346
-        } // library marker kkossev.buttonDimmerLib, line 347
+    if (buttonState != "unknown" && buttonNumber != 0) { // library marker kkossev.buttonDimmerLib, line 337
+        def descriptionText = "button $buttonNumber was $buttonState" // library marker kkossev.buttonDimmerLib, line 338
+	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical'] // library marker kkossev.buttonDimmerLib, line 339
+        logInfo "${descriptionText}" // library marker kkossev.buttonDimmerLib, line 340
+		sendEvent(event) // library marker kkossev.buttonDimmerLib, line 341
+        if (needsDebouncing()) { // library marker kkossev.buttonDimmerLib, line 342
+            startButtonDebounce() // library marker kkossev.buttonDimmerLib, line 343
+        } // library marker kkossev.buttonDimmerLib, line 344
+    } // library marker kkossev.buttonDimmerLib, line 345
+    else { // library marker kkossev.buttonDimmerLib, line 346
+        logWarn "UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}" // library marker kkossev.buttonDimmerLib, line 347
     } // library marker kkossev.buttonDimmerLib, line 348
-    else { // library marker kkossev.buttonDimmerLib, line 349
-        logWarn "UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}" // library marker kkossev.buttonDimmerLib, line 350
-    } // library marker kkossev.buttonDimmerLib, line 351
-} // library marker kkossev.buttonDimmerLib, line 352
+} // library marker kkossev.buttonDimmerLib, line 349
 
-void processTS004Fmode(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 354
-    if (descMap.value == "00") { // library marker kkossev.buttonDimmerLib, line 355
-        sendEvent(name: "switchMode", value: "dimmer", isStateChange: true)  // library marker kkossev.buttonDimmerLib, line 356
-        logInfo "mode is <b>dimmer</b>" // library marker kkossev.buttonDimmerLib, line 357
-    } // library marker kkossev.buttonDimmerLib, line 358
-    else if (descMap.value == "01") { // library marker kkossev.buttonDimmerLib, line 359
-        sendEvent(name: "switchMode", value: "scene", isStateChange: true) // library marker kkossev.buttonDimmerLib, line 360
-        logInfo "mode is <b>scene</b>" // library marker kkossev.buttonDimmerLib, line 361
+void processTS004Fmode(final Map descMap) { // library marker kkossev.buttonDimmerLib, line 351
+    if (descMap.value == "00") { // library marker kkossev.buttonDimmerLib, line 352
+        sendEvent(name: "switchMode", value: "dimmer", isStateChange: true)  // library marker kkossev.buttonDimmerLib, line 353
+        logInfo "mode is <b>dimmer</b>" // library marker kkossev.buttonDimmerLib, line 354
+    } // library marker kkossev.buttonDimmerLib, line 355
+    else if (descMap.value == "01") { // library marker kkossev.buttonDimmerLib, line 356
+        sendEvent(name: "switchMode", value: "scene", isStateChange: true) // library marker kkossev.buttonDimmerLib, line 357
+        logInfo "mode is <b>scene</b>" // library marker kkossev.buttonDimmerLib, line 358
+    } // library marker kkossev.buttonDimmerLib, line 359
+    else { // library marker kkossev.buttonDimmerLib, line 360
+        logWarn "TS004F unknown attrId ${descMap.attrId} value ${descMap.value}" // library marker kkossev.buttonDimmerLib, line 361
     } // library marker kkossev.buttonDimmerLib, line 362
-    else { // library marker kkossev.buttonDimmerLib, line 363
-        logWarn "TS004F unknown attrId ${descMap.attrId} value ${descMap.value}" // library marker kkossev.buttonDimmerLib, line 364
-    } // library marker kkossev.buttonDimmerLib, line 365
-} // library marker kkossev.buttonDimmerLib, line 366
+} // library marker kkossev.buttonDimmerLib, line 363
 
 
-def buttonDebounce(/*button*/) { // library marker kkossev.buttonDimmerLib, line 369
-    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired." // library marker kkossev.buttonDimmerLib, line 370
-    state.states["lastButtonNumber"] = 0 // library marker kkossev.buttonDimmerLib, line 371
-} // library marker kkossev.buttonDimmerLib, line 372
+def switchToSceneMode() // library marker kkossev.buttonDimmerLib, line 366
+{ // library marker kkossev.buttonDimmerLib, line 367
+    logInfo "switching TS004F into Scene mode" // library marker kkossev.buttonDimmerLib, line 368
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01)) // library marker kkossev.buttonDimmerLib, line 369
+} // library marker kkossev.buttonDimmerLib, line 370
 
-def switchToSceneMode() // library marker kkossev.buttonDimmerLib, line 374
-{ // library marker kkossev.buttonDimmerLib, line 375
-    logInfo "switching TS004F into Scene mode" // library marker kkossev.buttonDimmerLib, line 376
-    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01)) // library marker kkossev.buttonDimmerLib, line 377
-} // library marker kkossev.buttonDimmerLib, line 378
+def switchToDimmerMode() // library marker kkossev.buttonDimmerLib, line 372
+{ // library marker kkossev.buttonDimmerLib, line 373
+    logInfo "switching TS004F into Dimmer mode" // library marker kkossev.buttonDimmerLib, line 374
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)) // library marker kkossev.buttonDimmerLib, line 375
+} // library marker kkossev.buttonDimmerLib, line 376
 
-def switchToDimmerMode() // library marker kkossev.buttonDimmerLib, line 380
-{ // library marker kkossev.buttonDimmerLib, line 381
-    logInfo "switching TS004F into Dimmer mode" // library marker kkossev.buttonDimmerLib, line 382
-    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00)) // library marker kkossev.buttonDimmerLib, line 383
-} // library marker kkossev.buttonDimmerLib, line 384
-
-def switchMode( mode ) { // library marker kkossev.buttonDimmerLib, line 386
-    if (mode == "dimmer") { // library marker kkossev.buttonDimmerLib, line 387
-        switchToDimmerMode() // library marker kkossev.buttonDimmerLib, line 388
-    } // library marker kkossev.buttonDimmerLib, line 389
-    else if (mode == "scene") { // library marker kkossev.buttonDimmerLib, line 390
-        switchToSceneMode() // library marker kkossev.buttonDimmerLib, line 391
-    } // library marker kkossev.buttonDimmerLib, line 392
-} // library marker kkossev.buttonDimmerLib, line 393
+def switchMode( mode ) { // library marker kkossev.buttonDimmerLib, line 378
+    if (mode == "dimmer") { // library marker kkossev.buttonDimmerLib, line 379
+        switchToDimmerMode() // library marker kkossev.buttonDimmerLib, line 380
+    } // library marker kkossev.buttonDimmerLib, line 381
+    else if (mode == "scene") { // library marker kkossev.buttonDimmerLib, line 382
+        switchToSceneMode() // library marker kkossev.buttonDimmerLib, line 383
+    } // library marker kkossev.buttonDimmerLib, line 384
+} // library marker kkossev.buttonDimmerLib, line 385
 
 
+void processTuyaDpButtonDimmer(descMap, dp, dp_id, fncmd) { // library marker kkossev.buttonDimmerLib, line 388
 
-void processTuyaDpButtonDimmer(descMap, dp, dp_id, fncmd) { // library marker kkossev.buttonDimmerLib, line 397
+    switch (dp) { // library marker kkossev.buttonDimmerLib, line 390
+        case 0x01 : // on/off // library marker kkossev.buttonDimmerLib, line 391
+            sendSwitchEvent(fncmd) // library marker kkossev.buttonDimmerLib, line 392
+            break // library marker kkossev.buttonDimmerLib, line 393
+        case 0x02 : // library marker kkossev.buttonDimmerLib, line 394
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.buttonDimmerLib, line 395
+            break // library marker kkossev.buttonDimmerLib, line 396
+        case 0x04 : // battery // library marker kkossev.buttonDimmerLib, line 397
+            sendBatteryPercentageEvent(fncmd) // library marker kkossev.buttonDimmerLib, line 398
+            break // library marker kkossev.buttonDimmerLib, line 399
+        default : // library marker kkossev.buttonDimmerLib, line 400
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.buttonDimmerLib, line 401
+            break             // library marker kkossev.buttonDimmerLib, line 402
+    } // library marker kkossev.buttonDimmerLib, line 403
+} // library marker kkossev.buttonDimmerLib, line 404
 
-    switch (dp) { // library marker kkossev.buttonDimmerLib, line 399
-        case 0x01 : // on/off // library marker kkossev.buttonDimmerLib, line 400
-            sendSwitchEvent(fncmd) // library marker kkossev.buttonDimmerLib, line 401
-            break // library marker kkossev.buttonDimmerLib, line 402
-        case 0x02 : // library marker kkossev.buttonDimmerLib, line 403
-            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.buttonDimmerLib, line 404
-            break // library marker kkossev.buttonDimmerLib, line 405
-        case 0x04 : // battery // library marker kkossev.buttonDimmerLib, line 406
-            sendBatteryPercentageEvent(fncmd) // library marker kkossev.buttonDimmerLib, line 407
-            break // library marker kkossev.buttonDimmerLib, line 408
-        default : // library marker kkossev.buttonDimmerLib, line 409
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.buttonDimmerLib, line 410
-            break             // library marker kkossev.buttonDimmerLib, line 411
-    } // library marker kkossev.buttonDimmerLib, line 412
+
+def refreshButtonDimmer() { // library marker kkossev.buttonDimmerLib, line 407
+    List<String> cmds = [] // library marker kkossev.buttonDimmerLib, line 408
+    logDebug "refreshButtonDimmer() (n/a) : ${cmds} " // library marker kkossev.buttonDimmerLib, line 409
+    // TODO !!  // library marker kkossev.buttonDimmerLib, line 410
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.buttonDimmerLib, line 411
+    return cmds // library marker kkossev.buttonDimmerLib, line 412
 } // library marker kkossev.buttonDimmerLib, line 413
 
+def configureDeviceButtonDimmer() { // library marker kkossev.buttonDimmerLib, line 415
+    List<String> cmds = [] // library marker kkossev.buttonDimmerLib, line 416
+    // TODO !! // library marker kkossev.buttonDimmerLib, line 417
+    logDebug "configureDeviceButtonDimmer() : ${cmds}" // library marker kkossev.buttonDimmerLib, line 418
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.buttonDimmerLib, line 419
+    return cmds     // library marker kkossev.buttonDimmerLib, line 420
+} // library marker kkossev.buttonDimmerLib, line 421
 
-def refreshButtonDimmer() { // library marker kkossev.buttonDimmerLib, line 416
-    List<String> cmds = [] // library marker kkossev.buttonDimmerLib, line 417
-    logDebug "refreshButtonDimmer() (n/a) : ${cmds} " // library marker kkossev.buttonDimmerLib, line 418
-    // TODO !!  // library marker kkossev.buttonDimmerLib, line 419
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.buttonDimmerLib, line 420
-    return cmds // library marker kkossev.buttonDimmerLib, line 421
-} // library marker kkossev.buttonDimmerLib, line 422
-
-def configureDeviceButtonDimmer() { // library marker kkossev.buttonDimmerLib, line 424
+def initializeDeviceButtonDimmer() // library marker kkossev.buttonDimmerLib, line 423
+{ // library marker kkossev.buttonDimmerLib, line 424
     List<String> cmds = [] // library marker kkossev.buttonDimmerLib, line 425
-/*     // library marker kkossev.buttonDimmerLib, line 426
-    def mode = settings.fingerbotMode != null ? settings.fingerbotMode : FingerbotModeOpts.defaultValue // library marker kkossev.buttonDimmerLib, line 427
-    //logWarn "mode=${mode}  settings=${(settings.fingerbotMode)}" // library marker kkossev.buttonDimmerLib, line 428
-    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})" // library marker kkossev.buttonDimmerLib, line 429
-    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) ) // library marker kkossev.buttonDimmerLib, line 430
-*/ // library marker kkossev.buttonDimmerLib, line 431
+    int intMinTime = 300 // library marker kkossev.buttonDimmerLib, line 426
+    int intMaxTime = 14400    // 4 hours reporting period for the battery // library marker kkossev.buttonDimmerLib, line 427
 
-    logDebug "configureDeviceButtonDimmer() : ${cmds}" // library marker kkossev.buttonDimmerLib, line 433
-    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.buttonDimmerLib, line 434
-    return cmds     // library marker kkossev.buttonDimmerLib, line 435
-} // library marker kkossev.buttonDimmerLib, line 436
+    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=141)    // OK // library marker kkossev.buttonDimmerLib, line 429
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 142", ] // library marker kkossev.buttonDimmerLib, line 430
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 144", ] // library marker kkossev.buttonDimmerLib, line 431
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 145", ] // library marker kkossev.buttonDimmerLib, line 432
 
-def initializeDeviceButtonDimmer() // library marker kkossev.buttonDimmerLib, line 438
-{ // library marker kkossev.buttonDimmerLib, line 439
-    List<String> cmds = [] // library marker kkossev.buttonDimmerLib, line 440
-    int intMinTime = 300 // library marker kkossev.buttonDimmerLib, line 441
-    int intMaxTime = 3600 // library marker kkossev.buttonDimmerLib, line 442
-
-    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=141)    // OK // library marker kkossev.buttonDimmerLib, line 444
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 142", ]            // binding is OK            //  Configuring 0x0006 : -> configure reporting error: Unsupported Attribute [86, 00, 00, 00] // library marker kkossev.buttonDimmerLib, line 445
-    //error: //cmds += zigbee.configureReporting(0x0020, 0x0000, DataType.INT16 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=143)    // zigbee configure reporting error: Invalid Data Type [8D, 00, 00, 00] // library marker kkossev.buttonDimmerLib, line 446
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 144", ]            // binding is OK - reporting configuration is not supported // library marker kkossev.buttonDimmerLib, line 447
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 145", ] // library marker kkossev.buttonDimmerLib, line 448
+    logDebug "initializeDeviceButtonDimmer() : ${cmds}" // library marker kkossev.buttonDimmerLib, line 434
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.buttonDimmerLib, line 435
+    return cmds         // library marker kkossev.buttonDimmerLib, line 436
+} // library marker kkossev.buttonDimmerLib, line 437
 
 
-    logDebug "initializeDeviceButtonDimmer() : ${cmds}" // library marker kkossev.buttonDimmerLib, line 451
-    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.buttonDimmerLib, line 452
-    return cmds         // library marker kkossev.buttonDimmerLib, line 453
-} // library marker kkossev.buttonDimmerLib, line 454
+void initVarsButtonDimmer(boolean fullInit=false) { // library marker kkossev.buttonDimmerLib, line 440
+    logDebug "initVarsButtonDimmer(${fullInit})" // library marker kkossev.buttonDimmerLib, line 441
+    def debounceDefault = ((device.getDataValue("model") ?: "n/a") == "TS004F" || ((device.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])) ?  "1000" : "0" // library marker kkossev.buttonDimmerLib, line 442
+    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: debounceDefault, type: 'enum']) // library marker kkossev.buttonDimmerLib, line 443
+    if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true) // library marker kkossev.buttonDimmerLib, line 444
+    if (state.states == null) { state.states = [:] }  // library marker kkossev.buttonDimmerLib, line 445
+    state.states["ignoreButton1"] = false // library marker kkossev.buttonDimmerLib, line 446
+    state.states["debouncingActive"] = false // library marker kkossev.buttonDimmerLib, line 447
+} // library marker kkossev.buttonDimmerLib, line 448
 
+void initEventsButtonDimmer(boolean fullInit=false) { // library marker kkossev.buttonDimmerLib, line 450
+    def numberOfButtons = 0 // library marker kkossev.buttonDimmerLib, line 451
+    def supportedValues = [] // library marker kkossev.buttonDimmerLib, line 452
+    if (isIkeaShortcutButtonE1812()) { // library marker kkossev.buttonDimmerLib, line 453
+        numberOfButtons = 1 // library marker kkossev.buttonDimmerLib, line 454
+        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 455
+    }  // library marker kkossev.buttonDimmerLib, line 456
+    else if (isIkeaRODRET() || isIkeaOnOffSwitch()) { // library marker kkossev.buttonDimmerLib, line 457
+        numberOfButtons = 2 // library marker kkossev.buttonDimmerLib, line 458
+        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 459
+    } // library marker kkossev.buttonDimmerLib, line 460
+    else if (isIkeaStyrbar()) { // library marker kkossev.buttonDimmerLib, line 461
+        numberOfButtons = 4 // library marker kkossev.buttonDimmerLib, line 462
+        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 463
+    }  // library marker kkossev.buttonDimmerLib, line 464
+    else if (isIkeaRemoteControl()) { // library marker kkossev.buttonDimmerLib, line 465
+        numberOfButtons = 5 // library marker kkossev.buttonDimmerLib, line 466
+        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 467
+    }  // library marker kkossev.buttonDimmerLib, line 468
+    if (numberOfButtons != 0) { // library marker kkossev.buttonDimmerLib, line 469
+        sendNumberOfButtonsEvent(numberOfButtons) // library marker kkossev.buttonDimmerLib, line 470
+        sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.buttonDimmerLib, line 471
+    } // library marker kkossev.buttonDimmerLib, line 472
 
-void initVarsButtonDimmer(boolean fullInit=false) { // library marker kkossev.buttonDimmerLib, line 457
-    logDebug "initVarsButtonDimmer(${fullInit})" // library marker kkossev.buttonDimmerLib, line 458
-    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.buttonDimmerLib, line 459
-    if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true) // library marker kkossev.buttonDimmerLib, line 460
-    if (state.states == null) { state.states = [:] }  // library marker kkossev.buttonDimmerLib, line 461
-    state.states["ignoreButton1"] = false // library marker kkossev.buttonDimmerLib, line 462
-} // library marker kkossev.buttonDimmerLib, line 463
-
-void initEventsButtonDimmer(boolean fullInit=false) { // library marker kkossev.buttonDimmerLib, line 465
-    def numberOfButtons = 0 // library marker kkossev.buttonDimmerLib, line 466
-    def supportedValues = [] // library marker kkossev.buttonDimmerLib, line 467
-    if (isIkeaShortcutButtonE1812()) { // library marker kkossev.buttonDimmerLib, line 468
-        numberOfButtons = 1 // library marker kkossev.buttonDimmerLib, line 469
-        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 470
-    }  // library marker kkossev.buttonDimmerLib, line 471
-    else if (isIkeaRODRET() || isIkeaOnOffSwitch()) { // library marker kkossev.buttonDimmerLib, line 472
-        numberOfButtons = 2 // library marker kkossev.buttonDimmerLib, line 473
-        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 474
-    } // library marker kkossev.buttonDimmerLib, line 475
-    else if (isIkeaStyrbar()) { // library marker kkossev.buttonDimmerLib, line 476
-        numberOfButtons = 4 // library marker kkossev.buttonDimmerLib, line 477
-        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 478
-    }  // library marker kkossev.buttonDimmerLib, line 479
-    else if (isIkeaRemoteControl()) { // library marker kkossev.buttonDimmerLib, line 480
-        numberOfButtons = 5 // library marker kkossev.buttonDimmerLib, line 481
-        supportedValues = ["pushed", "held", "released"] // library marker kkossev.buttonDimmerLib, line 482
-    }  // library marker kkossev.buttonDimmerLib, line 483
-    if (numberOfButtons != 0) { // library marker kkossev.buttonDimmerLib, line 484
-        sendNumberOfButtonsEvent(numberOfButtons) // library marker kkossev.buttonDimmerLib, line 485
-        sendSupportedButtonValuesEvent(supportedValues) // library marker kkossev.buttonDimmerLib, line 486
-    } // library marker kkossev.buttonDimmerLib, line 487
-
-} // library marker kkossev.buttonDimmerLib, line 489
+} // library marker kkossev.buttonDimmerLib, line 474
 
 
 

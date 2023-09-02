@@ -22,7 +22,7 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-08-30 kkossev  - Libraries introduction for the Tuya Zigbee Button Dimmer driver; added IKEA Styrbar E2001/E2002;
- * ver. 1.0.1  2023-09-01 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; added "IKEA remote control E1810"  
+ * ver. 1.0.1  2023-09-02 kkossev  - (dev.branch) added TRADFRI on/off switch E1743; added "IKEA remote control E1810"; added IKEA TRADFRI SHORTCUT Button E1812; debounce disabled by default;
  *
  *                                   TODO: add IKEA RODRET E2201  keys processing !
  *                                   TODO: verify Ikea reporting configuration (WireShark) 1
@@ -35,8 +35,8 @@ library (
 */
 
 
-def buttonDimmerVersion()   {"1.0.1"}
-def buttonDimmerLibStamp() {"2023/09/01 11:52 PM"}
+def buttonDimmerVersion()   {"1.0.2"}
+def buttonDimmerLibStamp() {"2023/09/01 11:56 AM"}
 
 metadata {
     capability "Switch"    // IKEA remote control E1810 - central button
@@ -52,7 +52,7 @@ metadata {
     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI on/off switch",   manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA on/off switch E1743"  
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0004,0005,0006,0008,0019,1000", model:"TRADFRI remote control",  manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA remote control E1810"  
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA TRADFRI SHORTCUT Button E1812"
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters: "0003,0006,0008,0019,1000",          model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"                   // (stainless)
 	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters: "0003,0005,0006,0008,0019,1000",     model:"Remote Control N2",       manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC7C",      outClusters:"0003,0004,0006,0008,0019,1000",      model:"RODRET Dimmer",           manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA RODRET Wireless Dimmer E2201"
@@ -70,11 +70,11 @@ metadata {
     options     : [0: 'dimmer', 1: 'scene']
 ]
 @Field static final Map DebounceOpts = [
-    defaultValue: 1000,
-    options     : [0: 'disabled', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',]
+    defaultValue: 0,
+    options     : [0: 'disabled', 500: '0.5 seconds', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',]
 ]
 
-def needsDebouncing() { (((settings.debounce  ?: 0) as int) != 0) && (device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"]))}
+def needsDebouncing()           { (settings.debounce  ?: 0) as int != 0 }
 def isIkeaOnOffSwitch()         { device.getDataValue("model") == "TRADFRI on/off switch" }
 def isIkeaRemoteControl()       { device.getDataValue("model") == "TRADFRI remote control" }
 def isIkeaShortcutButtonE1812() { device.getDataValue("model") == "TRADFRI SHORTCUT Button" }
@@ -88,7 +88,7 @@ def isIkeaRODRET()              { device.getDataValue("model") == "RODRET Dimmer
 */
 void parseScenesClusterButtonDimmer(final Map descMap) {
     if (isIkeaStyrbar() || isIkeaRODRET() || isIkeaRemoteControl()) {
-        processStyrbarCommand(descMap)
+        processIkeaCommand(descMap)
     }
     else {
         logWarn "parseScenesClusterButtonDimmer: unprocessed Scenes cluster attribute ${descMap.attrId}"
@@ -108,21 +108,9 @@ void parseOnOffClusterButtonDimmer(final Map descMap) {
     else if (descMap.attrId == "8004") {
         processTS004Fmode(descMap)
     }
-    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) {
-        processStyrbarCommand(descMap)
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl() || isIkeaShortcutButtonE1812()) {
+        processIkeaCommand(descMap)
     }
-    else if (isIkeaShortcutButtonE1812() && ((descMap.clusterInt == 0x0006 || descMap.clusterInt == 0x0008) && (descMap.command in ["01","05","07" ]))) {
-            // TODO !!!
-            logInfo "IkeaShortcutButtonE1812 - not ready yet!"
-            // IKEA Tradfri Shortcut Button E1812
-            /*
-            buttonNumber = 1
-            if (descMap.clusterInt == 0x0006 && descMap.command == "01") buttonState = "pushed"    
-            else if (descMap.clusterInt == 0x0008 && descMap.command == "05") buttonState = "held"  
-            else if (descMap.clusterInt == 0x0008 && descMap.command == "07") buttonState = "released"
-            else buttonState = "unknown"
-            */
-    }    
     else {
         logWarn "parseOnOffClusterButtonDimmer: unprocessed OnOff Cluster attribute ${descMap.attrId}"
     }    
@@ -137,8 +125,8 @@ void parseLevelControlClusterButtonDimmer(final Map descMap) {
     if (descMap.attrId == "0000" && descMap.command == "FD") {
         processTS004Fcommand(descMap)
     }
-    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl()) {
-        processStyrbarCommand(descMap)
+    else if (isIkeaStyrbar() || isIkeaRODRET() ||isIkeaOnOffSwitch() || isIkeaRemoteControl() || isIkeaShortcutButtonE1812()) {
+        processIkeaCommand(descMap)
     }
     else {
         logWarn "parseLevelControlClusterButtonDimmer: unprocessed LevelControl cluster attribute ${descMap.attrId}"
@@ -148,11 +136,11 @@ void parseLevelControlClusterButtonDimmer(final Map descMap) {
 
 /*
  * -----------------------------------------------------------------------------
- * Styrbar
+ * IKEA buttons and remotes handler - clusters 5, 6 and 8
  * -----------------------------------------------------------------------------
 */
-void processStyrbarCommand(final Map descMap) {
-    logDebug "processStyrbarCommand: descMap: $descMap"
+void processIkeaCommand(final Map descMap) {
+    logDebug "processIkeaCommand: descMap: $descMap"
     def buttonNumber = 0
     def buttonState = "unknown"
     
@@ -226,16 +214,16 @@ void processStyrbarCommand(final Map descMap) {
     }
     
     else {
-        logWarn "processStyrbarCommand: unprocessed event from cluster ${descMap.clusterInt} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}"
+        logWarn "processIkeaCommand: unprocessed event from cluster ${descMap.clusterInt} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}"
         return
     } 
    
     
     if (buttonNumber != 0 ) {
         if (needsDebouncing()) {
-            if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active!
+            if (((state.states["lastButtonNumber"] ?: 0) == buttonNumber) && (state.states["debouncingActive"] == true)) {    // debouncing timer still active!
                 logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!"
-                runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
+                startButtonDebounce()
                 logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})"
                 return
             }
@@ -251,7 +239,7 @@ void processStyrbarCommand(final Map descMap) {
         logInfo "${descriptionText}"
 		sendEvent(event)
         if (needsDebouncing()) {
-            runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])
+            startButtonDebounce()
         }
     }
     else {
@@ -262,13 +250,22 @@ void processStyrbarCommand(final Map descMap) {
 
 }
 
+def startButtonDebounce() {
+    logDebug "starting timer (${settings.debounce}) for button ${state.states['lastButtonNumber']}"
+    runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, clearButtonDebounce, [overwrite: true])    // restart the debouncing timer again
+    state.states["debouncingActive"] = true
+}
+
+def clearButtonDebounce() {
+    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired."
+    //state.states["lastButtonNumber"] = 0
+    state.states["debouncingActive"] = false
+}
+
 def ignoreButton1() {
     logDebug "ignoreButton1 for button ${state.states['lastButtonNumber']} expired."
     state.states["ignoreButton1"] = false
 }
-
-
-
 
 void processTS004Fcommand(final Map descMap) {
     logDebug "processTS004Fcommand: descMap: $descMap"
@@ -327,7 +324,7 @@ void processTS004Fcommand(final Map descMap) {
         if (needsDebouncing()) {
             if ((state.states["lastButtonNumber"] ?: 0) == buttonNumber ) {    // debouncing timer still active!
                 logWarn "ignored event for button ${state.states['lastButtonNumber']} - still in the debouncing time period!"
-                runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
+                startButtonDebounce()
                 logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.states['lastButtonNumber']})"
                 return
             }
@@ -343,7 +340,7 @@ void processTS004Fcommand(final Map descMap) {
         logInfo "${descriptionText}"
 		sendEvent(event)
         if (needsDebouncing()) {
-            runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])
+            startButtonDebounce()
         }
     }
     else {
@@ -366,11 +363,6 @@ void processTS004Fmode(final Map descMap) {
 }
 
 
-def buttonDebounce(/*button*/) {
-    logDebug "debouncing timer (${settings.debounce}) for button ${state.states['lastButtonNumber']} expired."
-    state.states["lastButtonNumber"] = 0
-}
-
 def switchToSceneMode()
 {
     logInfo "switching TS004F into Scene mode"
@@ -391,7 +383,6 @@ def switchMode( mode ) {
         switchToSceneMode()
     }
 }
-
 
 
 void processTuyaDpButtonDimmer(descMap, dp, dp_id, fncmd) {
@@ -423,13 +414,7 @@ def refreshButtonDimmer() {
 
 def configureDeviceButtonDimmer() {
     List<String> cmds = []
-/*    
-    def mode = settings.fingerbotMode != null ? settings.fingerbotMode : FingerbotModeOpts.defaultValue
-    //logWarn "mode=${mode}  settings=${(settings.fingerbotMode)}"
-    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})"
-    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) )
-*/
-    
+    // TODO !!
     logDebug "configureDeviceButtonDimmer() : ${cmds}"
     if (cmds == []) { cmds = ["delay 299"] }    // no , 
     return cmds    
@@ -439,14 +424,12 @@ def initializeDeviceButtonDimmer()
 {
     List<String> cmds = []
     int intMinTime = 300
-    int intMaxTime = 3600
+    int intMaxTime = 14400    // 4 hours reporting period for the battery
 
     cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=141)    // OK
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 142", ]            // binding is OK            //  Configuring 0x0006 : -> configure reporting error: Unsupported Attribute [86, 00, 00, 00]
-    //error: //cmds += zigbee.configureReporting(0x0020, 0x0000, DataType.INT16 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay=143)    // zigbee configure reporting error: Invalid Data Type [8D, 00, 00, 00]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 144", ]            // binding is OK - reporting configuration is not supported
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 142", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", "delay 144", ]
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", "delay 145", ]
-    
 
     logDebug "initializeDeviceButtonDimmer() : ${cmds}"
     if (cmds == []) { cmds = ["delay 299",] }
@@ -456,10 +439,12 @@ def initializeDeviceButtonDimmer()
 
 void initVarsButtonDimmer(boolean fullInit=false) {
     logDebug "initVarsButtonDimmer(${fullInit})"
-    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: DebounceOpts.defaultValue.toString(), type: 'enum'])
+    def debounceDefault = ((device.getDataValue("model") ?: "n/a") == "TS004F" || ((device.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])) ?  "1000" : "0"
+    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: debounceDefault, type: 'enum'])
     if (fullInit || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
     if (state.states == null) { state.states = [:] } 
     state.states["ignoreButton1"] = false
+    state.states["debouncingActive"] = false
 }
 
 void initEventsButtonDimmer(boolean fullInit=false) {
