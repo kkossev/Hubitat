@@ -10,8 +10,8 @@
   "drivers": [
     {
       "id": "551e8d69-6ce0-4986-b336-ae9cc0c8afd9",
-      "name": "",
-      "namespace": "",
+      "name": "VINDSTYRKA Air Quality Monitor",
+      "namespace": "kkossev",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy",
       "required": true
     }
