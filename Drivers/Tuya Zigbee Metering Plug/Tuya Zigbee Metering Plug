@@ -55,7 +55,7 @@
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
  *  ver. 1.7.8 2023-07-29 kkossev - added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
- *  ver. 1.8.0 2023-08-07 kkossev - (dev. branch) added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail
+ *  ver. 1.8.0 2023-09-03 kkossev - (dev. branch) added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
  *
  *
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv 
@@ -80,7 +80,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.8.0" }
-def timeStamp() {"2023/08/07 1:04 PM"}
+def timeStamp() {"2023/09/03 11:09 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -157,6 +157,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,0006", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_lnggrqqi", deviceJoinName: "Tuya RC-MCB Circuit Breaker 2P"            // vendor: 'Mumubiz', model: 'ZJSB9-80Z' https://www.aliexpress.com/item/1005002605097816.html not tested  (no power monitoring)
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cjbofhxw", deviceJoinName: "MatSee Smart Meter with CT"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_abatw3kj", deviceJoinName: "RTX Circuit Breaker 4x25A ZCB25-4P"        // https://community.hubitat.com/t/3phase-switch-recomendations/118293/12?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bcusnqt8", deviceJoinName: "Zemismart Real-time Smart Energy Monitor"  // https://github.com/Koenkk/zigbee-herdsman-converters/blob/8162314dbfd6e3803aeaf1d35fffd83c7e6ff5c6/src/devices/tuya.ts#L5185 
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ky0fq4ho", deviceJoinName: "ATMS1602Z DIN Relay"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,0702,0B04,E001,E000,0000", outClusters:"0019,000A", model:"TS011F", manufacturer:"_TZ3000_ksw8qtmt", deviceJoinName: "Smart ZigBee Socket NOUS A1Z" //https://nous.technology/product/a1z-1.html
@@ -352,7 +353,7 @@ def getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() { device.getDataValue("model") in ["TS0601"] }
 private boolean isCircuitBreaker()      { device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] }
-private boolean isRTXCircuitBreaker()   { device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] }
+private boolean isRTXCircuitBreaker()   { device.getDataValue("manufacturer") in ["_TZE200_abatw3kj", "_TZE200_bcusnqt8"] }    // TODO - _TZE200_bcusnqt8 matches only partially !
 private boolean isDinRail()             { device.getDataValue("manufacturer") in ["_TZE200_eaac7dkw", "_TZE200_bkkmqmyo", "_TZE200_lsanae15"] }
 private boolean isHEProblematic()       { device.getDataValue("manufacturer") in ["_TZ3000_okaz9tjs", "_TZ3000_r6buo8ba", "_TZ3000_cfnprab5", "SONOFF", "Woolley", "unknown"] }
 private boolean isHoch()                { device.getDataValue("manufacturer") in ["_TZE200_hkdl5fmv"] }
