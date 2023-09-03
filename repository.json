@@ -205,6 +205,13 @@
       "tags": [
         "Zigbee"
       ]
+    },
+    {
+      "id": "922c95be-07e9-4376-a94d-fc702bea7ec9",
+      "name": "VINDSTYRKA Air Quality Monitor",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/packageManifest.json",
+      "description": "TVINDSTYRKA Air Quality Monitor - driver for Hubitat Elevation hub"
     }
   ]
 }
