@@ -26,7 +26,7 @@
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
- * ver. 2.1.4  2023-09-02 kkossev  - (dev. branch) buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'
+ * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -43,7 +43,7 @@
  */
 
 static String version() { "2.1.4" }
-static String timeStamp() {"2023/09/02 11:56 AM"}
+static String timeStamp() {"2023/09/06 8:10 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -142,7 +142,7 @@ metadata {
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         if (_DEBUG) {
-            command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
             command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
             command "tuyaTest", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -406,6 +406,9 @@ void parse(final String description) {
         case 0x0012 :                                       // Aqara Cube - Multistate Input
             parseMultistateInputCluster(descMap)
             break
+         case 0x0102 :                                      // window covering 
+            parseWindowCoveringCluster(descMap)
+            break       
         case 0x0201 :                                       // Aqara E1 TRV 
             parseThermostatCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
@@ -448,7 +451,7 @@ void parse(final String description) {
             break
         default:
             if (settings.logEnable) {
-                logWarn "zigbee received <b>unknown cluster:${descMap.cluster}</b> message (${descMap})"
+                logWarn "zigbee received <b>unknown cluster:${descMap.clusterId}</b> message (${descMap})"
             }
             break
     }
@@ -1130,6 +1133,10 @@ def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
 }
 
 def sendBatteryPercentageEvent( batteryPercent, isDigital=false ) {
+    if ((batteryPercent as int) == 255) {
+        logWarn "ignoring battery report raw=${batteryPercent}"
+        return
+    }
     def map = [:]
     map.name = 'battery'
     map.timeStamp = now()
@@ -1997,9 +2004,12 @@ private List<String> setLevelPrivate(final Object value, final Integer rate = 0,
  */
 void /*List<String>*/ setLevel(final Object value, final Object transitionTime = null) {
     logInfo "setLevel (${value}, ${transitionTime})"
-    final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
-    scheduleCommandTimeoutCheck()
-    /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate))
+    if (DEVICE_TYPE in  ["ButtonDimmer"]) { setLevelButtonDimmer(value, transitionTime); return }
+    else {
+        final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
+        scheduleCommandTimeoutCheck()
+        /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate))
+    }
 }
 
 /*
@@ -2289,6 +2299,21 @@ void handleMultistateInputEvent( Integer value, Boolean isDigital=false ) {
     logInfo "${eventMap.descriptionText}"
 }
 
+/*
+ * -----------------------------------------------------------------------------
+ * Window Covering Cluster 0x0102
+ * -----------------------------------------------------------------------------
+*/
+
+void parseWindowCoveringCluster(final Map descMap) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (DEVICE_TYPE in  ["ButtonDimmer"]) {
+        parseWindowCoveringClusterButtonDimmer(descMap)
+    }
+    else {
+        logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}"
+    }
+}
 
 /*
  * -----------------------------------------------------------------------------
