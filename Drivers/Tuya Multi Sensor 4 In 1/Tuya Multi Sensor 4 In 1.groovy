@@ -49,7 +49,8 @@
  * ver. 1.4.3  2023-08-17 kkossev  - TS0225 _TZ3218_awarhusb device profile changed to TS0225_LINPTECH_RADAR; cluster 0xE002 parser; added TS0601 _TZE204_ijxvkhd0 to TS0601_IJXVKHD0_RADAR; added _TZE204_dtzziy1e, _TZE200_ypprdwsl _TZE204_xsm7l9xa; YXZBRB58 radar illuminance and fadingTime bug fixes; added new TS0225_2AAELWXK_RADAR profile
  * ver. 1.4.4  2023-08-18 kkossev  - Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration and commands; added Illuminance correction coefficient; code cleanup
  * ver. 1.4.5  2023-08-26 kkossev  - reduced debug logs; 
- * ver. 1.5.0  2023-08-27 kkossev  - (dev. branch) added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
+ * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
+ * ver. 1.5.1  2023-09-06 kkossev  - (dev. branch) _TZE204_kapvnnlk fingerprint and DPs correction;
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -71,8 +72,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.5.0" }
-def timeStamp() {"2023/08/26 9:50 AM"}
+def version() { "1.5.1" }
+def timeStamp() {"2023/09/06 5:25 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -638,24 +639,23 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0601"],                                // https://www.aliexpress.com/item/1005005858609756.html     // https://www.aliexpress.com/item/1005005946786561.html    // https://www.aliexpress.com/item/1005005946931559.html 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "DistanceMeasurement":true],
-            preferences   : ["radarSensitivity":"TODO", "detectionDelay":"TODO", "fadingTime":"TODO", "minimumDistance":"TODO", "maximumDistance":"13"],
+            preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
             ],
             tuyaDPs:        [
-                [dp:1,   name:"motion",                 type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
-                [dp:11,  name:"unknown_dp_11",          type:"enum",  rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],  desc:'KAPVNNLK radar - unknown dp_11'],    // values: 0(inactive), 2 (move) 
-                [dp:12,  name:'unknown_dp_12',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_12'],    // values: 5
-                [dp:13,  name:'maximumDistance',        type:"value", rw: "rw", min:0, max:1000,  scale:100,  unit:"meters",   desc:'Max detection distance'],            // values: 600
-                [dp:15,  name:'unknown_dp_15',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_15'],    // values: 4
-                [dp:19,  name:"distance",               type:"value", rw: "ro", min:0, max:10000, scale:100,  unit:"meters",   desc:'Distance'],
-                [dp:16,  name:'unknown_dp_16',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_16'],    // values: 4
-                [dp:101, name:'unknown_dp_101',         type:"value", rw: "rw", min:0, max:1000,  scale:100,  unit:"meters",   desc:'Max detection distance'],            // values: 100
-                
+                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0,   max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
+                [dp:11,  name:"humanMotionState",                type:"enum",  rw: "ro", min:0,   max:2, map:[0:"none", 1:"small_move", 2:"large_move"],  desc:'Human motion state'],        // "none", "small_move", "large_move"]
+                [dp:12,  name:'fadingTime',                      type:"value", rw: "rw", min:3,   max:600,   step:1,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
+                [dp:13,  name:'maximumDistance',                 type:"value", rw: "rw", min:150, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],
+                [dp:15 , name:'radarSensitivity',                type:"value", rw: "rw", min:0,   max:7,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],
+                [dp:16 , name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0,   max:7,     step:1,  scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
+                [dp:19,  name:"distance",                        type:"value", rw: "ro", min:0,   max:10000, step:1,  scale:100, unit:"meters",    desc:'Distance'],
+                [dp:101, name:'batteryLevel',                    type:"value", rw: "rO", min:0,   max:100,   step:1,  scale:1,   unit:"%",         desc:'Battery level']
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
-            deviceJoinName: "Tuya Human Presence Detector",
+            deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW",
             configuration : [:]
     ],
     
