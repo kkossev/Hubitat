@@ -50,7 +50,7 @@
  * ver. 1.4.4  2023-08-18 kkossev  - Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration and commands; added Illuminance correction coefficient; code cleanup
  * ver. 1.4.5  2023-08-26 kkossev  - reduced debug logs; 
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
- * ver. 1.5.1  2023-09-06 kkossev  - (dev. branch) _TZE204_kapvnnlk fingerprint and DPs correction;
+ * ver. 1.5.1  2023-09-07 kkossev  - (dev. branch) _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences;
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -73,7 +73,7 @@
 */
 
 def version() { "1.5.1" }
-def timeStamp() {"2023/09/06 5:25 PM"}
+def timeStamp() {"2023/09/07 7:47 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -206,7 +206,7 @@ metadata {
         if ("presenceKeepTime" in DEVICE.preferences) {
             input ("presenceKeepTime", "number", title: "<b>Presence Keep Time (0..28800), seconds</b>", description: "<i>Fading time</i>",  range: "0..28800", defaultValue: 30)
         }
-        if ("maxiledIndicatormumDistance" in DEVICE.preferences) {
+        if ("ledIndicator" in DEVICE.preferences) {
             input (name:"ledIndicator", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected</i>", defaultValue: false)
         }
         if ("radarAlarmMode" in DEVICE.preferences) {
@@ -872,9 +872,40 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0225"],                                // ZG-205Z
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
-            preferences   : [:],
+            // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
+            preferences   : ["presenceKeepTime":"102", "ledIndicator":"107", "radarAlarmMode":"117", "radarAlarmVolume":"116", "radarAlarmTime":"115", \
+                             "textLargeMotion":"NONE", "motionFalseDetection":"103", "motionDetectionSensitivity":"2", "motionMinimumDistance":"3", "motionDetectionDistance":"4", \
+                             "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"105", "smallMotionMinimumDistance":"110", "smallMotionDetectionDistance":"104", \
+                             "textStaticDetection":"NONE", "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
+                            ], 
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00,EE00,E000,0400", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_2aaelwxk", deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector"]       // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+            ],
+            tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
+                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
+                [dp:101,  name:"humanMotionState",                type:"enum",  rw: "ro", min:0, max:2, map:[0:"none", 1:"large", 2:"small", 3:"static"],  desc:'Human motion state'],
+                [dp:102,  name:'presenceKeepTime',                type:"value", rw: "rw", min:5, max:3600,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
+                [dp:4,  name:'motionDetectionDistance',         type:"value", rw: "rw", min:0, max:1000,  scale:100, unit:"meters",    desc:'Large motion detection distance'],
+                [dp:104,  name:'smallMotionDetectionDistance',    type:"value", rw: "rw", min:0, max:600,   scale:100, unit:"meters",    desc:'Small motion detection distance'],
+                [dp:2 , name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],
+                [dp:105 , name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
+                [dp:106,  name:'illuminance_lux',                 type:"value", rw: "ro",                   scale:10,  unit:"lx",        desc:'Illuminance'],
+                [dp:107,  name:"ledIndicator",                    type:"bool",  rw: "ro", min:0, max:1, map:[0:"OFF", 1:"ON"],           desc:'LED indicator mode'],
+                [dp:115, name:'radarAlarmTime',                  type:"value", rw: "rw", min:0, max:60 ,   scale:1,   unit:"seconds",   desc:'Alarm time'],
+                [dp:116, name:"radarAlarmVolume",                type:"enum",  rw: "ro", min:0, max:3, map:[0:"low", 1:"medium", 2:"high", 3:"mute"],  desc:'Alarm volume'],
+                [dp:108, name:'staticDetectionDistance',         type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection distance'],
+                [dp:109, name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Static detection sensitivity'],
+                [dp:117, name:"radarAlarmMode",                  type:"enum",  rw: "ro", min:0, max:3, map:[0:"arm", 1:"off", 2:"alarm", 3:"doorbell"],  desc:'Alarm mode'],    // TODO !!!
+                [dp:3, name:'motionMinimumDistance',           type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
+                [dp:110, name:'smallMotionMinimumDistance',      type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
+     //           [dp:111, name:'staticDetectionMinimumDistance',  type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection minimum distance'], // TODO - check !!
+                [dp:114, name:'checkingTime',                    type:"value", rw: "ro",                   scale:10,  unit:"seconds",   desc:'Checking time'],
+                [dp:118, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar small move self-test'],    // TODO - check !!
+                [dp:119, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar breathe self-test'],        // TODO - check !
+                [dp:103, name:"motionFalseDetection",            type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Motion false detection'],
+                [dp:112, name:"radarReset",                      type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar reset'],
+                [dp:120, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar move self-test'],        // TODO - check !
+                [dp:113, name:"breatheFalseDetection",           type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Motion false detection']
             ],
             deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector",
             configuration : [:]
@@ -1370,7 +1401,7 @@ def processTuyaCluster( descMap ) {
         String clusterCmd = descMap?.data[0]
         def status = descMap?.data[1]            
         logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
-        if (status != "00" && !isHL0SS9OAradar()) {    // TODO - check also is2AAELWXKradar()
+        if (status != "00" && !(isHL0SS9OAradar() || is2AAELWXKradar())) {
             logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
