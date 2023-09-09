@@ -6,7 +6,7 @@ library (
     name: "thermostatLib",
     namespace: "kkossev",
     importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/thermostatLib.groovy",
-    version: "1.0.0",
+    version: "1.0.1",
     documentationLink: ""
 )
 /*
@@ -22,13 +22,16 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-09-07 kkossev  - added thermostatLib
+ * ver. 1.0.0  2023-09-09 kkossev  - added temperaturePollingInterval
  *
- *                                   TODO: Poll periodically for temperature (like VINDSTYRKA)
+ *                                   TODO: temperature event for 20 degrees bug?
+ *                                   TODO: debugLogss off not scheduled bug?
+ *                                   TODO: thermostat polling scheduled bug?
 */
 
 
-def thermostatLibVersion()   {"1.0.0"}
-def thermostatLibStamp() {"2023/09/09 10:10 AM"}
+def thermostatLibVersion()   {"1.0.1"}
+def thermostatLibStamp() {"2023/09/09 12:27 AM"}
 
 metadata {
     capability "ThermostatHeatingSetpoint"
@@ -60,16 +63,14 @@ metadata {
     // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
     // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
     preferences {
-       // input name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: true, description: '<i>Switches button order </i>'
+        input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TemperaturePollingIntervalOpts.options, defaultValue: TemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
     }
 }
-/*
-@Field static final Map SwitchModeOpts = [
-    defaultValue: 1,
-    options     : [0: 'dimmer', 1: 'scene']
-]
-*/
 
+@Field static final Map TemperaturePollingIntervalOpts = [
+    defaultValue: 600,
+    options     : [0: 'Disabled', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
+]
 
 
 //@Field static final Integer STYRBAR_IGNORE_TIMER = 1500  
@@ -289,7 +290,7 @@ void parseThermostatClusterThermostat(final Map descMap) {
 
     switch (descMap.attrInt as Integer) {
         case 0x000:                      // temperature
-            logInfo "temperature = ${value/100.0} (raw ${value})"
+            logDebug "temperature = ${value/100.0} (raw ${value})"
             handleTemperatureEvent(value/100.0)
             break
         case 0x0011:                      // cooling setpoint
@@ -388,6 +389,49 @@ void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
 }
 
 
+void updatedThermostat() {
+        final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
+        if (pollingInterval > 0) {
+            logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds"
+            scheduleThermostatPolling(pollingInterval)
+        }
+        else {
+            unScheduleThermostatPolling()
+            logInfo "updatedThermostat: thermostat polling is disabled!"
+        }
+}
+
+/**
+ * Schedule thermostat polling
+ * @param intervalMins interval in seconds
+ */
+private void scheduleThermostatPolling(final int intervalSecs) {
+    String cron = getCron( intervalSecs )
+    logDebug "cron = ${cron}"
+    schedule(cron, 'autoPollThermostat')
+}
+
+private void unScheduleThermostatPolling() {
+    unschedule('autoPollThermostat')
+}
+
+/**
+ * Scheduled job for polling device specific attribute(s)
+ */
+void autoPollThermostat() {
+    logDebug "autoPollThermostat()..."
+    checkDriverVersion()
+    List<String> cmds = []
+    if (state.states == null) state.states = [:]
+    //state.states["isRefresh"] = true
+    
+    cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
+    
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }    
+}
+
 def refreshThermostat() {
     List<String> cmds = []
     //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage)
@@ -398,7 +442,7 @@ def refreshThermostat() {
    
     // stock Generic Zigbee Thermostat Refresh answer:
     // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
-    
+    // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
     if (cmds == []) { cmds = ["delay 299"] }
     logDebug "refreshThermostat: ${cmds} "
     return cmds
@@ -442,6 +486,7 @@ void initVarsThermostat(boolean fullInit=false) {
     logDebug "initVarsThermostat(${fullInit})"
     if (fullInit == true || state.lastThermostatMode == null) state.lastThermostatMode = "unknown"
     if (fullInit == true || state.lastThermostatOperatingState == null) state.lastThermostatOperatingState = "unknown"
+    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
     
 }
 
@@ -497,15 +542,15 @@ void sendSupportedThermostatModes() {
 void initEventsThermostat(boolean fullInit=false) {
     sendSupportedThermostatModes()
     sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto"]), isStateChange: true)    
-    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true)
-    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true)
+    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "inital attribute setting")
+    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: "inital attribute setting")
     state.lastThermostatMode = "heat"
     sendThermostatOperatingStateEvent( "idle" )
-    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true)
-    sendEvent(name: "thermostatSetpoint", value:  20.0, unit: "\u00B0"+"C", isStateChange: true)        // Google Home compatibility
-    sendEvent(name: "heatingSetpoint", value: 20.0, unit: "\u00B0"+"C", isStateChange: true)
-    sendEvent(name: "coolingSetpoint", value: 30.0, unit: "\u00B0"+"C", isStateChange: true)
-    sendEvent(name: "temperature", value: 22.0, unit: "\u00B0"+"C", isStateChange: true)    
+    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "inital attribute setting")
+    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")        // Google Home compatibility
+    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
+    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
+    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")    
     updateDataValue("lastRunningMode", "heat")	
     
 }
