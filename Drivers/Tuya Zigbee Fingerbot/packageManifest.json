@@ -1,0 +1,19 @@
+{
+  "packageName": "Tuya Zigbee Fingerbot",
+  "author": "Krassimir Kossev",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.2.7",
+  "dateReleased": "2023-09-10",
+  "documentationLink": "https://community.hubitat.com/t/release-tuya-zigbee-fingerbot/118719",
+  "communityLink": "https://community.hubitat.com/t/release-tuya-zigbee-fingerbot/118719",
+  "releaseNotes": " 2.1.3 2023-08-28 - added Fingerbot Momentary capability; direction preference initialization bug fix;voltageToPercent (battery %) is enabled by default;Fingerbot touch-button enable/disable;\n2.1.0 2023-07-15 - Fingerbot Library\n2.0.3 2023-06-10 - First test version for HE",
+  "drivers": [
+    {
+      "id": "76494db0-9166-4c07-911f-c3bd37d81d7c",
+      "name": "Tuya Zigbee Fingerbot"",
+      "namespace": "kkossev",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy",
+      "required": true
+    }
+  ]
+}
