@@ -214,7 +214,17 @@
       "description": "VINDSTYRKA Air Quality Monitor - driver for Hubitat Elevation hub",
       "tags": [
         "Zigbee"
-      ]	  
-    }
+      ]
+    },
+    {
+      "id": "fbae2080-22f0-48e0-8788-f57dd5e571da",
+      "name": "Tuya Zigbee Fingerbot",
+      "category": "Control",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Fingerbot/packageManifest.json",
+      "description": "Tuya Zigbee Fingerbot - driver for Hubitat Elevation hub",
+      "tags": [
+        "Zigbee"
+      ]
+	}
   ]
 }
