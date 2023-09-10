@@ -10,7 +10,7 @@
   "drivers": [
     {
       "id": "76494db0-9166-4c07-911f-c3bd37d81d7c",
-      "name": "Tuya Zigbee Fingerbot"",
+      "name": "Tuya Zigbee Fingerbot",
       "namespace": "kkossev",
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy",
       "required": true
