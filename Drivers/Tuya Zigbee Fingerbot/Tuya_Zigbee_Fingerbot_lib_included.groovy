@@ -45,7 +45,7 @@
 static String version() { "2.1.3" }
 static String timeStamp() {"2023/08/28 11:19 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
