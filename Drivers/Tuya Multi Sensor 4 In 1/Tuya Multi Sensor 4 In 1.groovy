@@ -50,6 +50,7 @@
  * ver. 1.4.4  2023-08-18 kkossev  - Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration and commands; added Illuminance correction coefficient; code cleanup
  * ver. 1.4.5  2023-08-26 kkossev  - reduced debug logs; 
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
+ * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -71,8 +72,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.5.0" }
-def timeStamp() {"2023/08/26 9:50 AM"}
+def version() { "1.5.1" }
+def timeStamp() {"2023/09/09 9:36 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -109,8 +110,8 @@ metadata {
         attribute "distance", "number"              // Tuya Radar
         attribute "unacknowledgedTime", "number"    // AIR models
         attribute "motionType", "enum",  ["none", "presence", "peacefull", "smallMove", "largeMove"]    // blackSensor
-        attribute "existance_time", "number"        // BlackSquareRadar
-        attribute "leave_time", "number"            // BlackSquareRadar
+        attribute "existance_time", "number"        // BlackSquareRadar & LINPTECH
+        attribute "leave_time", "number"            // BlackSquareRadar & LINPTECH
         
         attribute "radarSensitivity", "number" 
         attribute "detectionDelay", "decimal" 
@@ -205,7 +206,7 @@ metadata {
         if ("presenceKeepTime" in DEVICE.preferences) {
             input ("presenceKeepTime", "number", title: "<b>Presence Keep Time (0..28800), seconds</b>", description: "<i>Fading time</i>",  range: "0..28800", defaultValue: 30)
         }
-        if ("maxiledIndicatormumDistance" in DEVICE.preferences) {
+        if ("ledIndicator" in DEVICE.preferences) {
             input (name:"ledIndicator", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected</i>", defaultValue: false)
         }
         if ("radarAlarmMode" in DEVICE.preferences) {
@@ -302,7 +303,7 @@ metadata {
 }
 
 def restrictTo4In1Only()        { is4in1() }
-def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() }
+def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isLINPTECHradar() }
 def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    // TODO: check isIJXVKHD0radar()
 
 @Field static final Map settableParsMap = [
@@ -638,24 +639,23 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0601"],                                // https://www.aliexpress.com/item/1005005858609756.html     // https://www.aliexpress.com/item/1005005946786561.html    // https://www.aliexpress.com/item/1005005946931559.html 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "DistanceMeasurement":true],
-            preferences   : ["radarSensitivity":"TODO", "detectionDelay":"TODO", "fadingTime":"TODO", "minimumDistance":"TODO", "maximumDistance":"13"],
+            preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13"],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
             ],
             tuyaDPs:        [
-                [dp:1,   name:"motion",                 type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
-                [dp:11,  name:"unknown_dp_11",          type:"enum",  rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],  desc:'KAPVNNLK radar - unknown dp_11'],    // values: 0(inactive), 2 (move) 
-                [dp:12,  name:'unknown_dp_12',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_12'],    // values: 5
-                [dp:13,  name:'maximumDistance',        type:"value", rw: "rw", min:0, max:1000,  scale:100,  unit:"meters",   desc:'Max detection distance'],            // values: 600
-                [dp:15,  name:'unknown_dp_15',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_15'],    // values: 4
-                [dp:19,  name:"distance",               type:"value", rw: "ro", min:0, max:10000, scale:100,  unit:"meters",   desc:'Distance'],
-                [dp:16,  name:'unknown_dp_16',          type:"value", rw: "rw", min:0, max:9 ,    scale:1,    unit:"x",        desc:'KAPVNNLK radar - unknown dp_16'],    // values: 4
-                [dp:101, name:'unknown_dp_101',         type:"value", rw: "rw", min:0, max:1000,  scale:100,  unit:"meters",   desc:'Max detection distance'],            // values: 100
-                
+                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0,   max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
+                [dp:11,  name:"humanMotionState",                type:"enum",  rw: "ro", min:0,   max:2, map:[0:"none", 1:"small_move", 2:"large_move"],  desc:'Human motion state'],        // "none", "small_move", "large_move"]
+                [dp:12,  name:'fadingTime',                      type:"value", rw: "rw", min:3,   max:600,   step:1,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
+                [dp:13,  name:'maximumDistance',                 type:"value", rw: "rw", min:150, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],
+                [dp:15 , name:'radarSensitivity',                type:"value", rw: "rw", min:0,   max:7,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],
+                [dp:16 , name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0,   max:7,     step:1,  scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
+                [dp:19,  name:"distance",                        type:"value", rw: "ro", min:0,   max:10000, step:1,  scale:100, unit:"meters",    desc:'Distance'],
+                [dp:101, name:'batteryLevel',                    type:"value", rw: "rO", min:0,   max:100,   step:1,  scale:1,   unit:"%",         desc:'Battery level']
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
-            deviceJoinName: "Tuya Human Presence Detector",
+            deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW",
             configuration : [:]
     ],
     
@@ -872,9 +872,40 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0225"],                                // ZG-205Z
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
-            preferences   : [:],
+            // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
+            preferences   : ["presenceKeepTime":"102", "ledIndicator":"107", "radarAlarmMode":"117", "radarAlarmVolume":"116", "radarAlarmTime":"115", \
+                             "textLargeMotion":"NONE", "motionFalseDetection":"103", "motionDetectionSensitivity":"2", "motionMinimumDistance":"3", "motionDetectionDistance":"4", \
+                             "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"105", "smallMotionMinimumDistance":"110", "smallMotionDetectionDistance":"104", \
+                             "textStaticDetection":"NONE", "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
+                            ], 
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00,EE00,E000,0400", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_2aaelwxk", deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector"]       // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+            ],
+            tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
+                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
+                [dp:101,  name:"humanMotionState",                type:"enum",  rw: "ro", min:0, max:2, map:[0:"none", 1:"large", 2:"small", 3:"static"],  desc:'Human motion state'],
+                [dp:102,  name:'presenceKeepTime',                type:"value", rw: "rw", min:5, max:3600,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
+                [dp:4,  name:'motionDetectionDistance',         type:"value", rw: "rw", min:0, max:1000,  scale:100, unit:"meters",    desc:'Large motion detection distance'],
+                [dp:104,  name:'smallMotionDetectionDistance',    type:"value", rw: "rw", min:0, max:600,   scale:100, unit:"meters",    desc:'Small motion detection distance'],
+                [dp:2 , name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],
+                [dp:105 , name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
+                [dp:106,  name:'illuminance_lux',                 type:"value", rw: "ro",                   scale:10,  unit:"lx",        desc:'Illuminance'],
+                [dp:107,  name:"ledIndicator",                    type:"bool",  rw: "ro", min:0, max:1, map:[0:"OFF", 1:"ON"],           desc:'LED indicator mode'],
+                [dp:115, name:'radarAlarmTime',                  type:"value", rw: "rw", min:0, max:60 ,   scale:1,   unit:"seconds",   desc:'Alarm time'],
+                [dp:116, name:"radarAlarmVolume",                type:"enum",  rw: "ro", min:0, max:3, map:[0:"low", 1:"medium", 2:"high", 3:"mute"],  desc:'Alarm volume'],
+                [dp:108, name:'staticDetectionDistance',         type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection distance'],
+                [dp:109, name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Static detection sensitivity'],
+                [dp:117, name:"radarAlarmMode",                  type:"enum",  rw: "ro", min:0, max:3, map:[0:"arm", 1:"off", 2:"alarm", 3:"doorbell"],  desc:'Alarm mode'],    // TODO !!!
+                [dp:3, name:'motionMinimumDistance',           type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
+                [dp:110, name:'smallMotionMinimumDistance',      type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
+     //           [dp:111, name:'staticDetectionMinimumDistance',  type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection minimum distance'], // TODO - check !!
+                [dp:114, name:'checkingTime',                    type:"value", rw: "ro",                   scale:10,  unit:"seconds",   desc:'Checking time'],
+                [dp:118, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar small move self-test'],    // TODO - check !!
+                [dp:119, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar breathe self-test'],        // TODO - check !
+                [dp:103, name:"motionFalseDetection",            type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Motion false detection'],
+                [dp:112, name:"radarReset",                      type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar reset'],
+                [dp:120, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar move self-test'],        // TODO - check !
+                [dp:113, name:"breatheFalseDetection",           type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Motion false detection']
             ],
             deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector",
             configuration : [:]
@@ -925,18 +956,52 @@ def isChattyRadarReport(descMap) {
             description   : "Tuya TS0225_LINPTECH 24GHz Radar",        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/646?u=kkossev
             models        : ["TS0225"],                                // DPs are unknown    // https://home.miot-spec.com/spec/linp.sensor_occupy.hb01 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
-            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
-            preferences   : [:],
+            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
+            preferences   : [/*"presenceKeepTime":"12",*/ "motionDetectionDistance":"4","motionDetectionSensitivity":"15", "staticDetectionSensitivity":"16"],                             
             fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
-            // uses IAS for occupancy!    // uses ZCL for illuminance
-            tuyaDPs:        [
-                [dp:101, name:"unknown", type:"value",  rw: "ro"]     // 0x65
+            // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 ... seems like a semi-baked product ... : ( 
+            tuyaDPs:       [ 
+                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],                                         // aka Presence State
+                [dp:4,   name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],              // aka Far Detection
+                [dp:12,  name:'presenceKeepTime',                type:"value", rw: "ro", min:0,  max:65535, step:1,  scale:1,   unit:"minutes",   desc:'Shows the presence duration in minutes'],       // aka Presence Time
+                [dp:15,  name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],           // aka Motionless Detection Sensitivity
+                [dp:16,  name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Static detection sensitivity'],                 // aka Motionless Detection Sensitivity 
+                [dp:19,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance'],                            // aka Current Distance	
+                [dp:20,  name:'illuminance_lux',                 type:"value", rw: "ro",                    scale:10,   unit:"lx",                desc:'Illuminance'],                                  // aka Illuminance Value
+                [dp:101, name:'leave_time',                      type:"value", rw: "ro", min:0, max:9999,   step:1,  scale:1,   unit:"minutes",   desc:'Shows the duration of the absence in minutes']  // aka nobody time	  
             ],
+            // LINPTECH is using a custom cluster 0xE002 for the settings, ZCL cluster 0x0400 for illuminance and the IAS cluster 0x0500 for motion detection
+            clE002attributes:       [ 
+                //[at:??,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],                                         // aka Presence State
+                [at:0xE00B,   name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],              // aka Far Detection
+                //[at:??,  name:'presenceKeepTime',                type:"value", rw: "ro", min:0,  max:65535, step:1,  scale:1,   unit:"minutes",   desc:'Shows the presence duration in minutes'],       // aka Presence Time
+                [at:0xE004,  name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],           // aka Motionless Detection Sensitivity
+                [at:0xE005,  name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Static detection sensitivity'],                 // aka Motionless Detection Sensitivity 
+                [at:0xE00A,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance']                            // aka Current Distance	
+                //[at:??,  name:'illuminance_lux',                 type:"value", rw: "ro",                    scale:10,   unit:"lx",                desc:'Illuminance'],                                  // aka Illuminance Value
+                //[at:???, name:'leave_time',                      type:"value", rw: "ro", min:0, max:9999,   step:1,  scale:1,   unit:"minutes",   desc:'Shows the duration of the absence in minutes']  // aka nobody time	  
+            ],
+            spammyDPsToIgnore : [19],
+            spammyDPsToNotTrace : [19],
             deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector",
             configuration : [:]
     ],    
+    
+/*
+
+X        Presence State	                    1	    (none/presence)
+X        Far Detection	                    4	    (600cm)
+X        Presence Time 	                    12	    (2Min)
+X        Motion Detection Sensitivity	    15     (5)
+X        Motionless Detection Sensitivity    16		(5)
+X        Current Distance	                19	    (270cm, 97cm ... )
+X        Illuminance Value 	                20	    (228lux)
+X        nobody time	                        101	    (10min)
+
+*/
+    
     
     //  no-name 240V AC ceiling radar presence sensor                
     "TS0225_EGNGMRZH_RADAR"   : [                                    // https://github.com/sprut/Hub/issues/2489
@@ -1328,20 +1393,30 @@ def processE002Cluster( descMap ) {
     // raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
     def value = zigbee.convertHexToInt(descMap.value) 
     switch (descMap.attrId) {
-        case "E001" :    // value:0000, 0003 000B 0047 0083
+        case "E001" :    // value:0, 1, 2, 9 ... ??????   radar fading time / Presence Keep Time ?? or it is the existance_time in minutes?
             logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             break
-        case "E004" :    // value:05
-            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+        case "E004" :    // value:05    // motionDetectionSensitivity
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            if (settings?.logEnable == true || settings?.motionDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar motionDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.motionDetectionSensitivity} == ${value as int}"}
+            device.updateSetting("motionDetectionSensitivity", [value:value as int , type:"number"])
             break
-        case "E005" :    // value:05
-            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+        case "E005" :    // value:05    // staticDetectionSensitivity
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar staticDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${value as int}"}
+            device.updateSetting("staticDetectionSensitivity", [value:value as int , type:"number"])
             break
-        case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054
-            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+        case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054 - distance
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            if (settings?.ignoreDistance == false) {
+                logInfo "LINPTECH radar target distance is ${value/100} m"
+                sendEvent(name : "distance", value : value/100, unit : "m")
+            }        
             break
-        case "E00B" :    // value:value:0258
-            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+        case "E00B" :    // value:value:600 -- motionDetectionDistance
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != value)) {logInfo "received LINPTECH radar Motion Detection Distance  : ${value/100} m"}
+            device.updateSetting("motionDetectionDistance", [value:value/100, type:"decimal"])
             break
         default : 
             logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
@@ -1370,7 +1445,7 @@ def processTuyaCluster( descMap ) {
         String clusterCmd = descMap?.data[0]
         def status = descMap?.data[1]            
         logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
-        if (status != "00" && !isHL0SS9OAradar()) {    // TODO - check also is2AAELWXKradar()
+        if (status != "00" && !(isHL0SS9OAradar() || is2AAELWXKradar())) {
             logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
@@ -1731,8 +1806,8 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
                     sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
-                else if (is2AAELWXKradar()) {
-                    logDebug "TS0225 Radar Motion Detection Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                else if (is2AAELWXKradar() || isLINPTECHradar()) {
+                    logDebug "TS0225/Linptech Radar Motion Detection Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != fncmd)) {logInfo "received Radar Motion Detection Distance  : ${fncmd/100} m"}
                     device.updateSetting("motionDetectionDistance", [value:fncmd/100, type:"decimal"])
                 }
@@ -1795,6 +1870,9 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.logEnable == true || settings?.presenceKeepTime != (fncmd as int)) { logInfo "received presenceKeepTime : ${fncmd}"} else {logDebug "skipped ${settings?.presenceKeepTime} == ${fncmd as int}"}
                     device.updateSetting("presenceKeepTime", [value:fncmd as int , type:"number"])                    
                 }
+                else if (isLINPTECHradar()) {
+                    existanceTimeEvent(fncmd)
+                }
                 else {
                     illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 }
@@ -1809,18 +1887,42 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 if (settings?.logEnable == true || (safeToInt(settings?.smallMotionDetectionDistance)*100 != fncmd)) {logInfo "received Small Motion Detection Distance  : ${fncmd/100} m"}
                 device.updateSetting("smallMotionDetectionDistance", [value:fncmd/100, type:"decimal"])
                 break
-            case 0x0F : // (15)    // isHL0SS9OAradar() 
-                logDebug "TS0225 Radar Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+            case 0x0F : // (15)    // isHL0SS9OAradar() isLINPTECHradar()
+                logDebug "TS0225/Linptech Radar Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 if (settings?.logEnable == true || settings?.motionDetectionSensitivity != (fncmd as int)) { logInfo "received motionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.motionDetectionSensitivity} == ${fncmd as int}"}
                 device.updateSetting("motionDetectionSensitivity", [value:fncmd as int , type:"number"])
                 break
-            case 0x10 : // (16)    // isHL0SS9OAradar() 
-                logDebug "TS0225 Radar Small Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
-                if (settings?.logEnable == true || settings?.smallMotionDetectionSensitivity != (fncmd as int)) { logInfo "received smallMotionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.smallMotionDetectionSensitivity} == ${fncmd as int}"}
-                device.updateSetting("smallMotionDetectionSensitivity", [value:fncmd as int , type:"number"])
+            case 0x10 : // (16)    
+                if (isLINPTECHradar()) {
+                    logDebug "Linptech Radar Static Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (fncmd as int)) { logInfo "received staticDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${fncmd as int}"}
+                    device.updateSetting("staticDetectionSensitivity", [value:fncmd as int , type:"number"])
+                }
+                else {    // isHL0SS9OAradar() 
+                    logDebug "TS0225 Radar Small Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+                    if (settings?.logEnable == true || settings?.smallMotionDetectionSensitivity != (fncmd as int)) { logInfo "received smallMotionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.smallMotionDetectionSensitivity} == ${fncmd as int}"}
+                    device.updateSetting("smallMotionDetectionSensitivity", [value:fncmd as int , type:"number"])
+                }
                 break
+            
+            case 0x13 : // (19)
+                if (isLINPTECHradar()) {
+                    if (settings?.ignoreDistance == false) {
+                        logInfo "Radar target distance is ${fncmd/100} m"
+                        sendEvent(name : "distance", value : fncmd/100, unit : "m")
+                    }
+                }
+                else {
+                    if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
+                }            
+            
             case 0x14 : // (20)    // isHL0SS9OAradar() 
-                illuminanceEventLux( Math.round(fncmd / 10))    // illuminance for TS0225 radar
+                if (isLINPTECHradar()) {
+                    logDebug "skipped Linptech Tuya DP illuminance report dp=${dp} value=${fncmd}"
+                }
+                else {
+                    illuminanceEventLux( Math.round(fncmd / 10))    // illuminance for TS0225 radar
+                }
                 break
             case 0x18 : // (24)    // isHL0SS9OAradar() 
                 if (settings?.logEnable) { logInfo "TS0225 Radar Indicator is ${fncmd?'On':'Off'} (dp_id=${dp_id} dp=${dp} fncmd=${fncmd})" }
@@ -1859,7 +1961,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else if (isLINPTECHradar()) {
-                    logInfo "TS0225_LINPTECH_RADAR reported unknown parameter dp=${dp} value=${fncmd}"
+                    leaveTimeEvent(fncmd)
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -2749,76 +2851,73 @@ def updated() {
         logDebug "forcedProfile is not set"
     }
     
-    if (true) {    // an configurable device parameter was changed
-        //    LED enable
-        if (true) {
-            if (is4in1()) {
-                logDebug "4-in-1: changing ledEnable to : ${settings?.ledEnable }"                
-                cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
-                logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
-                cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
-            }
+    //    LED enable
+    if (is4in1()) {
+        logDebug "4-in-1: changing ledEnable to : ${settings?.ledEnable }"                
+        cmds += sendTuyaCommand("6F", DP_TYPE_BOOL, settings?.ledEnable == true ? "01" : "00")
+        logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
+        cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
+    }
+    // sensitivity
+    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene()) { 
+        cmds += setRadarSensitivity( settings?.radarSensitivity )
+    }
+    else {
+        // settings?.sensitivity was changed in version 1.3.0
+        def sensitivityNew 
+        try {
+            sensitivityNew = settings?.sensitivity as Integer
         }
-        // sensitivity
-        if (true) {    
-            if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene()) { 
-                cmds += setRadarSensitivity( settings?.radarSensitivity )
-            }
-            else {
-                // settings?.sensitivity was changed in version 1.3.0
-                def sensitivityNew 
-                try {
-                    sensitivityNew = settings?.sensitivity as Integer
-                }
-                catch (e) {
-                    logWarn "sensitivity was reset to the default value!"
-                    sensitivityNew = sensitivityOpts.defaultValue
-                }
-                if (isTS0601_PIR()) {
-                    def val = sensitivityNew
-                    cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
-                    if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}"                
-                }
-                else if (isIAS()) {
-                    def val = sensitivityNew
-                    if (val != null) {
-                        logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
-                        cmds += sendSensitivityIAS(val)
-                    }
-                }
-            }
+        catch (e) {
+            logWarn "sensitivity was reset to the default value!"
+            sensitivityNew = sensitivityOpts.defaultValue
         }
-        // keep time
-        if (true) {    
-            if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) {
-                // do nothing
-            }
-            else if (isTS0601_PIR()) {
-                def val = settings?.keepTime as int
-                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-                if (settings?.logEnable) log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}"                
-            }
-            else if (isIAS()) {
-                if (settings?.keepTime != null) {
-                    cmds += sendKeepTimeIAS( settings?.keepTime )
-                    logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
-                }
-            }
+        if (isTS0601_PIR()) {
+            def val = sensitivityNew
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
+            if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}" }
         }
-        // 
-        if (true) {    
-            if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
+        else if (isIAS()) {
+            def val = sensitivityNew
+            if (val != null) {
+                logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
+                cmds += sendSensitivityIAS(val)
+            }
+       }
+    }
+    // keep time
+    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) {
+        // do nothing
+    }
+    else if (isTS0601_PIR()) {
+        def val = settings?.keepTime as int
+        cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
+        if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}" }           
+    }
+    else if (isIAS()) {
+       if (settings?.keepTime != null) {
+           cmds += sendKeepTimeIAS( settings?.keepTime )
+           logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+       }
+    }
+    // 
+    if (isLINPTECHradar()) {
+                //cmds += setRadarFadingTime( settings?.presenceKeepTime)                          // attribute id is unknown
+                cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )          // x
+                cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )    // x
+                cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )    // X
+    }
+    else if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
                 cmds += setRadarDetectionDelay( settings?.detectionDelay )        // radar detection delay
                 cmds += setRadarFadingTime( settings?.fadingTime ?: 30)           // radar fading time
                 cmds += setRadarMinimumDistance( settings?.minimumDistance )      // radar minimum distance
                 cmds += setRadarMaximumDistance( settings?.maximumDistance )      // radar maximum distance
-            }
-        }
+    }
         
-        if (false /*isHL0SS9OAradar() && _USE_CONVERTERS == true*/) {            // TODO - not ready yet!
+    if (false /*isHL0SS9OAradar() && _USE_CONVERTERS == true*/) {            // TODO - not ready yet!
             cmds += setPreferencesFromDeviceProfile()
-        }
-        else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
+    }
+    else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
             cmds += setRadarFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
             cmds += setRadarLedIndicator( settings?.ledIndicator )
             cmds += setRadarAlarmMode( settings?.radarAlarmMode )
@@ -2835,17 +2934,15 @@ def updated() {
             cmds += setStaticDetectionDistance( settings?.staticDetectionDistance )
             cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
             cmds += setStaticDetectionMinimumDistance( settings?.staticDetectionMinimumDistance )
-            
-            
-        }
-
-        //
-        if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) {
-            if (settings?.ignoreDistance == true ) 
+    }
+    //
+    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isLINPTECHradar()) {
+        if (settings?.ignoreDistance == true ) {
                 device.deleteCurrentState('distance')
         }
-        //
-        if (isHumanPresenceSensorAIR()) {
+    }
+    //
+    if (isHumanPresenceSensorAIR()) {
             if (vacancyDelay != null) {
                 def val = settings?.vacancyDelay
                 cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
@@ -2875,8 +2972,8 @@ def updated() {
                 cmds += sendTuyaCommand("66", DP_TYPE_ENUM, dpValHex)
                 logDebug "setting Sensor AIR o-sensitivity : ${oSensitivityOptions[value.toString()]} (${value})"                
             }
-        }
-        if (isBlackPIRsensor()) {
+    }
+    if (isBlackPIRsensor()) {
             if (inductionTime != null) {
                 def val = settings?.inductionTime
                 cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
@@ -2888,15 +2985,14 @@ def updated() {
                 cmds += sendTuyaCommand("69", DP_TYPE_ENUM, dpValHex)
                 logDebug "setting target distance to : ${blackSensorDistanceOptions[value.toString()]} (${value})"                
             }
-        }
-        if (("indicatorLight" in DEVICE.preferences)) {    // BlackSquareRadar
+    }
+    if (("indicatorLight" in DEVICE.preferences)) {    // BlackSquareRadar
             if (indicatorLight != null) {
                 def value = safeToInt(indicatorLight.value)
                 def dpValHex = zigbee.convertToHexString(value as int, 2) 
                 cmds += sendTuyaCommand("67", DP_TYPE_BOOL, dpValHex)
                 logDebug "setting indicator light to : ${blackRadarLedOptions[value.toString()]} (${value})"  
             }
-        }
     }
     //    
     if (cmds != null) {
@@ -3067,6 +3163,12 @@ void initializeVars( boolean fullInit = false ) {
     }  
     if (isSBYX0LM6radar()) {
         // TODO !
+    }
+    if (isLINPTECHradar()) {
+        if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", false)
+        if (fullInit == true || settings.motionDetectionSensitivity == null) device.updateSetting("motionDetectionSensitivity", [value:5, type:"number"])
+        if (fullInit == true || settings.staticDetectionSensitivity == null) device.updateSetting("staticDetectionSensitivity", [value:5, type:"number"])
+        if (fullInit == true || settings.motionDetectionDistance == null) device.updateSetting("motionDetectionDistance", [value:6.0, type:"decimal"])
     }
     
     
@@ -3277,7 +3379,7 @@ def sendSensitivityIAS( lvl ) {
     }
     ArrayList<String> cmds = []
     String str = sensitivityOpts.options[sensitivityLevel]
-    cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, sensitivityLevel, [:], delay=200)
+    cmds += zigbee.writeAttribute(0x0500, 0x0013, DataType.UINT8, sensitivityLevel as int, [:], delay=200)
     logDebug "${device.displayName} sending IAS sensitivity : ${str} (${sensitivityLevel})"
     // only prepare the cmds here!
     return cmds
@@ -3291,7 +3393,7 @@ def sendKeepTimeIAS( lvl ) {
     }
     ArrayList<String> cmds = []
     String str = keepTime4in1Opts.options[keepTimeVal]
-    cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, keepTimeVal, [:], delay=200)
+    cmds += zigbee.writeAttribute(0x0500, 0xF001, DataType.UINT8, keepTimeVal as int, [:], delay=200)
     logDebug "${device.displayName} sending IAS Keep Time : ${str} (${keepTimeVal})"
     // only prepare the cmds here!
     return cmds
@@ -3425,6 +3527,11 @@ def setRadarFadingTime( val ) {
         logDebug "changing radar Presence Keep Time to ${val} seconds (raw=${value})"                
         return sendTuyaCommand( isHL0SS9OAradar() ? "0C" : "66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
+    else if (isLINPTECHradar()) {
+        def value = val as int
+        logWarn "changing LINPTECH radar Presence Keep Time to ${value} seconds"                // TODO: not tested !!
+        return zigbee.writeAttribute(0xE002, 0xE001, 0x20, value as int, [:], delay=200)
+    }
     else { logWarn "setRadarFadingTime: unsupported model!"; return null }
 }
 
@@ -3445,85 +3552,103 @@ def setRadarMaximumDistance( val ) {
 }     
 
 def setRadarSensitivity( val ) {
-    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene()) { 
+    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorFall() || isHumanPresenceSensorScene() || isLINPTECHradar()) { 
         logDebug "changing radar sensitivity to : ${val}"                
-        return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6A" : "02", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
+        return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6A" : isLINPTECHradar() ? "0F" : "02", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
     }
 }
 
 def setRadarLedIndicator( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("radaradarLedIndicator", isHL0SS9OAradar() ? "18" : "6B", DP_TYPE_BOOL, value)
+    return setRadarParameter("radaradarLedIndicator", isHL0SS9OAradar() ? "18" : "6B", DP_TYPE_BOOL, value)
 }
 
 def setRadarAlarmMode( val ) {
     def value = val as int
-    setRadarParameter("radarAlarmMode", isHL0SS9OAradar() ? "69" : "75", DP_TYPE_ENUM, value)
+    return setRadarParameter("radarAlarmMode", isHL0SS9OAradar() ? "69" : "75", DP_TYPE_ENUM, value)
 }
 
 def setRadarAlarmVolume( val ) {
     def value = val as int
-    setRadarParameter("radarAlarmVolume", isHL0SS9OAradar() ? "66" : "74", DP_TYPE_ENUM, value)
+    return setRadarParameter("radarAlarmVolume", isHL0SS9OAradar() ? "66" : "74", DP_TYPE_ENUM, value)
 }
 
 def setRadarAlarmTime( val ) {
     def value = val as int
-    setRadarParameter("setRadarAlarmTime", isHL0SS9OAradar() ? "65" : "73", DP_TYPE_VALUE, value)
+    return setRadarParameter("setRadarAlarmTime", isHL0SS9OAradar() ? "65" : "73", DP_TYPE_VALUE, value)
 }
 
 def setMotionFalseDetection( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("motionFalseDetection", isHL0SS9OAradar() ? "70" : "67", DP_TYPE_BOOL, value)
+    return setRadarParameter("motionFalseDetection", isHL0SS9OAradar() ? "70" : "67", DP_TYPE_BOOL, value)
 }
 
 def setBreatheFalseDetection( val ) {
     def value = val ? "01" : "00"
-    setRadarParameter("breatheFalseDetection", isHL0SS9OAradar() ? "73" : "71", DP_TYPE_BOOL, value)
+    return setRadarParameter("breatheFalseDetection", isHL0SS9OAradar() ? "73" : "71", DP_TYPE_BOOL, value)
 }
 
 def setMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("motionDetectionDistance", isHL0SS9OAradar() ? "0D" : "04", DP_TYPE_VALUE, value)
+    if (isLINPTECHradar()) {
+        logDebug "changing LINPTECH radar MotionDetectionDistance to ${val}m (raw ${value})"
+        return zigbee.writeAttribute(0xE002, 0xE00B, 0x20, value as int, [:], delay=200)
+    }
+    else {
+        return setRadarParameter("motionDetectionDistance", isHL0SS9OAradar() ? "0D" : "04", DP_TYPE_VALUE, value)
+    }
 }
 
 def setMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("motionMinimumDistance", isHL0SS9OAradar() ? "6A" : "03", DP_TYPE_VALUE, value)
+    return setRadarParameter("motionMinimumDistance", isHL0SS9OAradar() ? "6A" : "03", DP_TYPE_VALUE, value)
 }
 
 def setMotionDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("motionDetectionSensitivity", isHL0SS9OAradar() ? "0F" : "02", DP_TYPE_ENUM, value)
+    if (isLINPTECHradar()) {
+        logDebug "changing LINPTECH radar MotionDetectionSensitivity to ${value}"
+        return zigbee.writeAttribute(0xE002, 0xE004, 0x20, value as int, [:], delay=200)
+    }
+    else {        
+        return setRadarParameter("motionDetectionSensitivity", (isHL0SS9OAradar() || isLINPTECHradar()) ? "0F" : "02", DP_TYPE_ENUM, value)
+    }
 }
 
 def setSmallMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "0E" : "68", DP_TYPE_VALUE, value)
+    return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "0E" : "68", DP_TYPE_VALUE, value)
 }
 
 def setSmallMotionDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("smallMotionDetectionSensitivity", isHL0SS9OAradar() ? "10" : "69" , DP_TYPE_ENUM, value)
+    return setRadarParameter("smallMotionDetectionSensitivity", isHL0SS9OAradar() ? "10" : "69" , DP_TYPE_ENUM, value)
 }
 
 def setSmallMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "6B" : "6E", DP_TYPE_VALUE, value)
+    return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "6B" : "6E", DP_TYPE_VALUE, value)
 }
 
 def setStaticDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("staticDetectionDistance", isHL0SS9OAradar() ? "67" : "6C", DP_TYPE_VALUE, value)
+    return setRadarParameter("staticDetectionDistance", isHL0SS9OAradar() ? "67" : "6C", DP_TYPE_VALUE, value)
 }
 
 def setStaticDetectionSensitivity( val ) {
     def value = val as int
-    setRadarParameter("staticDetectionSensitivity", isHL0SS9OAradar() ? "68" : "6D", DP_TYPE_ENUM, value)
+    if (isLINPTECHradar()) {
+        logDebug "changing LINPTECH radar StaticDetectionSensitivity to ${value}"
+        return zigbee.writeAttribute(0xE002, 0xE005, 0x20, value as int, [:], delay=200)
+    }
+    else { 
+        return setRadarParameter("staticDetectionSensitivity", isHL0SS9OAradar() ? "68" : isLINPTECHradar() ? "10" : "6D", DP_TYPE_ENUM, value)
+    }
 }
 
 def setStaticDetectionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    setRadarParameter("staticDetectionMinimumDistance", isHL0SS9OAradar() ? "6C" : "6F", DP_TYPE_VALUE, value)
+    return setRadarParameter("staticDetectionMinimumDistance", isHL0SS9OAradar() ? "6C" : "6F", DP_TYPE_VALUE, value)
 }
 
 /*
