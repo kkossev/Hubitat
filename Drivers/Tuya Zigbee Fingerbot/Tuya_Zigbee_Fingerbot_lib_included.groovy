@@ -19,7 +19,8 @@
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
  * ver. 2.1.0  2023-07-15 kkossev  - Fingerbot driver
  * ver. 2.1.2  2023-07-23 kkossev  - Fingerbot library;
- * ver. 2.1.4  2023-08-28 kkossev  - (dev. branch) added capability PushableButton for Fingerbot; sendTuyCommand independant from the partcualr Fingerboot fingerprint;
+ * ver. 2.1.3  2023-08-28 kkossev  - Added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;
+ * ver. 2.1.4  2023-08-28 kkossev  - (dev. branch) added capability PushableButton for Fingerbot; sendTuyCommand independent from the particular Fingerboot fingerprint;
  *
  *                                   TODO: 
  */
@@ -323,7 +324,7 @@ def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] 
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
-def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
+def isFingerbot()  { (DEVICE_TYPE in ["Fingerbot"]) }
 def isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
 
 /**

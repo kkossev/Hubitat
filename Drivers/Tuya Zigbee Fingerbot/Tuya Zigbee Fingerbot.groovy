@@ -16,34 +16,17 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
- * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
- * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
- * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
- * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
- * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
- * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
- * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
- * ver. 2.1.3  2023-08-28 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
+ * ver. 2.1.0  2023-07-15 kkossev  - Fingerbot driver
+ * ver. 2.1.2  2023-07-23 kkossev  - Fingerbot library;
+ * ver. 2.1.3  2023-08-28 kkossev  - Added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;
+ * ver. 2.1.4  2023-08-28 kkossev  - (dev. branch) added capability PushableButton for Fingerbot; sendTuyCommand independent from the particular Fingerboot fingerprint;
  *
- *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
- *                                   TODO: Aqara TVOC: implement battery level/percentage 
- *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
- *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
- *                                   TODO: measure PTT for on/off commands
- *                                   TODO: add rejonCtr to statistics
- *                                   TODO: Fingerbot: touch button (on top) enable/disable option
- *                                   TODO: implement Get Device Info command
- *                                   TODO: continue the work on the 'device' capability (this project main goal!)
- *                                   TODO: state timesamps in human readable form
- *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
- *                                   TODO: battery min/max voltage preferences
- *                                   TODO: Configure: add custom Notes
+ *                                   TODO: 
  */
 
-static String version() { "2.1.3" }
-static String timeStamp() {"2023/08/28 11:16 PM"}
+static String version() { "2.1.4" }
+static String timeStamp() {"2023/09/13 7:48 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -129,7 +112,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Device%20Driver/Tuya%20Zigbee%20Device.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/VINDSTYRKA%20Air%20Quality%20Monitor/VINDSTYRKA_Air_Quality_Monitor_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20TVOC%20Air%20Quality%20Monitor/Aqara_TVOC_Air_Quality_Monitor_lib_included.groovy',
-        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20E1%20Thermostat/Aqara%20E1%20Thermostat.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Plug/Tuya%20Zigbee%20Plug%20V2.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy',
@@ -205,11 +188,9 @@ metadata {
         if (deviceType in ["Dimmer", "ButtonDimmer"]) {
             capability "SwitchLevel"
         }
-        /*
         if (deviceType in  ["Fingerbot"]) {
             capability "PushableButton"
         }
-        */
         if (deviceType in  ["Button", "ButtonDimmer", "AqaraCube"]) {
             capability "PushableButton"
             capability "DoubleTapableButton"
@@ -343,7 +324,7 @@ def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] 
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
-def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
+def isFingerbot()  { (DEVICE_TYPE in ["Fingerbot"]) }
 def isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
 
 /**
@@ -1446,7 +1427,7 @@ def off() {
         logInfo "${descriptionText}"
     }
     else {
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
+        logDebug "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
     }
     
     
@@ -2603,7 +2584,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     def ep = safeToInt(state.destinationEP)
     if (ep==null || ep==0) ep = 1
-    def tuyaCmd = isFingerbot() ? 0x04 : SETDATA
+    def tuyaCmd = (DEVICE_TYPE in ["Fingerbot"]) ? 0x04 : SETDATA
     
     cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     logDebug "${device.displayName} sendTuyaCommand = ${cmds}"

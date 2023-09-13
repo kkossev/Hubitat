@@ -23,14 +23,15 @@ library (
  *
  * ver. 1.0.0  2023-07-13 kkossev  - Libraries introduction for the Tuya Zigbee Fingerbot driver;
  * ver. 1.0.1  2023-07-23 kkossev  - added _TZ3210_dse8ogfy fingerprint
- * ver. 1.0.2  2023-08-28 kkossev  - (dev. branch) processTuyaDpFingerbot; added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable; 
+ * ver. 1.0.2  2023-08-28 kkossev  - processTuyaDpFingerbot; added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable; 
+ * ver. 1.0.3  2023-09-13 kkossev  - (dev. branch) added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot
  *
  *                                   TODO: Update preferences values w/ the received parameters when the battery is re-inserted.
 */
 
 
-def tuyaFingerbotLibVersion()   {"1.0.2"}
-def tuyaFingerbotLibStamp() {"2023/08/28 11:16 PM"}
+def tuyaFingerbotLibVersion()   {"1.0.3"}
+def tuyaFingerbotLibStamp() {"2023/09/13 11:16 PM"}
 
 metadata {
     attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String>
@@ -40,6 +41,7 @@ metadata {
     attribute "upPosition", "number"
         
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot"
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_j4pdtz9v", deviceJoinName: "Moes Zigbee Fingerbot"        // https://community.hubitat.com/t/release-tuya-zigbee-fingerbot/118719/38?u=kkossev
     
     preferences {
         input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>'
