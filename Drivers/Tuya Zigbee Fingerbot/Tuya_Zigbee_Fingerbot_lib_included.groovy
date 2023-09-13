@@ -16,36 +16,18 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
- * ver. 2.0.1  2023-05-27 kkossev  - another test version (Aqara TVOC Air Monitor driver)
- * ver. 2.0.2  2023-05-29 kkossev  - Just another test version (Aqara E1 thermostat driver) (not ready yet!); added 'Advanced Options'; Xiaomi cluster decoding; added temperatureScale and tVocUnit'preferences; temperature rounding bug fix
  * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
- * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch; Tuya Zigbee Button Dimmer; Tuya Zigbee Dimmer; Tuya Zigbee Light Sensor; 
- * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
- * ver. 2.0.6  2023-07-09 kkossev  - Tuya Zigbee Light Sensor: added min/max reporting time; illuminance threshold; added lastRx checkInTime, batteryTime, battCtr; added illuminanceCoeff; checkDriverVersion() bug fix;
- * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
- * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
- * ver. 2.1.3  2023-08-28 kkossev  - (dev. branch) ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
+ * ver. 2.1.0  2023-07-15 kkossev  - Fingerbot driver
+ * ver. 2.1.2  2023-07-23 kkossev  - Fingerbot library;
+ * ver. 2.1.4  2023-08-28 kkossev  - (dev. branch) added capability PushableButton for Fingerbot; sendTuyCommand independant from the partcualr Fingerboot fingerprint;
  *
- *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
- *                                   TODO: Aqara TVOC: implement battery level/percentage 
- *                                   TODO: check  catchall: 0000 0006 00 00 0040 00 E51C 00 00 0000 00 00 01FDFF040101190000      (device object UNKNOWN_CLUSTER (0x0006) error: 0xFD)
- *                                   TODO: skip thresholds checking for T,H,I ... on maxReportingTime
- *                                   TODO: measure PTT for on/off commands
- *                                   TODO: add rejonCtr to statistics
- *                                   TODO: Fingerbot: touch button (on top) enable/disable option
- *                                   TODO: implement Get Device Info command
- *                                   TODO: continue the work on the 'device' capability (this project main goal!)
- *                                   TODO: state timesamps in human readable form
- *                                   TODO: parse the details of the configuration respose - cluster, min, max, delta ...
- *                                   TODO: battery min/max voltage preferences
- *                                   TODO: Configure: add custom Notes
+ *                                   TODO: 
  */
 
-static String version() { "2.1.3" }
-static String timeStamp() {"2023/08/28 11:19 PM"}
+static String version() { "2.1.4" }
+static String timeStamp() {"2023/09/13 7:18 AM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -205,11 +187,9 @@ metadata {
         if (deviceType in ["Dimmer", "ButtonDimmer"]) {
             capability "SwitchLevel"
         }
-        /*
         if (deviceType in  ["Fingerbot"]) {
             capability "PushableButton"
         }
-        */
         if (deviceType in  ["Button", "ButtonDimmer", "AqaraCube"]) {
             capability "PushableButton"
             capability "DoubleTapableButton"
@@ -1446,7 +1426,7 @@ def off() {
         logInfo "${descriptionText}"
     }
     else {
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
+        logDebug "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
     }
     
     
@@ -2603,7 +2583,7 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     def ep = safeToInt(state.destinationEP)
     if (ep==null || ep==0) ep = 1
-    def tuyaCmd = isFingerbot() ? 0x04 : SETDATA
+    def tuyaCmd = (DEVICE_TYPE in ["Fingerbot"]) ? 0x04 : SETDATA
     
     cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     logDebug "${device.displayName} sendTuyaCommand = ${cmds}"
@@ -3471,202 +3451,204 @@ library ( // library marker kkossev.tuyaFingerbotLib, line 1
  * // library marker kkossev.tuyaFingerbotLib, line 23
  * ver. 1.0.0  2023-07-13 kkossev  - Libraries introduction for the Tuya Zigbee Fingerbot driver; // library marker kkossev.tuyaFingerbotLib, line 24
  * ver. 1.0.1  2023-07-23 kkossev  - added _TZ3210_dse8ogfy fingerprint // library marker kkossev.tuyaFingerbotLib, line 25
- * ver. 1.0.2  2023-08-28 kkossev  - (dev. branch) processTuyaDpFingerbot; added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;  // library marker kkossev.tuyaFingerbotLib, line 26
- * // library marker kkossev.tuyaFingerbotLib, line 27
- *                                   TODO: Update preferences values w/ the received parameters when the battery is re-inserted. // library marker kkossev.tuyaFingerbotLib, line 28
-*/ // library marker kkossev.tuyaFingerbotLib, line 29
+ * ver. 1.0.2  2023-08-28 kkossev  - processTuyaDpFingerbot; added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;  // library marker kkossev.tuyaFingerbotLib, line 26
+ * ver. 1.0.3  2023-09-13 kkossev  - (dev. branch) added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot // library marker kkossev.tuyaFingerbotLib, line 27
+ * // library marker kkossev.tuyaFingerbotLib, line 28
+ *                                   TODO: Update preferences values w/ the received parameters when the battery is re-inserted. // library marker kkossev.tuyaFingerbotLib, line 29
+*/ // library marker kkossev.tuyaFingerbotLib, line 30
 
 
-def tuyaFingerbotLibVersion()   {"1.0.2"} // library marker kkossev.tuyaFingerbotLib, line 32
-def tuyaFingerbotLibStamp() {"2023/08/28 11:16 PM"} // library marker kkossev.tuyaFingerbotLib, line 33
+def tuyaFingerbotLibVersion()   {"1.0.3"} // library marker kkossev.tuyaFingerbotLib, line 33
+def tuyaFingerbotLibStamp() {"2023/09/13 11:16 PM"} // library marker kkossev.tuyaFingerbotLib, line 34
 
-metadata { // library marker kkossev.tuyaFingerbotLib, line 35
-    attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 36
-    attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 37
-    attribute "pushTime", "number" // library marker kkossev.tuyaFingerbotLib, line 38
-    attribute "dnPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 39
-    attribute "upPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 40
+metadata { // library marker kkossev.tuyaFingerbotLib, line 36
+    attribute "fingerbotMode", "enum", FingerbotModeOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 37
+    attribute "direction", "enum", FingerbotDirectionOpts.options.values() as List<String> // library marker kkossev.tuyaFingerbotLib, line 38
+    attribute "pushTime", "number" // library marker kkossev.tuyaFingerbotLib, line 39
+    attribute "dnPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 40
+    attribute "upPosition", "number" // library marker kkossev.tuyaFingerbotLib, line 41
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot" // library marker kkossev.tuyaFingerbotLib, line 42
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_dse8ogfy", deviceJoinName: "Tuya Zigbee Fingerbot" // library marker kkossev.tuyaFingerbotLib, line 43
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0006,EF00,0000", outClusters:"0019,000A", model:"TS0001", manufacturer:"_TZ3210_j4pdtz9v", deviceJoinName: "Moes Zigbee Fingerbot"        // https://community.hubitat.com/t/release-tuya-zigbee-fingerbot/118719/38?u=kkossev // library marker kkossev.tuyaFingerbotLib, line 44
 
-    preferences { // library marker kkossev.tuyaFingerbotLib, line 44
-        input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>' // library marker kkossev.tuyaFingerbotLib, line 45
-        input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>' // library marker kkossev.tuyaFingerbotLib, line 46
-        input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 47
-        input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 48
-        input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100   // library marker kkossev.tuyaFingerbotLib, line 49
-        input name: 'fingerbotButton', type: 'enum', title: '<b>Fingerbot Button</b>', options: FingerbotButtonOpts.options, defaultValue: FingerbotButtonOpts.defaultValue, required: true, description: '<i>Disable or enable the Fingerbot touch button</i>' // library marker kkossev.tuyaFingerbotLib, line 50
-    } // library marker kkossev.tuyaFingerbotLib, line 51
-} // library marker kkossev.tuyaFingerbotLib, line 52
+    preferences { // library marker kkossev.tuyaFingerbotLib, line 46
+        input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>' // library marker kkossev.tuyaFingerbotLib, line 47
+        input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>' // library marker kkossev.tuyaFingerbotLib, line 48
+        input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: "0..255", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 49
+        input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: "0..50", defaultValue: 0   // library marker kkossev.tuyaFingerbotLib, line 50
+        input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: "51..100", defaultValue: 100   // library marker kkossev.tuyaFingerbotLib, line 51
+        input name: 'fingerbotButton', type: 'enum', title: '<b>Fingerbot Button</b>', options: FingerbotButtonOpts.options, defaultValue: FingerbotButtonOpts.defaultValue, required: true, description: '<i>Disable or enable the Fingerbot touch button</i>' // library marker kkossev.tuyaFingerbotLib, line 52
+    } // library marker kkossev.tuyaFingerbotLib, line 53
+} // library marker kkossev.tuyaFingerbotLib, line 54
 
-@Field static final Map FingerbotModeOpts = [ // library marker kkossev.tuyaFingerbotLib, line 54
-    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 55
-    options     : [0: 'push', 1: 'switch'] // library marker kkossev.tuyaFingerbotLib, line 56
-] // library marker kkossev.tuyaFingerbotLib, line 57
-@Field static final Map FingerbotDirectionOpts = [ // library marker kkossev.tuyaFingerbotLib, line 58
-    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 59
-    options     : [0: 'normal', 1: 'reverse'] // library marker kkossev.tuyaFingerbotLib, line 60
-]          // library marker kkossev.tuyaFingerbotLib, line 61
-@Field static final Map FingerbotButtonOpts = [ // library marker kkossev.tuyaFingerbotLib, line 62
-    defaultValue: 1, // library marker kkossev.tuyaFingerbotLib, line 63
-    options     : [0: 'disabled', 1: 'enabled'] // library marker kkossev.tuyaFingerbotLib, line 64
-] // library marker kkossev.tuyaFingerbotLib, line 65
+@Field static final Map FingerbotModeOpts = [ // library marker kkossev.tuyaFingerbotLib, line 56
+    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 57
+    options     : [0: 'push', 1: 'switch'] // library marker kkossev.tuyaFingerbotLib, line 58
+] // library marker kkossev.tuyaFingerbotLib, line 59
+@Field static final Map FingerbotDirectionOpts = [ // library marker kkossev.tuyaFingerbotLib, line 60
+    defaultValue: 0, // library marker kkossev.tuyaFingerbotLib, line 61
+    options     : [0: 'normal', 1: 'reverse'] // library marker kkossev.tuyaFingerbotLib, line 62
+]          // library marker kkossev.tuyaFingerbotLib, line 63
+@Field static final Map FingerbotButtonOpts = [ // library marker kkossev.tuyaFingerbotLib, line 64
+    defaultValue: 1, // library marker kkossev.tuyaFingerbotLib, line 65
+    options     : [0: 'disabled', 1: 'enabled'] // library marker kkossev.tuyaFingerbotLib, line 66
+] // library marker kkossev.tuyaFingerbotLib, line 67
 
-def pushFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 67
-    logDebug "pushFingerbot: on" // library marker kkossev.tuyaFingerbotLib, line 68
-    on() // library marker kkossev.tuyaFingerbotLib, line 69
-} // library marker kkossev.tuyaFingerbotLib, line 70
+def pushFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 69
+    logDebug "pushFingerbot: on" // library marker kkossev.tuyaFingerbotLib, line 70
+    on() // library marker kkossev.tuyaFingerbotLib, line 71
+} // library marker kkossev.tuyaFingerbotLib, line 72
 
-def pushFingerbot(buttonNumber) {    //pushableButton capability // library marker kkossev.tuyaFingerbotLib, line 72
-    pushFingerbot() // library marker kkossev.tuyaFingerbotLib, line 73
-} // library marker kkossev.tuyaFingerbotLib, line 74
-
-
-def configureDeviceFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 77
-    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 78
-
-    def mode = settings.fingerbotMode != null ? settings.fingerbotMode : FingerbotModeOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 80
-    //logWarn "mode=${mode}  settings=${(settings.fingerbotMode)}" // library marker kkossev.tuyaFingerbotLib, line 81
-    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})" // library marker kkossev.tuyaFingerbotLib, line 82
-    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 83
-
-    final int duration = (settings.pushTime as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 85
-    logDebug "setting pushTime to ${duration} seconds)" // library marker kkossev.tuyaFingerbotLib, line 86
-    cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 87
-
-    final int dnPos = (settings.dnPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 89
-    logDebug "setting dnPosition to ${dnPos} %" // library marker kkossev.tuyaFingerbotLib, line 90
-    cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 91
-    final int upPos = (settings.upPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 92
-    logDebug "setting upPosition to ${upPos} %" // library marker kkossev.tuyaFingerbotLib, line 93
-    cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 94
-
-    final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 96
-    logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})" // library marker kkossev.tuyaFingerbotLib, line 97
-    cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 98
-    /* // library marker kkossev.tuyaFingerbotLib, line 99
-    */ // library marker kkossev.tuyaFingerbotLib, line 100
-    def button = settings.fingerbotButton != null ? settings.fingerbotButton : FingerbotButtonOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 101
-    //logWarn "button=${button}  settings=${(settings.fingerbotButton)}" // library marker kkossev.tuyaFingerbotLib, line 102
-    logDebug "setting fingerbotButton to ${FingerbotButtonOpts.options[button as int]} (${button})" // library marker kkossev.tuyaFingerbotLib, line 103
-    cmds += sendTuyaCommand("6B", DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 104
-
-    logDebug "configureDeviceFingerbot() : ${cmds}" // library marker kkossev.tuyaFingerbotLib, line 106
-    return cmds     // library marker kkossev.tuyaFingerbotLib, line 107
-} // library marker kkossev.tuyaFingerbotLib, line 108
-
-def initVarsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 110
-    logDebug "initVarsFingerbot(${fullInit})" // library marker kkossev.tuyaFingerbotLib, line 111
-    if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 112
-    if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 113
-    if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 114
-    if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 115
-    if (fullInit || settings?.direction == null) device.updateSetting('direction', [value: FingerbotDirectionOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 116
-    if (fullInit || settings?.fingerbotButton == null) device.updateSetting('fingerbotButton', [value: FingerbotButtonOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 117
-    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true) // library marker kkossev.tuyaFingerbotLib, line 118
-
-} // library marker kkossev.tuyaFingerbotLib, line 120
-
-void initEventsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 122
-/*  not needed? // library marker kkossev.tuyaFingerbotLib, line 123
-    sendNumberOfButtonsEvent(1) // library marker kkossev.tuyaFingerbotLib, line 124
-    sendSupportedButtonValuesEvent("pushed") // library marker kkossev.tuyaFingerbotLib, line 125
-*/ // library marker kkossev.tuyaFingerbotLib, line 126
-} // library marker kkossev.tuyaFingerbotLib, line 127
-
-/* // library marker kkossev.tuyaFingerbotLib, line 129
-Switch1 		    1 // library marker kkossev.tuyaFingerbotLib, line 130
-Mode			    101 // library marker kkossev.tuyaFingerbotLib, line 131
-Degree of declining	code: 102 // library marker kkossev.tuyaFingerbotLib, line 132
-Duration 		    103 // library marker kkossev.tuyaFingerbotLib, line 133
-Switch Reverse		104 // library marker kkossev.tuyaFingerbotLib, line 134
-Battery Power		105 // library marker kkossev.tuyaFingerbotLib, line 135
-Increase		    106 // library marker kkossev.tuyaFingerbotLib, line 136
-Tact Switch 		107 // library marker kkossev.tuyaFingerbotLib, line 137
-Click 			    108 // library marker kkossev.tuyaFingerbotLib, line 138
-Custom Program		109 // library marker kkossev.tuyaFingerbotLib, line 139
-Producion Test		110 // library marker kkossev.tuyaFingerbotLib, line 140
-Sports Statistics	111 // library marker kkossev.tuyaFingerbotLib, line 141
-Custom Timing		112 // library marker kkossev.tuyaFingerbotLib, line 142
-*/ // library marker kkossev.tuyaFingerbotLib, line 143
-
-void processTuyaDpFingerbot(descMap, dp, dp_id, fncmd) { // library marker kkossev.tuyaFingerbotLib, line 145
-
-    switch (dp) { // library marker kkossev.tuyaFingerbotLib, line 147
-        case 0x01 : // on/off // library marker kkossev.tuyaFingerbotLib, line 148
-            sendSwitchEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 149
-            break // library marker kkossev.tuyaFingerbotLib, line 150
-        case 0x02 : // library marker kkossev.tuyaFingerbotLib, line 151
-            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 152
-            break // library marker kkossev.tuyaFingerbotLib, line 153
-        case 0x04 : // battery // library marker kkossev.tuyaFingerbotLib, line 154
-            sendBatteryPercentageEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 155
-            break // library marker kkossev.tuyaFingerbotLib, line 156
-
-        case 0x65 : // (101) // library marker kkossev.tuyaFingerbotLib, line 158
-            def value = FingerbotModeOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 159
-            def descriptionText = "Fingerbot mode is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 160
-            sendEvent(name: "fingerbotMode", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 161
-            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 162
-            break // library marker kkossev.tuyaFingerbotLib, line 163
-        case 0x66 : // (102) // library marker kkossev.tuyaFingerbotLib, line 164
-            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 165
-            def descriptionText = "Fingerbot Down Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 166
-            sendEvent(name: "dnPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 167
-            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 168
-            break // library marker kkossev.tuyaFingerbotLib, line 169
-        case 0x67 : // (103) // library marker kkossev.tuyaFingerbotLib, line 170
-            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 171
-            def descriptionText = "Fingerbot push time (duration) is ${value} seconds" // library marker kkossev.tuyaFingerbotLib, line 172
-            sendEvent(name: "pushTime", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 173
-            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 174
-            break // library marker kkossev.tuyaFingerbotLib, line 175
-        case 0x68 : // (104) // library marker kkossev.tuyaFingerbotLib, line 176
-            def value = FingerbotDirectionOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 177
-            def descriptionText = "Fingerbot switch direction is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 178
-            sendEvent(name: "direction", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 179
-            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 180
-            break // library marker kkossev.tuyaFingerbotLib, line 181
-        case 0x69 : // (105) // library marker kkossev.tuyaFingerbotLib, line 182
-            //logInfo "Fingerbot Battery Power is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 183
-            sendBatteryPercentageEvent(fncmd)  // library marker kkossev.tuyaFingerbotLib, line 184
-            break // library marker kkossev.tuyaFingerbotLib, line 185
-        case 0x6A : // (106) // library marker kkossev.tuyaFingerbotLib, line 186
-            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 187
-            def descriptionText = "Fingerbot Up Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 188
-            sendEvent(name: "upPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 189
-            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 190
-            break // library marker kkossev.tuyaFingerbotLib, line 191
-        case 0x6B : // (107) // library marker kkossev.tuyaFingerbotLib, line 192
-            logInfo "Fingerbot Tact Switch is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 193
-            break // library marker kkossev.tuyaFingerbotLib, line 194
-        case 0x6C : // (108) // library marker kkossev.tuyaFingerbotLib, line 195
-            logInfo "Fingerbot Click is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 196
-            break // library marker kkossev.tuyaFingerbotLib, line 197
-        case 0x6D : // (109) // library marker kkossev.tuyaFingerbotLib, line 198
-            logInfo "Fingerbot Custom Program is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 199
-            break // library marker kkossev.tuyaFingerbotLib, line 200
-        case 0x6E : // (110) // library marker kkossev.tuyaFingerbotLib, line 201
-            logInfo "Fingerbot Producion Test is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 202
-            break // library marker kkossev.tuyaFingerbotLib, line 203
-        case 0x6F : // (111) // library marker kkossev.tuyaFingerbotLib, line 204
-            logInfo "Fingerbot Sports Statistics is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 205
-            break // library marker kkossev.tuyaFingerbotLib, line 206
-        case 0x70 : // (112) // library marker kkossev.tuyaFingerbotLib, line 207
-            logInfo "Fingerbot Custom Timing is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 208
-            break // library marker kkossev.tuyaFingerbotLib, line 209
-        default : // library marker kkossev.tuyaFingerbotLib, line 210
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 211
-            break             // library marker kkossev.tuyaFingerbotLib, line 212
-    } // library marker kkossev.tuyaFingerbotLib, line 213
-} // library marker kkossev.tuyaFingerbotLib, line 214
+def pushFingerbot(buttonNumber) {    //pushableButton capability // library marker kkossev.tuyaFingerbotLib, line 74
+    pushFingerbot() // library marker kkossev.tuyaFingerbotLib, line 75
+} // library marker kkossev.tuyaFingerbotLib, line 76
 
 
-def refreshFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 217
-    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 218
-    logDebug "refreshFingerbot() (n/a) : ${cmds} " // library marker kkossev.tuyaFingerbotLib, line 219
-    return cmds // library marker kkossev.tuyaFingerbotLib, line 220
-} // library marker kkossev.tuyaFingerbotLib, line 221
+def configureDeviceFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 79
+    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 80
+
+    def mode = settings.fingerbotMode != null ? settings.fingerbotMode : FingerbotModeOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 82
+    //logWarn "mode=${mode}  settings=${(settings.fingerbotMode)}" // library marker kkossev.tuyaFingerbotLib, line 83
+    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})" // library marker kkossev.tuyaFingerbotLib, line 84
+    cmds = sendTuyaCommand("65", DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 85
+
+    final int duration = (settings.pushTime as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 87
+    logDebug "setting pushTime to ${duration} seconds)" // library marker kkossev.tuyaFingerbotLib, line 88
+    cmds += sendTuyaCommand("67", DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 89
+
+    final int dnPos = (settings.dnPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 91
+    logDebug "setting dnPosition to ${dnPos} %" // library marker kkossev.tuyaFingerbotLib, line 92
+    cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 93
+    final int upPos = (settings.upPosition as Integer) ?: 0 // library marker kkossev.tuyaFingerbotLib, line 94
+    logDebug "setting upPosition to ${upPos} %" // library marker kkossev.tuyaFingerbotLib, line 95
+    cmds += sendTuyaCommand("6A", DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) ) // library marker kkossev.tuyaFingerbotLib, line 96
+
+    final int dir = (settings.direction as Integer) ?: FingerbotDirectionOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 98
+    logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})" // library marker kkossev.tuyaFingerbotLib, line 99
+    cmds += sendTuyaCommand("68", DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 100
+    /* // library marker kkossev.tuyaFingerbotLib, line 101
+    */ // library marker kkossev.tuyaFingerbotLib, line 102
+    def button = settings.fingerbotButton != null ? settings.fingerbotButton : FingerbotButtonOpts.defaultValue // library marker kkossev.tuyaFingerbotLib, line 103
+    //logWarn "button=${button}  settings=${(settings.fingerbotButton)}" // library marker kkossev.tuyaFingerbotLib, line 104
+    logDebug "setting fingerbotButton to ${FingerbotButtonOpts.options[button as int]} (${button})" // library marker kkossev.tuyaFingerbotLib, line 105
+    cmds += sendTuyaCommand("6B", DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2) ) // library marker kkossev.tuyaFingerbotLib, line 106
+
+    logDebug "configureDeviceFingerbot() : ${cmds}" // library marker kkossev.tuyaFingerbotLib, line 108
+    return cmds     // library marker kkossev.tuyaFingerbotLib, line 109
+} // library marker kkossev.tuyaFingerbotLib, line 110
+
+def initVarsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 112
+    logDebug "initVarsFingerbot(${fullInit})" // library marker kkossev.tuyaFingerbotLib, line 113
+    if (fullInit || settings?.fingerbotMode == null) device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 114
+    if (fullInit || settings?.pushTime == null) device.updateSetting("pushTime", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 115
+    if (fullInit || settings?.upPosition == null) device.updateSetting("upPosition", [value:0, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 116
+    if (fullInit || settings?.dnPosition == null) device.updateSetting("dnPosition", [value:100, type:"number"]) // library marker kkossev.tuyaFingerbotLib, line 117
+    if (fullInit || settings?.direction == null) device.updateSetting('direction', [value: FingerbotDirectionOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 118
+    if (fullInit || settings?.fingerbotButton == null) device.updateSetting('fingerbotButton', [value: FingerbotButtonOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.tuyaFingerbotLib, line 119
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", true) // library marker kkossev.tuyaFingerbotLib, line 120
+
+} // library marker kkossev.tuyaFingerbotLib, line 122
+
+void initEventsFingerbot(boolean fullInit=false) { // library marker kkossev.tuyaFingerbotLib, line 124
+/*  not needed? // library marker kkossev.tuyaFingerbotLib, line 125
+    sendNumberOfButtonsEvent(1) // library marker kkossev.tuyaFingerbotLib, line 126
+    sendSupportedButtonValuesEvent("pushed") // library marker kkossev.tuyaFingerbotLib, line 127
+*/ // library marker kkossev.tuyaFingerbotLib, line 128
+} // library marker kkossev.tuyaFingerbotLib, line 129
+
+/* // library marker kkossev.tuyaFingerbotLib, line 131
+Switch1 		    1 // library marker kkossev.tuyaFingerbotLib, line 132
+Mode			    101 // library marker kkossev.tuyaFingerbotLib, line 133
+Degree of declining	code: 102 // library marker kkossev.tuyaFingerbotLib, line 134
+Duration 		    103 // library marker kkossev.tuyaFingerbotLib, line 135
+Switch Reverse		104 // library marker kkossev.tuyaFingerbotLib, line 136
+Battery Power		105 // library marker kkossev.tuyaFingerbotLib, line 137
+Increase		    106 // library marker kkossev.tuyaFingerbotLib, line 138
+Tact Switch 		107 // library marker kkossev.tuyaFingerbotLib, line 139
+Click 			    108 // library marker kkossev.tuyaFingerbotLib, line 140
+Custom Program		109 // library marker kkossev.tuyaFingerbotLib, line 141
+Producion Test		110 // library marker kkossev.tuyaFingerbotLib, line 142
+Sports Statistics	111 // library marker kkossev.tuyaFingerbotLib, line 143
+Custom Timing		112 // library marker kkossev.tuyaFingerbotLib, line 144
+*/ // library marker kkossev.tuyaFingerbotLib, line 145
+
+void processTuyaDpFingerbot(descMap, dp, dp_id, fncmd) { // library marker kkossev.tuyaFingerbotLib, line 147
+
+    switch (dp) { // library marker kkossev.tuyaFingerbotLib, line 149
+        case 0x01 : // on/off // library marker kkossev.tuyaFingerbotLib, line 150
+            sendSwitchEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 151
+            break // library marker kkossev.tuyaFingerbotLib, line 152
+        case 0x02 : // library marker kkossev.tuyaFingerbotLib, line 153
+            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 154
+            break // library marker kkossev.tuyaFingerbotLib, line 155
+        case 0x04 : // battery // library marker kkossev.tuyaFingerbotLib, line 156
+            sendBatteryPercentageEvent(fncmd) // library marker kkossev.tuyaFingerbotLib, line 157
+            break // library marker kkossev.tuyaFingerbotLib, line 158
+
+        case 0x65 : // (101) // library marker kkossev.tuyaFingerbotLib, line 160
+            def value = FingerbotModeOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 161
+            def descriptionText = "Fingerbot mode is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 162
+            sendEvent(name: "fingerbotMode", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 163
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 164
+            break // library marker kkossev.tuyaFingerbotLib, line 165
+        case 0x66 : // (102) // library marker kkossev.tuyaFingerbotLib, line 166
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 167
+            def descriptionText = "Fingerbot Down Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 168
+            sendEvent(name: "dnPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 169
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 170
+            break // library marker kkossev.tuyaFingerbotLib, line 171
+        case 0x67 : // (103) // library marker kkossev.tuyaFingerbotLib, line 172
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 173
+            def descriptionText = "Fingerbot push time (duration) is ${value} seconds" // library marker kkossev.tuyaFingerbotLib, line 174
+            sendEvent(name: "pushTime", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 175
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 176
+            break // library marker kkossev.tuyaFingerbotLib, line 177
+        case 0x68 : // (104) // library marker kkossev.tuyaFingerbotLib, line 178
+            def value = FingerbotDirectionOpts.options[fncmd as int] // library marker kkossev.tuyaFingerbotLib, line 179
+            def descriptionText = "Fingerbot switch direction is ${value} (${fncmd})" // library marker kkossev.tuyaFingerbotLib, line 180
+            sendEvent(name: "direction", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 181
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 182
+            break // library marker kkossev.tuyaFingerbotLib, line 183
+        case 0x69 : // (105) // library marker kkossev.tuyaFingerbotLib, line 184
+            //logInfo "Fingerbot Battery Power is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 185
+            sendBatteryPercentageEvent(fncmd)  // library marker kkossev.tuyaFingerbotLib, line 186
+            break // library marker kkossev.tuyaFingerbotLib, line 187
+        case 0x6A : // (106) // library marker kkossev.tuyaFingerbotLib, line 188
+            def value = fncmd as int // library marker kkossev.tuyaFingerbotLib, line 189
+            def descriptionText = "Fingerbot Up Position is ${value} %" // library marker kkossev.tuyaFingerbotLib, line 190
+            sendEvent(name: "upPosition", value: value, descriptionText: descriptionText) // library marker kkossev.tuyaFingerbotLib, line 191
+            logInfo "${descriptionText}" // library marker kkossev.tuyaFingerbotLib, line 192
+            break // library marker kkossev.tuyaFingerbotLib, line 193
+        case 0x6B : // (107) // library marker kkossev.tuyaFingerbotLib, line 194
+            logInfo "Fingerbot Tact Switch is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 195
+            break // library marker kkossev.tuyaFingerbotLib, line 196
+        case 0x6C : // (108) // library marker kkossev.tuyaFingerbotLib, line 197
+            logInfo "Fingerbot Click is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 198
+            break // library marker kkossev.tuyaFingerbotLib, line 199
+        case 0x6D : // (109) // library marker kkossev.tuyaFingerbotLib, line 200
+            logInfo "Fingerbot Custom Program is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 201
+            break // library marker kkossev.tuyaFingerbotLib, line 202
+        case 0x6E : // (110) // library marker kkossev.tuyaFingerbotLib, line 203
+            logInfo "Fingerbot Producion Test is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 204
+            break // library marker kkossev.tuyaFingerbotLib, line 205
+        case 0x6F : // (111) // library marker kkossev.tuyaFingerbotLib, line 206
+            logInfo "Fingerbot Sports Statistics is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 207
+            break // library marker kkossev.tuyaFingerbotLib, line 208
+        case 0x70 : // (112) // library marker kkossev.tuyaFingerbotLib, line 209
+            logInfo "Fingerbot Custom Timing is ${fncmd}" // library marker kkossev.tuyaFingerbotLib, line 210
+            break // library marker kkossev.tuyaFingerbotLib, line 211
+        default : // library marker kkossev.tuyaFingerbotLib, line 212
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.tuyaFingerbotLib, line 213
+            break             // library marker kkossev.tuyaFingerbotLib, line 214
+    } // library marker kkossev.tuyaFingerbotLib, line 215
+} // library marker kkossev.tuyaFingerbotLib, line 216
+
+
+def refreshFingerbot() { // library marker kkossev.tuyaFingerbotLib, line 219
+    List<String> cmds = [] // library marker kkossev.tuyaFingerbotLib, line 220
+    logDebug "refreshFingerbot() (n/a) : ${cmds} " // library marker kkossev.tuyaFingerbotLib, line 221
+    return cmds // library marker kkossev.tuyaFingerbotLib, line 222
+} // library marker kkossev.tuyaFingerbotLib, line 223
 
 
 
