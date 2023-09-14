@@ -50,7 +50,8 @@
  * ver. 1.4.4  2023-08-18 kkossev  - Method too large: Script1.processTuyaCluster ... :( TS0225_LINPTECH_RADAR: myParseDescriptionAsMap & swapOctets(); deleteAllCurrentStates(); TS0225_2AAELWXK_RADAR preferences configuration and commands; added Illuminance correction coefficient; code cleanup
  * ver. 1.4.5  2023-08-26 kkossev  - reduced debug logs; 
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
- * ver. 1.5.1  2023-09-09 kkossev  - (dev. branch) _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
+ * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
+ * ver. 1.5.2  2023-09-14 kkossev  - (dev.branch) TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -72,8 +73,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.5.1" }
-def timeStamp() {"2023/09/09 9:36 AM"}
+def version() { "1.5.2" }
+def timeStamp() {"2023/09/14 11:25 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -768,21 +769,25 @@ def isChattyRadarReport(descMap) {
             description   : "Tuya Human Presence Detector IJXVKHD0",    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5acadaf16b0e85c1a8401223ddcae3d31ce970eb/src/devices/tuya.ts#L5747
             models        : ["TS0601"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
-            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
+            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
             preferences   : [:],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ijxvkhd0", deviceJoinName: "Tuya Human Presence Detector IJXVKHD0"]       // 
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
+                [dp:1, name:"unknown",                 type:"bool",  rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],  desc:'unknown state'],
+                [dp:2, name:"unknown",                 type:"bool",  rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],  desc:'unknown state'],
     			[dp:104, name:'illuminance_lux',        type:"value", rw: "ro",                   scale:1, unit:"lx",                  desc:'illuminance'],
                 [dp:105, name:"presence_state",         type:"enum",  rw: "ro", min:0, max:2, map:[0:"none", 1:"present", 2:"moving"], desc:'Presence state'],
                 [dp:106, name:'motion_sensitivity',     type:"value", rw: "rw", min:1, max:10,   scale:1,   unit:"x",                  desc:'Motion sensitivity'],
                 [dp:107, name:'detection_distance_max', type:"value", rw: "rw", min:0, max:1000, scale:100, unit:"meters",             desc:'Max detection distance'],
-                [dp:109, name:'detection_distance_min', type:"value", rw: "rw", min:0, max:1000, scale:100, unit:"meters",             desc:'Min detection distance'],
+                [dp:109, name:'distance',               type:"value", rw: "ro", min:0, max:1000, scale:100, unit:"meters",             desc:'Target distance'],
                 [dp:110, name:'fading_time',            type:"value", rw: "rw", min:1, max:15,   scale:1,   unit:"seconds",            desc:'Delay time'],
                 [dp:111, name:'presence_sensitivity',   type:"value", rw: "rw", min:1, max:10,   scale:1,   unit:"x",                  desc:'Presence sensitivity'],
                 [dp:123, name:"presence",               type:"enum",  rw: "ro", min:0, max:1, map:[0:"none", 1:"presence"],            desc:'Presence']
             ],
+            spammyDPsToIgnore : [109],
+            spammyDPsToNotTrace : [109],
             deviceJoinName: "Tuya Human Presence Detector IJXVKHD0",
             configuration : [:]
     ],
@@ -1765,9 +1770,14 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
         }
         switch (dp) {
             case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence stat? for all radars, including isHumanPresenceSensorAIR, isHumanPresenceSensorFall and isBlackSquareRadar and is2AAELWXKradar()
-                logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
-                // 03/29/2023 settings.invertMotion handles the 2-in-1 TS0601 wierness ..
-                handleMotion(motionActive = fncmd)
+                if (isIJXVKHD0radar()) {
+                    logDebug "ignored IJXVKHD0radar event ${dp} fncmd = ${fncmd}"
+                }
+                else {
+                    logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
+                    // 03/29/2023 settings.invertMotion handles the 2-in-1 TS0601 wierness ..
+                    handleMotion(motionActive = fncmd)
+                }
                 break
             case 0x02 :
                 if (isRadar() || isYXZBRB58radar() || isSBYX0LM6radar()) {    // including HumanPresenceSensorScene and isHumanPresenceSensorFall
@@ -1780,6 +1790,9 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.logEnable == true || settings?.motionDetectionSensitivity != (fncmd as int)) { logInfo "received motionDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.motionDetectionSensitivity} == ${fncmd as int}"}
                     device.updateSetting("motionDetectionSensitivity", [value:fncmd as int , type:"number"])
                 }            
+                else if (isIJXVKHD0radar()) {
+                    logDebug "ignored IJXVKHD0radar event ${dp} fncmd = ${fncmd}"
+                }
                 else {
                     logWarn "${device.displayName} non-radar event ${dp} fncmd = ${fncmd}"
                 }
@@ -2120,7 +2133,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     handleMotion(motionActive = fncmd)
                 }
                 else if (isIJXVKHD0radar()) {    // [105, 'presence_state', tuya.valueConverterBasic.lookup({'none': tuya.enum(0), 'present': tuya.enum(1), 'moving': tuya.enum(2)})],
-                    logInfo "IJXVKHD0 radar presence_state DP=0x69 (105) fncmd = ${fncmd}"
+                    logDebug "IJXVKHD0 radar presence_state DP=0x69 (105) fncmd = ${fncmd}"
                     // TODO - make it attribute !
                 }
                 else if (isSBYX0LM6radar()) {
@@ -2170,7 +2183,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     sendEvent(name : "radarSensitivity", value : fncmd as int)
                 }
                 else if (isIJXVKHD0radar()) {    // [106, 'motion_sensitivity', tuya.valueConverter.divideBy10],
-                    logInfo "IJXVKHD0 radar motion_sensitivity DP=0x6A (106) fncmd = ${fncmd/10.0} (raw=${fncmd})"
+                    logDebug "IJXVKHD0 radar motion_sensitivity DP=0x6A (106) fncmd = ${fncmd/10.0} (raw=${fncmd})"
                     // TODO - make it preference !
                 }
                 else if (isSBYX0LM6radar()) {    // https://github.com/Koenkk/zigbee-herdsman-converters/issues/5930#issuecomment-1651270524
@@ -2212,7 +2225,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
                 else if (isIJXVKHD0radar()) {    // [107, 'detection_distance_max', tuya.valueConverter.divideBy100],
-                    logInfo "IJXVKHD0 radar detection_distance_max DP=0x6B (107) fncmd = ${fncmd/100.0} meters (raw=${fncmd})"
+                    logDebug "IJXVKHD0 radar detection_distance_max DP=0x6B (107) fncmd = ${fncmd/100.0} meters (raw=${fncmd})"
                     // TODO - make it preference !
                 }
                 else if (isSBYX0LM6radar()) {
@@ -2282,18 +2295,14 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 }
                 break
             case 0x6D :    // (109)
-                if (isYXZBRB58radar() || isSXM7L9XAradar()) {
+                if (isYXZBRB58radar() || isSXM7L9XAradar() || isIJXVKHD0radar()) {
                     if (settings?.ignoreDistance == false) {
-                        logInfo "YXZBRB58/SXM7L9XA radar target distance is ${fncmd/100} m"
+                        logDebug "YXZBRB58/SXM7L9XA radar target distance is ${fncmd/100} m"
                         sendEvent(name : "distance", value : fncmd/100, unit : "m")
                     }
                 }
                 else if (isSBYX0LM6radar()) {
                     logDebug "radar status_indication DP=0x6D (109) fncmd = ${fncmd}"
-                } 
-                else if (isIJXVKHD0radar()) {    // [109, 'detection_distance_min', tuya.valueConverter.divideBy100],
-                    logInfo "IJXVKHD0 radar detection_distance_min DP=0x6D (109) fncmd = ${fncmd/100.0} meters (raw=${fncmd})"
-                    // TODO - make it preference !
                 }
                 else if (isHL0SS9OAradar()) {
                     logDebug "TS0225 Radar Time dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -2326,8 +2335,8 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     device.updateSetting("ledStatusAIR", [type:"enum", value: fncmd.toString()])
                 }
                 else if (isIJXVKHD0radar()) {    // [110, 'fading_time', tuya.valueConverter.raw],
-                    logInfo "IJXVKHD0 radar detection_distance_min DP=0x6E (110) fncmd = ${fncmd/100.0} meters (raw=${fncmd})"
-                    // TODO - make it preference !
+                    logDebug "IJXVKHD0 radar fading time DP=0x6E (110) fncmd = ${fncmd} seconds (raw=${fncmd})"
+                    // TODO - make it preference ! 
                 }
                 else if (isHL0SS9OAradar()) {
                     logDebug "TS0225 Radar Small Move Self-Test dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -2374,7 +2383,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     sendEvent(name : "detectionDelay", value : value)
                 }
                 else if (isIJXVKHD0radar()) {    // [111, 'presence_sensitivity', tuya.valueConverter.divideBy10],
-                    logInfo "IJXVKHD0 radar presence_sensitivity DP=0x6F (111) fncmd = ${fncmd/10.0} (raw=${fncmd})"
+                    logDebug "IJXVKHD0 radar presence_sensitivity DP=0x6F (111) fncmd = ${fncmd/10.0} (raw=${fncmd})"
                     // TODO - make it preference !
                 }
                 else if (isHL0SS9OAradar()) {
@@ -2414,7 +2423,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     // TODO - make it preference !
                 } 
                 else if (isIJXVKHD0radar()) {    // [112, 'presence', tuya.valueConverter.trueFalseEnum1],
-                    logInfo "IJXVKHD0 radar presence DP=0x70 (112) fncmd = ${fncmd}"
+                    logDebug "IJXVKHD0 radar presence DP=0x70 (112) fncmd = ${fncmd}"
                     handleMotion(motionActive = fncmd)
                 }
                 else if (isHL0SS9OAradar()) {
@@ -3008,6 +3017,7 @@ def ping() {
 
 def refresh() {
     logInfo "refresh()..."
+    checkDriverVersion()
     ArrayList<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
