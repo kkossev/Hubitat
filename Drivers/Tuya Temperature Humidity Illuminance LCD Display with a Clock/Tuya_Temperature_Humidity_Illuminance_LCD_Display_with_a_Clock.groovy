@@ -37,18 +37,18 @@
  * ver. 1.3.6  2023-06-10 kkossev - added _TZE200_yjjdcqsq to TS0601_Tuya group; 
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
+ * ver. 1.3.9  2023-09-17 kkossev - (dev. branch) added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; 
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
  *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
- *                                  TODO:  add Sonoff SNZB-02D (CR2450 battery, C/F)
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
  *
 */
 
-def version() { "1.3.8" }
-def timeStamp() {"2023/08/17 12:38 PM"}
+def version() { "1.3.9" }
+def timeStamp() {"2023/09/17 9:23 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -102,6 +102,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,E002,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_itnrsufe", deviceJoinName: "Tuya temperature and humidity sensor RCTW1Z"         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,E002,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_ywagc4rj", deviceJoinName: "Tuya temperature and humidity sensor"       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/211?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0402,0405,EF00,0000",      outClusters:"0019,000A",      model:"TS0201", manufacturer:"_TZ3210_ncw88jfq", deviceJoinName: "Tuya temperature and humidity sensor"       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/211?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0004,0005,0402,0405,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display" // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bjawzodf", deviceJoinName: "Tuya like Temperature Humidity LCD Display"                // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zl1kmjqx", deviceJoinName: "Tuya Temperature Humidity sensor MIR-TE100-TY"            // https://www.aliexpress.com/item/1005002836127648.html
@@ -133,6 +134,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0020,0000,0003,0402", outClusters:"0003", model:"THS317-ET", manufacturer:"OWON", deviceJoinName: "OWON Temperature sensor"                                             //https://community.hubitat.com/t/newbie-help-with-owon-ths317-et-multi-sensor/122671/5?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P"     // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/435?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P" 
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -245,10 +248,11 @@ metadata {
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
     '_TZ3000_ywagc4rj'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock/88093/210?u=kkossev
+    '_TZ3210_ncw88jfq'  : 'TS0201_TH',          // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/436?u=kkossev
     '_TZE200_myd45weu'  : 'TS0601_Soil',        // Soil monitoring sensor
     '_TZE200_ga1maeof'  : 'TS0601_Soil',        // Soil monitoring sensor
-    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
-    'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D
+    'eWeLink'           : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
+    'SONOFF'            : 'Zigbee NON-Tuya',    // Sonoff Temperature and Humidity Sensor SNZB-02, SNZB-02D, SNZB-02P
     'ShinaSystem'       : 'Zigbee NON-Tuya',    // USM-300Z
     'OWON'              : 'OWON',               // model:"THS317-ET", manufacturer:"OWON"
     ''                  : 'UNKNOWN',
@@ -259,13 +263,15 @@ metadata {
 
 @Field static final Map deviceProfilesV3 = [
     "SONOFF_TEMP_HUMI"  : [
-            models        : ["TH01", "SNZB-02D"],
+            models        : ["TH01", "SNZB-02D", "SNZB-02P"],
             manufacturers : ["eWeLink",  "SONOFF"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02"], 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"TH01", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02"],
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"],
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0402,0405,0001", outClusters:"0003", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"] 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02D", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02D"], 
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P"] 
             ],
             deviceJoinName: "Sonoff Temperature and Humidity Sensor",
             capabilities  : ["battery": true],
