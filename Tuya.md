@@ -37,11 +37,13 @@ Look for the recommended new 24Ghz TS0215 radars at the end of this list
 | Tuya Square Black 24GHz radar w/ LED  <br> ![image](https://user-images.githubusercontent.com/6189950/184286533-1637eddf-872f-4dc5-9539-4af54c342503.png) | <br> <b> Caution: chatty device!</b> <br><b>NOT RECOMMENDED to buy!</b><br><br>Review: [link](https://blakadder.com/cheapest-tuya-human-presence-sensor/) <br> AliExpress:  [(link)](https://www.aliexpress.com/item/1005004532077450.html))  <br> Driver status: fully functional (LED enable/disable, presence detection timers) |
 | <b>NEW!</b><br>OWON ZigBee Occupancy Sensor OPS305<br>  ![image](https://user-images.githubusercontent.com/6189950/184812511-ff85832a-787d-4859-bf7e-deb26da0b0c5.png)  | 10GHz mmWave radar from OWON <br> OWON site: [(link)](https://www.owon-smart.com/zigbee-occupancy-sensor-ops305-e-product/)<br> Occupancy only, no configurable settings! |
 
-## New 24GHz Tuya radars :  
+## New Tuya radars :  
 (more info [here](https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283) )
 |  Device |  Links |
 |---|---|
 |Tuya 24GHz Radar With Siren Alarm Motion Lux <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/95729606-28ce-4229-9a4d-c7943fc946ba) | Model: TS0225 <br>Manufacturer: _TZE200_hl0ss9oa  <br><br>AliExpress: [link](https://www.aliexpress.com/item/1005005761971083.html) <br> AliExpress: [link](https://www.aliexpress.com/item/1005005767446349.html) <br> AliExpress: [link](https://www.aliexpress.com/item/1005005781125119.html) <br><br> **RECOMMENDED!**|
+|Tuya Zigbee Smart Human Body Sensor 24GHz Radar Detector <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/f5e1b5ac-624f-4c15-970f-cf0acb05f32b) |Model: TS0601<br>Manufacturer: _TZE204_kapvnnlk <br> Amazon .com: [link](https://www.amazon.com/dp/B0CDRBX1CQ)<br> AliExpress: [link](https://www.aliexpress.com/item/1005005858609756.html) <br> Reports: presence, distance, humanMotionState (none, small_move, large_move), battery level<br><b>NO ILLUMINANCE! The batteries are only for a backup, and will be depleted very fast!</b><br>Configuration: fadingTime,maximumDistance, radarSensitivity, smallMotionDetectionSensitivity <br>Spammy device: yes? (to be confirmed)<br><br>Driver status: W.I.P. (basic functions are working)| 
+|Smart Human Presence Sensor <br> ![image](https://github.com/kkossev/Hubitat/assets/6189950/2c1ebe3e-3f08-4f49-b9c4-76fb1cf714f0)|Model: TS0601<br>Manufacturer: _TZE204_sooucan5 <br> Reports: Motion/presence, illuminance, distance<br>Configuration:radarSensitivity, minimumDistance, maximumDistance, fadingTime, detectionDelay <br>Spammy device - Yes<br>Amazon : [link](https://www.amazon.com/dp/B0BYDCY4YN)|
 
 ----------------------------
 
