@@ -51,7 +51,8 @@
  * ver. 1.4.5  2023-08-26 kkossev  - reduced debug logs; 
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
- * ver. 1.5.2  2023-09-14 kkossev  - (dev.branch) TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
+ * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
+ * ver. 1.5.3  2023-09-23 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -73,8 +74,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.5.2" }
-def timeStamp() {"2023/09/14 11:25 AM"}
+def version() { "1.5.3" }
+def timeStamp() {"2023/09/23 12:07 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -441,9 +442,9 @@ def isChattyRadarReport(descMap) {
     else if (isKAPVNNLKradar() && settings?.ignoreDistance == true) {
         return (descMap?.clusterId == "EF00" && (descMap.command in ["01", "02"]) && descMap.data?.size > 2  && descMap.data[2] == "13") 
     }  */
-    if (isHL0SS9OAradar()) {
-        return (descMap?.clusterId == "EF00" && (descMap.command in ["01", "02"]) && descMap.data?.size > 2  && descMap.data[2] == "0B") 
-    }
+//    if (isHL0SS9OAradar()) {    // humanMotionState
+//        return (descMap?.clusterId == "EF00" && (descMap.command in ["01", "02"]) && descMap.data?.size > 2  && descMap.data[2] == "0B") 
+//    }
     else {
         return false
     }
@@ -639,7 +640,7 @@ def isChattyRadarReport(descMap) {
             description   : "Tuya TS0601_KAPVNNLK 24GHz Radar",        // https://www.amazon.com/dp/B0CDRBX1CQ?psc=1&ref=ppx_yo2ov_dt_b_product_details  // https://www.aliexpress.com/item/1005005834366702.html  // https://github.com/Koenkk/zigbee2mqtt/issues/18632 
             models        : ["TS0601"],                                // https://www.aliexpress.com/item/1005005858609756.html     // https://www.aliexpress.com/item/1005005946786561.html    // https://www.aliexpress.com/item/1005005946931559.html 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
-            capabilities  : ["MotionSensor": true, "DistanceMeasurement":true],
+            capabilities  : ["MotionSensor": true, "DistanceMeasurement":true, "HumanMotionState":true],
             preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
@@ -827,7 +828,7 @@ def isChattyRadarReport(descMap) {
             description   : "Tuya TS0225_HL0SS9OA 24GHz Radar",        // https://www.aliexpress.com/item/1005005761971083.html 
             models        : ["TS0225"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
-            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true], 
+            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true], 
             preferences   : ["presenceKeepTime":"12", "ledIndicator":"24", "radarAlarmMode":"105", "radarAlarmVolume":"102", "radarAlarmTime":"101", \
                              "textLargeMotion":"NONE", "motionFalseDetection":"112", "motionDetectionSensitivity":"15", "motionMinimumDistance":"106", "motionDetectionDistance":"13", \
                              "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"16", "smallMotionMinimumDistance":"107", "smallMotionDetectionDistance":"14", \
@@ -876,7 +877,7 @@ def isChattyRadarReport(descMap) {
             description   : "Tuya TS0225_2AAELWXK 24GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
             models        : ["TS0225"],                                // ZG-205Z
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
-            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
+            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true],
             // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
             preferences   : ["presenceKeepTime":"102", "ledIndicator":"107", "radarAlarmMode":"117", "radarAlarmVolume":"116", "radarAlarmTime":"115", \
                              "textLargeMotion":"NONE", "motionFalseDetection":"103", "motionDetectionSensitivity":"2", "motionMinimumDistance":"3", "motionDetectionDistance":"4", \
@@ -1874,7 +1875,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 device.updateSetting("keepTime", [value:fncmd.toString(), type:"enum"])                
                 break
             case 0x0B : // (11)    // isHL0SS9OAradar() 
-                logInfo "TS0225 Radar Human Motion State is ${TS0225humanMotionState[fncmd.toString()]}"
+                logDebug "TS0225 Radar Human Motion State is ${TS0225humanMotionState[fncmd.toString()]}"
                 sendEvent(name : "humanMotionState", value : TS0225humanMotionState[fncmd.toString()])
                 break
             case 0x0C : // (12)
@@ -1967,7 +1968,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     device.updateSetting("radarAlarmTime", [value:fncmd as int , type:"number"])
                 }
                 else if (is2AAELWXKradar()) {
-                    logInfo "TS0225 Radar Human Motion State is ${TS0225humanMotionState[fncmd.toString()]}"
+                    logDebug "TS0225 Radar Human Motion State is ${TS0225humanMotionState[fncmd.toString()]}"
                     sendEvent(name : "humanMotionState", value : TS0225humanMotionState[fncmd.toString()])
                 }
                 else if (isEGNGMRZHradar()) {
