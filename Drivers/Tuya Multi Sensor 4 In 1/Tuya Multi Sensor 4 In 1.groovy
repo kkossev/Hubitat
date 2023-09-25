@@ -52,7 +52,7 @@
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
- * ver. 1.5.3  2023-09-23 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR
+ * ver. 1.5.3  2023-09-25 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; 
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -75,7 +75,7 @@
 */
 
 def version() { "1.5.3" }
-def timeStamp() {"2023/09/23 12:07 PM"}
+def timeStamp() {"2023/09/2325 9:21 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -2836,6 +2836,7 @@ def installed() {
 def updated() {
     log.info "${device.displayName} updated()..."
     checkDriverVersion()
+    updateTuyaVersion()
     ArrayList<String> cmds = []
     
     logInfo "Updating ${device.getLabel()} (${device.getName()}) model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} <b>deviceProfile=${state.deviceProfile}</b>"
@@ -3019,6 +3020,7 @@ def ping() {
 def refresh() {
     logInfo "refresh()..."
     checkDriverVersion()
+    updateTuyaVersion()
     ArrayList<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
@@ -3916,6 +3918,9 @@ void updateTuyaVersion() {
             device.updateDataValue("tuyaVersion", str)
             logInfo "tuyaVersion set to $str"
         }
+    }
+    else {
+        logWarn "application version is NULL"
     }
 }
 
