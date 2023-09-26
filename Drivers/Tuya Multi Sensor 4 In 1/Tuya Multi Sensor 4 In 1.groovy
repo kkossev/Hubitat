@@ -52,7 +52,7 @@
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
- * ver. 1.5.3  2023-09-25 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; 
+ * ver. 1.5.3  2023-09-26 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; added existance_time event
  *
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -75,7 +75,7 @@
 */
 
 def version() { "1.5.3" }
-def timeStamp() {"2023/09/2325 9:21 AM"}
+def timeStamp() {"2023/09/26 4:18 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1227,7 +1227,6 @@ def parse(String description) {
             processTuyaCluster( descMap )
         }
         else if (descMap.cluster  == "E002") {
-            logDebug "Cluster E002"
             processE002Cluster( descMap )
         }
         else if (descMap.profileId == "0000") {    // zdo
@@ -1400,7 +1399,8 @@ def processE002Cluster( descMap ) {
     def value = zigbee.convertHexToInt(descMap.value) 
     switch (descMap.attrId) {
         case "E001" :    // value:0, 1, 2, 9 ... ??????   radar fading time / Presence Keep Time ?? or it is the existance_time in minutes?
-            logInfo "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            sendEvent("name": "existance_time", "value": time, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${time} minutes")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (existance_time) value is ${value} (0x${descMap.value} (minutes?))"
             break
         case "E004" :    // value:05    // motionDetectionSensitivity
             logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
@@ -1415,7 +1415,7 @@ def processE002Cluster( descMap ) {
         case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054 - distance
             logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             if (settings?.ignoreDistance == false) {
-                logInfo "LINPTECH radar target distance is ${value/100} m"
+                logDebug "LINPTECH radar target distance is ${value/100} m"
                 sendEvent(name : "distance", value : value/100, unit : "m")
             }        
             break
