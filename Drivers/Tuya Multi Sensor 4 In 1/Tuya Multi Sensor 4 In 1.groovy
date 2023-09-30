@@ -52,8 +52,10 @@
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
- * ver. 1.5.3  2023-09-26 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; added existance_time event
+ * ver. 1.5.3  2023-09-30 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime
  *
+ *                                   TODO: Linptech: set the leave_time and existance_time to zero when not applicable
+ *                                   TODO: Linptech: configure the fading time (Tuya dp 101)
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
  *                                   TODO: command for black radar LED
@@ -75,7 +77,7 @@
 */
 
 def version() { "1.5.3" }
-def timeStamp() {"2023/09/26 4:18 PM"}
+def timeStamp() {"2023/09/30 11:49 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -969,25 +971,22 @@ def isChattyRadarReport(descMap) {
             ],
             // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 ... seems like a semi-baked product ... : ( 
             tuyaDPs:       [ 
-                [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],                                         // aka Presence State
-                [dp:4,   name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],              // aka Far Detection
-                [dp:12,  name:'presenceKeepTime',                type:"value", rw: "ro", min:0,  max:65535, step:1,  scale:1,   unit:"minutes",   desc:'Shows the presence duration in minutes'],       // aka Presence Time
-                [dp:15,  name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],           // aka Motionless Detection Sensitivity
-                [dp:16,  name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Static detection sensitivity'],                 // aka Motionless Detection Sensitivity 
-                [dp:19,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance'],                            // aka Current Distance	
-                [dp:20,  name:'illuminance_lux',                 type:"value", rw: "ro",                    scale:10,   unit:"lx",                desc:'Illuminance'],                                  // aka Illuminance Value
-                [dp:101, name:'leave_time',                      type:"value", rw: "ro", min:0, max:9999,   step:1,  scale:1,   unit:"minutes",   desc:'Shows the duration of the absence in minutes']  // aka nobody time	  
+                // [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],                                         // (not used!) aka Presence State
+                // [dp:4,   name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],              // (not used!) aka Far Detection
+                // [dp:12,  name:'presenceKeepTime',                type:"value", rw: "ro", min:0,  max:65535, step:1,  scale:1,   unit:"minutes",   desc:'Shows the presence duration in minutes'],       // (not used!) aka Presence Time
+                // [dp:15,  name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],           // (not used!) aka Motionless Detection Sensitivity
+                // [dp:16,  name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Static detection sensitivity'],                 // (not used!) aka Motionless Detection Sensitivity 
+                // [dp:19,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance'],                            // (not used!) aka Current Distance	
+                // [dp:20,  name:'illuminance_lux',                 type:"value", rw: "ro",                    scale:10,   unit:"lx",                desc:'Illuminance'],                                  // (not used!) aka Illuminance Value
+                [dp:101, name:'fadingTime',                      type:"value", rw: "ro", min:10, max:9999,   step:1,  scale:1,   unit:"seconds",  desc:'Fading time']                                  // aka 'nobody time'
             ],
-            // LINPTECH is using a custom cluster 0xE002 for the settings, ZCL cluster 0x0400 for illuminance and the IAS cluster 0x0500 for motion detection
+            // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
             clE002attributes:       [ 
-                //[at:??,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],                                         // aka Presence State
-                [at:0xE00B,   name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance'],              // aka Far Detection
-                //[at:??,  name:'presenceKeepTime',                type:"value", rw: "ro", min:0,  max:65535, step:1,  scale:1,   unit:"minutes",   desc:'Shows the presence duration in minutes'],       // aka Presence Time
+                [at:0xE001,  name:'existance_time',                  type:"value", rw: "r0", min:0,  max:65535, step:1,  scale:1,   unit:"seconds",   desc:'existance (presence) time'],                    // aka Presence Time
                 [at:0xE004,  name:'motionDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Large motion detection sensitivity'],           // aka Motionless Detection Sensitivity
                 [at:0xE005,  name:'staticDetectionSensitivity',      type:"value", rw: "rw", min:0,  max:5,     step:1,  scale:1,   unit:"x",         desc:'Static detection sensitivity'],                 // aka Motionless Detection Sensitivity 
-                [at:0xE00A,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance']                            // aka Current Distance	
-                //[at:??,  name:'illuminance_lux',                 type:"value", rw: "ro",                    scale:10,   unit:"lx",                desc:'Illuminance'],                                  // aka Illuminance Value
-                //[at:???, name:'leave_time',                      type:"value", rw: "ro", min:0, max:9999,   step:1,  scale:1,   unit:"minutes",   desc:'Shows the duration of the absence in minutes']  // aka nobody time	  
+                [at:0xE00A,  name:"distance",                        type:"value", rw: "ro", min:0,  max:600,   scale:100,  unit:"meters",            desc:'Measured distance'],                            // aka Current Distance	
+                [at:0xE00B,  name:'motionDetectionDistance',         type:"value", rw: "rw", min:75, max:600,   step:75, scale:100, unit:"meters",    desc:'Large motion detection distance']               // aka Far Detection
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
@@ -1342,7 +1341,7 @@ Map myParseDescriptionAsMap( String description )
         return descMap    // all OK!
     }
     catch (e1) {
-        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}"
+        logDebug "exception ${e1} caught while processing parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}"
         // try alternative custom parsing
         descMap = [:]
         try {
@@ -1398,29 +1397,29 @@ def processE002Cluster( descMap ) {
     // raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
     def value = zigbee.convertHexToInt(descMap.value) 
     switch (descMap.attrId) {
-        case "E001" :    // value:0, 1, 2, 9 ... ??????   radar fading time / Presence Keep Time ?? or it is the existance_time in minutes?
-            sendEvent("name": "existance_time", "value": time, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${time} minutes")
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (existance_time) value is ${value} (0x${descMap.value} (minutes?))"
+        case "E001" :    // the existance_time in minutes
+            sendEvent("name": "existance_time", "value": value, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${time} minutes")
+            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (existance_time) value is ${value} (0x${descMap.value} minutes)"
             break
         case "E004" :    // value:05    // motionDetectionSensitivity
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            //logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             if (settings?.logEnable == true || settings?.motionDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar motionDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.motionDetectionSensitivity} == ${value as int}"}
             device.updateSetting("motionDetectionSensitivity", [value:value as int , type:"number"])
             break
         case "E005" :    // value:05    // staticDetectionSensitivity
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            //logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar staticDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${value as int}"}
             device.updateSetting("staticDetectionSensitivity", [value:value as int , type:"number"])
             break
         case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054 - distance
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            //logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             if (settings?.ignoreDistance == false) {
                 logDebug "LINPTECH radar target distance is ${value/100} m"
                 sendEvent(name : "distance", value : value/100, unit : "m")
             }        
             break
         case "E00B" :    // value:value:600 -- motionDetectionDistance
-            logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
+            //logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${value} (0x${descMap.value})"
             if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != value)) {logInfo "received LINPTECH radar Motion Detection Distance  : ${value/100} m"}
             device.updateSetting("motionDetectionDistance", [value:value/100, type:"decimal"])
             break
@@ -1975,7 +1974,9 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else if (isLINPTECHradar()) {
-                    leaveTimeEvent(fncmd)
+                    if (settings?.logEnable == true || (settings?.fadingTime) != safeToDouble(device.currentValue("fadingTime")) ) {logInfo "received Radar fading time : ${value} seconds (${fncmd})"}
+                    device.updateSetting("fadingTime", [value:value , type:"decimal"])
+                    sendEvent(name : "fadingTime", value : value, unit : "s")
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -3605,7 +3606,7 @@ def setMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
     if (isLINPTECHradar()) {
         logDebug "changing LINPTECH radar MotionDetectionDistance to ${val}m (raw ${value})"
-        return zigbee.writeAttribute(0xE002, 0xE00B, 0x20, value as int, [:], delay=200)
+        return zigbee.writeAttribute(0xE002, 0xE00B, 0x21, value as int, [:], delay=200)
     }
     else {
         return setRadarParameter("motionDetectionDistance", isHL0SS9OAradar() ? "0D" : "04", DP_TYPE_VALUE, value)
