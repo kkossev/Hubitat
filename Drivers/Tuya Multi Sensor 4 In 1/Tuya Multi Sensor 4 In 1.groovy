@@ -52,10 +52,9 @@
  * ver. 1.5.0  2023-08-27 kkossev  - added TS0601 _TZE204_yensya2c radar; refactoring: deviceProfilesV2: tuyaDPs; unknownDPs; added _TZE204_clrdrnya; _TZE204_mhxn2jso; 2in1: _TZE200_1ibpyhdc, _TZE200_bh3n6gk8; added TS0202 _TZ3000_jmrgyl7o _TZ3000_hktqahrq _TZ3000_kmh5qpmb _TZ3040_usvkzkyn; added TS0601 _TZE204_kapvnnlk new device profile TS0601_KAPVNNLK_RADAR
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
- * ver. 1.5.3  2023-09-30 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime
+ * ver. 1.5.3  2023-09-30 kkossev  - (dev. branch) humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
  *
  *                                   TODO: Linptech: set the leave_time and existance_time to zero when not applicable
- *                                   TODO: Linptech: configure the fading time (Tuya dp 101)
  *                                   TODO: add isPreference to tuyaDPs - W.I.P.
  *                                   TODO: add extraPreferences to deviceProfilesV2
  *                                   TODO: command for black radar LED
@@ -77,7 +76,7 @@
 */
 
 def version() { "1.5.3" }
-def timeStamp() {"2023/09/30 11:49 AM"}
+def timeStamp() {"2023/09/30 12:32 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -115,7 +114,7 @@ metadata {
         attribute "unacknowledgedTime", "number"    // AIR models
         attribute "motionType", "enum",  ["none", "presence", "peacefull", "smallMove", "largeMove"]    // blackSensor
         attribute "existance_time", "number"        // BlackSquareRadar & LINPTECH
-        attribute "leave_time", "number"            // BlackSquareRadar & LINPTECH
+        attribute "leave_time", "number"            // BlackSquareRadar only
         
         attribute "radarSensitivity", "number" 
         attribute "detectionDelay", "decimal" 
@@ -965,7 +964,7 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0225"],                                // DPs are unknown    // https://home.miot-spec.com/spec/linp.sensor_occupy.hb01 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
-            preferences   : [/*"presenceKeepTime":"12",*/ "motionDetectionDistance":"4","motionDetectionSensitivity":"15", "staticDetectionSensitivity":"16"],                             
+            preferences   : ["fadingTime":"101", "motionDetectionDistance":"0xE002:0xE00B","motionDetectionSensitivity":"0xE002:0xE004", "staticDetectionSensitivity":"0xE002:0xE005"],                             
             fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
@@ -1398,7 +1397,7 @@ def processE002Cluster( descMap ) {
     def value = zigbee.convertHexToInt(descMap.value) 
     switch (descMap.attrId) {
         case "E001" :    // the existance_time in minutes
-            sendEvent("name": "existance_time", "value": value, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${time} minutes")
+            sendEvent("name": "existance_time", "value": value, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${value} minutes")
             logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (existance_time) value is ${value} (0x${descMap.value} minutes)"
             break
         case "E004" :    // value:05    // motionDetectionSensitivity
@@ -1974,6 +1973,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 else if (isLINPTECHradar()) {
+                    def value = fncmd 
                     if (settings?.logEnable == true || (settings?.fadingTime) != safeToDouble(device.currentValue("fadingTime")) ) {logInfo "received Radar fading time : ${value} seconds (${fncmd})"}
                     device.updateSetting("fadingTime", [value:value , type:"decimal"])
                     sendEvent(name : "fadingTime", value : value, unit : "s")
@@ -2914,10 +2914,10 @@ def updated() {
     }
     // 
     if (isLINPTECHradar()) {
-                //cmds += setRadarFadingTime( settings?.presenceKeepTime)                          // attribute id is unknown
-                cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )          // x
-                cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )    // x
-                cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )    // X
+                cmds += setRadarFadingTime(settings?.fadingTime ?: 10)
+                cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
+                cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
+                cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
     }
     else if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
                 cmds += setRadarDetectionDelay( settings?.detectionDelay )        // radar detection delay
@@ -3536,15 +3536,14 @@ def setRadarFadingTime( val ) {
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar())  ? "6E" : "66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
     else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
-        logWarn "val=${val}"
         def value = val as int
         logDebug "changing radar Presence Keep Time to ${val} seconds (raw=${value})"                
         return sendTuyaCommand( isHL0SS9OAradar() ? "0C" : "66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
     else if (isLINPTECHradar()) {
         def value = val as int
-        logWarn "changing LINPTECH radar Presence Keep Time to ${value} seconds"                // TODO: not tested !!
-        return zigbee.writeAttribute(0xE002, 0xE001, 0x20, value as int, [:], delay=200)
+        logDebug "changing LINPTECH radar fadintTime to ${value} seconds"                // CHECK!
+        return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
     else { logWarn "setRadarFadingTime: unsupported model!"; return null }
 }
