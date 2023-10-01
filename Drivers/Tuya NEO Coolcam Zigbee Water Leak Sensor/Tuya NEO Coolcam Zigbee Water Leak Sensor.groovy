@@ -1,6 +1,8 @@
 /**
  *  Tuya / NEO Coolcam Zigbee Water Leak Sensor driver for Hubitat
  *
+ *  https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370
+ *
  *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *	in compliance with the License. You may obtain a copy of the License at:
  *
@@ -22,15 +24,16 @@
  *                                  added Momentary capability - push() button will generate a 'tested' event for 2 seconds; added Presence capability; 
  * ver. 1.0.8 2023-05-13 kkossev  -  'unprocessed water event unknown' fix; lastWaterWet update bug fix;
  * ver. 1.1.0 2023-07-11 kkossev  - replaced Presence w/ healthStatus; added TS0207 _TZ3000_js34cuma; removed manipulating the powerSource and dropping the battery level 0% when offline.
+ * ver. 1.1.1 2023-07-28 kkossev  - added ping rtt; added zigbee.enrollResponse() in the configuration; added TS0207 _TZ3000_2wcynpml
  *
- * 
+ *                                  TODO:  scheduleCommandTimeoutCheck()
  *                                  TODO: check why Neo Coolcam is not sending actual battery reports : https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/86?u=kkossev 
  *                                  TODO: add batteryLastReplaced event; add 'Testing option'; add 'isTesting' state; 
  *
 */
 
-def version() { "1.1.0" }
-def timeStamp() {"2023/07/11 11:18 PM"}
+def version() { "1.1.1" }
+def timeStamp() {"2023/07/28 11:31 AM"}
 
 @Field static final Boolean debug = false
 @Field static final Boolean debugLogsDefault = true
@@ -61,7 +64,9 @@ metadata {
         command "wet", [[name: "Manually switch the Water Leak Sensor to WET state" ]]
         command "dry", [[name: "Manually switch the Water Leak Sensor to DRY state" ]]
         command "push", [[name: "Manually switch the Water Leak Sensor to TESTED state" ]]
-        //command "test"
+        if (debug==true) {
+            command "test"
+        }
         
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00",      outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor"          // vendor: 'Neo', model: 'NAS-WS02B0', 'NAS-DS07'
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003",                outClusters:"0003,0019", model:"q9mpfhw",manufacturer:"_TYST11_qq9mpfhw", deviceJoinName: "NEO Coolcam Leak Sensor SNTZ009" // SNTZ009
@@ -76,6 +81,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.0", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // https://community.hubitat.com/t/release-tuya-neo-coolcam-zigbee-water-leak-sensor/91370/41?u=kkossev 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,000A,0019,0001,0500,0501,1000", outClusters:"0004,0003,0001,0500,0501", model:"FNB56-WTS05FB2.4", manufacturer:"feibit", deviceJoinName: "Feibit SWA01ZB Water Leakage  Sensor"         // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_js34cuma", deviceJoinName: "Tuya Leak Sensor TS0207 Type II"  // KK
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0500,0000",      outClusters:"0019,000A", model:"TS0207", manufacturer:"_TZ3000_2wcynpml", deviceJoinName: "Tuya Leak Sensor TS0207"          // https://community.hubitat.com/t/2nd-water-sensor-will-not-report/122112?u=kkossev
     }
     preferences {
         input (name: "logEnable", type: "bool", title: "Debug logging", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: debugLogsDefault)
@@ -143,6 +149,14 @@ def parse(String description) {
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId == "0001") {
             logDebug "Tuya check-in (0001) app version ${descMap?.value}"
+            if ((state.pingTime ?: '0').toInteger() > 0) {
+                def now = new Date().getTime()
+                def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+                    sendRttEvent()
+                }
+                state.pingTime = null
+            }
         } 
         else if (descMap?.cluster == "0000" && descMap?.attrId in ["FFDF", "FFE2", "FFE4","FFFE"]) {
             logDebug "Tuya check-in (${descMap?.attrId}) value is ${descMap?.value}"
@@ -556,9 +570,9 @@ def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         initializeVars( fullInit = false ) 
-        state.driverVersion = driverVersionAndTimeStamp()
         configurePollPresence()
         configureLogsOff()
+        state.driverVersion = driverVersionAndTimeStamp()
     }
 }
 
@@ -611,6 +625,7 @@ def configure() {
     configurePollPresence()
     configureLogsOff()
     cmds += tuyaBlackMagic()    
+    cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)    
     sendZigbeeCommands(cmds)    
 }
 
@@ -708,4 +723,15 @@ private Map getBatteryResult(rawValue) {
 
 def sendBatteryEvent( roundedPct, isDigital=false ) {
     sendEvent(name: 'battery', value: roundedPct, unit: "%", type:  isDigital == true ? "digital" : "physical", isStateChange: true )    
+}
+
+def test () {
+    List<String> cmds = []
+    cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}"
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage 
+    
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }    
 }
