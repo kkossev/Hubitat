@@ -41,9 +41,12 @@
  * ver. 2.6.1 2023-02-05 kkossev     - added _TZ3000_mh9px7cq; isSmartKnob() typo fix; added capability 'Health Check'; added powerSource attribute 'battery'; added dummy ping() code; added _TZ3000_famkxci2
  * ver. 2.6.2 2023-02-23 kkossev     - added Konke button model: 3AFE280100510001 ; LoraTap _TZ3000_iszegwpd TS0046 buttons 5&6; 
  * ver. 2.6.3 2023-03-11 kkossev     - added TS0215 _TYZB01_qm6djpta _TZ3000_fsiepnrh _TZ3000_p6ju8myv; added state.stats{rxCtr,txCtr,rejoinCtr}; added Advanced options; added batteryReportingOptions; battery reporting is not changed by default!
- * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added "AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
+ * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
  * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
+ * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  *
+ *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
+ *                                   - TODO: batteryReporting is not initialized!
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
@@ -55,7 +58,6 @@
  *                                   - TODO: Try to send default responses after button press for TS004F devices : https://github.com/Koenkk/zigbee2mqtt/issues/8149
  *                                   - TODO: Advanced option 'batteryVoltage' 'enum' ['report voltage', 'voltage + battery%'']
  *                                   - TODO: calculate battery % from Voltage event for Konke button!
- *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *                                   - TODO: add 'auto revert to scene mode' option
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
@@ -63,8 +65,8 @@
  *
  */
 
-def version() { "2.6.5" }
-def timeStamp() {"2023/05/15 7:56 PM"}
+def version() { "2.6.6" }
+def timeStamp() {"2023/05/30 1:51 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -189,9 +191,9 @@ metadata {
             
     }
     preferences {
-        input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", defaultValue: true)
+        input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", defaultValue: DEFAULT_LOG_ENABLE)
         input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", defaultValue: true)
-        input (name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: DEFAULT_LOG_ENABLE)
+        input (name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: true)
         input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
         if (advancedOptions == true) {
         input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
