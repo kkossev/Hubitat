@@ -221,7 +221,7 @@ def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE1
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
 def isOsram() {device.getDataValue("manufacturer") == "OSRAM"}
-def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
+def needsDebouncing() {device.getDataValue("model") in ["TS004F","TS0044"] || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 def isSOSbutton() {device.getDataValue("manufacturer") in ["_TZ3000_4fsgukof", "_TZ3000_wr2ucaj9", "_TZ3000_zsh6uat3", "_TZ3000_tj4pwzzm", "_TZ3000_2izubafb", "_TZ3000_pkfazisv" ]}
 
