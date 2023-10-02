@@ -44,6 +44,7 @@
  * ver. 2.6.4 2023-04-27 kkossev     - added Sonoff SNZB-01; added IKEA Tradfri Shortcut Button E1812; added AC0251600NJ/AC0251100NJ OSRAM Lightify Switch Mini; added TS0041 _TZ3000_fa9mlvja 1 button; TS0215A _TZ3000_2izubafb inClusters correction
  * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
+ * ver. 2.6.7 2023-10-02 louisparks  - added TS0044 to debounce list
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *                                   - TODO: batteryReporting is not initialized!
@@ -65,8 +66,8 @@
  *
  */
 
-def version() { "2.6.6" }
-def timeStamp() {"2023/05/30 1:51 PM"}
+def version() { "2.6.7" }
+def timeStamp() {"2023/10/02 11:28 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
