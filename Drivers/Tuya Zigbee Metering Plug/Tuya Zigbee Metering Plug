@@ -55,9 +55,11 @@
  *  ver. 1.7.6 2023-05-13 kkossev - added partial support for TS0601 _TZE200_abatw3kj RTX Circuit Breaker 4x25A ZCB25-4P; added Tongou SY2 TZ3000_cayepv1a; thresholds decoding for RTX
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
  *  ver. 1.7.8 2023-07-29 kkossev - added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
- *  ver. 1.8.0 2023-09-03 kkossev - (dev. branch) added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
+ *  ver. 1.8.0 2023-09-03 kkossev - added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
+ *  ver. 1.8.1 2023-10-04 kkossev - (dev. branch)
  *
  *
+ *                                 TODO: 'all' attribute
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv 
  *                                 TODO: add rtt measurement in ping()
  *                                 TODO: add toggle() command
@@ -79,8 +81,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.8.0" }
-def timeStamp() {"2023/09/03 11:09 PM"}
+def version() { "1.8.1" }
+def timeStamp() {"2023/10/04 1:28 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -103,6 +105,7 @@ metadata {
         attribute "energyCost", "NUMBER"
 		attribute "energyDuration", "string"
         attribute "html", "string"
+        attribute "all", "string"
         attribute "hourlyEnergy", "NUMBER"
         //attribute "dailyEnergy", "string"
         attribute "healthStatus", "enum", ["unknown", "offline", "online"]
@@ -301,6 +304,7 @@ metadata {
             input (name: "frientEnergyMeterMode", type: "enum", title: "<b>Energy Reporting Mode</b>", description:"<i>Select Frient Energy Reporting Mode</i>", defaultValue: "0", options: develcoInterfaceMode)
        }        
         input (name: "attribEnable", type:  "bool", title: "<b>Enable HTML Attribute Creation?</b>",  description: "<i>html attribute for use in HE dashboards</i>", defaultValue: false)
+        input (name: "allEnable", type:  "bool", title: "<b>Enable 'all' Attribute Creation?</b>",  description: "<i>text attribute for use in HE device and rooms view</i>", defaultValue: false)
     }
 }
 
@@ -1791,6 +1795,9 @@ def configure() {
     if (settings.attribEnable == false) {
         device.deleteCurrentState("html")
     }
+    if (settings.allEnable == false) {
+        device.deleteCurrentState("all")
+    }
     
     cmds += configureReporting("Write", ONOFF,  "0", energyMaxReportingTime.toString(), "0", sendNow=false)    // switch state should be always reported 
     if (autoReportingEnabled == true ) {
@@ -1879,7 +1886,7 @@ def updated(){
     }
     if (txtEnable==true) log.info "${device.displayName} configuring the switch and energy reporting.."
     
-    if (attribEnable == true ) {
+    if (settings.attribEnable == true || settings.allEnable == true) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     formatAttrib()
@@ -1976,6 +1983,7 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings?.amperageThreshold == null) device.updateSetting("amperageThreshold",[value:25, type:"number"])
     if (fullInit == true || settings?.voltageThreshold == null) device.updateSetting("voltageThreshold", 1)
     if (fullInit == true || settings?.attribEnable == null) device.updateSetting("attribEnable", false)
+    if (fullInit == true || settings?.allEnable == null) device.updateSetting("allEnable", false)
     if (fullInit == true || settings?.pulseConfiguration == null) device.updateSetting("pulseConfiguration", [value:1000, type:"number"])
     if (fullInit == true || settings?.frientEnergyMeterMode == null) device.updateSetting("frientEnergyMeterMode", [value:"0", type:"enum"])    // electricity
     if (fullInit == true || settings?.overTemperatureBreaker == null) device.updateSetting("overTemperatureBreaker", false)
@@ -2560,37 +2568,65 @@ def FormattedDateTimeFromUnix( unixDateTime ) {
 }
 
 void formatAttrib() {
-    if (attribEnable == false) {
-        /* changed in ver 1.7.3. 03/27/2023 - do not send empty html attribute - will this break anything?
-        sendEvent(name: "html", value: "<table></table>", isChanged: false)     
-        */
+    if (settings.attribEnable == false && settings.allEnable == false) {    // do not send empty html or text attributes
         return
     }
-    if (settings?.logEnable) log.debug "formatAttrib"
-    String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
+    if (settings.attribEnable == true) {
+        logDebug "formatAttrib - html"
+        String attrStr = "<style>td{text-align:left;}</style><table id='hubInfoTable'>"
     
-    attrStr += addToAttr("status", "healthStatus")
-    if (!isFrientEnergyMonitor()) {
-        attrStr += addToAttr("Switch","switch")
+        attrStr += addToAttr("status", "healthStatus", "none")
+        if (!isFrientEnergyMonitor()) {
+            attrStr += addToAttr("Switch","switch", "none")
+        }
+        if (reportPower == true) {
+            attrStr += addToAttr("Power", "power", "none")
+        }
+        if (reportVoltage == true) {
+            attrStr += addToAttr("Voltage","voltage", "none")
+        }
+        if (reportAmperage == true) {
+            attrStr += addToAttr("Amperage","amperage", convert = "double")
+        }
+        if (isEnergyEnabled()) {
+            attrStr += addToAttr("Energy","energy", "none")
+            attrStr += addToAttr("Last hour","hourlyEnergy", "none")
+            attrStr += addToAttr("Cost","energyCost", "none")
+            attrStr += addToAttr("Duration","energyDuration", "none")
+        }
+        attrStr += "</table>"
+        updateAttr("html", attrStr)
+        if (attrStr.length() > 1024) { 
+            updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
+        }
+    
+    if (settings.allEnable == true) {
+        logDebug "formatAttrib - text"
+        String attrStr = ""
+        attrStr += addToAttr("status", "healthStatus", "none", isText=true)
+        if (!isFrientEnergyMonitor()) {
+            attrStr += addToAttr("Switch","switch", "none", isText=true)
+        }
+        if (reportPower == true) {
+            attrStr += addToAttr("Power", "power", "none", isText=true)
+        }
+        if (reportVoltage == true) {
+            attrStr += addToAttr("Voltage","voltage", "none", isText=true)
+        }
+        if (reportAmperage == true) {
+            attrStr += addToAttr("Amperage","amperage", convert = "double", isText=true)
+        }
+        if (isEnergyEnabled()) {
+            attrStr += addToAttr("Energy","energy", "none", isText=true)
+            //attrStr += addToAttr("Last hour","hourlyEnergy")
+            //attrStr += addToAttr("Cost","energyCost")
+            //attrStr += addToAttr("Duration","energyDuration")
+        }
+        updateAttr("all", attrStr)
+        if (attrStr.length() > 64) { 
+            updateAttr("all", "Max Attribute Size Exceeded: ${attrStr.length()}") }        
+        
     }
-    if (reportPower == true) {
-        attrStr += addToAttr("Power", "power"/*, convert ="int"*/)
-    }
-    if (reportVoltage == true) {
-        attrStr += addToAttr("Voltage","voltage")
-    }
-    if (reportAmperage == true) {
-        attrStr += addToAttr("Amperage","amperage", convert = "double")
-    }
-    if (isEnergyEnabled()) {
-        attrStr += addToAttr("Energy","energy")
-        attrStr += addToAttr("Last hour","hourlyEnergy")
-        attrStr += addToAttr("Cost","energyCost")
-        attrStr += addToAttr("Duration","energyDuration")
-    }
-    attrStr += "</table>"
-    updateAttr("html", attrStr)
-    if (attrStr.length() > 1024) { updateAttr("html", "Max Attribute Size Exceeded: ${attrStr.length()}") }
 }
 
 String combineAttr(String name, List<String> keys) {
@@ -2609,9 +2645,9 @@ String combineAttr(String name, List<String> keys) {
     return retResult
 }
 
-String addToAttr(String name, String key, String convert = "none") {
-    String retResult = '<tr><td>'
-    retResult += name + '</td><td>'
+String addToAttr(String name, String key, String convert = "none", Boolean isText = false) {
+    String retResult = isText ? '' : '<tr><td>'
+    retResult += isText ? '' : (name + '</td><td>')
 
     String attrUnit = getUnitFromState(key)
     if (attrUnit == null) attrUnit = ""
@@ -2630,7 +2666,7 @@ String addToAttr(String name, String key, String convert = "none") {
     else {
         retResult += "n/a"
     }
-    retResult += '</td></tr>'
+    retResult += isText ? ',  ' : '</td></tr>'
     return retResult
 }
 
@@ -2639,7 +2675,7 @@ String getUnitFromState(String attrName){
 }
 
 void updateAttr(String aKey, aValue, String aUnit = "") {
-    sendEvent(name:aKey, value:aValue, unit:aUnit)
+    sendEvent(name:aKey, value:aValue, unit:aUnit, type: "digital")
 }
 
 def deviceNotification(text) {
