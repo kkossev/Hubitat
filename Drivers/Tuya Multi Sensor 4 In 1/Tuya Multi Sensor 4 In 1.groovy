@@ -54,7 +54,7 @@
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
  * ver. 1.6.0  2023-10-06 kkossev  - (dev. branch) application version is updated; major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
- *                                   setPar and sendCommand paramters changed from enum to string; 
+ *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; 
  *
  *                                   TODO: setPar for Linptech
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -76,7 +76,7 @@
 */
 
 def version() { "1.6.0" }
-def timeStamp() {"2023/10/06 7:53 AM"}
+def timeStamp() {"2023/10/06 10:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -307,48 +307,6 @@ metadata {
     }
 }
 
-def restrictTo4In1Only()        { is4in1() }
-def restrictToTuyaRadarOnly()   { isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isLINPTECHradar() }
-def restrictToTS0225RadarOnly() { isHL0SS9OAradar() || is2AAELWXKradar() }    // TODO: check isIJXVKHD0radar()
-
-@Field static final Map settableParsMap = [    // TODO - use the Device Profiles !!!
-    "--- Select ---"   :               [ type: 'none', function: 'setParSelectHelp'],
-    "\u2193\u2193\u2193\u2193 (4-in-1 only) \u2193\u2193\u2193\u2193"  :       [ type: 'none', function: 'setParSelectHelp'],
-    "reportingTime4in1":               [ type: 'number',  min: 0,    scale: 1, max: 7200,  step: 1,   defaultValue: 10,    function: 'setReportingTime4in1',    restrictions: 'restrictTo4In1Only'],
-    "\u2193\u2193\u2193\u2193 (5.8 GHz radars only) \u2193\u2193\u2193\u2193": [ type: 'none', function: 'setParSelectHelp'],
-    "radarSensitivity" :               [ type: 'number',  min: 1,    scale: 1, max: 9,     step: 1,   defaultValue: 7,     function: 'setRadarSensitivity',      restrictions: 'restrictToTuyaRadarOnly'],
-    "detectionDelay"   :               [ type: 'decimal', min: 0.0,  scale: 1, max: 120.0, step: 0.1, defaultValue: 0.2,   function: 'setRadarDetectionDelay',   restrictions: 'restrictToTuyaRadarOnly'],
-    "fadingTime"       :               [ type: 'decimal', min: 0.5,  scale: 1, max: 500.0, step: 1.0, defaultValue: 60.0,  function: 'setRadarFadingTime',       restrictions: 'restrictToTuyaRadarOnly'],
-    "minimumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 0.25,  function: 'setRadarMinimumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
-    "maximumDistance"  :               [ type: 'decimal', min: 0.0,  scale: 1, max:   9.5, step: 0.1, defaultValue: 8.0,   function: 'setRadarMaximumDistance',  restrictions: 'restrictToTuyaRadarOnly'],
-    "\u2193\u2193\u2193\u2193 (24 GHz radars only) \u2193\u2193\u2193\u2193" : [ type: 'none', function: 'setParSelectHelp'],
-    "radarFadingTime":                 [ type: 'number',  min: 0,    scale: 1, max: 28800,  step: 1,  defaultValue: 10,    function: 'setRadarFadingTime',       restrictions: 'restrictToTS0225RadarOnly'],
-    "radarLedIndicator":               [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: false, function: 'setRadarLedIndicator',     restrictions: 'restrictToTS0225RadarOnly'],
-    
-    "motionFalseDetection":            [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: true,  function: 'setMotionFalseDetection',  restrictions: 'restrictToTS0225RadarOnly'],
-    "motionDetectionDistance":         [ type: 'decimal', min: 0.0,  scale: 1, max: 10.0,  step: 1,   defaultValue: 8.0,   function: 'setMotionDetectionDistance',         restrictions: 'restrictToTS0225RadarOnly'],
-    "motionMinimumDistance":           [ type: 'decimal', min: 0.0,  scale: 1, max: 10.0,  step: 1,   defaultValue: 0.0,   function: 'setMotionMinimumDistance',             restrictions: 'restrictToTS0225RadarOnly'],
-    "motionDetectionSensitivity":      [ type: 'number',  min: 0,    scale: 0, max: 10,    step: 1,   defaultValue: 7,     function: 'setMotionDetectionSensitivity',      restrictions: 'restrictToTS0225RadarOnly'],
-    
-    "smallMotionDetectionDistance":    [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setSmallMotionDetectionDistance',    restrictions: 'restrictToTS0225RadarOnly'],
-    "smallMotionDetectionSensitivity": [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,     function: 'setSmallMotionDetectionSensitivity', restrictions: 'restrictToTS0225RadarOnly'],
-    "smallMotionMinimumDistance":      [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setSmallMotionMinimumDistance',     restrictions: 'restrictToTS0225RadarOnly'],
-
-    "breatheFalseDetection":           [ type: 'bool',    min: 0,    scale: 1, max: 1,  step: 1,      defaultValue: false, function: 'setBreatheFalseDetection', restrictions: 'restrictToTS0225RadarOnly'],
-    "staticDetectionDistance":         [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 5,     function: 'setStaticDetectionDistance',        restrictions: 'restrictToTS0225RadarOnly'],
-    "staticDetectionSensitivity":      [ type: 'number',  min: 0,    scale: 0, max: 10,  step: 1,     defaultValue: 7,     function: 'setStaticDetectionSensitivity',     restrictions: 'restrictToTS0225RadarOnly'],
-    "staticDetectionMinimumDistance":  [ type: 'decimal', min: 0.0,  scale: 0, max: 6.0,   step: 1,   defaultValue: 0,     function: 'setStaticDetectionMinimumDistance', restrictions: 'restrictToTS0225RadarOnly']
-    
-]
-
-// TODO - supported to be taken from the Devie Profile
-@Field static final Map radarCommandsMap = [
-    "--- Select ---"   : [ function: 'sendCommandHelp', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
-    "resetSettings"    : [ function: 'resetSettings',    supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
-    "moveSelfTest"     : [ function: 'moveSelfTest',    supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
-    "smallMoveSelfTest": [ function: 'smallMoveSelfTest', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]],
-    "breatheSelfTest"  : [ function: 'breatheSelfTest', supported: ["TS0225_HL0SS9OA_RADAR", "TS0225_2AAELWXK_RADAR"]]
-]
 
 @Field static final Boolean _IGNORE_ZCL_REPORTS = true
 
@@ -461,6 +419,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "4IN1", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true],
+            commands      : ["reportingTime4in1", "reportingTime4in1"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // pairing: double click!
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],       
@@ -619,6 +578,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
             preferences   : ["radarSensitivity":"TODO", "detectionDelay":"TODO", "fadingTime":"102", "minimumDistance":"TODO", "maximumDistance":"TODO"],
+            commands      : ["radarSensitivity":"radarSensitivity", "detectionDelay":"detectionDelay", "minimumDistance":"minimumDistance", "maximumDistance":"maximumDistance"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"],       // KK
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ztc6ggyl", deviceJoinName: "Tuya ZigBee Breath Presence Sensor ZY-M100"],       // KK
@@ -649,6 +609,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "DistanceMeasurement":true, "HumanMotionState":true],
             preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13"],
+            commands      : ["radarSensitivity":"radarSensitivity", "maximumDistance":"maximumDistance", "smallMotionDetectionSensitivity":"smallMotionDetectionSensitivity"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
             ],
@@ -675,6 +636,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
             preferences   : ["radarSensitivity":"TODO"],        // TODO: range is 0..10
+            commands      : ["radarSensitivity":"radarSensitivity"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vrfecyku", deviceJoinName: "Tuya Human presence sensor MIR-HE200-TY"]
             ],
@@ -688,6 +650,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true],
             preferences   : ["radarSensitivity":"TODO"],        // TODO: range is 0..10
+            commands      : ["radarSensitivity":"radarSensitivity"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_lu01t0zl", deviceJoinName: "Tuya Human presence sensor with fall function"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ypprdwsl", deviceJoinName: "Tuya Human presence sensor with fall function"]
@@ -727,6 +690,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],    // https://github.com/Koenkk/zigbee2mqtt/issues/18318
             preferences   : ["radarSensitivity":"TODO", "detectionDelay":"TODO", "fadingTime":"102", "minimumDistance":"TODO", "maximumDistance":"TODO"],
+            commands      : ["radarSensitivity":"radarSensitivity", "detectionDelay":"detectionDelay", "minimumDistance":"minimumDistance", "maximumDistance":"maximumDistance"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sooucan5", deviceJoinName: "Tuya Human Presence Detector YXZBRB58"]                      // https://www.amazon.com/dp/B0BYDCY4YN                   
             ],
@@ -754,6 +718,7 @@ def isChattyRadarReport(descMap) {
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
             preferences   : ["radarSensitivity":"TODO", "detectionDelay":"TODO", "fadingTime":"110", "minimumDistance":"TODO", "maximumDistance":"TODO"],
+            commands      : ["radarSensitivity":"radarSensitivity", "detectionDelay":"detectionDelay", "minimumDistance":"minimumDistance", "maximumDistance":"maximumDistance"],            
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sxm7l9xa", deviceJoinName: "Tuya Human Presence Detector SXM7L9XA"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
@@ -831,9 +796,9 @@ def isChattyRadarReport(descMap) {
     ],
     
     
-    // the new 24GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - pedestal mount form-factor
+    // the new 5.8 GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - pedestal mount form-factor
     "TS0225_HL0SS9OA_RADAR"   : [
-            description   : "Tuya TS0225_HL0SS9OA 24GHz Radar",        // https://www.aliexpress.com/item/1005005761971083.html 
+            description   : "Tuya TS0225_HL0SS9OA Radar",        // https://www.aliexpress.com/item/1005005761971083.html 
             models        : ["TS0225"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true], 
@@ -842,8 +807,13 @@ def isChattyRadarReport(descMap) {
                              "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"16", "smallMotionMinimumDistance":"107", "smallMotionDetectionDistance":"14", \
                              "textStaticDetection":"NONE", "breatheFalseDetection":"115", "staticDetectionSensitivity":"104", "staticDetectionMinimumDistance":"108", "staticDetectionDistance":"103" \
                             ], 
+            commands      : ['resetSettings':'resetSettings', 'moveSelfTest':'moveSelfTest', 'smallMoveSelfTest':'smallMoveSelfTest', 'breatheSelfTest':'breatheSelfTest', 'motionFalseDetection':'motionFalseDetection', \
+                             'motionDetectionDistance':'motionDetectionDistance', 'motionMinimumDistance':'motionMinimumDistance', 'motionDetectionSensitivity':'motionDetectionSensitivity', "smallMotionDetectionSensitivity":"smallMotionDetectionSensitivity", \
+                             "breatheFalseDetection":"breatheFalseDetection", "staticDetectionMinimumDistance":"staticDetectionMinimumDistance", "staticDetectionSensitivity":"staticDetectionSensitivity", "staticDetectionDistance":"staticDetectionDistance", \
+                             "smallMotionDetectionDistance":"smallMotionDetectionDistance", "smallMotionMinimumDistance":"smallMotionMinimumDistance"
+            ],          
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_hl0ss9oa", deviceJoinName: "Tuya TS0225_HL0SS9OA 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_hl0ss9oa", deviceJoinName: "Tuya TS0225_HL0SS9OA Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
                 [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
@@ -874,15 +844,15 @@ def isChattyRadarReport(descMap) {
                 [dp:117, name:'leave_time',                      type:"value", rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   desc:'Radar absence duration'],     // not received
                 [dp:118, name:'radarDurationStatus',             type:"value", rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   desc:'Radar duration status']       // not received
             ],
-            deviceJoinName: "Tuya TS0225_HL0SS9OA 24Ghz Human Presence Detector",
+            deviceJoinName: "Tuya TS0225_HL0SS9OA Human Presence Detector",
             configuration : [:]
     ],    
 
    
     
-    // the new 24GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar() 
+    // the new 5.8GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar() 
     "TS0225_2AAELWXK_RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
-            description   : "Tuya TS0225_2AAELWXK 24GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
+            description   : "Tuya TS0225_2AAELWXK 5.8 GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
             models        : ["TS0225"],                                // ZG-205Z
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true],
@@ -892,26 +862,31 @@ def isChattyRadarReport(descMap) {
                              "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"105", "smallMotionMinimumDistance":"110", "smallMotionDetectionDistance":"104", \
                              "textStaticDetection":"NONE", "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
                             ], 
+            commands      : ['resetSettings':'resetSettings', 'moveSelfTest':'moveSelfTest', 'smallMoveSelfTest':'smallMoveSelfTest', 'breatheSelfTest':'breatheSelfTest', 'motionFalseDetection':'motionFalseDetection', \
+                             'motionDetectionDistance':'motionDetectionDistance', 'motionMinimumDistance':'motionMinimumDistance', 'motionDetectionSensitivity':'motionDetectionSensitivity', "smallMotionDetectionSensitivity":"smallMotionDetectionSensitivity", \
+                             "breatheFalseDetection":"breatheFalseDetection", "staticDetectionMinimumDistance":"staticDetectionMinimumDistance", "staticDetectionSensitivity":"staticDetectionSensitivity", "staticDetectionDistance":"staticDetectionDistance", \
+                             "smallMotionDetectionDistance":"smallMotionDetectionDistance", "smallMotionMinimumDistance":"smallMotionMinimumDistance"
+            ],
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00,EE00,E000,0400", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_2aaelwxk", deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector"]       // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
                 [dp:1,   name:"motion",                          type:"bool",  rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],  desc:'Presence state'],
-                [dp:101,  name:"humanMotionState",                type:"enum",  rw: "ro", min:0, max:2, map:[0:"none", 1:"large", 2:"small", 3:"static"],  desc:'Human motion state'],
-                [dp:102,  name:'presenceKeepTime',                type:"value", rw: "rw", min:5, max:3600,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
-                [dp:4,  name:'motionDetectionDistance',         type:"decimal", dt: "UINT16", rw: "rw", min:0.00, max:10.00, defaultValue:6.0,  step:1, scale:100, unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>'],
-                [dp:104,  name:'smallMotionDetectionDistance',    type:"value", rw: "rw", min:0, max:600,   scale:100, unit:"meters",    desc:'Small motion detection distance'],
+                [dp:101, name:"humanMotionState",                type:"enum",  rw: "ro", min:0, max:2, map:[0:"none", 1:"large", 2:"small", 3:"static"],  desc:'Human motion state'],
+                [dp:102, name:'presenceKeepTime',                type:"value", rw: "rw", min:5, max:3600,  scale:1,   unit:"seconds",   desc:'Presence keep time'],
+                [dp:4,   name:'motionDetectionDistance',         type:"decimal", dt: "UINT16", rw: "rw", min:0.00, max:10.00, defaultValue:6.0,  step:1, scale:100, unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>'],
+                [dp:104, name:'smallMotionDetectionDistance',    type:"value", rw: "rw", min:0, max:600,   scale:100, unit:"meters",    desc:'Small motion detection distance'],
                 [dp:2 ,  name:'motionDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:10, defaultValue:7,   step:1,  scale:1,   unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
-                [dp:105 , name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
-                [dp:106,  name:'illuminance_lux',                 type:"value", rw: "ro",                   scale:10,  unit:"lx",        desc:'Illuminance'],
-                [dp:107,  name:"ledIndicator",                    type:"bool",  rw: "ro", min:0, max:1, map:[0:"OFF", 1:"ON"],           desc:'LED indicator mode'],
+                [dp:105, name:'smallMotionDetectionSensitivity', type:"value", rw: "rw", min:0, max:10 ,   scale:1,   unit:"x",         desc:'Small motion detection sensitivity'],
+                [dp:106, name:'illuminance_lux',                 type:"value", rw: "ro",                   scale:10,  unit:"lx",        desc:'Illuminance'],
+                [dp:107, name:"ledIndicator",                    type:"bool",  rw: "ro", min:0, max:1, map:[0:"OFF", 1:"ON"],           desc:'LED indicator mode'],
                 [dp:115, name:'radarAlarmTime',                  type:"value", rw: "rw", min:0, max:60 ,   scale:1,   unit:"seconds",   desc:'Alarm time'],
                 [dp:116, name:"radarAlarmVolume",                type:"enum",  rw: "ro", min:0, max:3, map:[0:"low", 1:"medium", 2:"high", 3:"mute"],  desc:'Alarm volume'],
                 [dp:108, name:'staticDetectionDistance',         type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection distance'],
                 [dp:109, name:'staticDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:10, defaultValue:7,  step:1,  scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
                 [dp:117, name:"radarAlarmMode",                  type:"enum",  rw: "ro", min:0, max:3, map:[0:"arm", 1:"off", 2:"alarm", 3:"doorbell"],  desc:'Alarm mode'],    // TODO !!!
-                [dp:3, name:'motionMinimumDistance',           type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
-                [dp:110, name:'smallMotionMinimumDistance',      type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimumD distance'],
+                [dp:3,   name:'motionMinimumDistance',           type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Motion minimum distance'],
+                [dp:110, name:'smallMotionMinimumDistance',      type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Small motion minimum distance'],
      //           [dp:111, name:'staticDetectionMinimumDistance',  type:"value", rw: "rw", min:0, max:6000,  scale:100, unit:"meters",    desc:'Static detection minimum distance'], // TODO - check !!
                 [dp:114, name:'checkingTime',                    type:"value", rw: "ro",                   scale:10,  unit:"seconds",   desc:'Checking time'],
                 [dp:118, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar small move self-test'],    // TODO - check !!
@@ -921,7 +896,7 @@ def isChattyRadarReport(descMap) {
                 [dp:120, name:"radarStatus",                     type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Radar move self-test'],        // TODO - check !
                 [dp:113, name:"breatheFalseDetection",           type:"bool",  rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], desc:'Motion false detection']
             ],
-            deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector",
+            deviceJoinName: "Tuya TS0225_2AAELWXK 5.8 Ghz Human Presence Detector",
             configuration : [:]
     ],    
     
@@ -975,7 +950,8 @@ def isChattyRadarReport(descMap) {
             fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
-            // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 ... seems like a semi-baked product ... : ( 
+            commands      : ['refresh':'refresh', 'motionDetectionDistance':'motionDetectionDistance', 'motionDetectionSensitivity':'motionDetectionSensitivity', "staticDetectionSensitivity":"staticDetectionSensitivity"],
+            // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 
             tuyaDPs:       [ 
                 [dp:101, name:'fadingTime',                                   type:"number", rw: "rw", min:10, max:9999, defaultValue:10,  step:1,  scale:1,   unit:"seconds", title: "<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
             ],
@@ -3015,23 +2991,23 @@ def updated() {
     }
     // 
     if (isLINPTECHradar()) {
-                cmds += setRadarFadingTime(settings?.fadingTime ?: 10)
+                cmds += setFadingTime(settings?.fadingTime ?: 10)
                 cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
                 cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
                 cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
     }
     else if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
-                cmds += setRadarDetectionDelay( settings?.detectionDelay )        // radar detection delay
-                cmds += setRadarFadingTime( settings?.fadingTime ?: 30)           // radar fading time
-                cmds += setRadarMinimumDistance( settings?.minimumDistance )      // radar minimum distance
-                cmds += setRadarMaximumDistance( settings?.maximumDistance )      // radar maximum distance
+                cmds += setDetectionDelay( settings?.detectionDelay )        // radar detection delay
+                cmds += setFadingTime( settings?.fadingTime ?: 30)           // radar fading time
+                cmds += setMinimumDistance( settings?.minimumDistance )      // radar minimum distance
+                cmds += setMaximumDistance( settings?.maximumDistance )      // radar maximum distance
     }
         
     if (false /*isHL0SS9OAradar() && _USE_CONVERTERS == true*/) {            // TODO - not ready yet!
             cmds += setPreferencesFromDeviceProfile()
     }
     else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
-            cmds += setRadarFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
+            cmds += setFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
             cmds += setRadarLedIndicator( settings?.ledIndicator )
             cmds += setRadarAlarmMode( settings?.radarAlarmMode )
             cmds += setRadarAlarmVolume( settings?.radarAlarmVolume )
@@ -3131,7 +3107,7 @@ def refresh() {
     cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
     cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)             // batteryPercentageRemaining
-    log.warn "DEVICE=${DEVICE}"
+    
     if (isIAS() || is4in1()) {
         IAS_ATTRIBUTES.each { key, value ->
             cmds += zigbee.readAttribute(0x0500, key, [:], delay=200)
@@ -3692,7 +3668,7 @@ def setReportingTime4in1( val ) {
     }
 }
 
-def setRadarDetectionDelay( val ) {
+def setDetectionDelay( val ) {
     if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
         def value = ((val as double) * 10.0) as int
         logDebug "changing radar detection delay to ${val} seconds (raw=${value})"                
@@ -3700,7 +3676,7 @@ def setRadarDetectionDelay( val ) {
     }
 }
 
-def setRadarFadingTime( val ) {
+def setFadingTime( val ) {
     if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
         def value = ((val as double) * 10.0) as int
         logDebug "changing radar fading time to ${val} seconds (raw=${value})"                
@@ -3716,10 +3692,10 @@ def setRadarFadingTime( val ) {
         logDebug "changing LINPTECH radar fadingTime to ${value} seconds"                // CHECK!
         return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
     }
-    else { logWarn "setRadarFadingTime: unsupported model!"; return null }
+    else { logWarn "setFadingTime: unsupported model!"; return null }
 }
 
-def setRadarMinimumDistance( val ) {
+def setMinimumDistance( val ) {
     if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
         int value = ((val as double) * 100.0) as int
         logDebug "changing radar minimum distance to ${val} m (raw=${value})"                
@@ -3727,7 +3703,7 @@ def setRadarMinimumDistance( val ) {
     }
 }
 
-def setRadarMaximumDistance( val ) {
+def setMaximumDistance( val ) {
     if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar()) { 
         int value = ((val as double) * 100.0) as int
         logDebug "changing radar maximum distance to : ${val} m (raw=${value})"                
@@ -3836,7 +3812,7 @@ def setStaticDetectionMinimumDistance( val ) {
 }
 
 /*
-            cmds += setRadarFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
+            cmds += setFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
             cmds += setRadarLedIndicator( settings?.ledIndicator )
             cmds += setRadarAlarmMode( settings?.radarAlarmMode )
             cmds += setRadarAlarmVolume( settings?.radarAlarmVolume )
@@ -3951,68 +3927,55 @@ def radarCommand( String command, String DPcommand, String DPType) {
     return cmds
 }
 
+/**
+ * Sends a command to the device.
+ * @param command The command to send.
+ * @param val The value to send with the command.
+ * @return void
+ */
 def sendCommand( command=null, val=null )
 {
     logInfo "sending command ${command}"
     ArrayList<String> cmds = []
-    def value
-    Boolean supported = false
-    if (command == null || !(command in (radarCommandsMap.keySet() as List))) {
-        logWarn "sendCommand: the command <b>${command}</b> must be one of these : ${radarCommandsMap.keySet() as List}"
+    def supportedCommandsMap = DEVICE.commands 
+    if (supportedCommandsMap == null || supportedCommandsMap == [:]) {
+        logWarn "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return
     }
-    supported = state.deviceProfile in radarCommandsMap[command]?.supported
-    if (!supported) {
-        log.warn "sendCommand: <b>command</b> is supported by <b>${radarCommandsMap[command]?.supported}</b> radars only!"
+    def supportedCommandsList =  DEVICE.commands.keySet() as List 
+    // check if the command is defined in the DEVICE commands map
+    if (command == null || !(command in supportedCommandsList)) {
+        logWarn "sendCommand: the command <b>${command}</b> must be one of these : ${supportedCommandsList}"
         return
     }
-    //
     def func
     try {
-        func = radarCommandsMap[command]?.function
-        cmds = "$func"(value)
+        func = DEVICE.commands.find { it.key == command }.value
+        logDebug "executing <b>$func</b>()"
+        cmds = "$func"()
     }
     catch (e) {
-        logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
+        logWarn "Exception caught while processing <b>$func</b>()"
         return
     }
-    if (val == null)  { logDebug "executed <b>$func</b>()" } 
-    else              { logDebug "executed <b>$func</b>(<b>$val</b>)"} 
+    logDebug "executed <b>$func</b>()" 
     sendZigbeeCommands( cmds )
 }
 
-def sendCommandHelp( val ) {
-    logWarn "sendCommand: select one of the commands in this list suported by your device"             
-}
-
+/**
+ * Returns a list of valid parameters per model based on the device preferences.
+ *
+ * @return List of valid parameters.
+ */
 def getValidParsPerModel() {
     List<String> validPars = []
-    if (DEVICE?.preferences != null && isLINPTECHradar()) {
+    if (DEVICE?.preferences != null && DEVICE?.preferences != [:]) {
         // use the preferences to validate the parameters
         validPars = DEVICE.preferences.keySet().toList()
         log.trace "validPars=${validPars}"
     }
-    else {  // old way
-        settableParsMap.each { key, value -> 
-            if (value.type != 'none') {
-                def func
-                def isAllowed = false
-                try {
-                    func = value.restrictions
-                    isAllowed = "$func"()
-                }
-                catch (e) {
-                    logWarn "Exception caught while processing <b>$func</b>()"
-                }
-                if (isAllowed) {
-                    validPars.add(key)
-                }
-            }
-        }
-        }
     return validPars
 }
-
 
 /**
  * Validates the parameter value based on the given dpMap.
@@ -4055,9 +4018,15 @@ def validateParameterValue(Map dpMap, String val) {
 }
 
 
+/**
+ * Sets the parameter value for the device.
+ * @param par The name of the parameter to set.
+ * @param val The value to set the parameter to.
+ * @return Nothing.
+ */
 def setPar( par=null, val=null )
 {
-    if (DEVICE?.preferences != null && isLINPTECHradar()) {
+    if (DEVICE?.preferences != null && DEVICE?.preferences != [:]) {
         // new method
         logDebug "setPar new method: setting parameter ${par} to ${val}"
         ArrayList<String> cmds = []
@@ -4101,77 +4070,14 @@ def setPar( par=null, val=null )
         }
         logInfo "executed setPar <b>$setFunction</b>(<b>$value</b>)"
         sendZigbeeCommands( cmds )
-        log.warn "---- end of test ==="
         return
     }
-    else {
-        // the old method - TODO - DEL!
-        //logInfo "setting parameter ${par} to ${val}"
-        ArrayList<String> cmds = []
-        def value
-        Boolean validated = false
-        if (par == null || !(par in (settableParsMap.keySet() as List)) || settableParsMap[par]?.type == 'none') {
-            logWarn "setPar: invalid parameter name <b>${par}</b>"
-            logWarn "must be one of these : ${getValidParsPerModel()}"
-            return
-        }
-        if (settableParsMap[par]?.type == "number") {
-            value = safeToInt(val, -1)
-        }
-        else if (settableParsMap[par]?.type == "decimal") {
-            value = safeToDouble(val, -1.0)
-        }
-        else if (settableParsMap[par]?.type == "bool") {
-            if (val == '0' || val == 'false') {
-                value = 0
-            }
-            else if (val == '1' || val == 'true') {
-                value = 1
-            }
-            else {
-                log.warn "${device.displayName} setPar: bool parameter <b>${val}</b>"
-                log.warn "${device.displayName} value must be one of <b>0 1 false true</b>"
-                return
-            }
-        }
-        else {
-            logWarn "setPar: unsupported parameter type <b>${settableParsMap[par]?.type}</b>"
-            return
-        }
-        
-        if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
-        if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
-            if (val == null) { 
-                log.warn "${device.displayName} setPar: missing ${par} parameter <b>value</b>" 
-            }
-            else {
-                log.warn "${device.displayName} setPar: invalid ${par} parameter value <b>${val}</b>" 
-            }
-            log.warn "${device.displayName} value must be within ${settableParsMap[par]?.min} and ${settableParsMap[par]?.max}"
-            return
-        }
-        //
-        def func
-        try {
-            func = settableParsMap[par]?.function
-            def type = settableParsMap[par]?.type
-            device.updateSetting("$par", [value:value, type:type])
-            cmds = "$func"(value)
-        }
-        catch (e) {
-            logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
-            return
-        }
-
-        logInfo "executed setPar <b>$func</b>(<b>$val</b>)"
-        sendZigbeeCommands( cmds )
-    }
 }
 
-def setParSelectHelp( val ) {
-    logWarn "setPar: select one of the parameters in this list depending on your device"             
-}
-
+/**
+ * Updates the Tuya version of the device based on the application version.
+ * If the Tuya version has changed, updates the device data value and logs the change.
+ */
 void updateTuyaVersion() {
     def application = device.getDataValue("application") 
     if (application != null) {
@@ -4194,6 +4100,12 @@ void updateTuyaVersion() {
     }
 }
 
+/**
+ * Returns the device name and profile based on the device model and manufacturer.
+ * @param model The device model (optional). If not provided, it will be retrieved from the device data value.
+ * @param manufacturer The device manufacturer (optional). If not provided, it will be retrieved from the device data value.
+ * @return A list containing the device name and profile.
+ */
 def getDeviceNameAndProfile( model=null, manufacturer=null) {
     def deviceName         = UNKNOWN
     def deviceProfile      = UNKNOWN
