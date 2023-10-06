@@ -53,9 +53,10 @@
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
- * ver. 1.6.0  2023-10-05 kkossev  - (dev. branch) application version is updated; major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
+ * ver. 1.6.0  2023-10-06 kkossev  - (dev. branch) application version is updated; major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
+ *                                   setPar and sendCommand paramters changed from enum to string; 
  *
- *                                   TODO: add isPreference to tuyaDPs - W.I.P.
+ *                                   TODO: setPar for Linptech
  *                                   TODO: add extraPreferences to deviceProfilesV2
  *                                   TODO: command for black radar LED
  *                                   TODO: TS0601_IJXVKHD0_RADAR preferences - send events
@@ -75,7 +76,7 @@
 */
 
 def version() { "1.6.0" }
-def timeStamp() {"2023/10/05 12:18 PM"}
+def timeStamp() {"2023/10/06 7:53 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -129,10 +130,10 @@ metadata {
         command "setMotion", [[name: "setMotion", type: "ENUM", constraints: ["No selection", "active", "inactive"], description: "Force motion active/inactive (for tests)"]]
         command "refresh",   [[name: "May work for some DC/mains powered sensors only"]] 
         command "setPar", [
-                [name:"par", type: "ENUM", description: "preference parameter name", constraints: settableParsMap.keySet() as List],
+                [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]],
                 [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
         ]
-        command "sendCommand", [[name: "sendCommand", type: "ENUM", constraints: radarCommandsMap.keySet() as List, description: "send Tuya Radar commands"]]
+        command "sendCommand", [[name: "sendCommand", type: "STRING", constraints: ["STRING"], description: "send Tuya Radar commands"]]
         if (_DEBUG == true) {
             command "testTuyaCmd", [
                 [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
@@ -1084,6 +1085,77 @@ X        nobody time                            101        (10min)
     ]
     
 ]    
+
+// ---------------------------------- deviceProfilesV2 helper functions --------------------------------------------
+
+/**
+ * Returns the profile key for a given profile description.
+ * @param valueStr The profile description to search for.
+ * @return The profile key if found, otherwise null.
+ */
+def getProfileKey(String valueStr) {
+    def key = null
+    deviceProfilesV2.each {  profileName, profileMap ->
+        if (profileMap.description.equals(valueStr)) {
+            key = profileName
+        }
+    }
+    return key
+}
+
+
+/**
+ * Finds the preferences map for the given parameter.
+ * @param param The parameter to find the preferences map for.
+ * @param debug Whether or not to output debug logs.
+ * @return returns either tuyaDPs or attributes map, depending on where the preference (param) is found
+ * @return null if param is not defined for this device.
+ */
+def getPteferenceMap( String param, boolean debug=false ) {
+    Map foundMap = [:]
+    if (!(param in DEVICE.preferences)) {
+        if (debug) log.warn "getPteferenceMap: preference ${param} not defined for this device!"
+        return null
+    }
+    def preference = DEVICE.preferences["$param"]
+    if (debug) log.debug "getPteferenceMap: preference ${param} found. value is ${preference} isTuyaDP=${preference.isNumber()}"
+    if (preference.isNumber()) {
+        // find the preference in the tuyaDPs map
+        int dp = safeToInt(preference)
+        def dpMaps   =  DEVICE.tuyaDPs 
+        foundMap = dpMaps.find { it.dp == dp }
+    }
+    else { // cluster:attribute
+        if (debug) log.trace "${DEVICE.attributes}"
+        def dpMaps   =  DEVICE.tuyaDPs 
+        foundMap = DEVICE.attributes.find { it.at == preference }
+    }
+    if (debug) log.debug "getPteferenceMap: foundMap = ${foundMap}"
+    return foundMap     
+}
+
+/**
+ * Resets the device preferences to their default values.
+ * @param debug A boolean indicating whether to output debug information.
+ */
+def resetPreferencesToDefaults(boolean debug=false ) {
+    Map preferences = DEVICE.preferences
+    Map parMap = [:]
+    preferences.each{ parName, mapValue -> 
+        if (debug) log.trace "$parName $mapValue"
+        // find the individual preference map
+        parMap = getPteferenceMap(parName, false)
+        log.trace "parMap = $parMap"
+        // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
+        if (parMap.defaultValue == null) {
+            return // continue
+        }
+        if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
+        device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
+    }
+}
+
+
 
 @Field static final Map<Integer, String> IAS_ATTRIBUTES = [
 //  Zone Information
@@ -3915,43 +3987,50 @@ def sendCommandHelp( val ) {
 
 def getValidParsPerModel() {
     List<String> validPars = []
-    settableParsMap.each { key, value -> 
-        if (value.type != 'none') {
-            def func
-            def isAllowed = false
-            try {
-                func = value.restrictions
-                isAllowed = "$func"()
-            }
-            catch (e) {
-                logWarn "Exception caught while processing <b>$func</b>()"
-            }
-            if (isAllowed) {
-                validPars.add(key)
+    if (DEVICE?.preferences != null && isLINPTECHradar()) {
+        // use the preferences to validate the parameters
+        validPars = DEVICE.preferences.keySet().toList()
+        log.trace "validPars=${validPars}"
+    }
+    else {  // old way
+        settableParsMap.each { key, value -> 
+            if (value.type != 'none') {
+                def func
+                def isAllowed = false
+                try {
+                    func = value.restrictions
+                    isAllowed = "$func"()
+                }
+                catch (e) {
+                    logWarn "Exception caught while processing <b>$func</b>()"
+                }
+                if (isAllowed) {
+                    validPars.add(key)
+                }
             }
         }
-    }
+        }
     return validPars
 }
 
-def setPar( par=null, val=null )
-{
-    //logInfo "setting parameter ${par} to ${val}"
-    ArrayList<String> cmds = []
-    def value
-    Boolean validated = false
-    if (par == null || !(par in (settableParsMap.keySet() as List)) || settableParsMap[par]?.type == 'none') {
-        logWarn "setPar: invalid parameter name <b>${par}</b>"
-        logWarn "must be one of these : ${getValidParsPerModel()}"
-        return
-    }
-    if (settableParsMap[par]?.type == "number") {
+
+/**
+ * Validates the parameter value based on the given dpMap.
+ * 
+ * @param dpMap The map containing the parameter type, minimum and maximum values.
+ * @param val The value to be validated.
+ * @return The validated value if it is within the specified range, null otherwise.
+ */
+def validateParameterValue(Map dpMap, String val) {
+    def value = null
+    def parType = dpMap.type
+    if (parType == "number") {
         value = safeToInt(val, -1)
     }
-    else if (settableParsMap[par]?.type == "decimal") {
+    else if (parType == "decimal") {
         value = safeToDouble(val, -1.0)
     }
-    else if (settableParsMap[par]?.type == "bool") {
+    else if (parType == "bool") {
         if (val == '0' || val == 'false') {
             value = 0
         }
@@ -3959,42 +4038,134 @@ def setPar( par=null, val=null )
             value = 1
         }
         else {
-            log.warn "${device.displayName} setPar: bool parameter <b>${val}</b>"
-            log.warn "${device.displayName} value must be one of <b>0 1 false true</b>"
-            return
+            log.warn "${device.displayName} setPar: bool parameter <b>${val}</b>. value must be one of <b>0 1 false true</b>"
+            return null
         }
     }
     else {
-        logWarn "setPar: unsupported parameter type <b>${settableParsMap[par]?.type}</b>"
+        log.warn "${device.displayName} setPar: unsupported parameter type <b>${parType}</b>"
+        return null
+    }
+    Boolean validated = true
+    if ((dpMap.min != null && value < dpMap.min) || (dpMap.max != null && value > dpMap.max)) {
+        log.warn "${device.displayName} setPar: invalid ${par} parameter value <b>${val}</b> value must be within ${dpMap.min} and ${dpMap.max}"
+        return null
+    }
+    return value
+}
+
+
+def setPar( par=null, val=null )
+{
+    if (DEVICE?.preferences != null && isLINPTECHradar()) {
+        // new method
+        logDebug "setPar new method: setting parameter ${par} to ${val}"
+        ArrayList<String> cmds = []
+        
+        Boolean validated = false
+        if (par == null || !(par in getValidParsPerModel())) {
+            log.warn "${device.displayName} setPar: invalid parameter name <b>${par}</b>. must be one of these : ${getValidParsPerModel()}"
+            return
+        }
+        // find the tuayDPs map for the par
+        Map dpMap = getPteferenceMap(par, false)
+        if ( dpMap == null ) {
+            log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter<b>${par}</b>"
+            return
+        }
+        // convert the val to the correct type
+        def value = validateParameterValue(dpMap, val)
+        if (value == null) {
+            log.warn "${device.displayName} setPar: invalid parameter value <b>${val}</b>"
+            return
+        }
+        // update the device setting
+        device.updateSetting("$par", [value:value, type:dpMap.type])
+        logDebug "parameter ${par} value ${val}, type ${dpMap.type} validated to ${value}"
+        // search for set function
+        String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
+        String setFunction = "set${capitalizedFirstChar}"
+        // check if setFunction method exists
+        if (!this.respondsTo(setFunction)) {
+            log.warn "${device.displayName} setPar: set function <b>${setFunction}</b> not found"
+            return
+        }
+        logDebug "setFunction=${setFunction}"
+        // execute the setFunction
+        try {
+            cmds = "$setFunction"(value)
+        }
+        catch (e) {
+            logWarn "Exception caught while processing <b>$setFunction</b>(<b>$value</b>)"
+            return
+        }
+        logInfo "executed setPar <b>$setFunction</b>(<b>$value</b>)"
+        sendZigbeeCommands( cmds )
+        log.warn "---- end of test ==="
         return
     }
-    
-    if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
-    if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
-        if (val == null) { 
-            log.warn "${device.displayName} setPar: missing ${par} parameter <b>value</b>" 
+    else {
+        // the old method - TODO - DEL!
+        //logInfo "setting parameter ${par} to ${val}"
+        ArrayList<String> cmds = []
+        def value
+        Boolean validated = false
+        if (par == null || !(par in (settableParsMap.keySet() as List)) || settableParsMap[par]?.type == 'none') {
+            logWarn "setPar: invalid parameter name <b>${par}</b>"
+            logWarn "must be one of these : ${getValidParsPerModel()}"
+            return
+        }
+        if (settableParsMap[par]?.type == "number") {
+            value = safeToInt(val, -1)
+        }
+        else if (settableParsMap[par]?.type == "decimal") {
+            value = safeToDouble(val, -1.0)
+        }
+        else if (settableParsMap[par]?.type == "bool") {
+            if (val == '0' || val == 'false') {
+                value = 0
+            }
+            else if (val == '1' || val == 'true') {
+                value = 1
+            }
+            else {
+                log.warn "${device.displayName} setPar: bool parameter <b>${val}</b>"
+                log.warn "${device.displayName} value must be one of <b>0 1 false true</b>"
+                return
+            }
         }
         else {
-            log.warn "${device.displayName} setPar: invalid ${par} parameter value <b>${val}</b>" 
+            logWarn "setPar: unsupported parameter type <b>${settableParsMap[par]?.type}</b>"
+            return
         }
-        log.warn "${device.displayName} value must be within ${settableParsMap[par]?.min} and ${settableParsMap[par]?.max}"
-        return
-    }
-    //
-    def func
-    try {
-        func = settableParsMap[par]?.function
-        def type = settableParsMap[par]?.type
-        device.updateSetting("$par", [value:value, type:type])
-        cmds = "$func"(value)
-    }
-    catch (e) {
-        logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
-        return
-    }
+        
+        if (value >= settableParsMap[par]?.min && value <= settableParsMap[par]?.max) validated = true
+        if (validated == false && settableParsMap[par]?.min != null && settableParsMap[par]?.max != null) {
+            if (val == null) { 
+                log.warn "${device.displayName} setPar: missing ${par} parameter <b>value</b>" 
+            }
+            else {
+                log.warn "${device.displayName} setPar: invalid ${par} parameter value <b>${val}</b>" 
+            }
+            log.warn "${device.displayName} value must be within ${settableParsMap[par]?.min} and ${settableParsMap[par]?.max}"
+            return
+        }
+        //
+        def func
+        try {
+            func = settableParsMap[par]?.function
+            def type = settableParsMap[par]?.type
+            device.updateSetting("$par", [value:value, type:type])
+            cmds = "$func"(value)
+        }
+        catch (e) {
+            logWarn "Exception caught while processing <b>$func</b>(<b>$val</b>)"
+            return
+        }
 
-    logInfo "executed setPar <b>$func</b>(<b>$val</b>)"
-    sendZigbeeCommands( cmds )
+        logInfo "executed setPar <b>$func</b>(<b>$val</b>)"
+        sendZigbeeCommands( cmds )
+    }
 }
 
 def setParSelectHelp( val ) {
@@ -4086,62 +4257,7 @@ def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }    
 
-def getProfileKey(String valueStr) {
-    def key = null
-    deviceProfilesV2.each {  profileName, profileMap ->
-        if (profileMap.description.equals(valueStr)) {
-            key = profileName
-        }
-    }
-    return key
-}
 
-//
-// returns either tuyaDPs or attributes single map, depending on where the preference (param) is found
-//
-def findPreferencesMap( String param, boolean debug=false ) {
-    Map foundMap = [:]
-    if (!(param in DEVICE.preferences)) {
-        if (debug) log.warn "findPreferencesMap: preference ${param} not defined for this device!"
-        return null
-    }
-    def preference = DEVICE.preferences["$param"]
-    if (debug) log.debug "findPreferencesMap: preference ${param} found. value is ${preference} isTuyaDP=${preference.isNumber()}"
-    if (preference.isNumber()) {
-        // find the preference in the tuyaDPs map
-        int dp = safeToInt(preference)
-        def dpMaps   =  DEVICE.tuyaDPs 
-        foundMap = dpMaps.find { it.dp == dp }
-    }
-    else { // cluster:attribute
-        if (debug) log.trace "${DEVICE.attributes}"
-        def dpMaps   =  DEVICE.tuyaDPs 
-        foundMap = DEVICE.attributes.find { it.at == preference }
-    }
-    if (debug) log.debug "findPreferencesMap: foundMap = ${foundMap}"
-    return foundMap     
-}
-
-//
-// Itterate throug all Preferences and set the default values
-//
-def resetPreferencesToDefaults(boolean debug=false ) {
-    Map preferences = DEVICE.preferences
-    Map parMap = [:]
-    preferences.each{ parName, mapValue -> 
-        if (debug) log.trace "$parName $mapValue"
-        // find the individual preference map
-        //parMap = findSinglePreferenceMap(parName, mapValue, false)
-        parMap = findPreferencesMap(parName, false)
-        log.trace "parMap = $parMap"
-        // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
-        if (parMap.defaultValue == null) {
-            return // continue
-        }
-        if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
-        device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
-    }
-}
 
 
 def inputIt( String param, boolean debug=false ) {
@@ -4227,24 +4343,33 @@ def formattedDate2unix( formattedDate ) {
     }
 }
 
+
+@Field static final Map<Integer, Map> SettableParsFieldMap = new ConcurrentHashMap<>().withDefault {
+    new ConcurrentHashMap<Integer, Map>()
+}
+
+def getSettableParsList() {
+    if (device?.id == null) {
+        return ["SEE LOGS"]
+    }
+    if (SettableParsFieldMap.get(device?.id)) {
+        return SettableParsFieldMap.get(device?.id).pars.keySet().toList()
+    }
+    // put a map in the SettableParsFieldMap for the device.id if it doesn't exist, containing the settable parameters
+    Map settableParsMap = [:]
+    settableParsMap['pars'] = DEVICE.preferences
+    SettableParsFieldMap.put(device?.id, settableParsMap)
+    def result = SettableParsFieldMap.get(device?.id).pars.keySet().toList()
+    log.trace  "${result}"
+    log.warn "stored ${SettableParsFieldMap.get(device?.id)}"
+    return result
+
+}
+
+
 def test( val ) {
 
-    //log.warn "powerSource = ${deviceProfilesV2[getDeviceGroup()].device?.powerSource}"
-    //log.warn "indicatorLight = ${("indicatorLight" in DEVICE.preferences)}"
-    //log.warn "MotionSensor = ${("MotionSensor" in DEVICE.capabilities)}"
-    //log.warn "IlluminanceMeasurement = ${(DEVICE.capabilities?.IlluminanceMeasurement == true)}"
-    //log.warn "configuration = ${("0x0406" in DEVICE.configuration)}"
-    /*
-    def dp = 12
-    x = state.tuyaDPs["$dp"][2]
-    log.warn "x=${x}"
-    */
-   // setPreferencesFromDeviceProfile()
-   // log.warn "inputIt(${val})"
-   //inputIt(val) 
+    def list = getSettableParsList()
 
-   def str = unix2formattedDate(state.motionStarted as String)
-    logWarn "test str: ${str}"
-    def unix = formattedDate2unix(str)
-    logWarn "test unix: ${unix})"
+    logWarn "test list: ${list})"
 }
