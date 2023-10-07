@@ -45,9 +45,9 @@
  * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  * ver. 2.6.7 2023-10-02 louisparks  - added TS0044 to debounce list
+ * ver. 2.6.8 2023-10-03 kkossev     - added debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *
- *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
- *                                   - TODO: batteryReporting is not initialized!
+ *                                   - TODO: batteryReporting is not initialized?
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
  *                                   - TODO: configre (override) the numberOfButtons in the AdvancedOptions
  *                                   - TODO: Lightify initialization like in the stock HE driver'; add Aqara button;
@@ -66,8 +66,8 @@
  *
  */
 
-def version() { "2.6.7" }
-def timeStamp() {"2023/10/02 11:28 PM"}
+def version() { "2.6.8" }
+def timeStamp() {"2023/10/03 12:12 AM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -89,8 +89,6 @@ metadata {
     capability "PowerSource"
     capability "Configuration"
     capability "Health Check"
-    //capability "SwitchLevel"
-    //capability "Switch"
 
     attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
@@ -195,6 +193,7 @@ metadata {
         input (name: "logEnable", type: "bool", title: "<b>Enable debug logging</b>", defaultValue: DEFAULT_LOG_ENABLE)
         input (name: "txtEnable", type: "bool", title: "<b>Enable description text logging</b>", defaultValue: true)
         input (name: "reverseButton", type: "bool", title: "<b>Reverse button order</b>", defaultValue: true)
+        input (name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options.</i>')
         input (name: "advancedOptions", type: "bool", title: "Advanced options", defaultValue: false)
         if (advancedOptions == true) {
         input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
@@ -213,6 +212,10 @@ metadata {
     defaultValue: 00,
     options     : [00: 'Default', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
+@Field static final Map DebounceOpts = [
+    defaultValue: 1000,
+    options     : [0: 'disabled', 500: '0.5 seconds', 800: '0.8 seconds', 1000: '1.0 seconds', 1200: '1.2 seconds', 1500: '1.5 seconds', 2000: '2.0 seconds',]
+]
 
 
 def isTuya()  {device.getDataValue("model") in ["TS0601", "TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046", "TS0215", "TS0215A"]}
@@ -222,7 +225,7 @@ def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE1
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
 def isOsram() {device.getDataValue("manufacturer") == "OSRAM"}
-def needsDebouncing() {device.getDataValue("model") in ["TS004F","TS0044"] || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
+def needsDebouncing()           { (settings.debounce  ?: 0) as int != 0 }
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 def isSOSbutton() {device.getDataValue("manufacturer") in ["_TZ3000_4fsgukof", "_TZ3000_wr2ucaj9", "_TZ3000_zsh6uat3", "_TZ3000_tj4pwzzm", "_TZ3000_2izubafb", "_TZ3000_pkfazisv" ]}
 
@@ -418,9 +421,9 @@ def parse(String description) {
         if (buttonNumber != 0 ) {
             if (needsDebouncing()) {
                 if ( state.lastButtonNumber == buttonNumber ) {    // debouncing timer still active!
-                    if (logEnable) {log.warn "${device.displayName} ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"}
-                    runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
-                    if (logEnable) {log.debug "${device.displayName} restarted debouncing timer ${DEBOUNCE_TIME}ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})"}
+                    logWarn "ignored event for button ${state.lastButtonNumber} - still in the debouncing time period!"
+                    startButtonDebounce()                         // restart the debouncing timer again
+                    logDebug "restarted debouncing timer ${settings.debounce ?: DebounceOpts.defaultValue}ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})"
                     return null 
                 }
             }
@@ -438,7 +441,7 @@ def parse(String description) {
         if (event) {
 		    result = createEvent(event)
             if (needsDebouncing()) {
-                runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
+                startButtonDebounce()
             }
 	    } 
 	} // if catchall
@@ -469,6 +472,19 @@ def parse(String description) {
 	}
     return result
 }
+
+def startButtonDebounce() {
+    logDebug "starting timer (${settings.debounce}) for button ${state.lastButtonNumber}"
+    runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, clearButtonDebounce, [overwrite: true])    // restart the debouncing timer again
+    state.debouncingActive = true
+}
+
+def clearButtonDebounce() {
+    logDebug "debouncing timer (${settings.debounce}) for button ${state.lastButtonNumber} expired."
+    //state.lastButtonNumber = 0
+    state.debouncingActive = false
+}
+
 
 @Field static final Integer BUTTON_I = 8
 @Field static final Integer BUTTON_O = 7
@@ -582,11 +598,16 @@ void initializeVars(boolean fullInit = false ) {
     }
     if (state.stats == null) { state.stats = [:] }
     state.comment = "Works with Tuya TS004F TS0041 TS0042 TS0043 TS0044 TS0046 TS0601, icasa, Konke, Sonoff"
+
+    //def debounceDefault = ((device.getDataValue("model") ?: "n/a") == "TS004F" || ((device.getDataValue("manufacturer") ?: "n/a") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])) ?  "1000" : "0"
+    def debounceDefault = ((device.getDataValue("model") ?: "n/a") in ["TS004F", "TS0044"]) ?  "1000" : "0"
+    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: debounceDefault, type: 'enum'])
     if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", DEFAULT_LOG_ENABLE)
     if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit == true || settings?.reverseButton == null) device.updateSetting("reverseButton", true)
     if (fullInit == true || settings?.advancedOptions == null) device.updateSetting("advancedOptions", false)
     if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
+    state.debouncingActive = false
 }
 
 def configure() {
