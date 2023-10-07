@@ -13,3 +13,5 @@ Drivers/SmartThings/SmartThings.iml
 .idea/encodings.xml
 .hubitat/metadata.json
 Drivers/Tuya Zigbee Metering Plug/new 55.txt
+Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
+Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json

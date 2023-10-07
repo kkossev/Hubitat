@@ -76,7 +76,7 @@
 */
 
 def version() { "1.6.0" }
-def timeStamp() {"2023/10/06 10:48 PM"}
+def timeStamp() {"2023/10/06 11:59 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -377,7 +377,6 @@ def isTS0601_PIR() { (DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.pr
 def isRadar()             { return getDeviceGroup().contains("TS0601_TUYA_RADAR") } 
 def isBlackPIRsensor()    { return getDeviceGroup().contains("TS0601_PIR_PRESENCE") }     
 def isBlackSquareRadar()  { return getDeviceGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
-//def isOWONRadar()         { return getDeviceGroup().contains("OWON_OCP305_RADAR") } 
 def isHumanPresenceSensorAIR()     { return getDeviceGroup().contains("TS0601_PIR_AIR") }
 def isHumanPresenceSensorScene()   { return getDeviceGroup().contains("TS0601_RADAR_MIR-HE200-TY") }
 def isHumanPresenceSensorFall()    { return getDeviceGroup().contains("TS0601_RADAR_MIR-TY-FALL") }
@@ -387,7 +386,7 @@ def isIJXVKHD0radar()              { return getDeviceGroup().contains("TS0601_IJ
 def isHL0SS9OAradar()              { return getDeviceGroup().contains("TS0225_HL0SS9OA_RADAR") }
 def is2AAELWXKradar()              { return getDeviceGroup().contains("TS0225_2AAELWXK_RADAR") }    // same as HL0SS9OA, but another set of DPs
 def isSBYX0LM6radar()              { return getDeviceGroup().contains("TS0601_SBYX0LM6_RADAR") }
-def isLINPTECHradar()              { return getDeviceGroup().contains("TS0225_LINPTECH_RADAR") }    // was isAWARHUSBradar() 
+def isLINPTECHradar()              { return getDeviceGroup().contains("TS0225_LINPTECH_RADAR") }
 def isEGNGMRZHradar()              { return getDeviceGroup().contains("TS0225_EGNGMRZH_RADAR") }
 def isKAPVNNLKradar()              { return getDeviceGroup().contains("TS0601_KAPVNNLK_RADAR") }
 
@@ -1250,10 +1249,7 @@ def parse(String description) {
                 logDebug "ignored ZCL illuminance report (raw:Lux=${rawLux})"
                 return
             }
-            else if (isLINPTECHradar()) {
-                illuminanceEvent( rawLux )
-            }
-            else {
+            else {  // including isLINPTECHradar
                 illuminanceEvent( rawLux )
             }
         }  
@@ -1299,7 +1295,7 @@ def parse(String description) {
                 powerSourceReported = DEVICE.device?.powerSource
                 logDebug "forcing the powerSource to <b>${powerSourceReported}</b>"
             }
-            else if (is4in1() || ((DEVICE.device?.type == "radar") || isRadar() || isEGNGMRZHradar() || isLINPTECHradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || is2AAELWXKradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() ))  {     // for radars force powerSource 'dc'
+            else if (is4in1() || ((DEVICE.device?.type == "radar") || isRadar() || isEGNGMRZHradar() || isSBYX0LM6radar() || isHL0SS9OAradar() || is2AAELWXKradar() || isYXZBRB58radar() || isSXM7L9XAradar() || isHumanPresenceSensorAIR() || isBlackPIRsensor() ))  {     // for radars force powerSource 'dc'
                 powerSourceReported = powerSourceOpts.options[04]    // force it to dc !
             }
             powerSourceEvent( powerSourceReported )
@@ -1883,7 +1879,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     device.updateSetting("maximumDistance", [value:fncmd/100 , type:"decimal"])
                     sendEvent(name : "maximumDistance", value : fncmd/100, unit : "m")
                 }
-                else if (is2AAELWXKradar() || isLINPTECHradar()) {
+                else if (is2AAELWXKradar() /*|| isLINPTECHradar()*/) {
                     logDebug "TS0225/Linptech Radar Motion Detection Distance dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != fncmd)) {logInfo "received Radar Motion Detection Distance  : ${fncmd/100} m"}
                     device.updateSetting("motionDetectionDistance", [value:fncmd/100, type:"decimal"])
@@ -1947,9 +1943,9 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.logEnable == true || settings?.presenceKeepTime != (fncmd as int)) { logInfo "received presenceKeepTime : ${fncmd}"} else {logDebug "skipped ${settings?.presenceKeepTime} == ${fncmd as int}"}
                     device.updateSetting("presenceKeepTime", [value:fncmd as int , type:"number"])                    
                 }
-                else if (isLINPTECHradar()) {
+                /*else if (isLINPTECHradar()) {
                     existanceTimeEvent(fncmd)
-                }
+                }*/
                 else {
                     illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
                 }
@@ -1970,10 +1966,10 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 device.updateSetting("motionDetectionSensitivity", [value:fncmd as int , type:"number"])
                 break
             case 0x10 : // (16)    
-                if (isLINPTECHradar()) {
+                if (isLINPTECHradar()) { /*
                     logDebug "Linptech Radar Static Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (fncmd as int)) { logInfo "received staticDetectionSensitivity : ${fncmd}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${fncmd as int}"}
-                    device.updateSetting("staticDetectionSensitivity", [value:fncmd as int , type:"number"])
+                    device.updateSetting("staticDetectionSensitivity", [value:fncmd as int , type:"number"]) */
                 }
                 else {    // isHL0SS9OAradar() 
                     logDebug "TS0225 Radar Small Motion Detection Sensitivity dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -1983,19 +1979,19 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 break
             
             case 0x13 : // (19)
-                if (isLINPTECHradar()) {
+                if (isLINPTECHradar()) { /*
                     if (settings?.ignoreDistance == false) {
                         logInfo "Radar target distance is ${fncmd/100} m"
                         sendEvent(name : "distance", value : fncmd/100, unit : "m", type: "physical")
-                    }
+                    } */
                 }
                 else {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }            
             
             case 0x14 : // (20)    // isHL0SS9OAradar() 
-                if (isLINPTECHradar()) {
-                    logDebug "skipped Linptech Tuya DP illuminance report dp=${dp} value=${fncmd}"
+                if (isLINPTECHradar()) { /*
+                    logDebug "skipped Linptech Tuya DP illuminance report dp=${dp} value=${fncmd}" */
                 }
                 else {
                     illuminanceEventLux( Math.round(fncmd / 10))    // illuminance for TS0225 radar
@@ -2011,11 +2007,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 handleTuyaBatteryLevel( fncmd )
                 break
             case 0x65 :    // (101)
-                /*
-                if (isBlackSquareRadar()) {    // presence time in minutes (must be the first check!)    // TODO - obsolete
-                    existanceTimeEvent(fncmd)
-                }
-                else */if (isYXZBRB58radar()) {    // [0x65, 'illuminance_lux', tuya.valueConverter.raw],
+                if (isYXZBRB58radar()) {    // [0x65, 'illuminance_lux', tuya.valueConverter.raw],
                     logDebug "(101) YXZBRB58 radar illuminance is ${fncmd}"
                     illuminanceEventLux( fncmd )                
                 }
@@ -2037,11 +2029,11 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (isEGNGMRZHradar()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
-                else if (isLINPTECHradar()) {
+                else if (isLINPTECHradar()) { /*
                     def value = fncmd 
                     if (settings?.logEnable == true || (settings?.fadingTime) != safeToDouble(device.currentValue("fadingTime")) ) {logInfo "received Radar fading time : ${value} seconds (${fncmd})"}
                     device.updateSetting("fadingTime", [value:value , type:"decimal"])
-                    sendEvent(name : "fadingTime", value : value, unit : "s")
+                    sendEvent(name : "fadingTime", value : value, unit : "s") */
                 }
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported V_Sensitivity <b>${vSensitivityOptions[fncmd.toString()]}</b> (${fncmd})"
@@ -2061,11 +2053,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 }
                 break            
             case 0x66 :     // (102)
-                /*
-                if (isBlackSquareRadar()) {    // non-presence time in minutes (must be the first check!)    // TODO - obsolete
-                    leaveTimeEvent(fncmd)
-                }
-                else*/ if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar()) {                              // TODO !!! check whether the time is in seconds or in tenths of seconds?  https://templates.blakadder.com/ZY-M100.html  // TODO !!!
+                if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar()) {                              // TODO !!! check whether the time is in seconds or in tenths of seconds?  https://templates.blakadder.com/ZY-M100.html  // TODO !!!
                     def value = fncmd / 10
                     if (settings?.logEnable == true || (settings?.fadingTime) != safeToDouble(device.currentValue("fadingTime")) ) {logInfo "received Radar fading time : ${value} seconds (${fncmd})"}
                     device.updateSetting("fadingTime", [value:value , type:"decimal"])
@@ -2135,12 +2123,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (isEGNGMRZHradar()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }
-                /*
-                else if (isBlackSquareRadar()) {    // TODO - obsolete
-                    if (settings?.logEnable) log.info "${device.displayName} BlackSquareRadar Indicator Light is ${blackRadarLedOptions[fncmd.toString()]} (${fncmd})"
-                    //device.updateSetting("indicatorLight", [type:"enum", value: fncmd.toString()])              // no need to update the preference every 4 seconds!          
-                }
-                */
                 else if (isHumanPresenceSensorScene() || isHumanPresenceSensorFall()) { // trsfIlluminanceLux for TuYa Radar Sensor with fall function
                     logDebug "(103) radar illuminance is ${fncmd}"
                     illuminanceEventLux( fncmd )
@@ -2625,11 +2607,8 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (isEGNGMRZHradar()) {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
-                else if (isBlackPIRsensor()) {
-                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
                 else {
-                    logDebug "non-radar fall sensitivity  0x76 fncmd = ${fncmd}"
+                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
                 break
             case 0x77 : // (119)
@@ -2991,6 +2970,7 @@ def updated() {
     }
     // 
     if (isLINPTECHradar()) {
+        // TODO - itterate through all settings
                 cmds += setFadingTime(settings?.fadingTime ?: 10)
                 cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
                 cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
@@ -3025,7 +3005,7 @@ def updated() {
             cmds += setStaticDetectionMinimumDistance( settings?.staticDetectionMinimumDistance )
     }
     //
-    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || isLINPTECHradar()) {
+    if (isRadar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || "DistanceMeasurement" in DEVICE.capabilities /*isLINPTECHradar()*/) {
         if (settings?.ignoreDistance == true ) {
                 device.deleteCurrentState('distance')
         }
@@ -3263,9 +3243,11 @@ void initializeVars( boolean fullInit = false ) {
     if (isSBYX0LM6radar()) {
         // TODO !
     }
+    /*
     if (isLINPTECHradar()) {
         if (fullInit == true || settings.ignoreDistance == null) device.updateSetting("ignoreDistance", false)
     }
+    */
     // version 1.6.0 - load DeviceProfile specific defaults ...
     if (isLINPTECHradar()) {
         resetPreferencesToDefaults()
@@ -3303,7 +3285,7 @@ def configure() {
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"    // OWON motion/occupancy cluster
     }
-    else if (!(isRadar() || isLINPTECHradar() || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || is2in1())) {    // skip the binding for all the radars!                // TODO: check EPs !!!
+    else if (!(isRadar() || DEVICE?.type == "radar" /*isLINPTECHradar()*/ || isSBYX0LM6radar() || isYXZBRB58radar() || isSXM7L9XAradar() || is2in1())) {    // skip the binding for all the radars!                // TODO: check EPs !!!
         cmds += "delay 200"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
         cmds += "delay 200"
