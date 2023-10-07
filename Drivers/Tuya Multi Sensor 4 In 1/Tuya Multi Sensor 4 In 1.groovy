@@ -75,7 +75,7 @@
 */
 
 def version() { "1.6.0" }
-def timeStamp() {"2023/10/08 12:48 AM"}
+def timeStamp() {"2023/10/08 1:27 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,8 +86,7 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
-@Field static final Boolean _USE_CONVERTERS = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false
 
 metadata {
@@ -603,7 +602,7 @@ def isChattyRadarReport(descMap) {
 
             ],
             tuyaDPs:        [
-                //  {1=[0, 1, 2],   6=[1, 1, 2]}
+                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:0,     step:1,  scale:1, map:[ "0":"inactive", "1":"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:0,   max:9 ,    defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",          description:'<i>Sensitivity of the radar</i>'],
                 [dp:3,   name:'minimumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.1,   step:1,  scale:100,  unit:"meters",   title:"<b>Minimim detection distance</b>", description:'<i>Minimim (near) detection distance</i>'],
                 [dp:4,   name:'maximumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:6.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Maximum detection distance</b>", description:'<i>Maximum (far) detection distance</i>'],
@@ -1754,7 +1753,6 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd) {
  * @return true if the DP was processed successfully, false otherwise.
  */
 boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
-    if (_USE_CONVERTERS != true)      { return false }
     if (state.deviceProfile == null)  { return false }
     if (!(isBlackSquareRadar() || isKAPVNNLKradar() || isLINPTECHradar() || isZY_M100Radar()))      { return false }       // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status) 
@@ -3031,7 +3029,7 @@ def updated() {
                 cmds += setMaximumDistance( settings?.maximumDistance )      // radar maximum distance
     }
         
-    if (false /*isHL0SS9OAradar() && _USE_CONVERTERS == true*/) {            // TODO - not ready yet!
+    if (false) {            // TODO - not ready yet!
             cmds += setPreferencesFromDeviceProfile()
     }
     else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
