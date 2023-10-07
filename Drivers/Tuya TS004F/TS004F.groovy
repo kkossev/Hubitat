@@ -437,7 +437,7 @@ def parse(String description) {
         
         if (event) {
 		    result = createEvent(event)
-            if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
+            if (needsDebouncing()) {
                 runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
             }
 	    } 
