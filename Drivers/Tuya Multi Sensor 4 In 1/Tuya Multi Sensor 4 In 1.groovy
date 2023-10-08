@@ -53,8 +53,8 @@
  * ver. 1.5.1  2023-09-09 kkossev  - _TZE204_kapvnnlk fingerprint and DPs correction; added 2AAELWXK preferences; TS0225_LINPTECH_RADAR known preferences using E002 cluster
  * ver. 1.5.2  2023-09-14 kkossev  - TS0601_IJXVKHD0_RADAR ignore dp1 dp2; Distance logs changed to Debug; Refresh() updates driver version; 
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
- * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) application version is updated; major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
- *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; 
+ * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
+ *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR paramaters support; 
  *
  *                                   TODO: add rtt measurement for ping()
  *                                   TODO: add extraPreferences to deviceProfilesV2
@@ -75,7 +75,7 @@
 */
 
 def version() { "1.6.0" }
-def timeStamp() {"2023/10/08 1:27 AM"}
+def timeStamp() {"2023/10/08 9:51 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -87,7 +87,7 @@ import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 
 @Field static final Boolean _DEBUG = false
-@Field static final Boolean _TRACE_ALL = false
+@Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy onese
 
 metadata {
     definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
@@ -609,7 +609,7 @@ def isChattyRadarReport(descMap) {
                 [dp:3,   name:'minimumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.1,   step:1,  scale:100,  unit:"meters",   title:"<b>Minimim detection distance</b>", description:'<i>Minimim (near) detection distance</i>'],
                 [dp:4,   name:'maximumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:6.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Maximum detection distance</b>", description:'<i>Maximum (far) detection distance</i>'],
                 [dp:6,   name:'radarStatus',        type:"enum",    rw: "ro", min:0,   max:5 ,    defaultValue:1,     step:1,  scale:1,    map:[ "0":"checking", "1":"check_success", "2":"check_failure", "3":"others", "4":"comm_fault", "5":"radar_fault"] ,   unit:"TODO",     title:"<b>Radar self checking status</b>", description:'<i>Radar self checking status</i>'],            // radarSeradarSelfCheckingStatus[fncmd.toString()]
-                [dp:9,   name:"distance",           type:"decimal", rw: "ro", min:0,   max:10000, defaultValue:0,     step:1,  scale:100,  unit:"meters",   title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
+                [dp:9,   name:"distance",           type:"decimal", rw: "ro", min:0,   max:10.0 , defaultValue:0,     step:1,  scale:100,  unit:"meters",   title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
                 [dp:101, name:'detectionDelay',     type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.2,   step:1,  scale:10,   unit:"seconds",  title:"<b>Detection delay</b>",            description:'<i>Presence detection delay timer</i>'],
                 [dp:102, name:'fadingTime',         type:"decimal", rw: "rw", min:0.5, max:500.0, defaultValue:60.0,  step:1,  scale:10,   unit:"seconds",  title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:"number",  rw: "ro", min:0,   max:99999, defaultValue:0,     step:1,  scale:1,    unit:"?",        title:"<b>debugCLI</b>",                   description:'<i>debug CLI</i>'],
@@ -628,7 +628,7 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0601"],                                // https://www.aliexpress.com/item/1005005858609756.html     // https://www.aliexpress.com/item/1005005946786561.html    // https://www.aliexpress.com/item/1005005946931559.html 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "DistanceMeasurement":true, "HumanMotionState":true],
-            preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13"],
+            preferences   : ["radarSensitivity":"15", "fadingTime":"12", "maximumDistance":"13", "smallMotionDetectionSensitivity":"16"],
             commands      : ["resetStats":"resetStats"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
@@ -640,8 +640,8 @@ def isChattyRadarReport(descMap) {
                 [dp:13,  name:'maximumDistance',     type:"decimal", rw: "rw", min:1.5, max:6.0,   defaultValue:4.0, step:75, scale:100, unit:"meters",     title:"<b>Maximum detection distance</b>", description:'<i>Maximum (far) detection distance</i>'],  // aka 'Large motion detection distance'
                 [dp:15,  name:'radarSensitivity',    type:"number",  rw: "rw", min:0,   max:7 ,    defaultValue:5,   step:1,  scale:1,   unit:"x",          title:"<b>Radar sensitivity</b>",          description:'<i>Large motion detection sensitivity of the radar</i>'],                
                 [dp:16 , name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,   max:7,  defaultValue:5,   step:1,  scale:1,   unit:"x", title:"<b>Small motion sensitivity</b>",   description:'<i>Small motion detection sensitivity</i>'],
-                [dp:19,  name:"distance",            type:"decimal", rw: "ro", min:0,   max:10000, defaultValue:0,   step:1,  scale:100, unit:"meters",     title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
-                [dp:101, name:'batteryLevel',        type:"number",  rw: "rO", min:0,   max:100,   defaultValue:0,   step:1,  scale:1,   unit:"%",          title:"<b>Battery level</b>",              dedescription:'<i>Battery level</i>']
+                [dp:19,  name:"distance",            type:"decimal", rw: "ro", min:0,   max:10.0,  defaultValue:0,   step:1,  scale:100, unit:"meters",     title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
+                [dp:101, name:'batteryLevel',        type:"number",  rw: "rO", min:0,   max:100,   defaultValue:0,   step:1,  scale:1,   unit:"%",          title:"<b>Battery level</b>",              description:'<i>Battery level</i>']
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
@@ -1815,9 +1815,14 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
         }
         else {
             logDebug "preference '${name}' value ${perfValue} <b>differs</b> from dp value ${fncmd}"
-            if (debug) log.info "updating par ${name} from ${perfValue} to ${fncmd}}"
-            device.updateSetting("${name}",[value:fncmd, type:parMap.type])
-            wasChanged = true                // send an event also!
+            if (debug) log.info "updating par ${name} from ${perfValue} to ${fncmd} type ${foundItem.type}" 
+            try {
+                device.updateSetting("${name}",[value:fncmd, type:foundItem.type])
+                wasChanged = true
+            }
+            catch (e) {
+                logWarn "exception ${e} caught while updating preference ${name} to ${fncmd}, type ${foundItem.type}" 
+            }
         }
     }
     else {    // no preference exists for this dp
@@ -1854,8 +1859,8 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
                 break
             default :
                 sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
-                logDebug "event ${name} sent w/ value ${valueScaled}"
                 if (!doNotTrace) {
+                    logDebug "event ${name} sent w/ value ${valueScaled}"
                     logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
                 }
                 break
@@ -2220,7 +2225,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (val > 4294967295) val = val - 4294967295;                    
                     logInfo "4-in-1 temperature calibration is ${val / 10.0}"
                 }
-                else if (is3in1()) {    //  Tuya 3 in 1 (104) -> temperature in �C
+                else if (is3in1()) {    //  Tuya 3 in 1 (104) -> temperature in ?C
                     temperatureEvent( fncmd / 10.0 )
                 }
                 else {
@@ -2348,7 +2353,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (isHumanPresenceSensorAIR()) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported Light On Luminance Preference ${fncmd} Lux"
                 }
-                else if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in �C
+                else if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in ?C
                     temperatureEvent( fncmd / 10.0 )
                 }
                 else if (is3in1()) { // 3in1
@@ -3682,6 +3687,9 @@ def setReportingTime4in1( val ) {
             return sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))        
         }
     }
+    else {
+        return null
+    }
 }
 
 def setDetectionDelay( val ) {
@@ -3689,6 +3697,9 @@ def setDetectionDelay( val ) {
         def value = ((val as double) * 10.0) as int
         logDebug "changing radar detection delay to ${val} seconds (raw=${value})"                
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6F" : "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
+    }
+    else {
+        return null
     }
 }
 
@@ -3717,6 +3728,9 @@ def setMinimumDistance( val ) {
         logDebug "changing radar minimum distance to ${val} m (raw=${value})"                
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6C" : "03", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
     }
+    else {
+        return null
+    }
 }
 
 def setMaximumDistance( val ) {
@@ -3725,6 +3739,9 @@ def setMaximumDistance( val ) {
         logDebug "changing radar maximum distance to : ${val} m (raw=${value})"                
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6B" : "04", DP_TYPE_VALUE, zigbee.convertToHexString(value as int, 8))
     }
+    else {
+        return null
+    }
 }     
 
 def setRadarSensitivity( val ) {
@@ -3732,36 +3749,69 @@ def setRadarSensitivity( val ) {
         logDebug "changing radar sensitivity to : ${val}"                
         return sendTuyaCommand((isYXZBRB58radar() || isSXM7L9XAradar()) ? "6A" : isLINPTECHradar() ? "0F" : "02", DP_TYPE_VALUE, zigbee.convertToHexString(val as int, 8))
     }
+    else {
+        return null
+    }
 }
 
 def setRadarLedIndicator( val ) {
     def value = val ? "01" : "00"
-    return setRadarParameter("radaradarLedIndicator", isHL0SS9OAradar() ? "18" : "6B", DP_TYPE_BOOL, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {
+        return sendTuyaCommand(isHL0SS9OAradar() ? "18" : "6B", DP_TYPE_BOOL, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setRadarAlarmMode( val ) {
     def value = val as int
-    return setRadarParameter("radarAlarmMode", isHL0SS9OAradar() ? "69" : "75", DP_TYPE_ENUM, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {
+       return setRadarParameter("radarAlarmMode", isHL0SS9OAradar() ? "69" : "75", DP_TYPE_ENUM, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setRadarAlarmVolume( val ) {
     def value = val as int
-    return setRadarParameter("radarAlarmVolume", isHL0SS9OAradar() ? "66" : "74", DP_TYPE_ENUM, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {    
+        return setRadarParameter("radarAlarmVolume", isHL0SS9OAradar() ? "66" : "74", DP_TYPE_ENUM, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setRadarAlarmTime( val ) {
     def value = val as int
-    return setRadarParameter("setRadarAlarmTime", isHL0SS9OAradar() ? "65" : "73", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {    
+        return setRadarParameter("setRadarAlarmTime", isHL0SS9OAradar() ? "65" : "73", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setMotionFalseDetection( val ) {
     def value = val ? "01" : "00"
-    return setRadarParameter("motionFalseDetection", isHL0SS9OAradar() ? "70" : "67", DP_TYPE_BOOL, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {    
+        return setRadarParameter("motionFalseDetection", isHL0SS9OAradar() ? "70" : "67", DP_TYPE_BOOL, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setBreatheFalseDetection( val ) {
     def value = val ? "01" : "00"
-    return setRadarParameter("breatheFalseDetection", isHL0SS9OAradar() ? "73" : "71", DP_TYPE_BOOL, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {    
+        return setRadarParameter("breatheFalseDetection", isHL0SS9OAradar() ? "73" : "71", DP_TYPE_BOOL, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setMotionDetectionDistance( val ) {
@@ -3770,14 +3820,22 @@ def setMotionDetectionDistance( val ) {
         logDebug "changing LINPTECH radar MotionDetectionDistance to ${val}m (raw ${value})"
         return zigbee.writeAttribute(0xE002, 0xE00B, 0x21, value as int, [:], delay=200)
     }
-    else {
+    else if (isHL0SS9OAradar() || is2AAELWXKradar()) {
         return setRadarParameter("motionDetectionDistance", isHL0SS9OAradar() ? "0D" : "04", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
     }
 }
 
 def setMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    return setRadarParameter("motionMinimumDistance", isHL0SS9OAradar() ? "6A" : "03", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+        return setRadarParameter("motionMinimumDistance", isHL0SS9OAradar() ? "6A" : "03", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }
 }
 
 def setMotionDetectionSensitivity( val ) {
@@ -3793,22 +3851,42 @@ def setMotionDetectionSensitivity( val ) {
 
 def setSmallMotionDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "0E" : "68", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+        return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "0E" : "68", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }        
 }
 
 def setSmallMotionDetectionSensitivity( val ) {
     def value = val as int
-    return setRadarParameter("smallMotionDetectionSensitivity", isHL0SS9OAradar() ? "10" : "69" , DP_TYPE_ENUM, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+        return setRadarParameter("smallMotionDetectionSensitivity", isHL0SS9OAradar() ? "10" : "69" , DP_TYPE_ENUM, value)
+    }
+    else {
+        return null
+    }        
 }
 
 def setSmallMotionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "6B" : "6E", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+        return setRadarParameter("smallMotionDetectionDistance", isHL0SS9OAradar() ? "6B" : "6E", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }     
 }
 
 def setStaticDetectionDistance( val ) {
     def value = Math.round(val * 100)
-    return setRadarParameter("staticDetectionDistance", isHL0SS9OAradar() ? "67" : "6C", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+            return setRadarParameter("staticDetectionDistance", isHL0SS9OAradar() ? "67" : "6C", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }     
 }
 
 def setStaticDetectionSensitivity( val ) {
@@ -3817,34 +3895,24 @@ def setStaticDetectionSensitivity( val ) {
         logDebug "changing LINPTECH radar StaticDetectionSensitivity to ${value}"
         return zigbee.writeAttribute(0xE002, 0xE005, 0x20, value as int, [:], delay=200)
     }
-    else { 
-        return setRadarParameter("staticDetectionSensitivity", isHL0SS9OAradar() ? "68" : isLINPTECHradar() ? "10" : "6D", DP_TYPE_ENUM, value)
+    else if ( isHL0SS9OAradar() || is2AAELWXKradar()) { 
+        return setRadarParameter("staticDetectionSensitivity", isHL0SS9OAradar() ? "68" : "6D", DP_TYPE_ENUM, value)
     }
+    else {
+        return null
+    }    
 }
 
 def setStaticDetectionMinimumDistance( val ) {
     def value = Math.round(val * 100)
-    return setRadarParameter("staticDetectionMinimumDistance", isHL0SS9OAradar() ? "6C" : "6F", DP_TYPE_VALUE, value)
+    if (isHL0SS9OAradar() || is2AAELWXKradar()) {   
+        return setRadarParameter("staticDetectionMinimumDistance", isHL0SS9OAradar() ? "6C" : "6F", DP_TYPE_VALUE, value)
+    }
+    else {
+        return null
+    }    
 }
 
-/*
-            cmds += setFadingTime( settings?.presenceKeepTime)               // TS0225 radar presenceKeepTime (in seconds)
-            cmds += setRadarLedIndicator( settings?.ledIndicator )
-            cmds += setRadarAlarmMode( settings?.radarAlarmMode )
-            cmds += setRadarAlarmVolume( settings?.radarAlarmVolume )
-            cmds += setRadarAlarmTime( settings?.radarAlarmTime )
-            cmds += setMotionFalseDetection( settings?.motionFalseDetection )
-            cmds += setBreatheFalseDetection( settings?.breatheFalseDetection )
-            cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
-            cmds += setMotionMinimumDistance( settings?.motionMinimumDistance )
-            cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
-            cmds += setSmallMotionDetectionDistance( settings?.smallMotionDetectionDistance )
-            cmds += setSmallMotionMinimumDistance( settings?.smallMotionMinimumDistance )
-            cmds += setSmallMotionDetectionSensitivity( settings?.smallMotionDetectionSensitivity )
-            cmds += setStaticDetectionDistance( settings?.staticDetectionDistance )
-            cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
-            cmds += setStaticDetectionMinimumDistance( settings?.staticDetectionMinimumDistance )
-*/
 
 def setPreferencesFromDeviceProfile() {
     ArrayList<String> cmds = []
@@ -3890,6 +3958,15 @@ def setPreferencesFromDeviceProfile() {
 }
 
 
+/**
+ * Sets the radar parameter for the Tuya Multi Sensor 4 In 1 device.
+ * @param parName The name of the parameter to set.
+ * @param DPcommand The Tuya DP command to send.
+ * @param DPType The type of the Tuya DP command.
+ * @param DPval The value to set for the parameter.
+ * @return An ArrayList of commands sent to the device.
+ */
+ // TODO - replace this device-specific method !!!
 def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
     ArrayList<String> cmds = []
     if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {
@@ -4005,16 +4082,22 @@ def getValidParsPerModel() {
  * 
  * @param dpMap The map containing the parameter type, minimum and maximum values.
  * @param val The value to be validated.
- * @return The validated value if it is within the specified range, null otherwise.
+ * @return The validated and scaled value if it is within the specified range, null otherwise.
  */
 def validateAndScaleParameterValue(Map dpMap, String val) {
     def value = null
+    def scaledValue = null
     def parType = dpMap.type
     if (parType == "number") {
         value = safeToInt(val, -1)
+        scaledValue = value
     }
     else if (parType == "decimal") {
         value = safeToDouble(val, -1.0)
+        // scale the value
+        if (dpMap.scale != null) {
+            scaledValue = value * dpMap.scale
+        }
     }
     else if (parType == "bool") {
         if (val == '0' || val == 'false') {
@@ -4024,20 +4107,21 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             value = 1
         }
         else {
-            log.warn "${device.displayName} setPar: bool parameter <b>${val}</b>. value must be one of <b>0 1 false true</b>"
+            log.warn "${device.displayName} sevalidateAndScaleParameterValue: bool parameter <b>${val}</b>. value must be one of <b>0 1 false true</b>"
             return null
         }
+        scaledValue = value
     }
     else {
-        log.warn "${device.displayName} setPar: unsupported parameter type <b>${parType}</b>"
+        log.warn "${device.displayName} validateAndScaleParameterValue: unsupported parameter type <b>${parType}</b>"
         return null
     }
     Boolean validated = true
     if ((dpMap.min != null && value < dpMap.min) || (dpMap.max != null && value > dpMap.max)) {
-        log.warn "${device.displayName} setPar: invalid ${par} parameter value <b>${val}</b> value must be within ${dpMap.min} and ${dpMap.max}"
+        log.warn "${device.displayName} validateAndScaleParameterValue: invalid ${par} parameter value <b>${val}</b> value must be within ${dpMap.min} and ${dpMap.max}"
         return null
     }
-    return value
+    return scaledValue
 }
 
 
@@ -4076,17 +4160,33 @@ def setPar( par=null, val=null )
             return
         }
         // update the device setting
-        device.updateSetting("$par", [value:val, type:dpMap.type])
-        logDebug "parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${value}"
+        try {
+            device.updateSetting("$par", [value:val, type:dpMap.type])
+        }
+        catch (e) {
+            logWarn "setPar: Exception '${e}'caught while updateSetting <b>$par</b>(<b>$val</b>) type=${dpMap.type}"
+            return
+        }
+        logDebug "parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${tuyaValue} type=${dpMap.type}"
         // search for set function
         String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
         String setFunction = "set${capitalizedFirstChar}"
         // check if setFunction method exists
         if (!this.respondsTo(setFunction)) {
             log.warn "${device.displayName} setPar: set function <b>${setFunction}</b> not found"
-            return
+            // try sending the parameter using the new universal method
+            cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
+            if (cmds == null || cmds == []) {
+                logWarn "setPar: sendTuyaParameter par ${par} tuyaValue ${tuyaValue} returned null or empty list"
+                return
+            }
+            else {
+                logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$tuyaValue</b>)"
+                sendZigbeeCommands( cmds )
+                return
+            }
         }
-        logDebug "setFunction=${setFunction}"
+        logDebug "setPar: found setFunction=${setFunction}, tuyaValue=${tuyaValue}  (val=${val})"
         // execute the setFunction
         try {
             cmds = "$setFunction"(tuyaValue)
@@ -4095,11 +4195,53 @@ def setPar( par=null, val=null )
             logWarn "setPar: Exception '${e}'caught while processing <b>$setFunction</b>(<b>$tuyaValue</b>) (val=${val}))"
             return
         }
-        logInfo "executed setPar <b>$setFunction</b>(<b>$tuyaValue</b>)"
+        logDebug "setFunction result is ${cmds}"
+        if (cmds == null || cmds == []) {
+            logWarn "setPar: <b>$setFunction</b>(<b>$tuyaValue</b>) returned null or empty list"
+            // try sending the parameter using the new universal method
+            cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
+            if (cmds == null || cmds == []) {
+                logWarn "setPar: <b>$setFunction</b>(<b>$tuyaValue</b>) returned null or empty list"
+                return
+            }
+            else {
+                logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$tuyaValue</b>)"
+                sendZigbeeCommands( cmds )
+                return
+            }
+        }
+        logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$tuyaValue</b>)"
         sendZigbeeCommands( cmds )
         return
     }
 }
+
+// function to send a Tuya command to data point taken from dpMap with value tuyaValue and type taken from dpMap
+def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
+    //logDebug "sendTuyaParameter: trying to send parameter ${par} value ${tuyaValue}"
+    ArrayList<String> cmds = []
+    if (dpMap == null) {
+        log.warn "${device.displayName} sendTuyaParameter: tuyaDPs map not found for parameter <b>${par}</b>"
+        return null
+    }
+    String dp = zigbee.convertToHexString(dpMap.dp, 2)
+    if (dpMap.dp <= 0 || dpMap.dp >= 256) {
+        log.warn "${device.displayName} sendTuyaParameter: invalid dp <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
+        return null 
+    }
+    String dpType = dpMap.type == "bool" ? DP_TYPE_BOOL : dpMap.type == "enum" ? DP_TYPE_ENUM : (dpMap.type in ["value", "number", "decimal"]) ? DP_TYPE_VALUE: null
+    //log.debug "dpType = ${dpType}"
+    if (dpType == null) {
+        log.warn "${device.displayName} sendTuyaParameter: invalid dpType <b>${dpMap.type}</b> for parameter <b>${par}</b>"
+        return null 
+    }
+    // sendTuyaCommand
+    def dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2) 
+    logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp})"
+    cmds = sendTuyaCommand( dp, dpType, dpValHex)
+    return cmds
+}
+
 
 /**
  * Updates the Tuya version of the device based on the application version.
