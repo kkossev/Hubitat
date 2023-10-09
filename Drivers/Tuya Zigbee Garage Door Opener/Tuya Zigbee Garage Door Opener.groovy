@@ -17,11 +17,12 @@
  * ver. 1.0.2 2022-06-20 kkossev  - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.
  * ver. 1.0.3 2022-06-26 kkossev  - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default.
  * ver. 1.0.4 2022-07-06 kkossev  - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;
+ * ver. 1.0.5 2023-10-09 kkossev  - added _TZE204_nklqjk62 fingerprint
  *
 */
 
-def version() { "1.0.4" }
-def timeStamp() {"2022/07/06 9:02 PM"}
+def version() { "1.0.5" }
+def timeStamp() {"2022/07/06 8:34 AM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -48,6 +49,8 @@ metadata {
         
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_wfxuhoea", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "LoraTap Garage Door Opener"        // LoraTap GDC311ZBQ1
         fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE200_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"42", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
+        fingerprint profileId:"0104", model:"TS0601", manufacturer:"_TZE204_nklqjk62", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", application:"4A", deviceJoinName: "MatSee Garage Door Opener"         // MatSee PJ-ZGD01
+        
     }
 
     preferences {
