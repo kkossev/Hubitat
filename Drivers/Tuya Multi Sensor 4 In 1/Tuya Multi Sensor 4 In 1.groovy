@@ -55,7 +55,7 @@
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
  * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
- * ver. 1.6.1  2023-10-11 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring
+ * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring
  *                                   radar enum preferences;
  *
  *                                   TODO: Radar enum preferences - set defaultValue!
@@ -75,7 +75,7 @@
 */
 
 def version() { "1.6.1" }
-def timeStamp() {"2023/10/11 11:28 PM"}
+def timeStamp() {"2023/10/12 7:50 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -86,7 +86,7 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy onese
 
 metadata {
@@ -1029,16 +1029,16 @@ def getProfileKey(String valueStr) {
  * @return returns either tuyaDPs or attributes map, depending on where the preference (param) is found
  * @return null if param is not defined for this device.
  */
-def getPteferenceMap( String param, boolean debug=false ) {
+def getPreferencesMap( String param, boolean debug=false ) {
     Map foundMap = [:]
     if (!(param in DEVICE.preferences)) {
-        if (debug) log.warn "getPteferenceMap: preference ${param} not defined for this device!"
+        if (debug) log.warn "getPreferencesMap: preference ${param} not defined for this device!"
         return null
     }
     def preference 
     try {
         preference = DEVICE.preferences["$param"]
-        if (debug) log.debug "getPteferenceMap: preference ${param} found. value is ${preference} isTuyaDP=${preference.isNumber()}"
+        if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference} isTuyaDP=${preference.isNumber()}"
         if (preference.isNumber()) {
             // find the preference in the tuyaDPs map
             int dp = safeToInt(preference)
@@ -1051,10 +1051,10 @@ def getPteferenceMap( String param, boolean debug=false ) {
             foundMap = DEVICE.attributes.find { it.at == preference }
         }
     } catch (Exception e) {
-        if (debug) log.warn "getPteferenceMap: exception ${e} caught when getting preference ${param} !"
+        if (debug) log.warn "getPreferencesMap: exception ${e} caught when getting preference ${param} !"
         return null
     }
-    if (debug) log.debug "getPteferenceMap: foundMap = ${foundMap}"
+    if (debug) log.debug "getPreferencesMap: foundMap = ${foundMap}"
     return foundMap     
 }
 
@@ -1072,7 +1072,7 @@ def resetPreferencesToDefaults(boolean debug=false ) {
     preferences.each{ parName, mapValue -> 
         if (debug) log.trace "$parName $mapValue"
         // find the individual preference map
-        parMap = getPteferenceMap(parName, false)
+        parMap = getPreferencesMap(parName, false)
         //log.trace "parMap = $parMap"
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
@@ -2933,7 +2933,9 @@ def updateAllPreferences() {
     (DEVICE.preferences).each { name, dp -> 
         dpInt = safeToInt(dp)
         def dpMaps   =  DEVICE.tuyaDPs 
-        def foundMap = dpMaps.find { it.dp == dpInt }
+        Map foundMap
+        //foundMap = dpMaps.find { it.dp == dpInt }
+        foundMap = getPreferencesMap(name)
         logDebug "foundMap = ${foundMap}"
         if (foundMap != null) {
             scaledValue = getScaledPreferenceValue(name, foundMap)
@@ -2948,7 +2950,7 @@ def updateAllPreferences() {
             }
         }
         else {
-            logWarn "warning: couldn't find tuyaDPs map for dp ${dpValue}"
+            logWarn "warning: couldn't find tuyaDPs map for preference ${name} dp = ${dp}"
             return null
         }
     }    
@@ -3143,7 +3145,7 @@ def setPar( par=null, val=null )
             return
         }
         // find the tuayDPs map for the par
-        Map dpMap = getPteferenceMap(par, false)
+        Map dpMap = getPreferencesMap(par, false)
         if ( dpMap == null ) {
             log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"
             return
