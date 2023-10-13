@@ -55,10 +55,12 @@
  * ver. 1.5.3  2023-09-30 kkossev  - humanMotionState re-enabled for TS0225_HL0SS9OA_RADAR; tuyaVersion is updated on Refresh; LINPTECH: added existance_time event; illuminance parsing exception changed to debug level; leave_time changed to fadingTime; fadingTime configuration
  * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
- * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring
- *                                   radar enum preferences;
+ * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
+ * ver. 1.6.2  2023-10-13 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; 
+ *                                   
  *
  *                                   TODO: Radar enum preferences - set defaultValue!
+ *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 30 seconds ?
  *                                   TODO: Radar TS0225 _TZE200_hl0ss9oa preference 'staticDetectionSensitivity' value 8 differs from dp value 8 ?
  *                                   TODO: check why radar initialization attempts binding? 
  *                                   TODO: add rtt measurement for ping()
@@ -74,8 +76,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.1" }
-def timeStamp() {"2023/10/12 7:50 AM"}
+def version() { "1.6.2" }
+def timeStamp() {"2023/10/13 10:41 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -901,7 +903,8 @@ def isChattyRadarReport(descMap) {
                 [at:"0xE002:0xE004",  name:'motionDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:5,      defaultValue:5, step:1,  scale:1,   unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
                 [at:"0xE002:0xE005",  name:'staticDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:5,      defaultValue:5,      step:1,  scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
                 [at:"0xE002:0xE00A",  name:"distance",                        type:"decimal", dt: "UINT16", rw: "ro", min:0,  max:600,    scale:100,  unit:"meters",            title: "<b>Distance</b>",                      description:'<i>Measured distance</i>'],                            // aka Current Distance    
-                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"decimal", dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:6.0,  step:75, scale:100, unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+                //[at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"decimal", dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:6.0,  step:75, scale:100, unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"enum", dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:"600",  step:75, scale:1, map:[75: "0.75 meters",150: "1.5  meters", 225: "2.25 meters", 300: "3.0  meters", 375: "3.75 meters", 450: "4.5  meters", 525: "5.25 meters", 600 : "6.0  meters"], unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
@@ -909,20 +912,6 @@ def isChattyRadarReport(descMap) {
             configuration : [:]
     ],    
   
-    
-/*
-
-X        Presence State                        1        (none/presence)
-X        Far Detection                        4        (600cm)
-X        Presence Time                         12        (2Min)
-X        Motion Detection Sensitivity        15     (5)
-X        Motionless Detection Sensitivity    16        (5)
-X        Current Distance                    19        (270cm, 97cm ... )
-X        Illuminance Value                     20        (228lux)
-X        nobody time                            101        (10min)
-
-*/
-    
     
     //  no-name 240V AC ceiling radar presence sensor                
     "TS0225_EGNGMRZH_RADAR"   : [                                    // https://github.com/sprut/Hub/issues/2489
@@ -2929,7 +2918,7 @@ def updateAllPreferences() {
         return null
     }
     Integer dpInt = 0
-    Integer scaledValue
+    def scaledValue    // int or String for enums
     (DEVICE.preferences).each { name, dp -> 
         dpInt = safeToInt(dp)
         def dpMaps   =  DEVICE.tuyaDPs 
@@ -2940,9 +2929,17 @@ def updateAllPreferences() {
         if (foundMap != null) {
             scaledValue = getScaledPreferenceValue(name, foundMap)
             if (scaledValue != null) {
-                logDebug "updateAllPreferences: preference ${foundMap.name} scaledValue = ${scaledValue}" 
+                logDebug "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
+                if (foundMap.type == "enum") {
+                    scaledValue  = foundMap.map.find { it.value == scaledValue }?.key
+                }
                 String DPType = (foundMap.type in ["number", "decimal"]) ? DP_TYPE_VALUE : foundMap.type == "bool" ? DP_TYPE_BOOL : foundMap.type == "enum" ? DP_TYPE_ENUM : "unknown"
-                cmds += setRadarParameter(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue)
+                if (scaledValue != null) {
+                    cmds += setRadarParameter(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
+                }
+                else {
+                    logWarn "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
+                }
             }
             else {
                 logWarn "updateAllPreferences: preference ${foundMap.name} value not found!"
@@ -3356,6 +3353,8 @@ def inputIt( String param, boolean debug=false ) {
         return null
     }   
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
+    foundMap = getPreferencesMap(param)
+    /*
     if (isTuyaDP) {
         // find the preference in the tuyaDPs map
         int dp = safeToInt(preference)
@@ -3367,6 +3366,7 @@ def inputIt( String param, boolean debug=false ) {
         def dpMaps   =  DEVICE.tuyaDPs 
         foundMap = DEVICE.attributes.find { it.at == preference }
     }
+    */
     
     //if (debug) log.debug "foundMap = ${foundMap}"
     if (foundMap == null) {
