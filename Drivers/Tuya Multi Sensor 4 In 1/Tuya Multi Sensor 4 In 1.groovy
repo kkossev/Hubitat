@@ -56,9 +56,11 @@
  * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
- * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; 
+ * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; 
  *                                   
  *
+ *                                   TODO: TS0601_PIR_PRESENCE - induction time missing @TJBurton
+ *                                   TODO: TS0225_2AAELWXK_RADAR - preferences setting @TJBurton
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
  *                                   TODO: Radar TS0225 _TZE200_hl0ss9oa preference 'staticDetectionSensitivity' value 8 differs from dp value 8 ?
@@ -77,7 +79,7 @@
 */
 
 def version() { "1.6.2" }
-def timeStamp() {"2023/10/14 9:45 AM"}
+def timeStamp() {"2023/10/14 10:32 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -113,7 +115,7 @@ metadata {
         attribute "healthStatus", "enum", ["offline", "online"]
         attribute "distance", "number"              // Tuya Radar
         attribute "unacknowledgedTime", "number"    // AIR models
-        attribute "motionType", "enum",  ["none", "presence", "peacefull", "smallMove", "largeMove"]    // blackSensor
+        //attribute "motionType", "enum",  ["none", "presence", "peacefull", "smallMove", "largeMove"]    // blackSensor
         attribute "existance_time", "number"        // BlackSquareRadar & LINPTECH
         attribute "leave_time", "number"            // BlackSquareRadar only
         
@@ -123,7 +125,7 @@ metadata {
         attribute "minimumDistance", "decimal" 
         attribute "maximumDistance", "decimal"
         attribute "radarStatus", "enum", ["checking", "check_success", "check_failure", "others", "comm_fault", "radar_fault"] 
-        attribute "humanMotionState", "enum", TS0225humanMotionState.values() as List<String>
+        attribute "humanMotionState", "enum", ["none", "moving", "small_move", "stationary", "presence", "peaceful", "large_move"]
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
@@ -424,16 +426,16 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0601"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["targetDistance":"105"],
-            commands      : ["resetStats":"resetStats"],
+            preferences   : ["fadingTime":"102","targetDistance":"105"],
+            commands      : ["resetStats":"resetStats", "resetPreferencesToDefaults":"resetPreferencesToDefaults"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_9qayzqa8", deviceJoinName: "Smart PIR Human Motion Presence Sensor (Black)"]    // https://www.aliexpress.com/item/1005004296422003.html
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:102, name:'presentTime',         type:"number",  rw: "ro", min:0,   max:99999 ,    defaultValue:7,     step:1,  scale:1,    unit:"seconds",         description:'<i>Present Time</i>'],
-                [dp:105, name:'targetDistance',      type:"enum",    rw: "rw", min:0,   max:9 ,    defaultValue:0,     step:1,  scale:1,    map:[0:"0.5 m", 1:"1.0 m", 2:"1.5 m", 3:"2.0 m", 4:"2.5 m", 5:"3.0 m", 6:"3.5 m", 7:"4.0 m", 8:"4.5 m", 9:"5.0 m"] ,   unit:"meters",     title:"<b>Target Distance</b>", description:'<i>Target Distance</i>'], 
-                [dp:119, name:'motion',              type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:141, name:'humanMotionType',     type:"enum",    rw: "ro", min:0,   max:4 ,    defaultValue:0,     step:1,  scale:1,    map:[0:"none", 1:"presence", 2:"peaceful", 3:"small_move", 4:"large_move"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:102, name:'fadingTime',          type:"number",  rw: "rw", min:24,  max:300 ,  defaultValue:24,      step:1,  scale:1,    unit:"seconds",      title:"<b>Fading time</b>",   description:'<i>Fading(Induction) time</i>'],
+                [dp:105, name:'targetDistance',      type:"enum",    rw: "rw", min:0,   max:9 ,    defaultValue:"6",     step:1,  scale:1,    map:[0:"0.5 m", 1:"1.0 m", 2:"1.5 m", 3:"2.0 m", 4:"2.5 m", 5:"3.0 m", 6:"3.5 m", 7:"4.0 m", 8:"4.5 m", 9:"5.0 m"] ,   unit:"meters",     title:"<b>Target Distance</b>", description:'<i>Target Distance</i>'], 
+                [dp:119, name:'motion',              type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:141, name:'humanMotionState',    type:"enum",    rw: "ro", min:0,   max:4 ,    defaultValue:"0",     step:1,  scale:1,    map:[0:"none", 1:"presence", 2:"peaceful", 3:"small_move", 4:"large_move"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
             ],
             deviceJoinName: "Tuya PIR Human Motion Presence Sensor LQ-CG01-RDR",
             configuration : ["battery": false]
@@ -2647,6 +2649,7 @@ def setMotion( mode ) {
     }
 }
 
+/*
 import java.security.MessageDigest
 String generateMD5(String s) {
     if(s != null) {
@@ -2655,6 +2658,7 @@ String generateMD5(String s) {
         return "null"
     }
 }
+*/
 
 def sendSensitivityIAS( lvl ) {
     def sensitivityLevel = safeToInt(lvl, -1)
@@ -3463,3 +3467,4 @@ def test( val ) {
     logWarn "test inputIt(${val}) = ${result}"
     //resetPreferencesToDefaults(true)
 }
+reset
