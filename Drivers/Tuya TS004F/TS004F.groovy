@@ -45,6 +45,8 @@
  * ver. 2.6.5 2023-05-15 kkossev     - TS0215A _TZ3000_pkfazisv iAlarm (Meian) SOS button fingerprint correction; number of buttons and supportedValues correction for SOS buttons; added _TZ3000_abrsvsou
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  *
+ * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
+ *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *                                   - TODO: batteryReporting is not initialized!
  *                                   - TODO: unschedule jobs from other drivers: https://community.hubitat.com/t/moes-4-button-zigbee-switch/78119/20?u=kkossev
