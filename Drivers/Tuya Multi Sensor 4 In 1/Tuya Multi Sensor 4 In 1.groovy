@@ -56,11 +56,11 @@
  * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
- * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; 
+ * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  *                                   
- *
- *                                   TODO: TS0601_PIR_PRESENCE - induction time missing @TJBurton
- *                                   TODO: TS0225_2AAELWXK_RADAR - preferences setting @TJBurton
+ *                                   TODO: 
+ *                                   TODO: handle preferences of a type TEXT
+ *                                   TODO: delete all previous preferencies when changing the device profile!
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
  *                                   TODO: Radar TS0225 _TZE200_hl0ss9oa preference 'staticDetectionSensitivity' value 8 differs from dp value 8 ?
@@ -79,7 +79,7 @@
 */
 
 def version() { "1.6.2" }
-def timeStamp() {"2023/10/14 10:32 AM"}
+def timeStamp() {"2023/10/14 8:43 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -126,6 +126,9 @@ metadata {
         attribute "maximumDistance", "decimal"
         attribute "radarStatus", "enum", ["checking", "check_success", "check_failure", "others", "comm_fault", "radar_fault"] 
         attribute "humanMotionState", "enum", ["none", "moving", "small_move", "stationary", "presence", "peaceful", "large_move"]
+        attribute "radarAlarmMode", "enum",   ["0 - arm", "1 - off", "2 - alarm", "3 - doorbell"]
+        attribute "radarAlarmVolume", "enum", ["0 - low", "1 - medium", "2 - high", "3 - mute"]
+
         
         command "configure", [[name: "Configure the sensor after switching drivers"]]
         command "initialize", [[name: "Initialize the sensor after switching drivers.  \n\r   ***** Will load device default values! *****" ]]
@@ -452,16 +455,16 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_auin8mzr", deviceJoinName: "Tuya PIR Human Motion Presence Sensor AIR"]        // Tuya LY-TAD-K616S-ZB
             ],
             tuyaDPs:        [                                           // TODO - defaults !!
-                [dp:101, name:'vSensitivity',        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"Speed Priority", 1:"Standard", 2:"Accuracy Priority"] ,   unit:"-",     title:"<b>vSensitivity options</b>", description:'<i>V-Sensitivity mode</i>'], 
-                [dp:102, name:'oSensitivity',        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"Sensitive", 1:"Normal", 2:"Cautious"] ,   unit:"",     title:"<b>oSensitivity options</b>", description:'<i>O-Sensitivity mode</i>'], 
+                [dp:101, name:'vSensitivity',        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"Speed Priority", 1:"Standard", 2:"Accuracy Priority"] ,   unit:"-",     title:"<b>vSensitivity options</b>", description:'<i>V-Sensitivity mode</i>'], 
+                [dp:102, name:'oSensitivity',        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"Sensitive", 1:"Normal", 2:"Cautious"] ,   unit:"",     title:"<b>oSensitivity options</b>", description:'<i>O-Sensitivity mode</i>'], 
                 [dp:103, name:'vacancyDelay',        type:"number",  rw: "rw", min:0,   max:1000,  defaultValue:10,    step:1,  scale:1,    unit:"x",        title:"<b>Vacancy Delay</b>",          description:'<i>Vacancy Delay</i>'],
-                [dp:104, name:'detectionMode',       type:"enum",    rw: "rw", min:0,   max:1 ,    defaultValue:0,     step:1,  scale:1,    map:[0:"General Model", 1:"Temporary Stay", 2:"Basic Detecton", 3:"PIR Sensor Test"] ,   unit:"",     title:"<b>Detection Mode</b>", description:'<i>Detection Mode</i>'], 
+                [dp:104, name:'detectionMode',       type:"enum",    rw: "rw", min:0,   max:1 ,    defaultValue:"0",   step:1,  scale:1,    map:[0:"General Model", 1:"Temporary Stay", 2:"Basic Detecton", 3:"PIR Sensor Test"] ,   unit:"",     title:"<b>Detection Mode</b>", description:'<i>Detection Mode</i>'], 
                 [dp:105, name:'unacknowledgedTime',  type:"number",  rw: "ro", min:0,   max:9 ,    defaultValue:7,     step:1,  scale:1,    unit:"seconds",         description:'<i>unacknowledgedTime</i>'],
                 [dp:106, name:'illuminance',         type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],
                 [dp:107, name:'lightOnLuminance',    type:"number",  rw: "rw", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>lightOnLuminance</b>",                description:'<i>lightOnLuminance</i>'],        // Ligter, Medium, ... ?// TODO =- check range 0 - 10000 ?
                 [dp:108, name:'lightOffLuminance',   type:"number",  rw: "rw", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>lightOffLuminance</b>",                description:'<i>lightOffLuminance</i>'],
                 [dp:109, name:'luminanceLevel',      type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>luminanceLevel</b>",                description:'<i>luminanceLevel</i>'],            // Ligter, Medium, ... ?
-                [dp:110, name:'ledStatusAIR',        type:"enum",    rw: "rw", min:0,   max:1 ,    defaultValue:0,     step:1,  scale:1,    map:[0: "Switch On", 1:"Switch Off", 2: "Default"] ,   unit:"",     title:"<b>LED status</b>", description:'<i>Led status switch</i>'], 
+                [dp:110, name:'ledStatusAIR',        type:"enum",    rw: "rw", min:0,   max:1 ,    defaultValue:"0",   step:1,  scale:1,    map:[0: "Switch On", 1:"Switch Off", 2: "Default"] ,   unit:"",     title:"<b>LED status</b>", description:'<i>Led status switch</i>'], 
             ],
             deviceJoinName: "Tuya PIR Human Motion Presence Sensor AIR",
             configuration : ["battery": false]
@@ -516,16 +519,16 @@ def isChattyRadarReport(descMap) {
 
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:0,   max:9 ,    defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",          description:'<i>Sensitivity of the radar</i>'],
                 [dp:3,   name:'minimumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.1,   step:1,  scale:100,  unit:"meters",   title:"<b>Minimim detection distance</b>", description:'<i>Minimim (near) detection distance</i>'],
                 [dp:4,   name:'maximumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:6.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Maximum detection distance</b>", description:'<i>Maximum (far) detection distance</i>'],
-                [dp:6,   name:'radarStatus',        type:"enum",    rw: "ro", min:0,   max:5 ,    defaultValue:1,     step:1,  scale:1,    map:[ 0:"checking", 1:"check_success", 2:"check_failure", 3:"others", 4:"comm_fault", 5:"radar_fault"] ,   unit:"TODO",     title:"<b>Radar self checking status</b>", description:'<i>Radar self checking status</i>'],            // radarSeradarSelfCheckingStatus[fncmd.toString()]
+                [dp:6,   name:'radarStatus',        type:"enum",    rw: "ro", min:0,   max:5 ,    defaultValue:"1",   step:1,  scale:1,    map:[ 0:"checking", 1:"check_success", 2:"check_failure", 3:"others", 4:"comm_fault", 5:"radar_fault"] ,   unit:"TODO",     title:"<b>Radar self checking status</b>", description:'<i>Radar self checking status</i>'],            // radarSeradarSelfCheckingStatus[fncmd.toString()]
                 [dp:9,   name:"distance",           type:"decimal", rw: "ro", min:0,   max:10.0 , defaultValue:0,     step:1,  scale:100,  unit:"meters",   title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
                 [dp:101, name:'detectionDelay',     type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.2,   step:1,  scale:10,   unit:"seconds",  title:"<b>Detection delay</b>",            description:'<i>Presence detection delay timer</i>'],
                 [dp:102, name:'fadingTime',         type:"decimal", rw: "rw", min:0.5, max:500.0, defaultValue:60.0,  step:1,  scale:10,   unit:"seconds",  title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:"number",  rw: "ro", min:0,   max:99999, defaultValue:0,     step:1,  scale:1,    unit:"?",        title:"<b>debugCLI</b>",                   description:'<i>debug CLI</i>'],
-                [dp:104, name:'illuminance',    type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],
+                [dp:104, name:'illuminance',        type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],
 
             ],
             spammyDPsToIgnore : [9],
@@ -546,8 +549,8 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_kapvnnlk", deviceJoinName: "Tuya 24 GHz Human Presence Detector NEW"]           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev 
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',              type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:0,    step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:11,  name:"humanMotionState",    type:"enum",    rw: "ro", min:0,   max:2, map:[0:"none", 1:"small_move", 2:"large_move"],  description:'Human motion state'],        // "none", "small_move", "large_move"]
+                [dp:1,   name:'motion',              type:"enum",    rw: "ro", min:0,   max:1 ,    defaultValue:"0", step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:11,  name:"humanMotionState",    type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:"0", map:[0:"none", 1:"small_move", 2:"large_move"],  description:'Human motion state'],        // "none", "small_move", "large_move"]
                 [dp:12,  name:'fadingTime',          type:"number",  rw: "rw", min:3,   max:600,   defaultValue:60,  step:1,  scale:1,   unit:"seconds",    title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:13,  name:'maximumDistance',     type:"decimal", rw: "rw", min:1.5, max:6.0,   defaultValue:4.0, step:75, scale:100, unit:"meters",     title:"<b>Maximum detection distance</b>", description:'<i>Maximum (far) detection distance</i>'],  // aka 'Large motion detection distance'
                 [dp:15,  name:'radarSensitivity',    type:"number",  rw: "rw", min:0,   max:7 ,    defaultValue:5,   step:1,  scale:1,   unit:"x",          title:"<b>Radar sensitivity</b>",          description:'<i>Large motion detection sensitivity of the radar</i>'],                
@@ -575,16 +578,16 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ypprdwsl", deviceJoinName: "Tuya Human presence sensor with fall function"]
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:0,   max:10,    defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",          description:'<i>Sensitivity of the radar</i>'],
-                [dp:102, name:'motionState',        type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Motion state</b>", description:'<i>Motion state (occupancy)</i>'], 
-                [dp:103, name:'illuminance',    type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],
-                [dp:105, name:'tumbleSwitch',       type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"OFF", 1:"ON"] ,   unit:"",     title:"<b>Tumble status switch</b>", description:'<i>Tumble status switch</i>'], 
+                [dp:102, name:'motionState',        type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Motion state</b>", description:'<i>Motion state (occupancy)</i>'], 
+                [dp:103, name:'illuminance',        type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],
+                [dp:105, name:'tumbleSwitch',       type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"OFF", 1:"ON"] ,   unit:"",     title:"<b>Tumble status switch</b>", description:'<i>Tumble status switch</i>'], 
                 [dp:106, name:'tumbleAlarmTime',    type:"number",  rw: "rw", min:1,   max:5,     defaultValue:1,     step:1,  scale:1,    unit:"minutes",        title:"<b>Tumble alarm time</b>",                   description:'<i>Tumble alarm time</i>'],
-                [dp:112, name:'radarScene',         type:"enum",    rw: "rw", min:0,   max:6,     defaultValue:0,     step:1,  scale:1,    map:[ 0:"default", 1:"area", 2:"toilet", 3:"bedroom", 4:"parlour", 5:"office", 6:"hotel"] ,   unit:"-",     title:"<b>Radar Presets</b>", description:'<i>Presets for sensitivity for presence and movement</i>'],
-                [dp:114, name:'motionDirection',    type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:0,     step:1,  scale:1,    map:[ 0:"standing_still", 1:"moving_forward", 2:"moving_backward"] ,   unit:"-",     title:"<b>Movement direction</b>", description:'<i>direction of movement from the point of view of the radar</i>'],
+                [dp:112, name:'radarScene',         type:"enum",    rw: "rw", min:0,   max:6,     defaultValue:"0",   step:1,  scale:1,    map:[ 0:"default", 1:"area", 2:"toilet", 3:"bedroom", 4:"parlour", 5:"office", 6:"hotel"] ,   unit:"-",     title:"<b>Radar Presets</b>", description:'<i>Presets for sensitivity for presence and movement</i>'],
+                [dp:114, name:'motionDirection',    type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:"0",   step:1,  scale:1,    map:[ 0:"standing_still", 1:"moving_forward", 2:"moving_backward"] ,   unit:"-",     title:"<b>Movement direction</b>", description:'<i>direction of movement from the point of view of the radar</i>'],
                 [dp:115, name:'motionSpeed',        type:"number",  rw: "ro", min:0,   max:9999,  defaultValue:0,     step:1,  scale:1,    unit:"-",        title:"<b>Movement speed</b>",                   description:'<i>Speed of movement</i>'],
-                [dp:116, name:'fallDownStatus',     type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:0,     step:1,  scale:1,    map:[ 0:"none", 1:"maybe_fall", 2:"fall"] ,   unit:"-",     title:"<b>Fall down status</b>", description:'<i>Fall down status</i>'],
+                [dp:116, name:'fallDownStatus',     type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:"0",   step:1,  scale:1,    map:[ 0:"none", 1:"maybe_fall", 2:"fall"] ,   unit:"-",     title:"<b>Fall down status</b>", description:'<i>Fall down status</i>'],
                 //[dp:117, name:'staticDwellAalarm',  type:"text",    rw: "ro", min:0,   max:9999,  defaultValue:0,     step:1,  scale:1,    unit:"-",        title:"<b>Static dwell alarm</b>",                   description:'<i>Static dwell alarm</i>'],
                 [dp:118, name:'fallSensitivity',    type:"number",  rw: "rw", min:1,   max:10,    defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Fall sensitivity</b>",          description:'<i>Fall sensitivity of the radar</i>'],
             ],
@@ -606,10 +609,10 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mx6u6l4y", deviceJoinName: "24GHz Black Square Human Presence Radar w/ LED"]
             ],
             tuyaDPs:        [
-                [dp:1,   name:"motion",         type:"enum",   rw: "ro", min:0, max:1, map:[0:"inactive", 1:"active"],     description:'Presence'],
+                [dp:1,   name:"motion",         type:"enum",   rw: "ro", min:0, max:1,      defaultValue: "0", map:[0:"inactive", 1:"active"],     description:'Presence'],
                 [dp:101, name:'existance_time', type:"number", rw: "ro", min:0, max:9999,   scale:1,   unit:"minutes",    description:'Shows the presence duration in minutes'],
                 [dp:102, name:'leave_time',     type:"number", rw: "ro", min:0, max:9999,   scale:1,   unit:"minutes",    description:'Shows the duration of the absence in minutes'],
-                [dp:103, name:'indicatorLight', type:"enum",   rw: "rw", min:0, max:1, defaultValue: 0, map:[0:"OFF", 1:"ON"],  title:"<b>Indicator Light</b>", description:'<i>Turns the onboard LED on or off</i>']
+                [dp:103, name:'indicatorLight', type:"enum",   rw: "rw", min:0, max:1,      defaultValue: "0", map:[0:"OFF", 1:"ON"],  title:"<b>Indicator Light</b>", description:'<i>Turns the onboard LED on or off</i>']
             ],
             spammyDPsToIgnore : [103],                    // we don't need to know the LED status every 4 seconds!
             spammyDPsToNotTrace : [1, 101, 102, 103],     // very spammy device - 4 packates are sent every 4 seconds!
@@ -628,14 +631,14 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sooucan5", deviceJoinName: "Tuya Human Presence Detector YXZBRB58"]                      // https://www.amazon.com/dp/B0BYDCY4YN                   
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
-                [dp:1,   name:"motion",                 type:"bool",    rw: "ro", min:0,   max:2, map:[0:"inactive", 1:"active"],  description:'Presence state'],
-                [dp:2,   name:'radarSensitivity',       type:"number",  rw: "rw", min:0,   max:9 ,    defaultValue:7,   scale:1,    unit:"x",        title:"<b>Radar Sensitivity</b>",    description:'<i>Sensitivity of the radar</i>'],
-                [dp:3,   name:'minimumDistance',        type:"decimal", rw: "rw", min:0,   max:10.0,  defaultValue:0.5, scale:100,  unit:"meters",   title:'<b>Minimum distance</b>',     description:'<i>Minimum detection distance</i>'],
-                [dp:4,   name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:10.0,  defaultValue:6.0, scale:100,  unit:"meters",   title:'<b>Maximum distance</b>',     description:'<i>Maximum detection distance</i>'],
-                [dp:101, name:'illuminance',        type:"number",  rw: "ro",                   scale:1,    unit:"lx",       description:'Illuminance'],
-                [dp:102, name:'fadingTime',             type:"number",  rw: "rw", min:5,   max:1500,  defaultValue:60, step:1,  scale:1,   unit:"seconds",  title:"<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>'],
-                [dp:103, name:'detectionDelay',         type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:1.0,   scale:10,   unit:"seconds",   title:'<b>Detection delay</b>', description:'<i>Detection delay</i>'],
-                [dp:104, name:'radar_scene',            type:"enum",    rw: "rw", min:0,   max:4,     defaultValue:0, map:[0:"default", 1:"bathroom", 2:"bedroom", 3:"sleeping"],  description:'Presets for sensitivity for presence and movement'],    // https://github.com/kirovilya/zigbee-herdsman-converters/blob/b9bb6695fdf5d26ab4195cca9fcb1f2bd73afa71/src/devices/tuya.ts
+                [dp:1,   name:"motion",                 type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:"0",  map:[0:"inactive", 1:"active"],  description:'Presence state'],
+                [dp:2,   name:'radarSensitivity',       type:"number",  rw: "rw", min:0,   max:9 ,    defaultValue:7,    scale:1,    unit:"x",        title:"<b>Radar Sensitivity</b>",    description:'<i>Sensitivity of the radar</i>'],
+                [dp:3,   name:'minimumDistance',        type:"decimal", rw: "rw", min:0,   max:10.0,  defaultValue:0.5,  scale:100,  unit:"meters",   title:'<b>Minimum distance</b>',     description:'<i>Minimum detection distance</i>'],
+                [dp:4,   name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:10.0,  defaultValue:6.0,  scale:100,  unit:"meters",   title:'<b>Maximum distance</b>',     description:'<i>Maximum detection distance</i>'],
+                [dp:101, name:'illuminance',            type:"number",  rw: "ro",                   scale:1,    unit:"lx",       description:'Illuminance'],
+                [dp:102, name:'fadingTime',             type:"number",  rw: "rw", min:5,   max:1500,  defaultValue:60,   step:1,  scale:1,   unit:"seconds",  title:"<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>'],
+                [dp:103, name:'detectionDelay',         type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:1.0,  scale:10,   unit:"seconds",   title:'<b>Detection delay</b>', description:'<i>Detection delay</i>'],
+                [dp:104, name:'radar_scene',            type:"enum",    rw: "rw", min:0,   max:4,     defaultValue:"0",  map:[0:"default", 1:"bathroom", 2:"bedroom", 3:"sleeping"],  description:'Presets for sensitivity for presence and movement'],    // https://github.com/kirovilya/zigbee-herdsman-converters/blob/b9bb6695fdf5d26ab4195cca9fcb1f2bd73afa71/src/devices/tuya.ts
                 [dp:105, name:"distance",               type:"decimal", rw: "ro", min:0,   max:10000, scale:100,  unit:"meters",   description:'Distance']
             ],                    // https://github.com/zigpy/zha-device-handlers/issues/2429 
             spammyDPsToIgnore : [105],
@@ -657,7 +660,7 @@ def isChattyRadarReport(descMap) {
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
                 [dp:104, name:'illuminance',        type:"number",  rw: "ro",                   scale:1, unit:"lx",          description:'illuminance'],
-                [dp:105, name:"motion",                 type:"enum",    rw: "ro", min:0,   max:1, map:[0:"inactive", 1:"active"],  description:'Presence state'],
+                [dp:105, name:"motion",                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],  description:'Presence state'],
                 [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:0,   max:9 ,   defaultValue:7,   scale:1,    unit:"x",        title:'<b>Motion sensitivity</b>', description:'<i>Motion sensitivity</i>'],
                 [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,  defaultValue:6.0, scale:100,  unit:"meters",   title:'<b>Maximum distance</b>',   description:'<i>Max detection distance</i>'],
                 [dp:108, name:'minimumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,  defaultValue:0.5, scale:100,  unit:"meters",   title:'<b>Minimum distance</b>',   description:'Min detection distance'],       // TODO - check DP!
@@ -672,7 +675,7 @@ def isChattyRadarReport(descMap) {
     
     
     // '24G MmWave radar human presence motion sensor'
-    "TS0601_IJXVKHD0_RADAR"   : [                                       // isIJXVKHD0radar() - TODO!
+    "TS0601_IJXVKHD0_RADAR"   : [                                       // isIJXVKHD0radar() - TODO!    ZY-M100-24G
             description   : "Tuya Human Presence Detector IJXVKHD0",    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5acadaf16b0e85c1a8401223ddcae3d31ce970eb/src/devices/tuya.ts#L5747
             models        : ["TS0601"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
@@ -680,24 +683,24 @@ def isChattyRadarReport(descMap) {
             preferences   : ["radarSensitivity":"106", "staticDetectionSensitivity":"111", "fadingTime":"110", "maximumDistance":"107"],
             commands      : ["resetStats":"resetStats"],            
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ijxvkhd0", deviceJoinName: "Tuya Human Presence Detector IJXVKHD0"]       // 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ijxvkhd0", deviceJoinName: "Tuya Human Presence Detector ZY-M100-24G"]       // 
             ],
             tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
-                [dp:1, name:"unknown",                  type:"enum",    rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],          description:'unknown state'],
-                [dp:2, name:"unknown",                  type:"enum",    rw: "ro", min:0, max:2, map:[0:"inactive", 1:"active"],          description:'unknown state'],
-                [dp:104, name:'illuminance',        type:"number",  rw: "ro",                   scale:1, unit:"lx",                  description:'illuminance'],
-                [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0, max:2, map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
-                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1, max:10,   defaultValue:8, scale:1,   unit:"x",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity</i>'],
-                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0, max:10.0, defaultValue:7.0, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
-                [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0, max:10.0, scale:100, unit:"meters",             description:'Target distance'],
-                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1, max:15,   defaultValue:10, scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
-                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:10,   defaultValue:8, scale:1,   unit:"x",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
-                [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0, max:1, map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
+                [dp:1, name:"unknown",                  type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp1'],
+                [dp:2, name:"unknown",                  type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp2'],
+                [dp:104, name:'illuminance',            type:"number",  rw: "ro",                    scale:1, unit:"lx",                  description:'illuminance'],
+                [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0,   max:2,    defaultValue:"0", map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
+                [dp:106, name:'radarSensitivity',       type:"decimal", rw: "rw", min:1.0, max:10.0, defaultValue:8.0, scale:10,  unit:"x",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity</i>'],
+                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:10.0, defaultValue:7.0, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
+                [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0,   max:10.0, scale:100, unit:"meters",             description:'Target distance'],
+                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:15,   defaultValue:10,  scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
+                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:10, defaultValue:8,   scale:1,   unit:"x",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
+                [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
             ],
             spammyDPsToIgnore : [109],
             spammyDPsToNotTrace : [109],
-            deviceJoinName: "Tuya Human Presence Detector IJXVKHD0",
+            deviceJoinName: "Tuya Human Presence Detector ZY-M100-24G",
             configuration : [:]
     ],
 
@@ -714,17 +717,17 @@ def isChattyRadarReport(descMap) {
                 //        ^^^similar DPs, but not a full match? ^^^ TODO - make a new profile ?   // https://raw.githubusercontent.com/kvazis/training/master/z2m_converters/converters/_TZE204_mhxn2jso.js
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:12,  name:"presence_time",      type:"decimal", rw: "rw", min:0.1,  max:360.0, defaultValue:0.5, scale:10,   unit:"seconds", title:'<b>Presence time</b>', description:'<i>Presence time</i>'],    // for _TZE204_mhxn2jso
+                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:12,  name:"presence_time",      type:"decimal", rw: "rw", min:0.1,  max:360.0, defaultValue:0.5,  scale:10,   unit:"seconds", title:'<b>Presence time</b>', description:'<i>Presence time</i>'],    // for _TZE204_mhxn2jso
                 [dp:19,  name:"distance",           type:"decimal", rw: "ro", min:0,  max:10.0,  scale:100, unit:"meters",  description:'Distance'],
                 [dp:20,  name:"illuminance",        type:"number",  rw: "ro", min:0,  max:10000, scale:1,   unit:"lx",      description:'illuminance'],
                 [dp:101, name:"radarSensitivity",   type:"number",  rw: "rw", min:0,  max:10,    defaultValue:7, scale:1,   unit:"x",  title:'<b>Radar sensitivity</b>',       description:'<i>Radar sensitivity</i>'],
                 [dp:102, name:"detectionDelay",     type:"decimal", rw: "rw", min:0.5, max:360.0, defaultValue:1.0, scale:10,   unit:"seconds",  title:'<b>Delay time</b>',   description:'<i>Presence detection delay time</i>'],
                 [dp:111, name:"minimumDistance",    type:"decimal", rw: "rw", min:0.0, max:10.0, defaultValue:0.1, scale:100, unit:"meters",  title:'<b>Minimum distance</b>', description:'<i>Breath detection minimum distance</i>'],
                 [dp:112, name:"maximumDistance",    type:"decimal", rw: "rw", min:0.5, max:10.0, defaultValue:7.0, scale:100, unit:"meters",  title:'<b>Maximum distance</b>', description:'<i>Breath detection maximum distance</i>'],
-                [dp:113, name:"breathe_flag",       type:"bool",  rw: "rw"],
-                [dp:114, name:"small_flag",         type:"bool",  rw: "rw"],
-                [dp:115, name:"large_flag",         type:"bool",  rw: "rw"],
+                [dp:113, name:"breathe_flag",       type:"enum",  rw: "rw"],
+                [dp:114, name:"small_flag",         type:"enum",  rw: "rw"],
+                [dp:115, name:"large_flag",         type:"enum",  rw: "rw"],
                 [dp:116, name:"fadingTime",         type:"number", rw: "rw", min:0,  max:3600,  defaultValue:30, scale:1,   unit:"seconds",  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>']
             ],
             spammyDPsToIgnore : [19],
@@ -752,34 +755,36 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_hl0ss9oa", deviceJoinName: "Tuya TS0225_HL0SS9OA Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
             tuyaDPs:        [        // W.I.P - use already defined DPs and preferences !!  TODO - verify teh default values !
-                [dp:1,   name:'motion',                          type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:0,    step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:11,  name:"humanMotionState",                type:"enum",    rw: "ro", min:0,    max:3,    map:[0:"none", 1:"large", 2:"small", 3:"static"],       description:'Human motion state'],
+                [dp:1,   name:'motion',                          type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:11,  name:"humanMotionState",                type:"enum",    rw: "ro", min:0,    max:3,    defaultValue:"0",  map:[0:"none", 1:"large", 2:"small", 3:"static"],       description:'Human motion state'],
                 [dp:12,  name:'presenceKeepTime',                type:"number",  rw: "rw", min:5,    max:3600, defaultValue:30,   step:1, scale:1,   unit:"seconds",   title:'<b>Presence keep time</b>',                 description:'<i>Presence keep time</i>'],
                 [dp:13,  name:'motionDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:10.0, defaultValue:6.0,  step:1, scale:100, unit:"meters",    title:"<b>Motion Detection Distance</b>",          description:'<i>Large motion detection distance, meters</i>'], //dt: "UINT16"
                 [dp:14,  name:'smallMotionDetectionDistance',    type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:5.0,  step:1, scale:100, unit:"meters",    title:'<b>Small motion detection distance</b>',    description:'<i>Small motion detection distance</i>'],
                 [dp:15,  name:'motionDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title:"<b>Motion Detection Sensitivity</b>",       description:'<i>Large motion detection sensitivity</i>'],           // dt: "UINT8" aka Motionless Detection Sensitivity
                 [dp:16,  name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,    max:10 ,  defaultValue:7,    step:1, scale:1,   unit:"x",         title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'],
                 [dp:20,  name:'illuminance',                     type:"number",  rw: "ro",                                                scale:10,  unit:"lx",        description:'Illuminance'],
-                [dp:24,  name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,     map:[0:"OFF", 1:"ON"],                                 title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
-                [dp:101, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,   defaultValue:1,   step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
-                [dp:102, name:"radarAlarmVolume",                type:"enum",    rw: "rw", min:0,    max:3,     defaultValue:1,   map:[0:"low", 1:"medium", 2:"high", 3:"mute"],  title:'<b>Alarm volume</b>',            description:'<i>Alarm volume</i>'],
-                [dp:103, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:4.0, step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
-                [dp:104, name:'staticDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,    defaultValue:7,   step:1, scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",      description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity  
-                [dp:105, name:"radarAlarmMode",                  type:"enum",    rw: "rw", min:0,    max:3,     map:[0:"arm", 1:"off", 2:"alarm", 3:"doorbell"],       title:'<b>Alarm mode</b>',                         description:'<i>Alarm mode</i>'],
-                [dp:106, name:'motionMinimumDistance',           type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Motion minimum distance</b>',            description:'<i>Motion minimum distance</i>'],
-                [dp:107, name:'smallMotionMinimumDistance',      type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
-                [dp:108, name:'staticDetectionMinimumDistance',  type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Static detection minimum distance</b>',  description:'<i>Static detection minimum distance</i>'],
+                [dp:24,  name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],                                 title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
+                [dp:101, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,  defaultValue:1,    step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
+                [dp:102, name:"radarAlarmVolume",                type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"3",  map:[0:"0 - low", 1:"1 - medium", 2:"2 - high", 3:"3 - mute"],  title:'<b>Alarm volume</b>',            description:'<i>Alarm volume</i>'],
+                [dp:103, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:4.0,  step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
+                [dp:104, name:'staticDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",      description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity  
+                [dp:105, name:"radarAlarmMode",                  type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"1",  map:[0:"0 - arm", 1:"1 - off", 2:"2 - alarm", 3:"3 - doorbell"],  title:'<b>Alarm mode</b>',            description:'<i>Alarm mode</i>'],
+                [dp:106, name:'motionMinimumDistance',           type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Motion minimum distance</b>',            description:'<i>Motion minimum distance</i>'],
+                [dp:107, name:'smallMotionMinimumDistance',      type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
+                [dp:108, name:'staticDetectionMinimumDistance',  type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Static detection minimum distance</b>',  description:'<i>Static detection minimum distance</i>'],
                 [dp:109, name:'checkingTime',                    type:"decimal", rw: "ro",                   scale:10,  unit:"seconds",   description:'Checking time'],
-                [dp:110, name:"radarStatus",                     type:"enum",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar small move self-test'],
-                [dp:111, name:"radarStatus",                     type:"enum",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar breathe self-test'],
-                [dp:112, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0, max:1, map:[0:"disabled", 1:"enabled"], title:'Motion false detection', description:'Motion false detection'],
-                [dp:113, name:"radarReset",                      type:"enum",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar reset'],
-                [dp:114, name:"radarStatus",                     type:"enum",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar move self-test'],
-                [dp:115, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0, max:1, map:[0:"disabled", 1:"enabled"], title:'Breathe false detection', description:'Breathe false detection'],
-                [dp:116, name:'existance_time',                  type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar presence duration'],    // not received
-                [dp:117, name:'leave_time',                      type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
-                [dp:118, name:'radarDurationStatus',             type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar duration status']       // not received
+                [dp:110, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar small move self-test'],
+                [dp:111, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar breathe self-test'],
+                [dp:112, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'Motion false detection', description:'Motion false detection'],
+                [dp:113, name:"radarReset",                      type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar reset'],
+                [dp:114, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar move self-test'],
+                [dp:115, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'Breathe false detection', description:'Breathe false detection'],
+                [dp:116, name:'existance_time',                  type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar presence duration'],    // not received
+                [dp:117, name:'leave_time',                      type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
+                [dp:118, name:'radarDurationStatus',             type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar duration status']       // not received
             ],
+            spammyDPsToIgnore : [],
+            spammyDPsToNotTrace : [11],
             deviceJoinName: "Tuya TS0225_HL0SS9OA Human Presence Detector",
             configuration : [:]
     ],    
@@ -794,43 +799,41 @@ def isChattyRadarReport(descMap) {
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true],
             // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
             preferences   : ["presenceKeepTime":"102", "ledIndicator":"107", "radarAlarmMode":"117", "radarAlarmVolume":"116", "radarAlarmTime":"115", \
-                             "textLargeMotion":"NONE", "motionFalseDetection":"103", "motionDetectionSensitivity":"2", "motionMinimumDistance":"3", "motionDetectionDistance":"4", \
-                             "textSmallMotion":"NONE", "smallMotionDetectionSensitivity":"105", "smallMotionMinimumDistance":"110", "smallMotionDetectionDistance":"104", \
-                             "textStaticDetection":"NONE", "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
+                             /*"textLargeMotion":"NONE",*/ "motionFalseDetection":"103", "motionDetectionSensitivity":"2", "motionMinimumDistance":"3", "motionDetectionDistance":"4", \
+                             /*"textSmallMotion":"NONE",*/ "smallMotionDetectionSensitivity":"105", "smallMotionMinimumDistance":"110", "smallMotionDetectionDistance":"104", \
+                             /*"textStaticDetection":"NONE",*/ "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
                             ], 
-            commands      : ['resetSettings':'resetSettings', 'moveSelfTest':'moveSelfTest', 'smallMoveSelfTest':'smallMoveSelfTest', 'breatheSelfTest':'breatheSelfTest', 'motionFalseDetection':'motionFalseDetection', \
-                             'motionDetectionDistance':'motionDetectionDistance', 'motionMinimumDistance':'motionMinimumDistance', 'motionDetectionSensitivity':'motionDetectionSensitivity', "smallMotionDetectionSensitivity":"smallMotionDetectionSensitivity", \
-                             "breatheFalseDetection":"breatheFalseDetection", "staticDetectionMinimumDistance":"staticDetectionMinimumDistance", "staticDetectionSensitivity":"staticDetectionSensitivity", "staticDetectionDistance":"staticDetectionDistance", \
-                             "smallMotionDetectionDistance":"smallMotionDetectionDistance", "smallMotionMinimumDistance":"smallMotionMinimumDistance"
-            ],
+            commands      : ['resetSettings':'resetSettings', 'moveSelfTest':'moveSelfTest', 'smallMoveSelfTest':'smallMoveSelfTest', 'breatheSelfTest':'breatheSelfTest',  \
+                             "resetStats":"resetStats", "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults" \
+            ],          
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00,EE00,E000,0400", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_2aaelwxk", deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector"]       // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
             tuyaDPs:        [        // W.I.P. - use already defined DPs and preferences !!
-                [dp:1,   name:'motion',                          type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:0,    step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:1,   name:'motion',                          type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  step:1, scale:1,   map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:2,   name:'motionDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title:"<b>Motion Detection Sensitivity</b>",       description:'<i>Large motion detection sensitivity</i>'],           // dt: "UINT8" aka Motionless Detection Sensitivity
-                [dp:3,   name:'motionMinimumDistance',           type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Motion minimum distance</b>',            description:'<i>Motion minimum distance</i>'],
+                [dp:3,   name:'motionMinimumDistance',           type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Motion minimum distance</b>',            description:'<i>Motion minimum distance</i>'],
                 [dp:4,   name:'motionDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:10.0, defaultValue:6.0,  step:1, scale:100, unit:"meters",    title:"<b>Motion Detection Distance</b>",          description:'<i>Large motion detection distance, meters</i>'], //dt: "UINT16"
-                [dp:101, name:"humanMotionState",                type:"enum",    rw: "ro", min:0,    max:3,    map:[0:"none", 1:"large", 2:"small", 3:"static"],       description:'Human motion state'],
+                [dp:101, name:"humanMotionState",                type:"enum",    rw: "ro", min:0,    max:3,    defaultValue:"0",  map:[0:"none", 1:"large", 2:"small", 3:"static"],       description:'Human motion state'],
                 [dp:102, name:'presenceKeepTime',                type:"number",  rw: "rw", min:5,    max:3600, defaultValue:30,   step:1, scale:1,   unit:"seconds",   title:'<b>Presence keep time</b>',                 description:'<i>Presence keep time</i>'],
-                [dp:103, name:"motionFalseDetection",            type:"bool",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Motion false detection'],
+                [dp:103, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'Motion false detection',                    description:'Disable/enable Motion false detection'],
                 [dp:104, name:'smallMotionDetectionDistance',    type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:5.0,  step:1, scale:100, unit:"meters",    title:'<b>Small motion detection distance</b>',    description:'<i>Small motion detection distance</i>'],
                 [dp:105, name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,    max:10 ,  defaultValue:7,    step:1, scale:1,   unit:"x",         title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'],
-                [dp:106, name:'illuminance',                 type:"number",  rw: "ro",                                                scale:10,  unit:"lx",        description:'Illuminance'],
-                [dp:107, name:"ledIndicator",                    type:"enum",    rw: "ro", min:0,    max:1,     map:[0:"OFF", 1:"ON"],                                 title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
-                [dp:108, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:4.0, step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
-                [dp:109, name:'staticDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,    defaultValue:7,   step:1, scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",      description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity  
-                [dp:110, name:'smallMotionMinimumDistance',      type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
+                [dp:106, name:'illuminance',                     type:"number",  rw: "ro",                                                scale:10,  unit:"lx",        description:'Illuminance'],
+                [dp:107, name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],               title:'<b>LED indicator</b>',                      description:'<i>LED indicator mode</i>'],
+                [dp:108, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:4.0,  step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
+                [dp:109, name:'staticDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title:"<b>Static Detection Sensitivity</b>",       description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity  
+                [dp:110, name:'smallMotionMinimumDistance',      type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
                 //[dp:111, name:'staticDetectionMinimumDistance',  type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Static detection minimum distance</b>',  description:'<i>Static detection minimum distance</i>'],
-                [dp:112, name:"radarReset",                      type:"bool",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar reset'],
-                [dp:113, name:"breatheFalseDetection",           type:"bool",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Motion false detection'],
-                [dp:114, name:'checkingTime',                    type:"decimal", rw: "ro",                   scale:10,  unit:"seconds",   description:'Checking time'],
-                [dp:115, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,   defaultValue:1,   step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
-                [dp:116, name:"radarAlarmVolume",                type:"enum",    rw: "ro", min:0,    max:3,     defaultValue:1,   map:[0:"low", 1:"medium", 2:"high", 3:"mute"],  title:'<b>Alarm volume</b>',            description:'<i>Alarm volume</i>'],
-                [dp:117, name:"radarAlarmMode",                  type:"enum",    rw: "ro", min:0,    max:3,     map:[0:"arm", 1:"off", 2:"alarm", 3:"doorbell"],       title:'<b>Alarm mode</b>',                         description:'<i>Alarm mode</i>'],
-                [dp:118, name:"radarStatus",                     type:"enum",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar small move self-test'],
-                [dp:119, name:"radarStatus",                     type:"bool",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar breathe self-test'],
-                [dp:120, name:"radarStatus",                     type:"bool",    rw: "ro", min:0, max:1, map:[0:"disabled", 1:"enabled"], description:'Radar move self-test']
+                [dp:112, name:"radarReset",                      type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     description:'Radar reset'],
+                [dp:113, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'<b>Breathe false detection</b>',            description:'<i>Disable/enable Breathe false detection</i>'],
+                [dp:114, name:'checkingTime',                    type:"decimal", rw: "ro",                     scale:10,  unit:"seconds",   description:'Checking time'],
+                [dp:115, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,  defaultValue:1,    step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
+                [dp:116, name:"radarAlarmVolume",                type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"3",  map:[0:"0 - low", 1:"1 - medium", 2:"2 - high", 3:"3 - mute"],    title:'<b>Alarm volume</b>',          description:'<i>Alarm volume</i>'],
+                [dp:117, name:"radarAlarmMode",                  type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"1",  map:[0:"0 - arm", 1:"1 - off", 2:"2 - alarm", 3:"3 - doorbell"],  title:'<b>Alarm mode</b>',            description:'<i>Alarm mode</i>'],
+                [dp:118, name:"radarStatus",                     type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar small move self-test'],
+                [dp:119, name:"radarStatus",                     type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar breathe self-test'],
+                [dp:120, name:"radarStatus",                     type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar move self-test']
                 /*                
                 [dp:116, name:'existance_time',                  type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar presence duration'],    // not received
                 [dp:117, name:'leave_time',                      type:"number",  rw: "ro", min:0, max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
@@ -858,7 +861,7 @@ def isChattyRadarReport(descMap) {
             ],
             states: ["presence", "illuminance"],
             tuyaDPs:        [
-                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:0,   max:9,     defaultValue:5,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",          description:'<i>Sensitivity of the radar</i>'],
                 [dp:3,   name:'shieldRange',        type:"decimal", rw: "rw", min:0.0, max:8.0,   defaultValue:7.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Shield range distance</b>",      description:'<i>Shield range of the radar</i>'],
                 [dp:4,   name:'detectionRange',     type:"decimal", rw: "rw", min:0.0, max:8.0,   defaultValue:6.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Detection range distance</b>",   description:'<i>Detection range of the radar</i>'],
@@ -867,18 +870,18 @@ def isChattyRadarReport(descMap) {
                 [dp:101, name:'entryFilterTime',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.2,   step:1,  scale:10,   unit:"seconds",  title:"<b>Entry filter time</b>",          description:'<i>Entry filter time</i>'],
                 [dp:102, name:'fadingTime',         type:"number",  rw: "rw", min:0,   max:600,   defaultValue:30,    step:1,  scale:1,    unit:"seconds",  title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:"number",  rw: "ro", min:0,   max:99999, defaultValue:0,     step:1,  scale:1,    unit:"?",        title:"<b>debugCLI</b>",                   description:'<i>debug CLI</i>'],
-                [dp:104, name:'illuminance',    type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:10,   unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],   // divideBy10 !
+                [dp:104, name:'illuminance',        type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:10,   unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],   // divideBy10 !
                 [dp:105, name:'entrySensitivity',   type:"number",  rw: "rw", min:0,   max:9,     defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Entry sensitivity</b>",          description:'<i>Radar entry sensitivity</i>'],
                 [dp:106, name:'entryDistanceIndentation',    type:"decimal", rw: "rw", min:0.0, max:8.0,  defaultValue:6.0,   step:1,  scale:100,   unit:"meters",  title:"<b>Entry distance indentation</b>",          description:'<i>Entry distance indentation</i>'],
-                [dp:107, name:"breakerMode",        type:"enum",    rw: "rw", min:0,   max:1,     map:[0:"standard", 1:"local"],       title:'<b>Breaker mode</b>',                         description:'<i>Status Breaker mode: standard is external, local is auto</i>'],
-                [dp:108, name:"breakerStatus",      type:"enum",    rw: "rw", min:0,   max:1,     map:[0:"OFF", 1:"ON"],       title:'<b>Breaker status</b>',                         description:'<i>Breaker status changes with breakerMode->standard</i>'],
-                [dp:109, name:"statusIndication",   type:"enum",    rw: "rw", min:0,   max:1,     map:[0:"OFF", 1:"ON"],       title:'<b>Status indication</b>',                      description:'<i>Led backlight when triggered</i>'],
-                [dp:110, name:'illuminThreshold',   type:"decimal", rw: "rw", min:0.0, max:420.0,  defaultValue:100.0,  step:1,  scale:10,   unit:"lx",  title:"<b>Illuminance Threshold</b>",          description:'<i>Illumination threshold for switching on</i>'],
-                [dp:111, name:"breakerPolarity",    type:"enum",    rw: "rw", min:0,   max:1,     map:[0:"NC", 1:"NO"],       title:'<b>Breaker polarity</b>',                      description:'<i>Normally open / normally closed factory setting</i>'],
+                [dp:107, name:"breakerMode",        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"standard", 1:"local"],       title:'<b>Breaker mode</b>',                         description:'<i>Status Breaker mode: standard is external, local is auto</i>'],
+                [dp:108, name:"breakerStatus",      type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"OFF", 1:"ON"],       title:'<b>Breaker status</b>',                         description:'<i>Breaker status changes with breakerMode->standard</i>'],
+                [dp:109, name:"statusIndication",   type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"OFF", 1:"ON"],       title:'<b>Status indication</b>',                      description:'<i>Led backlight when triggered</i>'],
+                [dp:110, name:'illuminThreshold',   type:"decimal", rw: "rw", min:0.0, max:420.0, defaultValue:100.0,  step:1,  scale:10,   unit:"lx",  title:"<b>Illuminance Threshold</b>",          description:'<i>Illumination threshold for switching on</i>'],
+                [dp:111, name:"breakerPolarity",    type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"NC", 1:"NO"],       title:'<b>Breaker polarity</b>',                      description:'<i>Normally open / normally closed factory setting</i>'],
                 [dp:112, name:'blockTime',          type:"number",  rw: "rw", min:0,   max:100,   defaultValue:30,    step:1,  scale:1,    unit:"seconds",  title:"<b>Block time'</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:113, name:'parameterSettingResult',    type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'parameterSettingResult'],
                 [dp:114, name:'factoryParameters',  type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'factory_parameters'],
-                [dp:115, name:'sensor',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:0,     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",    description:'<i>Sensor state</i>'], 
+                [dp:115, name:'sensor',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",    description:'<i>Sensor state</i>'], 
             ],        
             deviceJoinName: "Tuya Human Presence Detector SBYX0LM6",
             configuration : [:]
@@ -887,28 +890,26 @@ def isChattyRadarReport(descMap) {
     // isLINPTECHradar() 
     "TS0225_LINPTECH_RADAR"   : [                                      // https://github.com/Koenkk/zigbee2mqtt/issues/18637 
             description   : "Tuya TS0225_LINPTECH 24GHz Radar",        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/646?u=kkossev
-            models        : ["TS0225"],                                // DPs are unknown    // https://home.miot-spec.com/spec/linp.sensor_occupy.hb01 
+            models        : ["TS0225"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
             preferences   : ["fadingTime":"101", "motionDetectionDistance":"0xE002:0xE00B","motionDetectionSensitivity":"0xE002:0xE004", "staticDetectionSensitivity":"0xE002:0xE005"],                             
             fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
-            commands      : ['refresh':'refresh', 'motionDetectionDistance':'motionDetectionDistance', 'motionDetectionSensitivity':'motionDetectionSensitivity', "staticDetectionSensitivity":"staticDetectionSensitivity"],
-            // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 
-            tuyaDPs:       [ 
-                [dp:101, name:'fadingTime',                                   type:"number", rw: "rw", min:10, max:9999, defaultValue:10,  step:1,  scale:1,   unit:"seconds", title: "<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults"],
+            tuyaDPs:       [                                           // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 
+                [dp:101,              name:'fadingTime',                      type:"number",                rw: "rw", min:1,    max:9999, defaultValue:10,  step:1,  scale:1,   unit:"seconds", title: "<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
             ],
-            // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
-            attributes:       [ 
-                [at:"0xE002:0xE001",  name:'existance_time',                  type:"number",  dt: "UINT16", rw: "ro", min:0,  max:65535,  step:1,  scale:1,   unit:"minutes",   title: "<b>Existance time/b>",                 description:'<i>existance (presence) time</i>'],                    // aka Presence Time
-                [at:"0xE002:0xE004",  name:'motionDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,  max:5,      defaultValue:"4", step:1,  scale:1,  map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
-                [at:"0xE002:0xE005",  name:'staticDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,  max:5,      defaultValue:"3", step:1,  scale:1,  map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
-                [at:"0xE002:0xE00A",  name:"distance",                        type:"decimal", dt: "UINT16", rw: "ro", min:0,  max:600,    scale:100,  unit:"meters",            title: "<b>Distance</b>",                      description:'<i>Measured distance</i>'],                            // aka Current Distance    
-                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"enum",    dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:"600",  step:75, scale:1, map:[75: "0.75 meters",150: "1.5  meters", 225: "2.25 meters", 300: "3.0  meters", 375: "3.75 meters", 450: "4.5  meters", 525: "5.25 meters", 600 : "6.0  meters"], unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+            attributes:       [                                        // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
+                [at:"0xE002:0xE001",  name:'existance_time',                  type:"number",  dt: "UINT16", rw: "ro", min:0,    max:65535,  step:1,  scale:1,   unit:"minutes",   title: "<b>Existance time/b>",                 description:'<i>existance (presence) time, recommended value is > 10 seconds!</i>'],                    // aka Presence Time
+                [at:"0xE002:0xE004",  name:'motionDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,    max:5,      defaultValue:"4", step:1,  scale:1,   map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
+                [at:"0xE002:0xE005",  name:'staticDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,    max:5,      defaultValue:"3", step:1,  scale:1,   map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
+                [at:"0xE002:0xE00A",  name:"distance",                        type:"decimal", dt: "UINT16", rw: "ro", min:0,    max:600,    scale:100,  unit:"meters",            title: "<b>Distance</b>",                      description:'<i>Measured distance</i>'],                            // aka Current Distance    
+                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"enum",    dt: "UINT16", rw: "rw", min:75,   max:600,    defaultValue:"4.50", step:75, scale:100, map:["0.75": "0.75 meters","1.50": "1.50 meters", "2.25": "2.25 meters", "3.00": "3.00 meters", "3.75": "3.75 meters", "4.50": "4.50 meters", "5.25": "5.25 meters", "6.00" : "6.00 meters"], unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
-            spammyDPsToIgnore : [19],
-            spammyDPsToNotTrace : [19],
+            spammyDPsToIgnore : [19],       // TODO
+            spammyDPsToNotTrace : [19],     // TODO
             deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector",
             configuration : [:]
     ],    
@@ -1059,6 +1060,10 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         if (debug) log.trace "$parName $mapValue"
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
+        if (parMap == null) {
+            logWarn "Preference ${parName} not found in tuyaDPs or attributes map!"
+            return // continue
+        }   
         //log.trace "parMap = $parMap"
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
@@ -1402,10 +1407,15 @@ def processE002Cluster( descMap ) {
             }        
             break
         case "E00B" :    // value:value:600 -- motionDetectionDistance, UINT16  // raw:F2EF01E0020A0BE021C201, dni:F2EF, endpoint:01, cluster:E002, size:0A, attrId:E00B, encoding:21, command:0A, value:01C2, clusterInt:57346, attrInt:57355
-            if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != value)) {logInfo "received LINPTECH radar Motion Detection Distance  : ${value/100} m"}
-            device.updateSetting("motionDetectionDistance", [value:value as String, type:"enum"])
+            Integer settingsScaled = (safeToDouble(settings?.motionDetectionDistance) * 100) as int
+            Float valueFloat = value/100F
+            log.warn "motionDetectionDistance raw = ${value} settings = ${settings?.motionDetectionDistance} settingsScaled = ${settingsScaled} valueFloat=${valueFloat} isEqual = ${settingsScaled == value}"
+            if (settings?.logEnable == true || (settingsScaled != value)) {logInfo "received LINPTECH radar Motion Detection Distance  : ${value/100} m"}
+            // format valueFloat to 2 decimals
+            String formatted = String.format("%.2f", valueFloat)
+            device.updateSetting("motionDetectionDistance", [value:formatted, type:"enum"])
             break
-        default : ö
+        default : 
             logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
             break
     }
@@ -1430,8 +1440,10 @@ def processTuyaCluster( descMap ) {
     }
     else if (descMap?.clusterInt==CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]
-        def status = descMap?.data[1]            
-        logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
+        def status = descMap?.data[1]    
+        if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {        
+            logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
+        }
         if (status != "00" && !(isHL0SS9OAradar() || is2AAELWXKradar())) {
             logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
@@ -1604,7 +1616,7 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
 //
 //  TODO: refactor!
 //
-def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd) {
+def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false) {
     if (foundItem == null) { return [true, "none"] }
     def dpType = foundItem.type
     if (dpType == null) { return [true, "none"] }
@@ -1620,7 +1632,7 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd) {
             tuyaValue  = foundItem.map[fncmd as int] ?: "unknown"
             hubitatValue = tuyaValue
             isEqual    = ((attrValue  as String) == (tuyaValue as String))      // because the events(attributes) are always strings
-            logDebug "compareAndConvertTuyaToHubitatEventValue: <b>dpType=${dpType}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} tuyaValue=${tuyaValue} fncmd=${fncmd}"
+            //if (!doNotTrace) { logDebug "compareAndConvertTuyaToHubitatEventValue: <b>dpType=${dpType}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} tuyaValue=${tuyaValue} fncmd=${fncmd}" }
             break
         case "value" :      // depends on foundItem.scale
         case "number" :
@@ -1630,23 +1642,22 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd) {
                 tuyaValue  = safeToInt(fncmd)
                 hubitatValue = tuyaValue
                 isEqual    = ((attrValue as int) == (tuyaValue as int))
-                //log.trace "fncmd=${valueScaled} valueScaled=${valueScaled} isEqual=${isEqual}"
+                //if (!doNotTrace)  log.trace "fncmd=${valueScaled} valueScaled=${valueScaled} isEqual=${isEqual}"
             }
             else {        // compare as float
-                //log.trace "float"
                 attrValue = safeToDouble(device.currentValue(name))
                 tuyaValue = safeToInt(fncmd)
                 double valueScaled  = (tuyaValue as double) / (foundItem.scale as double) 
                 hubitatValue = valueScaled                
                 isEqual = Math.abs((attrValue as double) - (valueScaled as double)) < 0.001 
-                //log.trace "fncmd=${valueScaled} valueScaled=${valueScaled} isEqual=${isEqual}"
+                //if (!doNotTrace)  log.trace "fncmd=${valueScaled} valueScaled=${valueScaled} isEqual=${isEqual}"
             }
             break
         default :
             logWarn "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{}"
             return [true, "none"]   // fallback - assume equal
     }
-    //log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
+    //if (!doNotTrace)  log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
     return [isEqual, hubitatValue]
 }
 
@@ -1694,7 +1705,7 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     boolean wasChanged = false
     boolean doNotTrace = isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy DP's
     if (!doNotTrace) {
-        logDebug "processTuyaDPfromDeviceProfile dp=${dp} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${fncmd} - ${foundItem.description}"
+        //logDebug "processTuyaDPfromDeviceProfile dp=${dp} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${fncmd} - ${foundItem.description}"
     }
     // check if the dp has the same value as the last one, or the value has changed
     // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
@@ -1738,7 +1749,7 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     
     // second, send an event if this is declared as an attribute!
     if (isAttribute) {                                         // this DP has an attribute that must be sent in an Event
-        (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd)
+        (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${fncmd})" }
         
@@ -1753,7 +1764,7 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
         def value = safeToInt(fncmd)
         def divider = safeToInt(foundItem.scale ?: 1) ?: 1
         def valueCorrected = value / divider
-        logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}"
+        //if (!doNotTrace) { logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
         switch (name) {
             case "motion" :
                 handleMotion(motionActive = fncmd)
@@ -1785,7 +1796,7 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
 
 void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
         if (!isSpammyDPsToNotTrace(descMap)) {
-            logDebug "Tuya cluster: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
+            logDebug "processTuyaDP: received: dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
         }
         //
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -2287,19 +2298,18 @@ def updated() {
        }
     }
     // 
-    /*
-    if (isLINPTECHradar()) {
-        // TODO - itterate through all settings
-        cmds += setFadingTime(settings?.fadingTime ?: 10) 
-        cmds += setMotionDetectionDistance( settings?.motionDetectionDistance )
-        cmds += setMotionDetectionSensitivity( settings?.motionDetectionSensitivity )
-        cmds += setStaticDetectionSensitivity( settings?.staticDetectionSensitivity )
-    }
-    */
 
-    // new update method for all radars
-    if (DEVICE.device?.type == "radar") {
-            cmds += updateAllPreferences()
+    // new update method for all radars, WITHOUT Linptech - TODO !
+    if (isLINPTECHradar()) {
+        
+        setPar( "fadingTime", settings?.fadingTime ?: 10 )
+        setPar( "motionDetectionDistance", settings?.motionDetectionDistance )
+        setPar( "motionDetectionSensitivity", settings?.motionDetectionSensitivity)
+        setPar( "staticDetectionSensitivity", settings?.staticDetectionSensitivity )
+    }    
+    else if (DEVICE.device?.type == "radar") {
+        // Itterates through all settings
+        cmds += updateAllPreferences()
     }
     //
     if ("DistanceMeasurement" in DEVICE.capabilities) {
@@ -2823,49 +2833,53 @@ def setReportingTime4in1( val ) {
     }
 }
 
+// Linptech radar exception code below
+// TODO - refactor it!
+
 def setFadingTime( val ) {
     if (isLINPTECHradar()) {
         def value = safeToInt(val)
-        logDebug "changing LINPTECH radar fadingTime to ${value} seconds"                // CHECK!
-        return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))
+        logDebug "changing LINPTECH radar fadingTime to ${value} seconds"
+        return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))   // this is the only Linptech command that used Tuya DPs ...
     }
     else {
         return null
     }
 }
 
-
-def setMotionDetectionDistance( val ) {
-    def value = Math.round(val * 100)
+// Linptech specific - refactor it!
+def setMotionDetectionDistance( scaledValue ) {
     if (isLINPTECHradar()) {
-        logDebug "changing LINPTECH radar MotionDetectionDistance to ${val}m (raw ${value})"
-        return zigbee.writeAttribute(0xE002, 0xE00B, 0x21, value as int, [:], delay=200)
+        logDebug "changing LINPTECH radar MotionDetectionDistance to scaledValue=${scaledValue}"
+        return zigbee.writeAttribute(0xE002, 0xE00B, 0x21, scaledValue as int, [:], delay=200)
     }
     else {
         return null
     }
 }
+
 
 def setMotionDetectionSensitivity( val ) {
     if (isLINPTECHradar()) {
-        logDebug "changing LINPTECH radar MotionDetectionSensitivity to ${value}"
+        logDebug "changing LINPTECH radar MotionDetectionSensitivity to ${val}"
         return zigbee.writeAttribute(0xE002, 0xE004, 0x20, val as int, [:], delay=200)
     }
     else {        
-        //return setRadarParameter("motionDetectionSensitivity", (isHL0SS9OAradar() || isLINPTECHradar()) ? "0F" : "02", DP_TYPE_ENUM, value)
         return null
     }
 }
 
+
 def setStaticDetectionSensitivity( val ) {
     if (isLINPTECHradar()) {
-        logDebug "changing LINPTECH radar StaticDetectionSensitivity to ${value}"
+        logDebug "changing LINPTECH radar StaticDetectionSensitivity to ${val}"
         return zigbee.writeAttribute(0xE002, 0xE005, 0x20, val as int, [:], delay=200)
     }
     else {
         return null
     }    
 }
+
 
 
 /**
@@ -2895,11 +2909,15 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
             scaledValue = value == "true" ? 1 : 0
             break
         case "enum" :
+            //log.warn "getScaledPreferenceValue: <b>ENUM</b> preference ${preference} type:${dpMap.type} value = ${value} dpMap.scale=${dpMap.scale}"
             if (dpMap.map == null) {
                 logWarn "getScaledPreferenceValue: preference ${preference} has no map defined!"
                 return null
             }
-            scaledValue = dpMap.map[safeToInt(value)]
+            scaledValue = value 
+            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
+                scaledValue = Math.round(safeToDouble(scaledValue ) * safeToInt(dpMap.scale))
+            }            
             break
         default :
             logWarn "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
@@ -2931,7 +2949,8 @@ def updateAllPreferences() {
             if (scaledValue != null) {
                 logDebug "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
                 if (foundMap.type == "enum") {
-                    scaledValue  = foundMap.map.find { it.value == scaledValue }?.key
+                    logDebug "updateAllPreferences: <b>ENUM</b> preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} "
+                    //scaledValue  = foundMap.map.find { it.value == scaledValue }?.key
                 }
                 String DPType = (foundMap.type in ["number", "decimal"]) ? DP_TYPE_VALUE : foundMap.type == "bool" ? DP_TYPE_BOOL : foundMap.type == "enum" ? DP_TYPE_ENUM : "unknown"
                 if (scaledValue != null) {
@@ -3072,49 +3091,65 @@ def getValidParsPerModel() {
 }
 
 /**
- * Validates the parameter value based on the given dpMap.
+ * Called from setPar() method only!
+ * Validates the parameter value based on the given dpMap type and scales it if needed.
  * 
  * @param dpMap The map containing the parameter type, minimum and maximum values.
- * @param val The value to be validated.
+ * @param val The value to be validated and scaled.
  * @return The validated and scaled value if it is within the specified range, null otherwise.
  */
 def validateAndScaleParameterValue(Map dpMap, String val) {
     def value = null
     def scaledValue = null
-    def parType = dpMap.type
-    if (parType == "number") {
-        value = safeToInt(val, -1)
-        scaledValue = value
-    }
-    else if (parType == "decimal") {
-        value = safeToDouble(val, -1.0)
-        // scale the value
-        if (dpMap.scale != null) {
-            scaledValue = value * dpMap.scale
-        }
-    }
-    else if (parType == "bool") {
-        if (val == '0' || val == 'false') {
-            value = 0
-        }
-        else if (val == '1' || val == 'true') {
-            value = 1
-        }
-        else {
-            log.warn "${device.displayName} sevalidateAndScaleParameterValue: bool parameter <b>${val}</b>. value must be one of <b>0 1 false true</b>"
+    log.warn "validateAndScaleParameterValue dpMap=${dpMap} val=${val}"
+    switch (dpMap.type) {
+        case "number" :
+            value = safeToInt(val, -1)
+            scaledValue = value
+            break
+        case "decimal" :
+             value = safeToDouble(val, -1.0)
+            // scale the value
+            if (dpMap.scale != null) {
+                scaledValue = value * dpMap.scale
+            }
+            break
+        case "bool" :
+            if (val == '0' || val == 'false')     { value = scaledValue = 0 }
+            else if (val == '1' || val == 'true') { value = scaledValue = 1 }
+            else {
+                log.warn "${device.displayName} sevalidateAndScaleParameterValue: bool parameter <b>${val}</b>. value must be one of <b>0 1 false true</b>"
+                return null
+            }
+            break
+        case "enum" :
+            // val could be both integer or float value ... check if the scaling is different than 1 in dpMap 
+
+            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
+                // we have a float parameter input - convert it to int
+                scaledValue = (safeToDouble(val, -1.0) * safeToInt(dpMap.scale)) as Integer
+            }
+            else {
+                scaledValue = safeToInt(val, -1)
+            }
+            if (scaledValue == null || scaledValue == -1) {
+                // get the keys of dpMap.map as a List
+                List<String> keys = dpMap.map.keySet().toList()
+                log.warn "${device.displayName} validateAndScaleParameterValue: enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
+                return null
+            }
+            break
+        default :
+            logWarn "validateAndScaleParameterValue: unsupported dpMap type <b>${parType}</b>"
             return null
-        }
-        scaledValue = value
     }
-    else {
-        log.warn "${device.displayName} validateAndScaleParameterValue: unsupported parameter type <b>${parType}</b>"
+    //log.warn "validateAndScaleParameterValue before checking  scaledValue=${scaledValue}"
+    // check if the value is within the specified range
+    if ((dpMap.min != null && scaledValue < dpMap.min) || (dpMap.max != null && scaledValue > dpMap.max)) {
+        log.warn "${device.displayName} validateAndScaleParameterValue: invalid ${par} parameter value <b>${val}</b> (scaled ${scaledValue}). Value must be within ${dpMap.min} and ${dpMap.max}"
         return null
     }
-    Boolean validated = true
-    if ((dpMap.min != null && value < dpMap.min) || (dpMap.max != null && value > dpMap.max)) {
-        log.warn "${device.displayName} validateAndScaleParameterValue: invalid ${par} parameter value <b>${val}</b> value must be within ${dpMap.min} and ${dpMap.max}"
-        return null
-    }
+    //log.warn "validateAndScaleParameterValue returning scaledValue=${scaledValue}"
     return scaledValue
 }
 
@@ -3147,6 +3182,10 @@ def setPar( par=null, val=null )
             log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"
             return
         }
+        if (val == null) {
+            log.warn "${device.displayName} setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"
+            return
+        }
         // convert the val to the correct type and scales it if needed
         def tuyaValue = validateAndScaleParameterValue(dpMap, val as String)
         if (tuyaValue == null) {
@@ -3167,7 +3206,7 @@ def setPar( par=null, val=null )
         String setFunction = "set${capitalizedFirstChar}"
         // check if setFunction method exists
         if (!this.respondsTo(setFunction)) {
-            log.warn "${device.displayName} setPar: set function <b>${setFunction}</b> not found"
+            logDebug "setPar: set function <b>${setFunction}</b> not found"
             // try sending the parameter using the new universal method
             cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
             if (cmds == null || cmds == []) {
