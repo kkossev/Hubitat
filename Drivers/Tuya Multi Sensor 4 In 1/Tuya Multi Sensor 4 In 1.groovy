@@ -56,11 +56,11 @@
  * ver. 1.6.0  2023-10-08 kkossev  - (dev. branch) major refactoring of the preferences input; all preference settings are reset to defaults when changing device profile; added 'all' attribute; present state 'motionStarted' in a human-readable form.
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
- * ver. 1.6.2  2023-10-13 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; 
+ * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; 
  *                                   
  *
- *                                   TODO: Radar enum preferences - set defaultValue!
- *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 30 seconds ?
+ *                                   TODO: Linptech spammyDPsToIgnore[] !
+ *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
  *                                   TODO: Radar TS0225 _TZE200_hl0ss9oa preference 'staticDetectionSensitivity' value 8 differs from dp value 8 ?
  *                                   TODO: check why radar initialization attempts binding? 
  *                                   TODO: add rtt measurement for ping()
@@ -77,7 +77,7 @@
 */
 
 def version() { "1.6.2" }
-def timeStamp() {"2023/10/13 10:41 AM"}
+def timeStamp() {"2023/10/14 9:45 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -900,11 +900,10 @@ def isChattyRadarReport(descMap) {
             // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
             attributes:       [ 
                 [at:"0xE002:0xE001",  name:'existance_time',                  type:"number",  dt: "UINT16", rw: "ro", min:0,  max:65535,  step:1,  scale:1,   unit:"minutes",   title: "<b>Existance time/b>",                 description:'<i>existance (presence) time</i>'],                    // aka Presence Time
-                [at:"0xE002:0xE004",  name:'motionDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:5,      defaultValue:5, step:1,  scale:1,   unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
-                [at:"0xE002:0xE005",  name:'staticDetectionSensitivity',      type:"number",  dt: "UINT8",  rw: "rw", min:0,  max:5,      defaultValue:5,      step:1,  scale:1,   unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
+                [at:"0xE002:0xE004",  name:'motionDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,  max:5,      defaultValue:"4", step:1,  scale:1,  map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Motion Detection Sensitivity</b>",  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
+                [at:"0xE002:0xE005",  name:'staticDetectionSensitivity',      type:"enum",    dt: "UINT8",  rw: "rw", min:1,  max:5,      defaultValue:"3", step:1,  scale:1,  map:[1: "1 - low", 2: "2 - medium low", 3: "3 - medium", 4: "4 - medium high", 5: "5 - high"], unit:"x",         title: "<b>Static Detection Sensitivity</b>",  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity 
                 [at:"0xE002:0xE00A",  name:"distance",                        type:"decimal", dt: "UINT16", rw: "ro", min:0,  max:600,    scale:100,  unit:"meters",            title: "<b>Distance</b>",                      description:'<i>Measured distance</i>'],                            // aka Current Distance    
-                //[at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"decimal", dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:6.0,  step:75, scale:100, unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
-                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"enum", dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:"600",  step:75, scale:1, map:[75: "0.75 meters",150: "1.5  meters", 225: "2.25 meters", 300: "3.0  meters", 375: "3.75 meters", 450: "4.5  meters", 525: "5.25 meters", 600 : "6.0  meters"], unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+                [at:"0xE002:0xE00B",  name:'motionDetectionDistance',         type:"enum",    dt: "UINT16", rw: "rw", min:0.75, max:6.00, defaultValue:"600",  step:75, scale:1, map:[75: "0.75 meters",150: "1.5  meters", 225: "2.25 meters", 300: "3.0  meters", 375: "3.75 meters", 450: "4.5  meters", 525: "5.25 meters", 600 : "6.0  meters"], unit:"meters", title: "<b>Motion Detection Distance</b>",     description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
@@ -1052,10 +1051,6 @@ def getPreferencesMap( String param, boolean debug=false ) {
  * @param debug A boolean indicating whether to output debug information.
  */
 def resetPreferencesToDefaults(boolean debug=false ) {
-    if (false/*!(isLINPTECHradar() || isKAPVNNLKradar())*/) {
-        log.warn "resetPreferencesToDefaults: not implemented for this device!"
-        return
-    }
     Map preferences = DEVICE.preferences
     Map parMap = [:]
     preferences.each{ parName, mapValue -> 
@@ -1381,6 +1376,7 @@ def parseZDOcommand( Map descMap ) {
     }
 }
 
+// TODO - refactoring 
 def processE002Cluster( descMap ) {
     // raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
     def value = zigbee.convertHexToInt(descMap.value) 
@@ -1389,13 +1385,13 @@ def processE002Cluster( descMap ) {
             sendEvent("name": "existance_time", "value": value, "unit": "minutes", "type": "physical", "descriptionText": "Presence is active for ${value} minutes")
             logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (existance_time) value is ${value} (0x${descMap.value} minutes)"
             break
-        case "E004" :    // value:05    // motionDetectionSensitivity, UINT8
+        case "E004" :    // value:05    // motionDetectionSensitivity, UINT8    // raw:F2EF01E0020804E02004, dni:F2EF, endpoint:01, cluster:E002, size:08, attrId:E004, encoding:20, command:0A, value:04, clusterInt:57346, attrInt:57348
             if (settings?.logEnable == true || settings?.motionDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar motionDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.motionDetectionSensitivity} == ${value as int}"}
-            device.updateSetting("motionDetectionSensitivity", [value:value as int , type:"number"])
+            device.updateSetting("motionDetectionSensitivity", [value:value as String , type:"enum"])
             break
-        case "E005" :    // value:05    // staticDetectionSensitivity, UINT8
+        case "E005" :    // value:05    // staticDetectionSensitivity, UINT8    // raw:F2EF01E0020805E02005, dni:F2EF, endpoint:01, cluster:E002, size:08, attrId:E005, encoding:20, command:0A, value:05, clusterInt:57346, attrInt:57349
             if (settings?.logEnable == true || settings?.staticDetectionSensitivity != (value as int)) { logInfo "received LINPTECH radar staticDetectionSensitivity : ${value}"} else {logDebug "skipped ${settings?.staticDetectionSensitivity} == ${value as int}"}
-            device.updateSetting("staticDetectionSensitivity", [value:value as int , type:"number"])
+            device.updateSetting("staticDetectionSensitivity", [value:value as String , type:"enum"])
             break
         case "E00A" :    // value:009F, 6E, 2E, .....00B6 0054 - distance, UINT16
             if (settings?.ignoreDistance == false) {
@@ -1403,11 +1399,11 @@ def processE002Cluster( descMap ) {
                 sendEvent(name : "distance", value : value/100, unit : "m")
             }        
             break
-        case "E00B" :    // value:value:600 -- motionDetectionDistance, UINT16
+        case "E00B" :    // value:value:600 -- motionDetectionDistance, UINT16  // raw:F2EF01E0020A0BE021C201, dni:F2EF, endpoint:01, cluster:E002, size:0A, attrId:E00B, encoding:21, command:0A, value:01C2, clusterInt:57346, attrInt:57355
             if (settings?.logEnable == true || (safeToInt(settings?.motionDetectionDistance)*100 != value)) {logInfo "received LINPTECH radar Motion Detection Distance  : ${value/100} m"}
-            device.updateSetting("motionDetectionDistance", [value:value/100, type:"decimal"])
+            device.updateSetting("motionDetectionDistance", [value:value as String, type:"enum"])
             break
-        default : 
+        default : ö
             logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
             break
     }
@@ -2925,7 +2921,7 @@ def updateAllPreferences() {
         Map foundMap
         //foundMap = dpMaps.find { it.dp == dpInt }
         foundMap = getPreferencesMap(name)
-        logDebug "foundMap = ${foundMap}"
+        //logDebug "foundMap = ${foundMap}"
         if (foundMap != null) {
             scaledValue = getScaledPreferenceValue(name, foundMap)
             if (scaledValue != null) {
@@ -3465,4 +3461,5 @@ def getSettableParsList() {
 def test( val ) {
     def result = inputIt( val, debug=true )
     logWarn "test inputIt(${val}) = ${result}"
+    //resetPreferencesToDefaults(true)
 }
