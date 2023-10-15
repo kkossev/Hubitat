@@ -57,7 +57,11 @@
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
+ * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions;
  *                                   
+ *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
+ *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
+ *                                   TODO: do not show errors/warnings for  new settings ie breath , led etc if the preferences are not set and saved - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: handle preferences of a type TEXT
  *                                   TODO: delete all previous preferencies when changing the device profile!
  *                                   TODO: Linptech spammyDPsToIgnore[] !
@@ -75,8 +79,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.2" }
-def timeStamp() {"2023/10/14 9:21 PM"}
+def version() { "1.6.3" }
+def timeStamp() {"2023/10/15 11:48 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -755,7 +759,7 @@ def isChattyRadarReport(descMap) {
                 [dp:15,  name:'motionDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title:"<b>Motion Detection Sensitivity</b>",       description:'<i>Large motion detection sensitivity</i>'],           // dt: "UINT8" aka Motionless Detection Sensitivity
                 [dp:16,  name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,    max:10 ,  defaultValue:7,    step:1, scale:1,   unit:"x",         title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'],
                 [dp:20,  name:'illuminance',                     type:"number",  rw: "ro",                                                scale:10,  unit:"lx",        description:'Illuminance'],
-                [dp:24,  name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],                                 title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
+                [dp:24,  name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],       title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
                 [dp:101, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,  defaultValue:1,    step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
                 [dp:102, name:"radarAlarmVolume",                type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"3",  map:[0:"0 - low", 1:"1 - medium", 2:"2 - high", 3:"3 - mute"],  title:'<b>Alarm volume</b>',            description:'<i>Alarm volume</i>'],
                 [dp:103, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:4.0,  step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
@@ -767,10 +771,10 @@ def isChattyRadarReport(descMap) {
                 [dp:109, name:'checkingTime',                    type:"decimal", rw: "ro",                   scale:10,  unit:"seconds",   description:'Checking time'],
                 [dp:110, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar small move self-test'],
                 [dp:111, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar breathe self-test'],
-                [dp:112, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'Motion false detection', description:'Motion false detection'],
+                [dp:112, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'<b>Motion false detection</b>', description:'<i>Motion false detection</i>'],
                 [dp:113, name:"radarReset",                      type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar reset'],
                 [dp:114, name:"radarStatus",                     type:"enum",    rw: "ro", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], description:'Radar move self-test'],
-                [dp:115, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'Breathe false detection', description:'Breathe false detection'],
+                [dp:115, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"], title:'<b>Breathe false detection</b>', description:'<i>Breathe false detection</i>'],
                 [dp:116, name:'existance_time',                  type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar presence duration'],    // not received
                 [dp:117, name:'leave_time',                      type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar absence duration'],     // not received
                 [dp:118, name:'radarDurationStatus',             type:"number",  rw: "ro", min:0,    max:60 ,   scale:1,   unit:"seconds",   description:'Radar duration status']       // not received
@@ -786,7 +790,7 @@ def isChattyRadarReport(descMap) {
     // the new 5.8GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar() 
     "TS0225_2AAELWXK_RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : "Tuya TS0225_2AAELWXK 5.8 GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
-            models        : ["TS0225"],                                // ZG-205Z
+            models        : ["TS0225"],                                // ZG-205Z   https://github.com/Koenkk/zigbee-herdsman-converters/blob/38bf79304292c380dc8366966aaefb71ca0b03da/src/devices/tuya.ts#L4793 
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "HumanMotionState":true],
             // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
@@ -796,7 +800,7 @@ def isChattyRadarReport(descMap) {
                              /*"textStaticDetection":"NONE",*/ "breatheFalseDetection":"113", "staticDetectionSensitivity":"109", /*"staticDetectionMinimumDistance":"108",*/ "staticDetectionDistance":"108" \
                             ], 
             commands      : ['resetSettings':'resetSettings', 'moveSelfTest':'moveSelfTest', 'smallMoveSelfTest':'smallMoveSelfTest', 'breatheSelfTest':'breatheSelfTest',  \
-                             "resetStats":"resetStats", "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults" \
+                             "resetStats":"resetStats", "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences" \
             ],          
             fingerprints  : [                                          // reports illuminance and motion using clusters 0x400 and 0x500 !
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,E002,EF00,EE00,E000,0400", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZE200_2aaelwxk", deviceJoinName: "Tuya TS0225_2AAELWXK 24Ghz Human Presence Detector"]       // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
@@ -808,17 +812,17 @@ def isChattyRadarReport(descMap) {
                 [dp:4,   name:'motionDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:10.0, defaultValue:6.0,  step:1, scale:100, unit:"meters",    title:"<b>Motion Detection Distance</b>",          description:'<i>Large motion detection distance, meters</i>'], //dt: "UINT16"
                 [dp:101, name:"humanMotionState",                type:"enum",    rw: "ro", min:0,    max:3,    defaultValue:"0",  map:[0:"none", 1:"large", 2:"small", 3:"static"],       description:'Human motion state'],
                 [dp:102, name:'presenceKeepTime',                type:"number",  rw: "rw", min:5,    max:3600, defaultValue:30,   step:1, scale:1,   unit:"seconds",   title:'<b>Presence keep time</b>',                 description:'<i>Presence keep time</i>'],
-                [dp:103, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'Motion false detection',                    description:'Disable/enable Motion false detection'],
+                [dp:103, name:"motionFalseDetection",            type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'<b>Motion false detection</b>',     description:'<i>Disable/enable Motion false detection</i>'],
                 [dp:104, name:'smallMotionDetectionDistance',    type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:5.0,  step:1, scale:100, unit:"meters",    title:'<b>Small motion detection distance</b>',    description:'<i>Small motion detection distance</i>'],
                 [dp:105, name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,    max:10 ,  defaultValue:7,    step:1, scale:1,   unit:"x",         title:'<b>Small motion detection sensitivity</b>', description:'<i>Small motion detection sensitivity</i>'],
                 [dp:106, name:'illuminance',                     type:"number",  rw: "ro",                                                scale:10,  unit:"lx",        description:'Illuminance'],
-                [dp:107, name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],               title:'<b>LED indicator</b>',                      description:'<i>LED indicator mode</i>'],
+                [dp:107, name:"ledIndicator",                    type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - OFF", 1:"1 - ON"],               title:'<b>LED indicator</b>',              description:'<i>LED indicator mode</i>'],
                 [dp:108, name:'staticDetectionDistance',         type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:4.0,  step:1, scale:100, unit:"meters",    title:'<b>Static detection distance</b>',          description:'<i>Static detection distance</i>'],
                 [dp:109, name:'staticDetectionSensitivity',      type:"number",  rw: "rw", min:0,    max:10,   defaultValue:7,    step:1, scale:1,   unit:"x",         title:"<b>Static Detection Sensitivity</b>",       description:'<i>Static detection sensitivity</i>'],                 //  dt: "UINT8", aka Motionless Detection Sensitivity  
                 [dp:110, name:'smallMotionMinimumDistance',      type:"decimal", rw: "rw", min:0.0,  max:6.0,  defaultValue:0.5,  step:1, scale:100, unit:"meters",    title:'<b>Small Motion Minimum Distance</b>',      description:'<i>Small Motion Minimum Distance</i>'],
                 //[dp:111, name:'staticDetectionMinimumDistance',  type:"decimal", rw: "rw", min:0.0,  max:6.0,   defaultValue:0.5, step:1, scale:100, unit:"meters",    title:'<b>Static detection minimum distance</b>',  description:'<i>Static detection minimum distance</i>'],
                 [dp:112, name:"radarReset",                      type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     description:'Radar reset'],
-                [dp:113, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'<b>Breathe false detection</b>',            description:'<i>Disable/enable Breathe false detection</i>'],
+                [dp:113, name:"breatheFalseDetection",           type:"enum",    rw: "rw", min:0,    max:1,    defaultValue:"0",  map:[0:"0 - disabled", 1:"1 - enabled"],     title:'<b>Breathe false detection</b>',    description:'<i>Disable/enable Breathe false detection</i>'],
                 [dp:114, name:'checkingTime',                    type:"decimal", rw: "ro",                     scale:10,  unit:"seconds",   description:'Checking time'],
                 [dp:115, name:'radarAlarmTime',                  type:"number",  rw: "rw", min:0,    max:60 ,  defaultValue:1,    step:1, scale:1,   unit:"seconds",   title:'<b>Alarm time</b>',                         description:'<i>Alarm time</i>'],
                 [dp:116, name:"radarAlarmVolume",                type:"enum",    rw: "rw", min:0,    max:3,    defaultValue:"3",  map:[0:"0 - low", 1:"1 - medium", 2:"2 - high", 3:"3 - mute"],    title:'<b>Alarm volume</b>',          description:'<i>Alarm volume</i>'],
@@ -889,7 +893,7 @@ def isChattyRadarReport(descMap) {
             fingerprints  : [                                          // https://www.amazon.com/dp/B0C7C6L66J?ref=ppx_yo2ov_dt_b_product_details&th=1 
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,E002,4000,EF00,0500", outClusters:"0019,000A", model:"TS0225", manufacturer:"_TZ3218_awarhusb", deviceJoinName: "Tuya TS0225_LINPTECH 24Ghz Human Presence Detector"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
             ],
-            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults"],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs:       [                                           // the tuyaDPs revealed from iot.tuya.com are actually not used by the device! The only exception is dp:101 
                 [dp:101,              name:'fadingTime',                      type:"number",                rw: "rw", min:1,    max:9999, defaultValue:10,  step:1,  scale:1,   unit:"seconds", title: "<b>Fading time</b>", description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
             ],
@@ -1447,7 +1451,7 @@ def processTuyaCluster( descMap ) {
             def dp      = zigbee.convertHexToInt(descMap?.data[2])           // "dp" field describes the action/message of a command frame
             def dp_id   = zigbee.convertHexToInt(descMap?.data[3])           // "dp_identifier" is device dependant
             def fncmd   = getTuyaAttributeValue(descMap?.data)               // 
-            def dp_len  = zigbee.convertHexToInt(descMap?.data[5])           // the length of the DP - 1 or 4 ...
+            def dp_len  = zigbee.convertHexToInt(descMap?.data[5])           // the length of the DP - 1 or 4 ... This is NOT the DP type!!
             
             updateStateTuyaDPs(descMap, dp, dp_id, fncmd, dp_len)
             processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) 
@@ -1566,10 +1570,11 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
     switch (foundItem.type) {
         case "bool" :       // [0:"OFF", 1:"ON"] 
         case "enum" :       // [0:"inactive", 1:"active"]
-            tuyaValueScaled  = foundItem.map[fncmd.toString()] ?: "unknown"
-            preferenceValue = preference as String
-            isEqual    = ((attrValue  as String) == (tuyaValue as String))
-            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
+            //tuyaValueScaled  = foundItem.map[fncmd.toString()] ?: "unknown"
+            tuyaValueScaled  = safeToInt(fncmd)     // changed in ver ver. 1.6.3
+            preferenceValue = safeToInt(preference)
+            isEqual    = ((preferenceValue as int) == (tuyaValueScaled as int))
+            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
             break
         case "value" :      // depends on foundItem.scale
         case "number" :
@@ -1592,7 +1597,10 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
             logWarn "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
             return [true, "none"]   // fallback - assume equal
     }
-    //log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } tuyaValueScaled=${tuyaValueScaled} "
+    if (isEqual == false) {
+        logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
+    }
+    //
     return [isEqual, tuyaValueScaled]
 }
 
@@ -1689,9 +1697,9 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     }
 
     def name = foundItem.name                                    // preference name as in the tuyaDPs map
-    def existingPrefName = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
+    def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
     def perfValue = null   // preference value
-    boolean preferenceExists = existingPrefName != null          // check if there is an existing preference for this dp  
+    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this dp  
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this dp
     boolean isEqual = false
     boolean wasChanged = false
@@ -1717,15 +1725,16 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     // first, check if there is a preference defined to be updated
     if (preferenceExists) {
         // preference exists and its's value is extracted
-        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, existingPrefName)    
+        def oldPerfValue = device.getSetting(name)
+        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, existingPrefValue)    
         if (isEqual == true) {                                 // the DP value is the same as the preference value - no need to update the preference
-            logDebug "no change: preference '${name}' scaled value ${perfValue} equals dp value ${fncmd}"
+            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (dp raw value ${fncmd})"
         }
         else {
-            logDebug "preference '${name}' value ${perfValue} <b>differs</b> from dp value ${fncmd}"
-            if (debug) log.info "updating par ${name} from ${perfValue} to ${fncmd} type ${foundItem.type}" 
+            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (dp raw value ${fncmd})"
+            if (debug) log.info "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" 
             try {
-                device.updateSetting("${name}",[value:fncmd, type:foundItem.type])
+                device.updateSetting("${name}",[value:perfValue, type:foundItem.type])
                 wasChanged = true
             }
             catch (e) {
@@ -2385,6 +2394,7 @@ def checkDriverVersion() {
             device.deleteCurrentState('temperature')
             
         }
+        validateAndFixPreferences()   // new in version 1.6.3
     }
 }
 
@@ -3059,9 +3069,9 @@ def getValidParsPerModel() {
  * @return The validated and scaled value if it is within the specified range, null otherwise.
  */
 def validateAndScaleParameterValue(Map dpMap, String val) {
-    def value = null
+    def value = null    // validated value - integer, floar
     def scaledValue = null
-    log.warn "validateAndScaleParameterValue dpMap=${dpMap} val=${val}"
+    logDebug "validateAndScaleParameterValue dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case "number" :
             value = safeToInt(val, -1)
@@ -3071,7 +3081,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
              value = safeToDouble(val, -1.0)
             // scale the value
             if (dpMap.scale != null) {
-                scaledValue = value * dpMap.scale
+                scaledValue = (value * dpMap.scale) as Integer
             }
             break
         case "bool" :
@@ -3087,12 +3097,13 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
 
             if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
                 // we have a float parameter input - convert it to int
-                scaledValue = (safeToDouble(val, -1.0) * safeToInt(dpMap.scale)) as Integer
+                value = safeToDouble(val, -1.0)
+                scaledValue = (value * safeToInt(dpMap.scale)) as Integer
             }
             else {
-                scaledValue = safeToInt(val, -1)
+                value = scaledValue = safeToInt(val, -1)
             }
-            if (scaledValue == null || scaledValue == -1) {
+            if (scaledValue == null || scaledValue < 0) {
                 // get the keys of dpMap.map as a List
                 List<String> keys = dpMap.map.keySet().toList()
                 log.warn "${device.displayName} validateAndScaleParameterValue: enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
@@ -3105,8 +3116,8 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
     }
     //log.warn "validateAndScaleParameterValue before checking  scaledValue=${scaledValue}"
     // check if the value is within the specified range
-    if ((dpMap.min != null && scaledValue < dpMap.min) || (dpMap.max != null && scaledValue > dpMap.max)) {
-        log.warn "${device.displayName} validateAndScaleParameterValue: invalid ${par} parameter value <b>${val}</b> (scaled ${scaledValue}). Value must be within ${dpMap.min} and ${dpMap.max}"
+    if ((dpMap.min != null && value < dpMap.min) || (dpMap.max != null && value > dpMap.max)) {
+        log.warn "${device.displayName} validateAndScaleParameterValue: invalid ${dpMap.name} parameter value <b>${value}</b> (scaled ${scaledValue}). Value must be within ${dpMap.min} and ${dpMap.max}"
         return null
     }
     //log.warn "validateAndScaleParameterValue returning scaledValue=${scaledValue}"
@@ -3165,7 +3176,7 @@ def setPar( par=null, val=null )
         String setFunction = "set${capitalizedFirstChar}"
         // check if setFunction method exists
         if (!this.respondsTo(setFunction)) {
-            logDebug "setPar: set function <b>${setFunction}</b> not found"
+            //logDebug "setPar: set function <b>${setFunction}</b> not found"
             // try sending the parameter using the new universal method
             cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
             if (cmds == null || cmds == []) {
@@ -3173,7 +3184,7 @@ def setPar( par=null, val=null )
                 return
             }
             else {
-                logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$tuyaValue</b>)"
+                logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$val</b> (tuyaValue=${tuyaValue}))"
                 sendZigbeeCommands( cmds )
                 return
             }
@@ -3230,7 +3241,7 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     }
     // sendTuyaCommand
     def dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2) 
-    logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp})"
+    logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp} dpType=${dpType} "
     cmds = sendTuyaCommand( dp, dpType, dpValHex)
     return cmds
 }
@@ -3441,8 +3452,75 @@ def getSettableParsList() {
 
 }
 
+def validateAndFixPreferences() {
+    //logDebug "validateAndFixPreferences: preferences=${DEVICE.preferences}"
+    if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
+        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}"
+        return null
+    }
+    def validationFailures = 0
+    def validationFixes = 0
+    DEVICE.preferences.each {
+        Map foundMap = getPreferencesMap(it.key)
+        if (foundMap == null) {
+            logWarn "validateAndFixPreferences: map not found for preference ${it.key}"
+            return null
+        }
+        String settingType = device.getSettingType(it.key)
+        def settingValue = device.getSetting(it.key)
+        if (settingType == null) {
+            logWarn "validateAndFixPreferences: settingType not found for preference ${it.key}"
+            return null
+        }
+        //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) settingValue = ${settingValue} mapType = ${foundMap.type} settingType=${settingType}"
+        if (foundMap.type != settingType) {
+            logWarn "validateAndFixPreferences: preference ${it.key} (${it.value}) settingValue = ${settingValue} mapType = ${foundMap.type} settingType=${settingType}"
+            validationFailures ++
+            // remove the setting and create a new one using the foundMap.type
+            try {
+                device.removeSetting(it.key)
+                logWarn "validateAndFixPreferences: removing setting ${it.key}"
+            }
+            catch (e) {
+                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
+                return null
+            }
+            // change the settingValue to the foundMap default value
+            settingValue = foundMap.defaultValue
+            try {
+                device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
+                logWarn "validateAndFixPreferences: updated setting ${it.key} with value ${settingValue} -> new type ${foundMap.type}"
+                validationFixes ++
+            }
+            catch (e) {
+                logWarn "validateAndFixPreferences: exception ${e} caught while creating setting ${it.key} with type ${foundMap.type}"
+                return null
+            }
+        }
+    }
+    logDebug "validateAndFixPreferences: validationFailures = ${validationFailures} validationFixes = ${validationFixes}"
+}
+
+
 def test( val ) {
-    def result = inputIt( val, debug=true )
-    logWarn "test inputIt(${val}) = ${result}"
+    //def result = inputIt( val, debug=true )
+    //logWarn "test inputIt(${val}) = ${result}"
     //resetPreferencesToDefaults(true)
+    /*
+    settings.each { k, v -> 
+        String settingName = k
+        // remove  [ and ] from the setting name
+        settingName = settingName.replaceAll("\\[|\\]", "")
+        logWarn "settings ${k} = ${v}   settingName = ${settingName}"
+        logWarn "settings ${k} = ${v} type = ${getSettingType('advancedOptions')}"
+
+           }
+*/
+/*
+    settings.each { k, v -> 
+        def x = device.getSettingType(k)
+        log.info ("settings ${k} = ${v} (${x})")
+    }   
+*/
+    validateAndFixPreferences()
 }
