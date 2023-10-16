@@ -1,55 +1,128 @@
-<!doctype html>
-<html>
-<head>
-	<title>Tuya Multi Sensor 4 In 1 Quick Reference</title>
-	<style>
-		h1, h2, h3 { color: RoyalBlue;}
-	</style>
-</head>
-<body>
-	<div>
-		<h1>Tuya Multi Sensor 4 In 1 Driver Quick Reference</h1>
-		<div>
-			<h2>Commands</h2>
-			<ul>
-				<li><b>Configure - </b>Updates the preference settings and the base data</li>
-				<li><b>Refresh - </b>Forces a run of all polling cycles to refresh all polled attributes (including base data if not polled independently)</li>
-				<li><b>TODO - </b>TODO</li>
-			</ul>
-		</div>
-		
-		<div>
-			<h2>Preferences</h2>
-			<p>TODO - text line 1
-				TODO - text line 2
-				TODO - text line 3.</p>
-			<ul>
-				<li><b>Enable debug logging? -</b> Creates Debug Entries in the HE Log for 24 hours</li>
-				<li><b>TODO -</b> Don't create <i>Warn</i>ing log entries (most are simply informational)</li>
-    				<li><b>TODO-</b> text line 3)</li>
-				<ul>
-        				<li><b>TODO-</b> Ident 1</li>
-        				<li><b>TODO -</b> Ident 2</li>
-				</ul>								
-    				<li><b>TODO -</b> line 5</li>
-				<li><b>TODO<span style='background-color:red;font-weight:bold;color:black'>&nbsp;hours&nbsp;</span>- </b> text line 6</li>
-			</ul>
-		</div>
-		<div>
-			<h2>Recommendations</h2>
-			<ul>
-				<li>TODO - text line 1.</li>
-				<li>TODO - text line 2.</li>
-				<li>TODO - text line 3.</li>
-			</ul>
-		</div>
-		<div>
-			<h2>Notes</h2>
-			<ol>
-				<li>TODO.</li>
-			</ol>
-		</div>
-
-	<div>
-</body>
-</html>
+<hr>
+<h2 id="states-attributes-">States (attributes):</h2>
+<p><img src="https://community.hubitat.com/uploads/default/original/3X/b/4/b4e1f33da6edc4db3fcdbf341fb470e86c2443cb.png" alt="image|288x183"></p>
+<ul>
+	<li><strong>motion</strong> : the mmWave radar occupancy state (Tuya uses the term &#39;presence&#39;) is
+		represented as Hubitat standard &#39;motion&#39; capability for easy use in HE automations:<ul>
+			<li><strong>active</strong> - the radar has explicitly reported &#39;presence&#39;.</li>
+			<li><strong>inactive</strong> - the radar has explicitly reported &#39;no presence&#39;.</li>
+		</ul>
+	</li>
+	<li><strong>humanMotionState</strong> : <ul>
+			<li><strong>none</strong> - the radar has reported &#39;no presence&#39;.</li>
+			<li><strong>moving</strong> - the radar has reported active movement.</li>
+			<li><strong>small_move</strong> - the radar has reported slight movement.</li>
+			<li><strong>stationary</strong> - the radar has detected breathing / stationary micro movement.</li>
+		</ul>
+	</li>
+	<li><strong>illuminance</strong> - Tuya uses a weird way to report the illuminance, still experimenting to convert
+		it to Lux values that are close to other illuminance sensors readings.</li>
+	<li><strong>radarStatus</strong> - &quot;checking&quot;, &quot;check_success&quot;, &quot;check_failure&quot;,
+		&quot;others&quot;, &quot;comm_fault&quot;, &quot;radar_fault&quot;</li>
+	<li><strong>powerSource</strong> - fixed to &#39;DC&#39;</li>
+	<li><strong>healthStatus</strong> - offline or online to HE Zigbee coordinator.</li>
+</ul>
+<hr>
+<h2 id="preferences-settings-">Preferences (settings) :</h2>
+<p><img src="https://community.hubitat.com/uploads/default/optimized/3X/3/e/3e5650d589dc99d8bbdba4f518c1edc5e4c87ccf_2_486x500.png" alt="image|486x500"></p>
+<ul>
+	<li><strong>Description text logthe ging</strong> - <em>Display sensor states on HE log page. The recommended value
+			is <b>true</b>.</em></li>
+	<li><strong>Debug logging</strong> - <em>Debug information useful for troubleshooting. The recommended value is
+			false.</em></li>
+	<li><strong>Lux threshold</strong> - <em>the illuminance change must be greater than this threshold value to be
+			reported as an event. The default value is 5.</em></li>
+	<li><strong>Presence Keep Time</strong> (Fade time) - <em>the approximate time without any motion (including
+			&#39;static presence&#39;/breathing), after which the radar will report no motion.</em></li>
+	<li><strong>Enable LED</strong> - <em>Enable LED blinking when motion is detected.Default value is off ( LED
+			disabled)</em> </li>
+	<li><strong>Radar Alarm Mode</strong> : <em>configures the use of the inbuilt 120 (Chinese)dB siren :</em>
+		<ul>
+			<li>&#39;<strong>disabled</strong>&#39; - this is the default mode this driver sets.</li>
+			<li>&#39;<strong>enabled</strong>&#39; - <em>the siren will sound loud when a motion is detected (look at
+					the photo on the AliExpress website how scared the thief was! : )</em> </li>
+			<li>&#39;<strong>activate</strong>-&#39; - turns on the alarm immediately (not recommended!). </li>
+		</ul>
+	</li>
+	<li><strong>Radar Alarm Volume</strong> - <em>&quot;Low&quot;, &quot;Middle&quot;, &quot;High&quot;,
+			&quot;Mute&quot;. The default setting is &#39;muted&#39;.</em></li>
+	<li><strong>Radar Alarm Time</strong> - <em>Alarm sounding duration, (1..60)seconds</em></li>
+	<li><strong>Motion Detection Settigs :</strong> - <strong>Settings for movement types such as walking, trotting,
+			fast running, circling, jumping and other movements</strong>
+		<ul>
+			<li><strong>Motion False Detection</strong> - <em>Disable/Enable motion false detection.</em></li>
+			<li><strong>Motion Detection Sensitivity</strong> - <em> Motion(movement) sensitivity, (0..10)</em></li>
+			<li><strong>Motion Minimum Distance</strong> - <em>Motion(movement) minimum distance, (0.0..10.0)
+					meters</em></li>
+			<li><strong>Motion Detection Distance</strong> - <em>Motion(movement) maximum distance (0.0..10.0)
+					meters.</em></li>
+		</ul>
+	</li>
+	<li><strong>Small Motion Detection Settigs :</strong> - <strong>Settings for small movement types such as tilting
+			the head, waving, raising the hand, flicking the body, playing with the mobile phone, turning over the book,
+			etc..</strong>
+		<ul>
+			<li><strong>Small Motion Detection Sensitivity</strong> - <em>Small motion detection sensitivity,
+					(0..10)</em></li>
+			<li><strong>Micro Motion Minimum Distance</strong> - <em>Small motion minimum distance, (0.0..6.0)
+					meters</em></li>
+			<li><strong>Small Motion Detection Distance</strong> - <em>Small motion detection maximum distance,
+					(0.0..6.0) meters</em></li>
+		</ul>
+	</li>
+	<li><strong>Static Detection Settigs :</strong> - <strong>The sensor can detect breathing within a certain range to
+			determine people presence in the detection area (for example, while sleeping or reading).</strong>
+		<ul>
+			<li><strong>Breathe False Detection</strong> - <em>Disable/Enable breathe false detection.</em></li>
+			<li><strong>Static Detection Sensitivity</strong> - <em>Static Detection sensitivity, (0..10)</em></li>
+			<li><strong>Static Detection Minimum Distance</strong> - <em>Static detection minimum distance, (0.0..6.0)
+					meters</em></li>
+		</ul>
+	</li>
+	<li><strong>Static Detection Distance</strong> - <em>Static detection maximum distance, (0.0..6.0) meters</em></li>
+	<li><strong>Advhttps://community.hubitat.com/uploads/default/optimized/3X/3/e/3e5650d589dc99d8bbdba4f518c1edc5e4c87ccf_2_486x500.pnganced Options</strong> - enables showing the advanced options/preferences. Hit F5 in the browser to
+		refresh the Preferences list.<ul>
+			<li><strong>Device Profile</strong> - <em>Forcely change the Device Profile, if the model/manufacturer was
+					not recognized automatically.</em></li>
+		</ul>
+	</li>
+</ul>
+<hr>
+<h3 id="commands">Commands</h3>
+<ul>
+	<li><strong>Configure</strong> - </li>
+	<li><strong>Initialize</strong> - </li>
+	<li><strong>Ping</strong> - </li>
+	<li><strong>Refresh</strong> - </li>
+	<li><strong>Send Command</strong> - <ul>
+			<li><strong>resetSetting</strong> - </li>
+			<li><strong>moveSelfTest</strong> - </li>
+			<li><strong>microMoveSelfTest</strong> - </li>
+			<li><strong>breatheSelfTest</strong> - </li>
+		</ul>
+	</li>
+	<li><strong>Set Motion</strong> - forcibly set the motion attribute as present or not present.</li>
+	<li><strong>Set Par</strong> - these are the Preferences that can be modified on-the-fly from RM5 or webCoREautomations : 
+		<ul>
+			<li>must be one of these : [radarFadingTime, radarLedIndicator, motionFalseDetection, breatheFalseDetection,
+				motionDetectionDistance, motionMinimumDistance, motionDetectionSensitivity,
+				smallMotionDetectionDistance, smallMotionDetectionSensitivity, microMotionMinimumDistance,
+				staticDetectionDistance, staticDetectionSensitivity]
+			</li>
+		</ul>
+	</li>
+</ul>
+<hr>
+<p>These are the presets from Tuya SmartLife app : </p>
+<table>
+	<thead><tr><th></th><th>LivingRoom</th><th>Bedroom</th><th>Washroom</th><th>Aisle</th><th>Kitchen</th></tr></thead>
+	<tbody>
+		<tr><td>Motion detection distance</td><td>800</td><td>500</td><td>300</td><td>900</td><td>1000</td></tr>
+		<tr><td>Motion detection sensitivity</td><td>6x</td><td>6x</td><td>5x</td><td>8x</td><td>6x</td></tr>
+		<tr><td>Small motion detection distance</td><td>600</td><td>400</td><td>400</td><td>400</td><td>600</td></tr>
+		<tr><td>Small motion detection sensitivity</td><td>9</td><td>6</td><td>8</td><td>5</td><td>8</td></tr>
+		<tr><td>Static detection distance</td><td>600</td><td>600</td><td>400</td><td>0</td><td>0</td></tr>
+		<tr><td>Static detection sensitivity</td><td>9x</td><td>9x</td><td>8x</td><td>8x</td><td>8x</td></tr>
+	</tbody>
+</table>
+<hr>
