@@ -57,7 +57,7 @@
  *                                   setPar and sendCommand major refactoring +parameters changed from enum to string; TS0601_KAPVNNLK_RADAR parameters support; 
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
- * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions;
+ * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  *                                   
  *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
@@ -80,7 +80,7 @@
 */
 
 def version() { "1.6.3" }
-def timeStamp() {"2023/10/16 9:32 AM"}
+def timeStamp() {"2023/10/16 10:18 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -3460,21 +3460,24 @@ def validateAndFixPreferences() {
     }
     def validationFailures = 0
     def validationFixes = 0
+    def oldSettingValue 
+    def newValue
+    String settingType 
     DEVICE.preferences.each {
         Map foundMap = getPreferencesMap(it.key)
         if (foundMap == null) {
             logWarn "validateAndFixPreferences: map not found for preference ${it.key}"
             return null
         }
-        String settingType = device.getSettingType(it.key)
-        def settingValue = device.getSetting(it.key)
+        settingType = device.getSettingType(it.key)
+        oldSettingValue = device.getSetting(it.key)
         if (settingType == null) {
             logWarn "validateAndFixPreferences: settingType not found for preference ${it.key}"
             return null
         }
-        //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) settingValue = ${settingValue} mapType = ${foundMap.type} settingType=${settingType}"
+        //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
-            logWarn "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (settingValue = ${settingValue}) "
+            logWarn "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
             validationFailures ++
             // remove the setting and create a new one using the foundMap.type
             try {
@@ -3487,38 +3490,40 @@ def validateAndFixPreferences() {
             }
             // first, try to use the old setting value
             try {
-                // correct the settingValue type
-                if (foundMap.type == "decimal") settingValue = settingValue.toDouble()
-                else if (foundMap.type == "number") settingValue = settingValue.toInteger()
-                else if (foundMap.type == "bool") settingValue = settingValue == "true" ? 1 : 0
+                // correct the oldSettingValue type
+                if (foundMap.type == "decimal")     { newValue = oldSettingValue.toDouble() }
+                else if (foundMap.type == "number") { newValue = oldSettingValue.toInteger() }
+                else if (foundMap.type == "bool")   { newValue = oldSettingValue == "true" ? 1 : 0 }
                 else if (foundMap.type == "enum") {
-                    String formatted
+                    // check if the old settingValue was 'true' or 'false' and convert it to 1 or 0
+                    if (oldSettingValue == "true" || oldSettingValue == "false" || oldSettingValue == true || oldSettingValue == false) {
+                        newValue = (oldSettingValue == "true" || oldSettingValue == true) ? "1" : "0"
+                    }
                     // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals
-                    if (foundMap.map.keySet().toString().any { it.contains(".") }) {
-                        formatted = String.format("%.2f", settingValue)
+                    else if (foundMap.map.keySet().toString().any { it.contains(".") }) {
+                        newValue = String.format("%.2f", oldSettingValue)
                     }
                     else {
                         // format the settingValue as a string of the integer value
-                        formatted = String.format("%d", settingValue)
+                        newValue = String.format("%d", oldSettingValue)
                     }
-                    settingValue = formatted
                 }
                 //
-                device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
-                logWarn "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old setting value ${settingValue} "
+                device.updateSetting(it.key, [value:newValue, type:foundMap.type])
+                logWarn "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 validationFixes ++
             }
             catch (e) {
-                logWarn "validateAndFixPreferences: exception ${e} caught while creating setting ${it.key} with type ${foundMap.type} and old setting value ${settingValue} "
+                logWarn "validateAndFixPreferences: exception '${e}' caught while creating setting ${it.key} with type ${foundMap.type} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 // change the settingValue to the foundMap default value
                 try {
                     settingValue = foundMap.defaultValue
                     device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
-                    logWarn "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${settingValue} "
+                    logWarn "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
                 }
                 catch (e2) {
-                    logWarn "<b>validateAndFixPreferences: exception ${e2} caught while setting default value ... Giving up!</b>"
+                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>"
                     return null
                 }            
             }
