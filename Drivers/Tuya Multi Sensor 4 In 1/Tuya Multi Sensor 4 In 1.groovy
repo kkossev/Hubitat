@@ -80,7 +80,7 @@
 */
 
 def version() { "1.6.3" }
-def timeStamp() {"2023/10/15 11:48 PM"}
+def timeStamp() {"2023/10/16 9:32 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -3474,7 +3474,7 @@ def validateAndFixPreferences() {
         }
         //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) settingValue = ${settingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
-            logWarn "validateAndFixPreferences: preference ${it.key} (${it.value}) settingValue = ${settingValue} mapType = ${foundMap.type} settingType=${settingType}"
+            logWarn "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (settingValue = ${settingValue}) "
             validationFailures ++
             // remove the setting and create a new one using the foundMap.type
             try {
@@ -3485,16 +3485,42 @@ def validateAndFixPreferences() {
                 logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
                 return null
             }
-            // change the settingValue to the foundMap default value
-            settingValue = foundMap.defaultValue
+            // first, try to use the old setting value
             try {
+                // correct the settingValue type
+                if (foundMap.type == "decimal") settingValue = settingValue.toDouble()
+                else if (foundMap.type == "number") settingValue = settingValue.toInteger()
+                else if (foundMap.type == "bool") settingValue = settingValue == "true" ? 1 : 0
+                else if (foundMap.type == "enum") {
+                    String formatted
+                    // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals
+                    if (foundMap.map.keySet().toString().any { it.contains(".") }) {
+                        formatted = String.format("%.2f", settingValue)
+                    }
+                    else {
+                        // format the settingValue as a string of the integer value
+                        formatted = String.format("%d", settingValue)
+                    }
+                    settingValue = formatted
+                }
+                //
                 device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
-                logWarn "validateAndFixPreferences: updated setting ${it.key} with value ${settingValue} -> new type ${foundMap.type}"
+                logWarn "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old setting value ${settingValue} "
                 validationFixes ++
             }
             catch (e) {
-                logWarn "validateAndFixPreferences: exception ${e} caught while creating setting ${it.key} with type ${foundMap.type}"
-                return null
+                logWarn "validateAndFixPreferences: exception ${e} caught while creating setting ${it.key} with type ${foundMap.type} and old setting value ${settingValue} "
+                // change the settingValue to the foundMap default value
+                try {
+                    settingValue = foundMap.defaultValue
+                    device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
+                    logWarn "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${settingValue} "
+                    validationFixes ++
+                }
+                catch (e2) {
+                    logWarn "<b>validateAndFixPreferences: exception ${e2} caught while setting default value ... Giving up!</b>"
+                    return null
+                }            
             }
         }
     }
