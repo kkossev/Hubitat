@@ -58,7 +58,10 @@
  * ver. 1.6.1  2023-10-12 kkossev  - (dev. branch) TS0601_KAPVNNLK_RADAR TS0225_HL0SS9OA_RADAR TS0225_2AAELWXK_RADAR TS0601_RADAR_MIR-HE200-TY TS0601_YXZBRB58_RADAR TS0601_SXM7L9XA_RADAR TS0601_IJXVKHD0_RADAR TS0601_YENSYA2C_RADAR TS0601_SBYX0LM6_RADAR TS0601_PIR_AIR TS0601_PIR_PRESENCE refactoring; radar enum preferences;
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
- *                                   
+ * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
+ *
+ *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
+ *                                   TODO: command for black radar LED
  *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: do not show errors/warnings for  new settings ie breath , led etc if the preferences are not set and saved - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
@@ -67,7 +70,6 @@
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
  *                                   TODO: add rtt measurement for ping()
- *                                   TODO: command for black radar LED
  *                                   TODO: TS0225_HL0SS9OA_RADAR - add presets
  *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
@@ -79,8 +81,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.3" }
-def timeStamp() {"2023/10/16 10:18 AM"}
+def version() { "1.6.4" }
+def timeStamp() {"2023/10/18 8:16 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -160,8 +162,10 @@ metadata {
     
     preferences {
         if (advancedOptions == true || advancedOptions == false) { // Groovy ... :) 
-            input (name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>", defaultValue: true)
-            input (name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>", defaultValue: true)
+            input (name: "quickref",  type: "hidden", title: "$ttStyleStr<a href='https://htmlpreview.github.io/?https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_Multi_Sensor_4_In_1.html' target='_blank'>Quick Reference v${version()}</a>")
+            input (name: "txtEnable", type: "bool",   title: "<b>Description text logging</b>", description: "<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>", defaultValue: true)
+            input (name: "logEnable", type: "bool",   title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>", defaultValue: true)
+
             if (("motionReset" in DEVICE?.preferences)) {
                 input (name: "motionReset", type: "bool", title: "<b>Reset Motion to Inactive</b>", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
                 if (motionReset.value == true) {
@@ -237,6 +241,7 @@ metadata {
 @Field static final String UNKNOWN =  'UNKNOWN'
 @Field static final Map blackRadarLedOptions =      [ "0" : "Off", "1" : "On" ]      // HumanPresenceSensorAIR
 @Field static final Map TS0225humanMotionState = [ "0": "none", "1": "moving", "2": "small_move", "3": "stationary"  ]
+@Field static String ttStyleStr = "<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:yellow;color:black;}</style>"
 
 /*
                                LivingRoom    Bedroom    Washroom    Aisle    Kitchen
@@ -643,28 +648,30 @@ def isChattyRadarReport(descMap) {
             configuration : [:]
     ],    
 
-    // isSXM7L9XAradar() TODO !!! check whether the fading time (110) and the detection delay (111) are not swapped ????? // TODO !!!        https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6998#issuecomment-1612113340 
+    // isSXM7L9XAradar()                                                // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6998#issuecomment-1612113340 
     "TS0601_SXM7L9XA_RADAR"   : [                                       // https://gist.github.com/Koenkk/9295fc8afcc65f36027f9ab4d319ce64 
             description   : "Tuya Human Presence Detector SXM7L9XA",    // https://github.com/zigpy/zha-device-handlers/issues/2378#issuecomment-1558777494
-            models        : ["TS0601"],
-            device        : [type: "radar", powerSource: "dc", isSleepy:false],
+            models        : ["TS0601"],                                 // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/tree/main 
+            device        : [type: "radar", powerSource: "dc", isSleepy:false],     // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/wenzhi_tuya_M100-230908.js
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
             preferences   : ["radarSensitivity":"106", "detectionDelay":"111", "fadingTime":"110", "minimumDistance":"108", "maximumDistance":"107"],
             commands      : ["resetStats":"resetStats"],            
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sxm7l9xa", deviceJoinName: "Tuya Human Presence Detector SXM7L9XA"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sxm7l9xa", deviceJoinName: "Tuya Human Presence Detector SXM7L9XA"],      // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_e5m9c5hl", deviceJoinName: "Tuya Human Presence Detector WZ-M100"]       // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/745?u=kkossev  
             ],
-            tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
-                [dp:104, name:'illuminance',        type:"number",  rw: "ro",                   scale:1, unit:"lx",          description:'illuminance'],
-                [dp:105, name:"motion",                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],  description:'Presence state'],
-                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:0,   max:9 ,   defaultValue:7,   scale:1,    unit:"x",        title:'<b>Motion sensitivity</b>', description:'<i>Motion sensitivity</i>'],
-                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,  defaultValue:6.0, scale:100,  unit:"meters",   title:'<b>Maximum distance</b>',   description:'<i>Max detection distance</i>'],
-                [dp:108, name:'minimumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,  defaultValue:0.5, scale:100,  unit:"meters",   title:'<b>Minimum distance</b>',   description:'Min detection distance'],       // TODO - check DP!
-                [dp:109, name:"distance",               type:"decimal", rw: "ro", min:0,   max:10.0, scale:100,  unit:"meters",   description:'Distance'],                      // TODO - check DP!
-                // TODO - check scaling!
-                [dp:110, name:'fadingTime',             type:"decimal", rw: "rw", min:0.5, max:150.0, defaultValue:60.0, step:1,  scale:10,   unit:"seconds",  title: "<b>Fading time</b>", description:'<i>Presence inactivity timer</i>'],
-                [dp:111, name:'detectionDelay',         type:"decimal", rw: "rw", min:0,   max:10.0,    defaultValue:0.5, scale:10,   unit:"seconds",              title: "<b>Detection delay</b>", description:'<i>Detection delay</i>']
+            tuyaDPs:        [
+                [dp:104, name:'illuminance',            type:"number",  rw: "ro",                     scale:1, unit:"lx",          description:'illuminance'],
+                [dp:105, name:"motion",                 type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0", map:[0:"inactive", 1:"active"],  description:'Presence state'],
+                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1,   max:10 ,   defaultValue:7,   scale:1,    unit:"x",        title:'<b>Motion sensitivity</b>', description:'<i>Motion sensitivity</i>'],
+                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,   defaultValue:6.0, scale:100,  unit:"meters",   title:'<b>Maximum distance</b>',   description:'<i>Max detection distance</i>'],
+                [dp:108, name:'minimumDistance',        type:"decimal", rw: "rw", min:0,   max:9.5,   defaultValue:0.5, scale:100,  unit:"meters",   title:'<b>Minimum distance</b>',   description:'Min detection distance'],       // TODO - check DP!
+                [dp:109, name:"distance",               type:"decimal", rw: "ro", min:0,   max:10.0,  scale:100,  unit:"meters",    description:'Distance'],
+                [dp:110, name:'fadingTime',             type:"decimal", rw: "rw", min:0.5, max:150.0, defaultValue:60.0, step:5,    scale:10,   unit:"seconds",  title: "<b>Fading time</b>", description:'<i>Presence inactivity timer</i>'],
+                [dp:111, name:'detectionDelay',         type:"decimal", rw: "rw", min:0,   max:10.0,  defaultValue:0.5, scale:10,   unit:"seconds",              title: "<b>Detection delay</b>", description:'<i>Detection delay</i>']
             ],
+            spammyDPsToIgnore : [109],
+            spammyDPsToNotTrace : [109],
             deviceJoinName: "Tuya Human Presence Detector SXM7L9XA",
             configuration : [:],
     ],    
@@ -844,41 +851,64 @@ def isChattyRadarReport(descMap) {
     "TS0601_SBYX0LM6_RADAR"   : [                                      // _TZE204_sbyx0lm6    TS0601   model: 'MTG075-ZB-RL', '5.8G Human presence sensor with relay',
             description   : "Tuya Human Presence Detector SBYX0LM6",   // https://github.com/vit-um/hass/blob/main/zigbee2mqtt/tuya_h_pr.js    
             models        : ["TS0601"],                                // https://github.com/Koenkk/zigbee-herdsman-converters/issues/5930      https://github.com/Koenkk/zigbee-herdsman-converters/issues/5930#issuecomment-1651270524
-            device        : [type: "radar", powerSource: "dc", isSleepy:false],
+            device        : [type: "radar", powerSource: "dc", isSleepy:false],     // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/ts0601_radar_X75-X25-230705.js 
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "DistanceMeasurement":true],
-            preferences   : ["radarSensitivity":"2", "shieldRange":"3", "detectionRange":"4", "entryFilterTime":"101", "fadingTime":"102", "entrySensitivity":"105", "entryDistanceIndentation":"106", "breakerMode":"107", \
+            preferences   : ["radarSensitivity":"2", "minimumDistance":"3", "maximumDistance":"4", "detectionDelay":"101", "fadingTime":"102", "entrySensitivity":"105", "entryDistanceIndentation":"106", "breakerMode":"107", \
                              "breakerStatus":"108", "statusIndication":"109", "illuminThreshold":"110", "breakerPolarity":"111", "blockTime":"112"
                             ], 
             commands      : ['resetSettings':'resetSettings'],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sbyx0lm6", deviceJoinName: "Tuya 5.8GHz Human Presence Detector w/ relay"],     // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_dtzziy1e", deviceJoinName: "Tuya 24GHz Human Presence Detector w/ relay"],      // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_clrdrnya", deviceJoinName: "Tuya Human Presence Detector w/ relay"]             // https://www.aliexpress.com/item/1005005865536713.html                  // https://github.com/Koenkk/zigbee2mqtt/issues/18677?notification_referrer_id=NT_kwDOAF5zfrI3NDQ1Mzc2NTAxOjYxODk5NTA
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_sbyx0lm6", deviceJoinName: "Tuya 5.8GHz Human Presence Detector MTG075-ZB-RL"],    // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_sbyx0lm6", deviceJoinName: "Tuya 5.8GHz Human Presence Detector MTG075-ZB-RL"],     
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_dtzziy1e", deviceJoinName: "Tuya 24GHz Human Presence Detector MTG275-ZB-RL"],     // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_dtzziy1e", deviceJoinName: "Tuya 24GHz Human Presence Detector MTG275-ZB-RL"],     // https://www.aliexpress.com/item/1005004788260949.html                  // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/539?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_clrdrnya", deviceJoinName: "Tuya Human Presence Detector MTG235-ZB-RL"],               // https://www.aliexpress.com/item/1005005865536713.html                  // https://github.com/Koenkk/zigbee2mqtt/issues/18677?notification_referrer_id=NT_kwDOAF5zfrI3NDQ1Mzc2NTAxOjYxODk5NTA
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_clrdrnya", deviceJoinName: "Tuya Human Presence Detector MTG235-ZB-RL"],
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_cfcznfbz", deviceJoinName: "Tuya Human Presence Detector MTG075-ZB2"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_iaeejhvf", deviceJoinName: "Tuya Human Presence Detector MTG075-ZB2-RL"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_mtoaryre", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB2-RL"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_8s6jtscb", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB2"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_rktkuel1", deviceJoinName: "Tuya Human Presence Detector MTD065-ZB2"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mp902om5", deviceJoinName: "Tuya Human Presence Detector MTG075-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_mp902om5", deviceJoinName: "Tuya Human Presence Detector MTG075-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_w5y5slkq", deviceJoinName: "Tuya Human Presence Detector MTG275-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_w5y5slkq", deviceJoinName: "Tuya Human Presence Detector MTG275-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_xnaqu2pc", deviceJoinName: "Tuya Human Presence Detector MTD065-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_xnaqu2pc", deviceJoinName: "Tuya Human Presence Detector MTD065-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_wk7seszg", deviceJoinName: "Tuya Human Presence Detector MTG235-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_wk7seszg", deviceJoinName: "Tuya Human Presence Detector MTG235-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_0wfzahlw", deviceJoinName: "Tuya Human Presence Detector MTD021-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_0wfzahlw", deviceJoinName: "Tuya Human Presence Detector MTD021-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_pfayrzcw", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB-RL"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_pfayrzcw", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB-RL"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_z4tzr0rg", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB"],    
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_z4tzr0rg", deviceJoinName: "Tuya Human Presence Detector MTG035-ZB"]  
             ],
-            states: ["presence", "illuminance"],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
-                [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:0,   max:9,     defaultValue:5,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",          description:'<i>Sensitivity of the radar</i>'],
-                [dp:3,   name:'shieldRange',        type:"decimal", rw: "rw", min:0.0, max:8.0,   defaultValue:7.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Shield range distance</b>",      description:'<i>Shield range of the radar</i>'],
-                [dp:4,   name:'detectionRange',     type:"decimal", rw: "rw", min:0.0, max:8.0,   defaultValue:6.0,   step:1,  scale:100,  unit:"meters",   title:"<b>Detection range distance</b>",   description:'<i>Detection range of the radar</i>'],
-                [dp:6,   name:'equipmentStatus',    type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'equipment_status'],
-                [dp:9,   name:"distance",           type:"decimal", rw: "ro", min:0,   max:10.0,  defaultValue:0,     step:1,  scale:100,  unit:"meters",   description:'<i>detected distance</i>'],
-                [dp:101, name:'entryFilterTime',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.2,   step:1,  scale:10,   unit:"seconds",  title:"<b>Entry filter time</b>",          description:'<i>Entry filter time</i>'],
-                [dp:102, name:'fadingTime',         type:"number",  rw: "rw", min:0,   max:600,   defaultValue:30,    step:1,  scale:1,    unit:"seconds",  title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
+                [dp:2,   name:'radarSensitivity',   type:"number",  rw: "rw", min:1,   max:9,     defaultValue:5,     step:1,  scale:1,    unit:"x",        title:"<b>Radar sensitivity</b>",     description:'<i>Sensitivity of the radar</i>'],
+                [dp:3,   name:'minimumDistance',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:0.1,   step:10, scale:100,  unit:"meters",   title:"<b>Minimum distance</b>",      description:'<i>Shield range of the radar</i>'],         // was shieldRange
+                [dp:4,   name:'maximumDistance',    type:"decimal", rw: "rw", min:1.5, max:10.0,  defaultValue:7.0,   step:10, scale:100,  unit:"meters",   title:"<b>Maximum distance</b>",      description:'<i>Detection range of the radar</i>'],      // was detectionRange
+                [dp:6,   name:'radarStatus',        type:"enum",    rw: "ro", min:0,   max:5 ,    defaultValue:"1",   step:1,  scale:1,    map:[ 0:"checking", 1:"check_success", 2:"check_failure", 3:"others", 4:"comm_fault", 5:"radar_fault"] ,   unit:"",     title:"<b>Radar self checking status</b>", description:'<i>Radar self checking status</i>'],
+                [dp:9,   name:"distance",           type:"decimal", rw: "ro", min:0.0, max:10.0,  defaultValue:0.0,   step:1,  scale:100,  unit:"meters",   description:'<i>detected distance</i>'],
+                [dp:101, name:'detectionDelay',     type:"decimal", rw: "rw", min:0.0, max:1.0,   defaultValue:0.2,   step:1,  scale:10,   unit:"seconds",  title:"<b>Detection delay</b>",       description:'<i>Entry filter time</i>'],
+                [dp:102, name:'fadingTime',         type:"decimal", rw: "rw", min:0.5, max:150.0, defaultValue:30.0,  step:1,  scale:10,   unit:"seconds",  title:"<b>Fading time</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:"number",  rw: "ro", min:0,   max:99999, defaultValue:0,     step:1,  scale:1,    unit:"?",        title:"<b>debugCLI</b>",                   description:'<i>debug CLI</i>'],
                 [dp:104, name:'illuminance',        type:"number",  rw: "ro", min:0,   max:2000,  defaultValue:0,     step:1,  scale:10,   unit:"lx",       title:"<b>illuminance</b>",                description:'<i>illuminance</i>'],   // divideBy10 !
-                [dp:105, name:'entrySensitivity',   type:"number",  rw: "rw", min:0,   max:9,     defaultValue:7,     step:1,  scale:1,    unit:"x",        title:"<b>Entry sensitivity</b>",          description:'<i>Radar entry sensitivity</i>'],
-                [dp:106, name:'entryDistanceIndentation',    type:"decimal", rw: "rw", min:0.0, max:8.0,  defaultValue:6.0,   step:1,  scale:100,   unit:"meters",  title:"<b>Entry distance indentation</b>",          description:'<i>Entry distance indentation</i>'],
-                [dp:107, name:"breakerMode",        type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"standard", 1:"local"],       title:'<b>Breaker mode</b>',                         description:'<i>Status Breaker mode: standard is external, local is auto</i>'],
-                [dp:108, name:"breakerStatus",      type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"OFF", 1:"ON"],       title:'<b>Breaker status</b>',                         description:'<i>Breaker status changes with breakerMode->standard</i>'],
+                [dp:105, name:'entrySensitivity',   type:"number",  rw: "rw", min:1,   max:9,     defaultValue:5,     step:1,  scale:1,    unit:"x",        title:"<b>Entry sensitivity</b>",          description:'<i>Radar entry sensitivity</i>'],
+                [dp:106, name:'entryDistanceIndentation',    type:"decimal", rw: "rw", min:0.0, max:10.0,  defaultValue:6.0,   step:10,  scale:100,   unit:"meters",  title:"<b>Entry distance indentation</b>",          description:'<i>Entry distance indentation</i>'],     // aka 'Detection range reduce when unoccupied'
+                [dp:107, name:"breakerMode",        type:"enum",    rw: "rw", min:0,   max:3,     defaultValue:"0",   map:[0:"standalone", 1:"local", 2:"manual", 3:"unavailable"],       title:'<b>Breaker mode</b>',    description:'<i>Status Breaker mode: standalone is external, local is auto</i>'],
+                [dp:108, name:"breakerStatus",      type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"OFF", 1:"ON"],       title:'<b>Breaker status</b>',                         description:'<i>on/off state of the switch</i>'],
                 [dp:109, name:"statusIndication",   type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"OFF", 1:"ON"],       title:'<b>Status indication</b>',                      description:'<i>Led backlight when triggered</i>'],
                 [dp:110, name:'illuminThreshold',   type:"decimal", rw: "rw", min:0.0, max:420.0, defaultValue:100.0,  step:1,  scale:10,   unit:"lx",  title:"<b>Illuminance Threshold</b>",          description:'<i>Illumination threshold for switching on</i>'],
                 [dp:111, name:"breakerPolarity",    type:"enum",    rw: "rw", min:0,   max:1,     defaultValue:"0",   map:[0:"NC", 1:"NO"],       title:'<b>Breaker polarity</b>',                      description:'<i>Normally open / normally closed factory setting</i>'],
-                [dp:112, name:'blockTime',          type:"number",  rw: "rw", min:0,   max:100,   defaultValue:30,    step:1,  scale:1,    unit:"seconds",  title:"<b>Block time'</b>",                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
-                [dp:113, name:'parameterSettingResult',    type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'parameterSettingResult'],
-                [dp:114, name:'factoryParameters',  type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'factory_parameters'],
-                [dp:115, name:'sensor',             type:"enum",    rw: "ro", min:0,   max:1,     defaultValue:"0",   step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",    description:'<i>Sensor state</i>'], 
+                [dp:112, name:'blockTime',          type:"number",  rw: "rw", min:0,   max:100,   defaultValue:30,    step:1,  scale:1,    unit:"seconds",  title:"<b>Block time'</b>",                description:'<i>Sensor inhibition time after presence or relay state changed</i>'],                                  // aka 'nobody time'
+                [dp:113, name:'parameterSettingResult',    type:"enum",    rw: "ro", min:0,   max:6 ,    defaultValue:"1",   step:1,  scale:1,    map:[ 0:"none", 1:"invalid detection range reduce", 2:"invalid minimum detection range", 3:"invalid maximum detection range", 4:"switch unavailable", 5:"invalid inhibition time", 6:"switch polarity unsupported"] ,   unit:"",   description:'<i>Config error</i>'],
+                [dp:114, name:'factoryParameters',  type:"number",  rw: "ro",                                                  scale:1,    unit:"-",        description:'Factory Reset'],
+                [dp:115, name:'sensor',             type:"enum",    rw: "ro", min:0,   max:2,     defaultValue:"0",   step:1,  scale:1,    map:[0:"on", 1:"off", 2:"report occupy", 3:"report unoccupy"] ,   unit:"",    description:'<i>Sensor state</i>'], 
             ],        
+            spammyDPsToIgnore : [9],
+            spammyDPsToNotTrace : [9],
             deviceJoinName: "Tuya Human Presence Detector SBYX0LM6",
             configuration : [:]
     ],    
@@ -1060,7 +1090,6 @@ def resetPreferencesToDefaults(boolean debug=false ) {
             logWarn "Preference ${parName} not found in tuyaDPs or attributes map!"
             return // continue
         }   
-        //log.trace "parMap = $parMap"
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
             return // continue
