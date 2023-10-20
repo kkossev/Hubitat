@@ -59,7 +59,9 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
+ * ver. 1.6.5  2023-10-20 kkossev  - (dev. branch) W.I.P.
  *
+ *                                   TODO: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute; add SiHAS USM-300Z
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: command for black radar LED
  *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
@@ -81,8 +83,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.4" }
-def timeStamp() {"2023/10/18 8:16 AM"}
+def version() { "1.6.5" }
+def timeStamp() {"2023/10/18 11:20 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -113,6 +115,7 @@ metadata {
         //capability "DoubleTapableButton"
         //capability "HoldableButton"
 
+        attribute "occupancy", "enum", ["occupied", "unoccupied"]   // https://developer.smartthings.com/docs/devices/capabilities/capabilities-reference // https://developer.smartthings.com/capabilities/occupancySensor 
         attribute "all", "string"
         attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -279,11 +282,11 @@ def isIAS()  { DEVICE?.device?.isIAS == true  }
 def isTS0601_PIR() { (DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) || ("sensitivity" in DEVICE.preferences)) }
 //def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
 
-def isZY_M100Radar()             { return getDeviceGroup().contains("TS0601_TUYA_RADAR") } 
-def isBlackPIRsensor()    { return getDeviceGroup().contains("TS0601_PIR_PRESENCE") }     
-def isBlackSquareRadar()  { return getDeviceGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
+def isZY_M100Radar()               { return getDeviceGroup().contains("TS0601_TUYA_RADAR") } 
+def isBlackPIRsensor()             { return getDeviceGroup().contains("TS0601_PIR_PRESENCE") }     
+def isBlackSquareRadar()           { return getDeviceGroup().contains("TS0601_BLACK_SQUARE_RADAR") }
 def isHumanPresenceSensorAIR()     { return getDeviceGroup().contains("TS0601_PIR_AIR") }           // isHumanPresenceSensorScene() removed in version 1.6.1
-def isHumanPresenceSensorFall()    { return getDeviceGroup().contains("TS0601_RADAR_MIR-TY-FALL") } // NOT USED ver 1.6.1
+//def isHumanPresenceSensorFall()    { return getDeviceGroup().contains("TS0601_RADAR_MIR-TY-FALL") } // NOT USED ver 1.6.1
 def isYXZBRB58radar()              { return getDeviceGroup().contains("TS0601_YXZBRB58_RADAR") }
 def isSXM7L9XAradar()              { return getDeviceGroup().contains("TS0601_SXM7L9XA_RADAR") }
 def isIJXVKHD0radar()              { return getDeviceGroup().contains("TS0601_IJXVKHD0_RADAR") }
@@ -293,6 +296,10 @@ def isSBYX0LM6radar()              { return getDeviceGroup().contains("TS0601_SB
 def isLINPTECHradar()              { return getDeviceGroup().contains("TS0225_LINPTECH_RADAR") }
 def isEGNGMRZHradar()              { return getDeviceGroup().contains("TS0225_EGNGMRZH_RADAR") }
 def isKAPVNNLKradar()              { return getDeviceGroup().contains("TS0601_KAPVNNLK_RADAR") }
+def isSONOFF()                     { return getDeviceGroup().contains("SONOFF_SNZB-06P_RADAR") }
+def isSiHAS()                      { return device.getDataValue("manufacturer")== "ShinaSystem" }
+
+
 
 
 // TODO - check if DPs are declared in the device profiles and remove this function 
@@ -988,6 +995,25 @@ def isChattyRadarReport(descMap) {
             configuration : ["0x0406":"bind"]
     ],
     
+     // isSONOFF() 
+    "SONOFF_SNZB-06P_RADAR" : [ 
+            description   : "SONOFF SNZB-06P RADAR",
+            models        : ["SONOFF"],
+            device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
+            capabilities  : ["MotionSensor": true],
+            preferences   : [:],                             
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406,0500,FC57,FC11", outClusters:"0003,0019", model:"SNZB-06P", manufacturer:"SONOFF", deviceJoinName: "SONOFF SNZB-06P RADAR"],      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0406,0402,0001,0405,0500", outClusters:"0004,0003,0019", model:"USM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS MultiPurpose Sensor"]  // for tests! 
+            ],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            tuyaDPs       : [:],
+            attributes    : [:],
+            deviceJoinName: "SONOFF SNZB-06P RADAR",
+            //configuration : ["0x0406":"bind"]
+            configuration : [:]
+    ],    
+  
     
     "UNKNOWN"             : [                        // the Device Profile key (shown in the State Variables)
             description   : "Unknown device",        // the Device Profile description (shown in the Preferences)
@@ -1080,7 +1106,11 @@ def getPreferencesMap( String param, boolean debug=false ) {
  * @param debug A boolean indicating whether to output debug information.
  */
 def resetPreferencesToDefaults(boolean debug=false ) {
-    Map preferences = DEVICE.preferences
+    Map preferences = DEVICE?.preferences
+    if (preferences == null) {
+        logWarn "Preferences not found!"
+        return
+    }
     Map parMap = [:]
     preferences.each{ parName, mapValue -> 
         if (debug) log.trace "$parName $mapValue"
@@ -1229,7 +1259,12 @@ def parse(String description) {
         }
         else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
             def raw = Integer.parseInt(descMap.value,16)
-            handleMotion( raw & 0x01 )
+            if (isSONOFF()) {
+                occupancyEvent(raw)
+            }
+            else {
+                handleMotion( raw & 0x01 )
+            }
         }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
@@ -2218,6 +2253,19 @@ def illuminanceEventLux( lux ) {
     runIn( 1, formatAttrib, [overwrite: true])    
 }
 
+def occupancyEvent( raw ) {
+    logDebug "occupancyEvent: raw=${raw}"
+    def map = [:] 
+    map.name = "occupancy"
+    map.value = raw ? "occupied" : "unoccupied"
+    map.unit = ""
+    map.type = "physical"
+    // map.isStateChange = true
+    map.descriptionText = "${map.name} state is ${map.value}"
+    logInfo "${map.descriptionText}"
+    sendEvent(map)
+    //runIn( 1, formatAttrib, [overwrite: true])    
+}
 
 def powerSourceEvent( state = null) {
     String ps = null
@@ -2361,13 +2409,13 @@ def updated() {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     //    
-    if (cmds != null && cmds.size() > 0) {
-        logDebug "sending the changed AdvancedOptions"
+    if (cmds != null && cmds.size() > 10) {
+        logDebug "sending the changed AdvancedOptions (size=${cmds.size()}) to the device..."
         sendZigbeeCommands( cmds )  
         logInfo "preferencies updates are sent to the device..."
     }
     else {
-        logDebug "no preferences are changed"
+        logDebug "no preferences are changed (size=${cmds.size()}) "
     }
 }
 
@@ -2375,24 +2423,82 @@ def ping() {
     logInfo "ping() is not implemented" 
 }
 
+private getILLUMINANCE_MEASUREMENT_CLUSTER() { 0x0400 }
+private getRELATIVE_HUMIDITY_CLUSTER() { 0x0405 }
+private getOCCUPANCY_SENSING_CLUSTER() { 0x0406 }
+private getATTRIBUTE_IAS_ZONE_STATUS() { 0x0000 }
+private getPOWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE() { 0x0020 }
+private getTEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
+private getRELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
+private getILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
+private getOCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE() { 0x0000 }
+
+def refreshSiHAS() {
+    def refreshCmds = []
+
+    refreshCmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, POWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE, [:], delay=201)
+
+    refreshCmds += zigbee.readAttribute(RELATIVE_HUMIDITY_CLUSTER, RELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, [:], delay=202)
+    refreshCmds += zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, [:], delay=203)
+    refreshCmds += zigbee.readAttribute(ILLUMINANCE_MEASUREMENT_CLUSTER, ILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, [:], delay=204)
+    refreshCmds += zigbee.readAttribute(OCCUPANCY_SENSING_CLUSTER, OCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE, [:], delay=205)
+    refreshCmds += zigbee.enrollResponse(300)
+    return refreshCmds
+}
+
+def configureSiHAS() {
+    if (settings?.logEnable) {log.debug "${device.displayName} configure()"}
+    def configCmds = []
+
+    // Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
+   // sendEvent(name: "checkInterval", value: 2 * 60 * 60 + 1 * 60, displayed: false, data: [protocol: "zigbee", hubHardwareId: device.hub.hardwareID])
+
+    // temperature minReportTime 30 seconds, maxReportTime 5 min. Reporting interval if no activity
+    // battery minReport 30 seconds, maxReportTime 6 hrs by default
+    // humidity minReportTime 30 seconds, maxReportTime 60 min
+    // illuminance minReportTime 30 seconds, maxReportTime 60 min
+    // occupancy sensing minReportTime 10 seconds, maxReportTime 60 min
+    // ex) zigbee.configureReporting(0x0001, 0x0020, DataType.UINT8, 600, 21600, 0x01)
+    // This is for cluster 0x0001 (power cluster), attribute 0x0021 (battery level), whose type is UINT8,
+    // the minimum time between reports is 10 minutes (600 seconds) and the maximum time between reports is 6 hours (21600 seconds),
+    // and the amount of change needed to trigger a report is 1 unit (0x01).
+    configCmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, POWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE, DataType.UINT8, 30, 21600, 0x01/*100mv*1*/, [:], delay=221)
+
+    configCmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.INT16, 15, 300, 10/*10/100=0.1도*/, [:], delay=222)
+    configCmds += zigbee.configureReporting(RELATIVE_HUMIDITY_CLUSTER, RELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.UINT16, 15, 300, 40/*10/100=0.4%*/, [:], delay=223)
+    configCmds += zigbee.configureReporting(ILLUMINANCE_MEASUREMENT_CLUSTER, ILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE, DataType.UINT16, 15, 3600, 1/*1 lux*/, [:], delay=224)
+    configCmds += zigbee.configureReporting(OCCUPANCY_SENSING_CLUSTER, OCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE, DataType.BITMAP8, 1, 600, 1, [:], delay=225)
+    //configCmds += zigbee.configureReporting(zigbee.IAS_ZONE_CLUSTER, ATTRIBUTE_IAS_ZONE_STATUS, DataType.BITMAP16, 0, 0xffff, null, [:], delay=226) // set : none reporting flag, device sends out notification to the bound devices.
+    configCmds +=  ["zdo bind 0x${device.deviceNetworkId} 0x${endpoint} 0x01 0x0500 {${device.zigbeeId}} {}", "delay 229", ]
+    configCmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+    
+    return configCmds + refreshSiHAS()
+}
+
+
 def refresh() {
     logInfo "refresh()..."
     checkDriverVersion()
     updateTuyaVersion()
     ArrayList<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=200)             // Power Source
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)             // batteryVoltage
-    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)             // batteryPercentageRemaining
+    cmds += zigbee.readAttribute(0x0000, 0x0007, [:], delay=191)             // Power Source
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=192)             // batteryVoltage
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=193)             // batteryPercentageRemaining
     
     if (isIAS() || is4in1()) {
         IAS_ATTRIBUTES.each { key, value ->
-            cmds += zigbee.readAttribute(0x0500, key, [:], delay=200)
+            cmds += zigbee.readAttribute(0x0500, key, [:], delay=199)
         }
     }
     if (is4in1()) {
         cmds += zigbee.command(0xEF00, 0x07, "00")    // Fantem Tuya Magic
     }
-    cmds += zigbee.command(0xEF00, 0x03)
+    if (isTuya()) {
+        cmds += zigbee.command(0xEF00, 0x03) 
+    }
+    if (isSiHAS()) {
+        cmds += refreshSiHAS()
+    }
     if (settings.allStatusTextEnable == true) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
@@ -2501,10 +2607,16 @@ void initializeVars( boolean fullInit = false ) {
     //
 }
 
+def isTuya() {
+    return (device.getDataValue("manufacturer")?.startsWith("TS") == true)
+}
+
 def tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
-    cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
+    if (isTuya()) {
+        cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
+    }
     return  cmds
 }
 
@@ -2522,6 +2634,9 @@ def configure() {
     if (isIAS() ) {
         cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "Enrolling IAS device: ${cmds}"
+    }
+    else if (isSiHAS()) {
+        cmds += configureSiHAS()
     }
     else if (("0x0406" in DEVICE.configuration)) {
         cmds += "delay 200"
@@ -3281,6 +3396,10 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
  * If the Tuya version has changed, updates the device data value and logs the change.
  */
 void updateTuyaVersion() {
+    if (!isTuya()) {
+        return
+    }
+
     def application = device.getDataValue("application") 
     if (application != null) {
         Integer ver
