@@ -3,14 +3,14 @@
  *
  *  https://community.hubitat.com/t/generic-tuya-contact-temp-zigbee-device/112357
  *
- * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- * 	in compliance with the License. You may obtain a copy of the License at:
+ *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *  in compliance with the License. You may obtain a copy of the License at:
  *
- * 		http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
- * 	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- * 	for the specific language governing permissions and limitations under the License.
+ *   Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *   on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *   for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-02-12 kkossev  - Initial test version
  * ver. 1.0.1  2023-02-15 kkossev  - dynamic Preferences, depending on the device Profile; setDeviceName bug fixed; added BlitzWolf RH3001; _TZE200_nvups4nh fingerprint correction; healthStatus timer started; presenceCountDefaultThreshold bug fix;
@@ -18,19 +18,21 @@
  * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
+ * ver. 1.1.2  2023-10-20 kkossev  - (dev. branch) added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
  *
+ *                                   TODO: 
  *                                   TODO: Add clearStats command
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
  *                                   TODO: deviceProfile is not recognized?? ver 1.0.3 20223/02/25; TODO - remove 'lastRx'on Initialize
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact if not supported by the device profile
- *                                   TODO: - option 'Convert Battery Voltage to Percent'; extend the model in the profile to a list
+ *                                   TODO:  extend the model in the profile to a list
  *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
  */
 
 
-static def version() { "1.1.1" }
-static def timeStamp() { "2023/06/08 9:56 PM" }
+static def version() { "1.1.2" }
+static def timeStamp() { "2023/10/20 12:46 PM" }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -67,6 +69,8 @@ metadata {
         attribute "Info", "string"
         // when defined as attributes, will be shown on top of the 'Current States' list ...
         attribute "healthStatus", "enum", ["offline", "online", "unknown"]
+        attribute "batteryVoltage", "number"
+
 
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0004,0005,EF00", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_nvups4nh", deviceJoinName: "Tuya Contact and T/H Sensor"
         fingerprint profileId: "0104", endpointId: "01", inClusters: "0001,0500,0000", outClusters: "0019,000A", model: "TS0601", manufacturer: "_TZE200_pay2byax", deviceJoinName: "Tuya Contact and Illuminance Sensor"
@@ -92,8 +96,8 @@ metadata {
 
     }
     preferences {
-        input(name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input(name: "txtEnable", type: "bool", title: "<b>Description text logging</b>", description: "<i>Display measured values in HE log page. Recommended value is <b>true</b></i>", defaultValue: true)
+        input(name: "logEnable", type: "bool", title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>", defaultValue: true)
         input(name: "offlineThreshold", type: "number", title: "<b>HealthCheck Offline Threshold</b>", description: "<i>HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check</i>", range:"0..24", defaultValue: presenceCountDefaultThreshold)
         if (isConfigurable()) {
             input (title: "To configure a sleepy device, try any of the methods below :", description: "<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>", type: "paragraph", element: "paragraph")
@@ -119,15 +123,16 @@ metadata {
                 input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
                     '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.</i>'
             }
-            input name: "minReportingTime", type: "number", title: "Minimum time between non-contact reports", description: "<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>", defaultValue: 10, range: "1..3600"
-            
+            input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
+            input name: "minReportingTime", type: "number", title: "<b>Minimum time between non-contact reports</b>", description: "<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>", defaultValue: 10, range: "1..3600"
+            input (name: "pollContactStatus", type: "bool", title: "<b>Poll Contact Status</b>", description: "<i>Poll the contact status when the device is awake</i>", defaultValue: false)
         }
     }
 }
 
 @Field static final Map batteryReportingOptions = [
     defaultValue: 00,
-    options     : [00: 'Default', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
+    options     : [00: 'Default', 7200: 'Every 2 Hours', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
 
 
@@ -267,6 +272,7 @@ def parse(String description) {
     Map descMap = [:]
     try { statsMap['rxCtr']++ } catch (e) { statsMap['rxCtr'] = 0 }; state.stats = mapToJsonString(statsMap)
     descMap = zigbee.parseDescriptionAsMap(description)
+    logDebug "parse() description=$description "
 //    /*try{*/ logDebug "parse() description=$description /*descMap = ${zigbee.parseDescriptionAsMap(description)}*/ " // } catch (e) {logWarn "exception catched when procesing description ${description}"}
     
     if (description?.startsWith('zone status') || description?.startsWith('zone report')) {
@@ -274,7 +280,8 @@ def parse(String description) {
         parseIasMessage(description)    // TS0203 contact sensors
     } 
     else if (description?.startsWith('enroll request')) {
-        /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
+        /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. 
+           It  must do this immediately it has joined the network  (during commissioning). */
         logInfo "Sending IAS enroll response..."
         ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "sending enroll response: ${cmds}"
@@ -292,8 +299,10 @@ def parse(String description) {
                 sendBatteryPercentageEvent(Integer.parseInt(descMap.value, 16))
             } 
             else if (descMap.attrInt == 0x0020) {
-                //log.trace "descMap.attrInt == 0x0020"
-                getBatteryResult(Integer.parseInt(descMap.value, 16))
+                 sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16))
+                if ((settings.voltageToPercent ?: false) == true) {
+                    sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16), convertToPercent=true)
+                }
             } 
             else {
                 log.warn "unparesed attrint $descMap.attrInt"
@@ -392,6 +401,13 @@ def parse(String description) {
     //
     if (isPendingConfig()) {
         ConfigurationStateMachine()
+    }
+    if (settings?.pollContactStatus == true) {          // added 10/19/2023 
+        Map lastTxMap = stringToJsonMap(state.lastTx)
+        //try {logDebug "now() - lastTxMap?.contactPoll = ${(now() - lastTxMap?.contactPoll)}"} catch (e) {logDebug "exception catched when procesing now() - lastTxMap?.contactPoll"}
+        if (lastTxMap?.contactPoll == null || (lastTxMap?.contactPoll != null && (now() - lastTxMap?.contactPoll) > 60000)) {   // last poll was more than 60 seconds ago
+            pollContactStatus()
+        }
     }
 }
 
@@ -545,22 +561,16 @@ def processTuyaCluster(descMap) {
     } 
     else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02")) {
         def dataLen = descMap?.data.size()
-        //log.warn "dataLen=${dataLen}"
-        def transid = zigbee.convertHexToInt(descMap?.data[1])
-        // "transid" is just a "counter", a response will have the same transid as the command
+        def transid = zigbee.convertHexToInt(descMap?.data[1])                 // "transid" is just a "counter", a response will have the same transid as the command
         for (int i = 0; i < (dataLen - 4);) {
-            def dp = zigbee.convertHexToInt(descMap?.data[2 + i])
-            // "dp" field describes the action/message of a command frame
-            def dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])
-            // "dp_identifier" is device dependant
+            def dp = zigbee.convertHexToInt(descMap?.data[2 + i])              // "dp" field describes the action/message of a command frame
+            def dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])           // "dp_identifier" is device dependant
             def fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             def fncmd = getTuyaAttributeValue(descMap?.data, i)                //
             //if (settings?.logEnable) log.trace "${device.displayName}  dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4;
-            //log.warn "next index is : ${i}"
         }
-        //log.warn "##### end of parsing ####"
     } // if (descMap?.command == "01" || descMap?.command == "02")
 }
 
@@ -638,6 +648,13 @@ def parseIasMessage(String description) {
 def sendContactEvent(contactActive, isDigital = false) {
     def descriptionText = "contact is " + (contactActive  ? "open" : "closed")
     if (txtEnable) log.info "${device.displayName} ${descriptionText}"
+    Map statsMap = stringToJsonMap(state.stats); 
+    // if contact is changed and contactPoll time is less than 10 seconds ago, increment the stats.outOfSync counter
+    if ((contactActive ? "open" : "closed") != device.currentValue("contact")) {
+        if (now() - (statsMap['contactPoll'] ?: now() ) < 10000) {
+            try {statsMap['outOfSync']++} catch (e) {statsMap['outOfSync'] = 1; }
+        }
+    }
     sendEvent(
             name: 'contact',
             value: contactActive ? 'open' : 'closed',
@@ -645,6 +662,7 @@ def sendContactEvent(contactActive, isDigital = false) {
             type: isDigital == true ? "digital" : "physical",
             descriptionText: descriptionText
     )
+    state.stats = mapToJsonString(statsMap)
 }
 
 def temperatureEvent(temperature, isDigital = false) {
@@ -750,7 +768,6 @@ def motionEvent(value) {
 }
 
 def illuminanceEvent(illuminance, isDigital = false) {
-    //def rawLux = Integer.parseInt(descMap.value,16)
     def lux = illuminance > 0 ? Math.round(Math.pow(10, (illuminance / 10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "type": isDigital == true ? 'digital' : 'physical', "unit": "lx")
     logInfo "illuminance is ${lux} Lux"
@@ -788,7 +805,7 @@ def updated() {
 
     if (isBatteryConfigurable()) {
         int batteryReportinginterval = (settings.batteryReporting as Integer) ?: 0
-        logDebug "settings?.batteryReporting = ${settings?.batteryReporting as int} batteryReportinginterval=${batteryReportinginterval}"
+        //logDebug "settings?.batteryReporting = ${settings?.batteryReporting as int} batteryReportinginterval=${batteryReportinginterval}"
         if (batteryReportinginterval > 0) {
             def newBattCfg = "3600" + "," + batteryReportinginterval.toString() + "," + "1"                // TODO !! org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object '[, 0, , 0, , 0, , 0, , 0, , 0, , 0, ............. with class 'java.util.ArrayList' to class 'int' on line 780 (method updated)
             if (lastTxMap.battCfg == null || (lastTxMap.battCfg != lastRxMap.battCfg) || (lastTxMap.battCfg != newBattCfg ) ) {
@@ -914,6 +931,7 @@ def configTimer() {
 
 def refresh() {
     checkDriverVersion()
+    pollContactStatus() 
     if (deviceProfiles[getModelGroup()]?.capabilities?.battery?.value == true) {
         List<String> cmds = []
         cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
@@ -922,6 +940,16 @@ def refresh() {
     } else {
         logInfo "refresh() is not implemented for this sleepy Zigbee device"
     }
+}
+
+def pollContactStatus() {
+        Map lastTxMap = stringToJsonMap(state.lastTx)
+        List<String> cmds = []
+        cmds += zigbee.readAttribute(0x0500, 0x0000, [:], delay = 200)
+        sendZigbeeCommands(cmds)
+        logWarn "pollContactStatus() called"
+        lastTxMap.contactPoll = now()
+        state.lastTx = mapToJsonString(lastTxMap)
 }
 
 static def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
@@ -942,7 +970,8 @@ def resetStats() {
     Map stats = [
             rxCtr  : 0,
             txCtr  : 0,
-            rejoins: 0
+            rejoins: 0,
+            outOfSync: 0
     ]
     Map lastRx = [
             battCfg : '-1,-1,-1'
@@ -1090,7 +1119,8 @@ def sendBatteryPercentageEvent(rawValue) {
         result.name = 'battery'
         result.translatable = true
         result.value = Math.round(rawValue / 2)
-        result.descriptionText = "${device.displayName} battery is ${result.value}%"
+        result.descriptionText = "${device.displayName} battery percentage is ${result.value}%"
+        result.descriptionText += " (${device.currentValue("contact")})"
         //result.isStateChange = true
         result.unit = "%"
         result.type = 'physical'
@@ -1111,30 +1141,39 @@ def handleTuyaBatteryLevel( fncmd ) {
     sendBatteryPercentageEvent(rawValue*2)
 }
 
-private Map getBatteryResult(rawValue) {
-    logDebug "getBatteryResult volts = ${(double) rawValue / 10.0}"
-    def linkText = getLinkText(device)
 
+def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
     def result = [:]
-
     def volts = rawValue / 10
     if (!(rawValue == 0 || rawValue == 255)) {
-        def minVolts = 2.1
-        def maxVolts = 3.0
+        def minVolts = 2.2
+        def maxVolts = 3.2
         def pct = (volts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0)
-            roundedPct = 1
-        result.value = Math.min(100, roundedPct)
-        result.descriptionText = "${linkText} battery is ${result.value}%"
-        result.name = 'battery'
-        //result.isStateChange = true
+        if (roundedPct <= 0) roundedPct = 1
+        if (roundedPct >100) roundedPct = 100
+        if (convertToPercent == true) {
+            result.value = Math.min(100, roundedPct)
+            result.name = 'battery'
+            result.unit  = '%'
+            result.descriptionText = "battery is ${roundedPct} %"
+        }
+        else {
+            result.value = volts
+            result.name = 'batteryVoltage'
+            result.unit  = 'V'
+            result.descriptionText = "battery is ${volts} Volts"
+        }
+        result.descriptionText += " (${device.currentValue("contact")})"
         result.type = 'physical'
-        result.unit = "%"
+        result.isStateChange = true
+        logInfo "${result.descriptionText}"
         sendEvent(result)
-    } else {
-        if (settings?.logEnable) log.warn "${device.displayName} ignoring BatteryResult(${rawValue})"
     }
+    else {
+        logWarn "ignoring BatteryResult(${rawValue})"
+    }    
 }
 
 // called when any event was received from the Zigbee device in parse() method..
