@@ -60,7 +60,7 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-21 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; 
+ * ver. 1.6.5  2023-10-21 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; 
  *
  *                                   TODO: W.I.P.: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
@@ -86,7 +86,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/21 11:51 AM"}
+def timeStamp() {"2023/10/21 7:02 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -103,7 +103,7 @@ import java.util.concurrent.ConcurrentHashMap
 metadata {
     definition (name: "Tuya Multi Sensor 4 In 1", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy", singleThreaded: true ) {
         capability "Sensor"
-        capability "Configuration"
+        //capability "Configuration"
         capability "Battery"
         capability "MotionSensor"
         capability "TemperatureMeasurement"        
@@ -478,16 +478,28 @@ def isChattyRadarReport(descMap) {
             configuration : ["battery": false]
     ],
 
-    "NONTUYA_MOTION_IAS"   : [
-            description   : "Other OEM Motion sensors (IAS)",
-            models        : ["TS0202","RH3040"],
-            device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
+    "SONOFF_MOTION_IAS"   : [
+            description   : "Sonoff/eWeLink Motion sensor",
+            models        : ["eWeLink"],
+            device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],   // very sleepy !!
             capabilities  : ["MotionSensor": true, "Battery": true],
             preferences   : ["motionReset":true],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"ms01", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"],        // for testL 60 seconds re-triggering period!
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"msO1", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"],        // second variant
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"MS01", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"],        // third variant
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"MS01", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"]        // third variant
+            ],
+            deviceJoinName: "Sonoff/eWeLink Motion sensor",
+            configuration : ["0x0001":[["bind":true], ["reporting":"0x21, 0x20, 3600, 7200, 0x02"]]]  // battery percentage, min 3600, max 7200, UINT8, delta 2
+    ],
+
+    "NONTUYA_MOTION_IAS"   : [
+            description   : "Other OEM Motion sensors (IAS)",
+            models        : ["MOT003","XXX"],
+            device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
+            capabilities  : ["MotionSensor": true, "Battery": true],
+            preferences   : ["motionReset":true],
+            fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0400,0402,0500", outClusters:"0019", model:"MOT003", manufacturer:"HiveHome.com", deviceJoinName: "Hive Motion Sensor"]         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
             ],
             deviceJoinName: "Other OEM Motion sensor (IAS)",
@@ -1225,7 +1237,7 @@ def parse(String description) {
         logDebug "parse: enroll request: $description"
         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
         if (settings?.logEnable) log.info "${device.displayName} Sending IAS enroll response..."
-        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        ArrayList<String> cmds = zigbee.enrollResponse(300) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=201)
         logDebug "enroll response: ${cmds}"
         sendZigbeeCommands( cmds )  
     }    
@@ -2642,10 +2654,18 @@ def isTuya() {
 
 def tuyaBlackMagic() {
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
     if (isTuya()) {
+        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
         cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x13, [:], delay=200)
     }
+    else {
+        logDebug "tuyaBlackMagic for non-Tuya device ..."
+        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005, 0x4000], [:], delay=200)      // manufacturer, model, SoftwareBuildID
+        if (isIAS() ) {
+            logDebug "tuyaBlackMagic for IAS device ..."
+            cmds += zigbee.readAttribute(0x0500, 0x0001, [:], delay=201)                    // IAS Zone Cluster, Zone Type
+        }        
+    }   
     return  cmds
 }
 
@@ -2658,14 +2678,22 @@ def configure() {
     scheduleDeviceHealthCheck()
     state.motionStarted = unix2formattedDate(now())
     ArrayList<String> cmds = []
-    cmds += tuyaBlackMagic()    
-    
+    cmds += tuyaBlackMagic()     // commented out 10/21/2023 - we aleady have the BlackMagic in the initialize() method !
+    int intMinTime = safeToInt(3600)    // TODO: make it configurable
+    int intMaxTime = safeToInt(7200)    // TODO: make it configurable
     if (isIAS() ) {
-        cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
-        logDebug "Enrolling IAS device: ${cmds}"
+        cmds += zigbee.enrollResponse(300) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=224)
+        logDebug "Enrolling IAS device ..."
     }
-    else if (isSiHAS()) {
+    if (isSiHAS()) {
         cmds += configureSiHAS()
+    }
+    else if ("0x0001" in DEVICE.configuration) {    // Power Configuration cluster
+        logDebug "configuring the battery reporting... (min=${intMinTime}, max=${intMaxTime}, delta=0x02)"
+        cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=225)  // delta 0x02 = 1% change
+        cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=226)  // TEST
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=227)    // try also battery voltage
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=228)    // try also battery voltage
     }
     else if (("0x0406" in DEVICE.configuration)) {
         cmds += "delay 200"
@@ -3643,7 +3671,7 @@ def validateAndFixPreferences() {
     DEVICE.preferences.each {
         Map foundMap = getPreferencesMap(it.key)
         if (foundMap == null) {
-            logWarn "validateAndFixPreferences: map not found for preference ${it.key}"
+            logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
             return null
         }
         settingType = device.getSettingType(it.key)
