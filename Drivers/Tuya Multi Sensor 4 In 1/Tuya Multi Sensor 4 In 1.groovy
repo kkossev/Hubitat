@@ -86,7 +86,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/21 10:49 AM"}
+def timeStamp() {"2023/10/21 11:51 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1016,8 +1016,8 @@ def isChattyRadarReport(descMap) {
     
      // isSiHAS()
     "SIHAS_USM-300Z_4_IN_1" : [ 
-            description   : "SONOFF SNZB-06P RADAR",
-            models        : ["SONOFF"],
+            description   : "SiHAS USM-300Z 4-in-1",
+            models        : ["ShinaSystem"],
             device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
             capabilities  : ["MotionSensor": true],
             preferences   : [:],                             
@@ -1383,17 +1383,26 @@ def parse(String description) {
     } // if 'catchall:' or 'read attr -'
     else if (description.startsWith('raw')) {
         // description=raw:11E201E0020A0AE0219F00, dni:11E2, endpoint:01, cluster:E002, size:0A, attrId:E00A, encoding:21, command:0A, value:009F, clusterInt:57346, attrInt:57354
+        /*
         descMap = [:]
         descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry ->
             def pair = entry.split(':')
             [(pair.first().trim()): pair.last().trim()]
         }        
-        logDebug "parsed row : cluster=${descMap.cluster} attrId=${descMap.attrId}"
-        if (descMap.cluster  ==  "E002") {
+        */
+        descMap = myParseDescriptionAsMap(description)
+        logDebug "parsed raw : cluster=${descMap.cluster} clusterId=${descMap.clusterId} attrId=${descMap.attrId} descMap=${descMap}"
+        if (descMap.cluster  ==  "E002") {      // TODO !!!!!!!!!!! check if this is correct :  cluster vs clusterId
             processE002Cluster( descMap )
         }
+        else if (descMap.profileId == "0000") {    // zdo
+            parseZDOcommand(descMap)
+        } 
+        if (descMap.clusterId  ==  "0005") {
+            logDebug "<b>unprocessed cluster ${descMap.clusterId}</b> description = ${description}"
+        }        
         else {
-            logWarn "<b>UNPROCESSED RAW cluster ${descMap?.cluster}</b> description = ${description}"
+            logWarn "<b>UNPROCESSED RAW cluster ${descMap.clusterId}</b> description = ${description}"
         }
     }
     else {
@@ -1406,6 +1415,7 @@ Map myParseDescriptionAsMap( String description )
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
+        //logWarn "myParseDescriptionAsMap: parsed OK using zigbee.parseDescriptionAsMap descMap=${descMap}"
         return descMap    // all OK!
     }
     catch (e1) {
@@ -1432,6 +1442,7 @@ Map myParseDescriptionAsMap( String description )
 
 def parseZDOcommand( Map descMap ) {
     switch (descMap.clusterId) {
+        // TODO - add ZDO 0005
         case "0006" :
             if (settings?.logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7]+descMap.data[6]})"
             break
