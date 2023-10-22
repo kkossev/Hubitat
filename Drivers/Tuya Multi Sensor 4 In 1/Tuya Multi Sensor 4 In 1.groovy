@@ -60,8 +60,9 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!
+ * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *
+ *                                   TODO: W.I.P. TS0601_2IN1 refactoring
  *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
  *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: W.I.P.: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
@@ -89,7 +90,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/22 6:38 PM"}
+def timeStamp() {"2023/10/22 7:55 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -194,12 +195,14 @@ metadata {
         if (("ledEnable" in DEVICE?.preferences)) {            // 4in1()
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
         }
-        if (("keepTime" in DEVICE?.preferences) && (DEVICE?.preferences.keepTime == true)) {
+        /*
+        if (("keepTime" in DEVICE?.preferences) && (DEVICE?.preferences.keepTime != false)) {
             input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: getKeepTimeOpts().options, defaultValue: getKeepTimeOpts().defaultValue)
         }
-        if (("sensitivity" in DEVICE?.preferences) && (DEVICE?.preferences.sensitivity == true)) {
+        if (("sensitivity" in DEVICE?.preferences) && (DEVICE?.preferences.sensitivity != false)) {
             input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
         }
+        */
         if (advancedOptions == true || advancedOptions == false) { 
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
                 input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 5)   
@@ -210,12 +213,14 @@ metadata {
             input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
         }
 
-        if (DEVICE.device?.type == "radar") {
+        //if (DEVICE.device?.type == "radar") {
             // itterate over all radars DEVICE.preferences map and inputIt
             (DEVICE.preferences).each { key, value ->
-                input inputIt(key)
+                if (inputIt(key) != null) {
+                    input inputIt(key)
+                }
             }
-        }
+        //}
 
     if (false) {
         if ("textLargeMotion" in DEVICE?.preferences) {
@@ -362,16 +367,23 @@ def isChattyRadarReport(descMap) {
             configuration : ["battery": false]
     ],
 
-    "TS0601_2IN1"  : [
+    // is2in1() 
+    "TS0601_2IN1"  : [      // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568 
             description   : "Tuya 2in1 (Motion and Illuminance) sensor",
             models         : ["TS0601"],
             device        : [type: "2IN1", isIAS:true, powerSource: "battery", isSleepy:true],
-            capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "IlluminanceMeasurement": true, "Battery": true],
-            preferences   : ["motionReset":true, "invertMotion":true, "keepTime":true, "sensitivity":true], // TODO - check sensitivity !
+            capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "Battery": true],
+            preferences   : ["motionReset":true, "invertMotion":true, "keepTime":"10", "sensitivity":true], // TODO - check sensitivity !
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bh3n6gk8", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_1ibpyhdc", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"]          //
+            ],
+            tuyaDPs:        [
+                [dp:10,  name:"keepTime",              type:"enum",   rw: "rw", min:0, max:3,    defaultValue:"0",  unit:"seconds",   map:[0:"10 seconds", 1:"30 seconds", 2:"60 seconds", 3:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (refresh and update only while active)</i>"],
+                [dp:12,  name:'illuminance',           type:"number", rw: "ro", min:0, max:1000, defaultValue:0,   step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",     description:'<i>illuminance</i>'],
+                [dp:102, name:'illuminance_interval',  type:"number", rw: "rw", min:1, max:720,  defaultValue:1,   step:1,  scale:1,    unit:"minutes",  title:"<b>Illuminance Interval</b>",     description:'<i>Brightness acquisition interval (refresh and update only while active)</i>'], 
+
             ],
             deviceJoinName: "Tuya Multi Sensor 2 In 1",
             configuration : ["battery": false]
@@ -1982,6 +1994,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 logInfo "Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
                 device.updateSetting("keepTime", [value:fncmd.toString(), type:"enum"])                
                 break
+                /*
             case 0x0C : // (12)
                 if (is2in1()) {
                     illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
@@ -1990,6 +2003,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
                 }                  
                 break
+                */
             case 0x19 : // (25) 
                 logDebug "Motion Switch battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 handleTuyaBatteryLevel( fncmd )
@@ -2007,12 +2021,12 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (is3in1()) {     // battery level for 3 in 1;  
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )                    
-                }
+                } /*
                 else if (is2in1()) {     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568
                     logDebug "Tuya 2in1 illuminance_interval time is ${fncmd} minutes"
                     // TODO !!!
                     //device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])                  
-                }            
+                }  */          
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }            
@@ -3615,12 +3629,31 @@ def inputIt( String param, boolean debug=false ) {
     boolean isTuyaDP 
     try {
         preference = DEVICE.preferences["$param"]
-        isTuyaDP = preference.isNumber()
     }
     catch (e) {
         if (debug) log.warn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}"
         return null
     }   
+    //  check for boolean values
+    try {
+        if (preference in [true, false]) {
+            if (debug) log.warn "inputIt: preference ${param} is boolean value ${preference} - skipping it for now!"
+            return null
+        }
+    }
+    catch (e) {
+        if (debug) log.warn "inputIt: exception ${e} caught while checking for boolean values preference ${param} value ${preference}"
+        return null
+    } 
+
+    try {
+        isTuyaDP = preference.isNumber()
+    }
+    catch (e) {
+        if (debug) log.warn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}"
+        return null
+    } 
+
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
     foundMap = getPreferencesMap(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
@@ -3798,8 +3831,8 @@ def validateAndFixPreferences() {
 
 
 def test( val ) {
-    //def result = inputIt( val, debug=true )
-    //logWarn "test inputIt(${val}) = ${result}"
+    def result = inputIt( val, debug=true )
+    logWarn "test inputIt(${val}) = ${result}"
     //resetPreferencesToDefaults(true)
     /*
     settings.each { k, v -> 
@@ -3819,5 +3852,5 @@ def test( val ) {
 */
     //validateAndFixPreferences()
     //resetPreferencesToDefaults(true)
-    getPreferencesMap( "motionReset", true)
+    //getPreferencesMap( "motionReset", true)
 }
