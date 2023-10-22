@@ -61,8 +61,9 @@
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
+ *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors;
  *
- *                                   TODO: W.I.P. TS0601_2IN1 refactoring
+ *                                   TODO: W.I.P. 
  *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
  *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: W.I.P.: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
@@ -90,7 +91,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/22 7:55 PM"}
+def timeStamp() {"2023/10/22 10:54 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -132,6 +133,9 @@ metadata {
         attribute "existance_time", "number"        // BlackSquareRadar & LINPTECH
         attribute "leave_time", "number"            // BlackSquareRadar only
         attribute" pushed", "number"                // TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]
+        attribute "keepTime", "enum", ["10 seconds", "30 seconds","60 seconds", "120 seconds"]
+        attribute "sensitivity", "enum", ["low", "medium","high"]
+        
         
         attribute "radarSensitivity", "number" 
         attribute "detectionDelay", "decimal" 
@@ -339,7 +343,7 @@ def isChattyRadarReport(descMap) {
     "TS0202_4IN1"  : [
             description   : "Tuya 4in1 (motion/temp/humi/lux) sensor",
             models        : ["TS0202"],
-            device        : [type: "4IN1", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
+            device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true, "keepTime":true, "sensitivity":true],
             commands      : ["reportingTime4in1", "reportingTime4in1"],
@@ -357,7 +361,7 @@ def isChattyRadarReport(descMap) {
     "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
             description   : "Tuya 3in1 (Motion/Temp/Humi) sensor",
             models        : ["TS0601"],
-            device        : [type: "3IN1", powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
+            device        : [type: "PIR", powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true],
             fingerprints  : [
@@ -371,18 +375,22 @@ def isChattyRadarReport(descMap) {
     "TS0601_2IN1"  : [      // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568 
             description   : "Tuya 2in1 (Motion and Illuminance) sensor",
             models         : ["TS0601"],
-            device        : [type: "2IN1", isIAS:true, powerSource: "battery", isSleepy:true],
+            device        : [type: "PIR", isIAS:false, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "IlluminanceMeasurement": true, "Battery": true],
-            preferences   : ["motionReset":true, "invertMotion":true, "keepTime":"10", "sensitivity":true], // TODO - check sensitivity !
+            preferences   : ["motionReset":true, "invertMotion":true, "keepTime":"10", "sensitivity":"9"],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bh3n6gk8", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_1ibpyhdc", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"]          //
             ],
             tuyaDPs:        [
-                [dp:10,  name:"keepTime",              type:"enum",   rw: "rw", min:0, max:3,    defaultValue:"0",  unit:"seconds",   map:[0:"10 seconds", 1:"30 seconds", 2:"60 seconds", 3:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (refresh and update only while active)</i>"],
-                [dp:12,  name:'illuminance',           type:"number", rw: "ro", min:0, max:1000, defaultValue:0,   step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",     description:'<i>illuminance</i>'],
-                [dp:102, name:'illuminance_interval',  type:"number", rw: "rw", min:1, max:720,  defaultValue:1,   step:1,  scale:1,    unit:"minutes",  title:"<b>Illuminance Interval</b>",     description:'<i>Brightness acquisition interval (refresh and update only while active)</i>'], 
+                [dp:1,   name:'motion',                type:"enum",   rw: "ro", min:0, max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"inactive", 1:"active"] ,   unit:"",  description:'<i>Motion</i>'], 
+                [dp:4,   name:'battery',               type:"number", rw: "ro", min:0, max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%",          title:"<b>Battery level</b>",              description:'<i>Battery level</i>'],
+                [dp:9,   name:"sensitivity",           type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                [dp:10,  name:"keepTime",              type:"enum",   rw: "rw", min:0, max:3,    defaultValue:"0",  unit:"seconds",    map:[0:"10 seconds", 1:"30 seconds", 2:"60 seconds", 3:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
+                [dp:12,  name:'illuminance',           type:"number", rw: "ro", min:0, max:1000, defaultValue:0,    step:1,  scale:1,  unit:"lx",       title:"<b>illuminance</b>",     description:'<i>illuminance</i>'],
+                [dp:102, name:'illuminance_interval',  type:"number", rw: "rw", min:1, max:720,  defaultValue:1,    step:1,  scale:1,  unit:"minutes",  title:"<b>Illuminance Interval</b>",     description:'<i>Brightness acquisition interval (update at the time motion is activated)</i>'], 
 
             ],
             deviceJoinName: "Tuya Multi Sensor 2 In 1",
@@ -605,7 +613,7 @@ def isChattyRadarReport(descMap) {
                 [dp:15,  name:'radarSensitivity',    type:"number",  rw: "rw", min:0,   max:7 ,    defaultValue:5,   step:1,  scale:1,   unit:"x",          title:"<b>Radar sensitivity</b>",          description:'<i>Large motion detection sensitivity of the radar</i>'],                
                 [dp:16 , name:'smallMotionDetectionSensitivity', type:"number",  rw: "rw", min:0,   max:7,  defaultValue:5,   step:1,  scale:1,   unit:"x", title:"<b>Small motion sensitivity</b>",   description:'<i>Small motion detection sensitivity</i>'],
                 [dp:19,  name:"distance",            type:"decimal", rw: "ro", min:0.0, max:10.0,  defaultValue:0.0, step:1,  scale:100, unit:"meters",     title:"<b>Distance</b>",                   description:'<i>detected distance</i>'],
-                [dp:101, name:'batteryLevel',        type:"number",  rw: "rO", min:0,   max:100,   defaultValue:0,   step:1,  scale:1,   unit:"%",          title:"<b>Battery level</b>",              description:'<i>Battery level</i>']
+                [dp:101, name:'batteryLevel',        type:"number",  rw: "ro", min:0,   max:100,   defaultValue:100, step:1,  scale:1,   unit:"%",          title:"<b>Battery level</b>",              description:'<i>Battery level</i>']
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19],
@@ -1078,7 +1086,7 @@ def isChattyRadarReport(descMap) {
             description   : "Unknown device",        // the Device Profile description (shown in the Preferences)
             models        : ["UNKNOWN"],             // used to match a Device profile if the individuak fingerprints do not match
             device        : [
-                type: "unknown_device_type",         // 'radar'
+                type: "PIR",         // 'PIR' or 'radar' 
                 isIAS:true,                          // define it for PIR sensors only!
                 powerSource: "dc",                   // determines the powerSource value - can be 'battery', 'dc', 'mains'
                 isSleepy:false                       // determines the update and ping behaviour
@@ -1091,13 +1099,13 @@ def isChattyRadarReport(descMap) {
             tuyaDPs:        [
                 [
                     dp:1,
-                    name:"presence_state",
+                    name:"motion",
                     type:"enum",
                     rw: "ro",
                     min:0,
                     max:1,
-                    map:[0:"none", 1:"presence"],
-                    description:'Presence state'
+                    map:[0:"inactive", 1:"active"],
+                    description:'Motion state'
                 ]
             ],        
             deviceJoinName: "Unknown device",        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
@@ -1197,6 +1205,7 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         }   
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
+            logWarn "no default value for preference ${parName} !"
             return // continue
         }
         if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -1914,7 +1923,14 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
             if (!doNotTrace) {
                 if (settings.logEnable) { logInfo "${descText} (no change)"}
             }
-            return true                                      // we are done (if there was potentially a preference, it should be already set to the same value)
+            // patch for inverted motion sensor 2-in-1
+            if (name == "motion" && is2in1()) {
+                logDebug "patch for inverted motion sensor 2-in-1"
+                // continue ... 
+            }
+            else {
+                return true      // we are done (if there was potentially a preference, it should be already set to the same value)
+            }
         }
         
         // DP value (fncmd) is not equal to the attribute last value or was changed- we must send an event!
@@ -2435,7 +2451,7 @@ def updated() {
         logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
         cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
     }
-
+/*
     // sensitivity - TODO! - REMOVE !!!!!
     // settings?.sensitivity was changed in version 1.3.0
     def sensitivityNew 
@@ -2447,36 +2463,46 @@ def updated() {
         sensitivityNew = sensitivityOpts.defaultValue
     }
     //
-   
-    if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity == true))) {
-        if (isIAS()) {
-            def val = sensitivityNew
-            if (val != null) {
-                logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
-                cmds += sendSensitivityIAS(val)
+   */
+    if (settings?.sensitivity != null) {
+        if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
+            def val = settings?.sensitivity as int    
+            if (isIAS()) {
+                if (val != null) {
+                    logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
+                    cmds += sendSensitivityIAS(val)
+                }
+            }
+            else { 
+                if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}" }
+                setPar( "sensitivity", val as String)
             }
         }
-        else {      // TODO - move to dpMap !!
-            def val = sensitivityNew
-            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
-            if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}" }
-        }
     }
-    
+    else {
+        logDebug "sensitivity is not set"
+    }
 
     // keep time
-    if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime == true))) {
-        if (isIAS() && (settings?.keepTime != null)) {
-           cmds += sendKeepTimeIAS( settings?.keepTime )
-           logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
-        }        
-        else {  // TODO - move to dpMap !!
-            def val = settings?.keepTime as int
-            cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-            if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}" }           
-       }
+    if (settings?.keepTime != null) {
+        if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime != false))) {
+            if (isIAS() && (settings?.keepTime != null)) {
+            cmds += sendKeepTimeIAS( settings?.keepTime )
+            logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+            }        
+            else {  // TODO - move to dpMap !!
+                /*
+                def val = settings?.keepTime as int
+                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
+                */
+                if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${(settings?.keepTime as int )}" }           
+                setPar( "keepTime", settings?.keepTime as String)
+        }
+        }
     }
-
+    else {
+        logDebug "keepTime is not set"
+    }
     // new update method for all radars, WITHOUT Linptech - TODO !
     if (isLINPTECHradar()) {
         
@@ -2485,7 +2511,7 @@ def updated() {
         setPar( "motionDetectionSensitivity", settings?.motionDetectionSensitivity)
         setPar( "staticDetectionSensitivity", settings?.staticDetectionSensitivity )
     }    
-    else if (DEVICE.device?.type == "radar") {
+    else if (DEVICE.device?.type in ["radar", "PIR"]) {
         // Itterates through all settings
         cmds += updateAllPreferences()
     }
@@ -3210,7 +3236,7 @@ def updateAllPreferences() {
             }
         }
         else {
-            logWarn "warning: couldn't find tuyaDPs map for preference ${name} dp = ${dp}"
+            logDebug "warning: couldn't find tuyaDPs map for preference ${name} (dp = ${dp})"
             return null
         }
     }    
@@ -3831,9 +3857,13 @@ def validateAndFixPreferences() {
 
 
 def test( val ) {
+    /*
     def result = inputIt( val, debug=true )
     logWarn "test inputIt(${val}) = ${result}"
-    //resetPreferencesToDefaults(true)
+    */
+    log.trace settings
+    resetPreferencesToDefaults(true)
+    log.trace settings
     /*
     settings.each { k, v -> 
         String settingName = k
