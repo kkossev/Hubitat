@@ -60,7 +60,7 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; 
+ * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!
  *
  *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
  *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
@@ -89,7 +89,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/22 3:56 PM"}
+def timeStamp() {"2023/10/22 6:38 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -102,7 +102,7 @@ import hubitat.zigbee.zcl.DataType
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy onese
 
 metadata {
@@ -130,6 +130,7 @@ metadata {
         attribute "unacknowledgedTime", "number"    // AIR models
         attribute "existance_time", "number"        // BlackSquareRadar & LINPTECH
         attribute "leave_time", "number"            // BlackSquareRadar only
+        attribute" pushed", "number"                // TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]
         
         attribute "radarSensitivity", "number" 
         attribute "detectionDelay", "decimal" 
@@ -200,7 +201,7 @@ metadata {
             input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
         }
         if (advancedOptions == true || advancedOptions == false) { 
-            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) ) {
+            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
                 input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 5)   
                 input name: "illuminanceCoeff", type: "decimal", title: "<b>Illuminance Correction Coefficient</b>", description: "<i>Illuminance correction coefficient, range (0.10..10.00)</i>", range: "0.10..10.00", defaultValue: 1.00
             }
@@ -425,20 +426,26 @@ def isChattyRadarReport(descMap) {
             configuration : ["battery": false]
     ],
     
-    "TS0202_MOTION_SWITCH": [
+    // isMotionSwitch()
+    "TS0202_MOTION_SWITCH": [   
             description   : "Tuya Motion Sensor and Scene Switch",
             models        : ["TS0202"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
-            capabilities  : ["MotionSensor":true, "switch":true, "Battery":true],
-            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],  // TODO - check sensitivity !
+            capabilities  : ["MotionSensor":true, "IlluminanceMeasurement":true, "switch":true, "Battery":true],
+            preferences   : ["motionReset":true, "keepTime":false, "sensitivity":false, "luxThreshold":false],    // keepTime is hardcoded 60 seconds, no sensitivity configuration
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,EF00,0000", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_cwamkvua", deviceJoinName: "Tuya Motion Sensor and Scene Switch"]
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,EF00,0000", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_cwamkvua", deviceJoinName: "Tuya Motion Sensor and Scene Switch"]  // vendor: 'Linkoze', model: 'LKMSZ001'
                 
+            ],
+            tuyaDPs:        [
+                [dp:101, name:'pushed',         type:"enum",   rw: "ro", min:0, max:2, defaultValue:"0", step:1,  scale:1,    map:[0:"pushed", 1:"doubleTapped", 2:"held"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
+                [dp:102, name:'illuminance',    type:"number", rw: "ro", min:0, max:1, defaultValue:0,   step:1,  scale:1,    unit:"lx",       title:"<b>illuminance</b>",     description:'<i>illuminance</i>'],
+
             ],
             deviceJoinName: "Tuya Motion Sensor and Scene Switch",
             configuration : ["battery": false]
     ],
-    
+
     "TS0601_PIR_PRESENCE"   : [ // isBlackPIRsensor()       // https://github.com/zigpy/zha-device-handlers/issues/1618
             description   : "Tuya PIR Human Motion Presence Sensor (Black)",
             models        : ["TS0601"],
@@ -1040,7 +1047,7 @@ def isChattyRadarReport(descMap) {
     "SIHAS_USM-300Z_4_IN_1" : [ 
             description   : "SiHAS USM-300Z 4-in-1",
             models        : ["ShinaSystem"],
-            device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
+            device        : [type: "radar", powerSource: "battery", isIAS:false, isSleepy:false],
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "Battery": true],
             preferences   : [:],                             
             fingerprints  : [
@@ -1050,7 +1057,7 @@ def isChattyRadarReport(descMap) {
             tuyaDPs       : [:],
             attributes    : [:],
             deviceJoinName: "SiHAS USM-300Z 4-in-1",
-            //configuration : ["0x0406":"bind"]
+            //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:]
     ],    
   
@@ -1162,7 +1169,7 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         if (debug) log.trace "$parName $mapValue"
         // TODO - could be also 'true' or 'false' ...
         if (mapValue in [true, false]) {
-            logInfo "Preference ${parName} is predefined -> (${mapValue})"
+            logDebug "Preference ${parName} is predefined -> (${mapValue})"
             // TODO - set the predefined value
             /*
             if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -1813,7 +1820,7 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false)
  */
 boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     if (state.deviceProfile == null)  { return false }
-    if (!(DEVICE.device?.type == "radar"))      { return false }       // only these models are handled here for now ...
+    //if (!(DEVICE.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status) 
 
     def tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs
@@ -1917,6 +1924,10 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
             case "illuminance_lux" :
                 illuminanceEventLux(valueCorrected)       
                 break
+            case "pushed" :
+                logDebug "button event received fncmd=${fncmd} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+                buttonEvent(valueScaled)
+                break
             default :
                 sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
                 if (!doNotTrace) {
@@ -1984,24 +1995,15 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 handleTuyaBatteryLevel( fncmd )
                 break
             case 0x65 :    // (101)
-                if (isMotionSwitch()) {    // button 'single': 0, 'hold': 1, 'double': 2
-                    def action = fncmd == 2 ? 'held' : fncmd == 1 ? 'doubleTapped' : fncmd == 0 ? 'pushed' : 'unknown'
-                    logInfo "button 1 was $action"
-                    sendEvent(name: action, value: '1', data: [buttonNumber: 1], descriptionText: "button 1 was pushed", isStateChange: true, type: 'physical')
-                }
-                else {     //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
-                    logDebug "motion event 0x65 fncmd = ${fncmd}"
-                    handleMotion(motionActive=fncmd)
-                }
+                 //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
+                logDebug "motion event 0x65 fncmd = ${fncmd}"
+                handleMotion(motionActive=fncmd)
                 break            
             case 0x66 :     // (102)
                 if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1 
                     logInfo "4-in-1 reporting time interval is ${fncmd} minutes"
                     device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])
-                }
-                else if (isMotionSwitch()) {
-                    illuminanceEventLux( fncmd )    // 0 = 'dark' 1 = 'bright'
-                }
+                } 
                 else if (is3in1()) {     // battery level for 3 in 1;  
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )                    
@@ -2340,6 +2342,11 @@ def occupancyEvent( raw ) {
     //runIn( 1, formatAttrib, [overwrite: true])    
 }
 
+def buttonEvent( action, buttonNumber=1 ) {
+    logInfo "button $buttonNumber was $action"
+    sendEvent(name: action, value: '1', data: [buttonNumber: 1], descriptionText: "button 1 was pushed", isStateChange: true, type: 'physical')
+}
+
 def powerSourceEvent( state = null) {
     String ps = null
     if (state != null && state == 'unknown' ) {
@@ -2647,7 +2654,7 @@ void resetStats() {
 
 // called by initialize() button
 void initializeVars( boolean fullInit = false ) {
-    logInfo "${device.displayName} InitializeVars( fullInit = ${fullInit} )..."
+    logInfo "InitializeVars( fullInit = ${fullInit} )..."
     if (fullInit == true) {
         deleteAllCurrentStates()
         state.clear()
@@ -2677,6 +2684,13 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit == true || settings.humidityOffset == null) device.updateSetting("humidityOffset",[value:0.0, type:"decimal"])
     if (fullInit == true || settings.luxOffset == null) device.updateSetting("luxOffset",[value:1.0, type:"decimal"])
     if (fullInit == true || settings.luxThreshold == null) device.updateSetting("luxThreshold", [value:5, type:"number"])
+    if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold  == false)) {
+        logDebug "setting luxThreshold to 0"
+        device.updateSetting("luxThreshold", [value:0, type:"number"])
+    }
+    else {
+        logDebug "luxThreshold is not set to 0 (luxThreshold=${DEVICE?.preferences.luxThreshold}, IlluminanceMeasurement=${DEVICE?.capabilities?.IlluminanceMeasurement})"
+    }
     if (fullInit == true || settings.illuminanceCoeff == null) device.updateSetting("illuminanceCoeff", [value:1.0, type:"decimal"])
     if (fullInit == true || settings.parEvents == null) device.updateSetting("parEvents", true)
     if (fullInit == true || settings.invertMotion == null) device.updateSetting("invertMotion", is2in1() ? true : false)
@@ -2692,8 +2706,9 @@ void initializeVars( boolean fullInit = false ) {
     //
 }
 
+// TODO - refine ! 
 def isTuya() {
-    return (device.getDataValue("manufacturer")?.startsWith("TS") == true)
+    return (device.getDataValue("model")?.startsWith("TS") == true)
 }
 
 def tuyaBlackMagic() {
