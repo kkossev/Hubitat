@@ -60,8 +60,11 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-21 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; 
+ * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; 
  *
+ *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
+ *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
+ *                                   TODO: W.I.P.: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
  *                                   TODO: W.I.P.: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: quickRef
@@ -86,18 +89,20 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/21 7:02 PM"}
+def timeStamp() {"2023/10/22 3:56 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
-import hubitat.zigbee.zcl.DataType
+
 import hubitat.device.HubAction
 import hubitat.device.Protocol
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
+import hubitat.zigbee.zcl.DataType
+
 import java.util.ArrayList
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy onese
 
 metadata {
@@ -171,10 +176,10 @@ metadata {
             input (name: "txtEnable", type: "bool",   title: "<b>Description text logging</b>", description: "<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>", defaultValue: true)
             input (name: "logEnable", type: "bool",   title: "<b>Debug logging</b>", description: "<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>", defaultValue: true)
 
-            if (("motionReset" in DEVICE?.preferences)) {
+            if (("motionReset" in DEVICE?.preferences) && (DEVICE?.preferences.motionReset == true)) {
                 input (name: "motionReset", type: "bool", title: "<b>Reset Motion to Inactive</b>", description: "<i>Software Reset Motion to Inactive after timeout. Recommended value is <b>false</b></i>", defaultValue: false)
                 if (motionReset.value == true) {
-                    input ("motionResetTimer", "number", title: "After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds", description: "", range: "0..7200", defaultValue: 60)
+                    input ("motionResetTimer", "number", title: "<b>Motion Reset Timer</b>", description: "<i>After motion is detected, wait ___ second(s) until resetting to inactive state. Default = 60 seconds</i>", range: "0..7200", defaultValue: 60)
                 }
             }
             if (false) {    // TODO!
@@ -188,10 +193,10 @@ metadata {
         if (("ledEnable" in DEVICE?.preferences)) {            // 4in1()
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
         }
-        if (DEVICE?.device?.isIAS == true || ("keepTime" in DEVICE?.preferences)) {
+        if (("keepTime" in DEVICE?.preferences) && (DEVICE?.preferences.keepTime == true)) {
             input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: getKeepTimeOpts().options, defaultValue: getKeepTimeOpts().defaultValue)
         }
-        if (DEVICE?.device?.isIAS == true || ("sensitivity" in DEVICE?.preferences)) {
+        if (("sensitivity" in DEVICE?.preferences) && (DEVICE?.preferences.sensitivity == true)) {
             input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
         }
         if (advancedOptions == true || advancedOptions == false) { 
@@ -281,8 +286,10 @@ def is3in1() { return getDeviceGroup().contains("TS0601_3IN1") }
 def is2in1() { return getDeviceGroup().contains("TS0601_2IN1") }
 def isMotionSwitch() { return getDeviceGroup().contains("TS0202_MOTION_SWITCH") }
 def isIAS()  { DEVICE?.device?.isIAS == true  }
-def isTS0601_PIR() { (DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) || ("sensitivity" in DEVICE.preferences)) }
+//def isTS0601_PIR() { (DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) || ("sensitivity" in DEVICE.preferences)) }
 //def isConfigurable() { return isIAS() }   // TS0202 models ['_TZ3000_mcxw5ehu', '_TZ3000_msl6wxk9']
+def getTemperatureDiv() {  isSiHAS() ? 100.0 : 10.0 } // temperatureEvent
+def getHumidityDiv()    {  isSiHAS() ? 100.0 : 1.0 }   // humidityEvent
 
 def isZY_M100Radar()               { return getDeviceGroup().contains("TS0601_TUYA_RADAR") } 
 def isBlackPIRsensor()             { return getDeviceGroup().contains("TS0601_PIR_PRESENCE") }     
@@ -328,7 +335,7 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0202"],
             device        : [type: "4IN1", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
-            preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true],
+            preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true, "keepTime":true, "sensitivity":true],
             commands      : ["reportingTime4in1", "reportingTime4in1"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // pairing: double click!
@@ -359,7 +366,7 @@ def isChattyRadarReport(descMap) {
             models         : ["TS0601"],
             device        : [type: "2IN1", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "IlluminanceMeasurement": true, "Battery": true],
-            preferences   : ["motionReset":true, "invertMotion":true],
+            preferences   : ["motionReset":true, "invertMotion":true, "keepTime":true, "sensitivity":true], // TODO - check sensitivity !
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3towulqd", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://www.aliexpress.com/item/1005004095233195.html
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_bh3n6gk8", deviceJoinName: "Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL"],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
@@ -374,7 +381,7 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0202","RH3040"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true],
+            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],  // TODO - check sensitivity !
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr        
@@ -423,7 +430,7 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0202"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor":true, "switch":true, "Battery":true],
-            preferences   : ["motionReset":true],
+            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],  // TODO - check sensitivity !
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,EF00,0000", outClusters:"0019,000A", model:"TS0202", manufacturer:"_TZ3210_cwamkvua", deviceJoinName: "Tuya Motion Sensor and Scene Switch"]
                 
@@ -483,14 +490,17 @@ def isChattyRadarReport(descMap) {
             models        : ["eWeLink"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],   // very sleepy !!
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true],
+            preferences   : ["motionReset":true, "keepTime":false, 'sensitivity':false],   // just enable or disable showing the motionReset preference, no link to  tuyaDPs or attributes map!
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"ms01", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"],        // for testL 60 seconds re-triggering period!
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"msO1", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"],        // second variant
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0003", model:"MS01", manufacturer:"eWeLink", deviceJoinName: "eWeLink Motion Sensor"]        // third variant
             ],
             deviceJoinName: "Sonoff/eWeLink Motion sensor",
-            configuration : ["0x0001":[["bind":true], ["reporting":"0x21, 0x20, 3600, 7200, 0x02"]]]  // battery percentage, min 3600, max 7200, UINT8, delta 2
+            configuration : [ 
+                "0x0001":[["bind":true],  ["reporting":"0x21, 0x20, 3600, 7200, 0x02"]],    // TODO - use the reproting values
+                "0x0500":[["bind":false], ["sensitivity":false], ["keepTime":false]],       // TODO - use in update function
+            ]  // battery percentage, min 3600, max 7200, UINT8, delta 2
     ],
 
     "NONTUYA_MOTION_IAS"   : [
@@ -498,7 +508,7 @@ def isChattyRadarReport(descMap) {
             models        : ["MOT003","XXX"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true],
+            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0400,0402,0500", outClusters:"0019", model:"MOT003", manufacturer:"HiveHome.com", deviceJoinName: "Hive Motion Sensor"]         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
             ],
@@ -1021,7 +1031,7 @@ def isChattyRadarReport(descMap) {
             tuyaDPs       : [:],
             attributes    : [:],
             deviceJoinName: "SONOFF SNZB-06P RADAR",
-            //configuration : ["0x0406":"bind"]
+            //configuration : ["0x0406":"bind"]     // TODO !!
             configuration : [:]
     ],    
   
@@ -1031,7 +1041,7 @@ def isChattyRadarReport(descMap) {
             description   : "SiHAS USM-300Z 4-in-1",
             models        : ["ShinaSystem"],
             device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
-            capabilities  : ["MotionSensor": true],
+            capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "Battery": true],
             preferences   : [:],                             
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0400,0003,0406,0402,0001,0405,0500", outClusters:"0004,0003,0019", model:"USM-300Z", manufacturer:"ShinaSystem", deviceJoinName: "SiHAS MultiPurpose Sensor"]
@@ -1111,7 +1121,12 @@ def getPreferencesMap( String param, boolean debug=false ) {
     def preference 
     try {
         preference = DEVICE.preferences["$param"]
-        if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference} isTuyaDP=${preference.isNumber()}"
+        if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference}"
+        if (preference in [true, false]) {
+            // find the preference in the tuyaDPs map
+            logDebug "getPreferencesMap: preference ${param} is boolean"
+            return null     // no maps for predefined preferences !
+        }
         if (preference.isNumber()) {
             // find the preference in the tuyaDPs map
             int dp = safeToInt(preference)
@@ -1123,6 +1138,7 @@ def getPreferencesMap( String param, boolean debug=false ) {
             def dpMaps   =  DEVICE.tuyaDPs 
             foundMap = DEVICE.attributes.find { it.at == preference }
         }
+        // TODO - could be also 'true' or 'false' ...
     } catch (Exception e) {
         if (debug) log.warn "getPreferencesMap: exception ${e} caught when getting preference ${param} !"
         return null
@@ -1144,6 +1160,16 @@ def resetPreferencesToDefaults(boolean debug=false ) {
     Map parMap = [:]
     preferences.each{ parName, mapValue -> 
         if (debug) log.trace "$parName $mapValue"
+        // TODO - could be also 'true' or 'false' ...
+        if (mapValue in [true, false]) {
+            logInfo "Preference ${parName} is predefined -> (${mapValue})"
+            // TODO - set the predefined value
+            /*
+            if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
+            device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])     
+            */       
+            return // continue
+        }
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
         if (parMap == null) {
@@ -1275,17 +1301,23 @@ def parse(String description) {
                 return
             }
             else {  // including isLINPTECHradar
-                logDebug "parse: illuminance report (raw:Lux=${rawLux})"
-                illuminanceEvent( rawLux )
+                if (isSiHAS()) {
+                    logDebug "parse: illuminanceEventLux report (raw:Lux=${rawLux})"
+                    illuminanceEventLux( rawLux )
+                }
+                else {
+                    logDebug "parse: illuminanceEvent report (raw:Lux=${rawLux})"
+                    illuminanceEvent( rawLux )
+                }
             }
         }  
         else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value,16)
-            temperatureEvent( raw / 10.0 )
+            temperatureEvent( raw / getTemperatureDiv())
         }
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value,16)
-            humidityEvent( raw / 1.0 )
+            humidityEvent( raw / getHumidityDiv())
         }
         else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
             def raw = Integer.parseInt(descMap.value,16)
@@ -1876,10 +1908,10 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
                 handleMotion(motionActive = fncmd)
                 break
             case "temperature" :
-                temperatureEvent(fncmd / 10.0)      // TODO - DivideByX
+                temperatureEvent(fncmd / getTemperatureDiv())
                 break
             case "humidity" :
-                humidityEvent(fncmd)                // TODO - DivideByX
+                humidityEvent(fncmd / getHumidityDiv())
                 break
             case "illuminance" :
             case "illuminance_lux" :
@@ -1925,11 +1957,11 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 break
             case 0x07 : // temperature for 4-in-1 (no data)
                 logDebug "4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
-                temperatureEvent( fncmd / 10.0 )
+                temperatureEvent( fncmd / getTemperatureDiv())
                 break
             case 0x08 : // humidity for 4-in-1 (no data)
                 logDebug "4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
-                humidityEvent( fncmd )
+                humidityEvent( fncmd / getHumidityDiv())
                 break
             case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd 
                 logInfo "received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
@@ -2004,7 +2036,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     logInfo "4-in-1 temperature calibration is ${val / 10.0}"
                 }
                 else if (is3in1()) {    //  Tuya 3 in 1 (104) -> temperature in ?C
-                    temperatureEvent( fncmd / 10.0 )
+                    temperatureEvent( fncmd / getTemperatureDiv())
                 }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
@@ -2017,7 +2049,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     logInfo "4-in-1 humidity calibration is ${val}"                
                 }
                 else if (is3in1()){    //  Tuya 3 in 1 (105) -> humidity in %
-                    humidityEvent(fncmd)
+                    humidityEvent(fncmd / getHumidityDiv())
                 }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
@@ -2038,7 +2070,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 break
             case 0x6B : // (107)
                 if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in ?C
-                    temperatureEvent( fncmd / 10.0 )
+                    temperatureEvent( fncmd / getTemperatureDiv())
                 }
                 else if (is3in1()) { // 3in1
                     logDebug "Min Temp is: ${fncmd} (DP=0x6B)"  
@@ -2049,7 +2081,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 break            
             case 0x6C : //  (108) Tuya 4 in 1 -> humidity in %
                 if (is4in1()) {
-                    humidityEvent (fncmd)
+                    humidityEvent (fncmd / getHumidityDiv())
                 }
                 else if (is3in1()) { // 3in1
                     logDebug "(3in1) Max Temp is: ${fncmd} (DP=0x6C)"  
@@ -2382,7 +2414,8 @@ def updated() {
         logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
         cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
     }
-    // sensitivity - TODO!
+
+    // sensitivity - TODO! - REMOVE !!!!!
     // settings?.sensitivity was changed in version 1.3.0
     def sensitivityNew 
     try {
@@ -2392,31 +2425,36 @@ def updated() {
         logWarn "sensitivity was reset to the default value!"
         sensitivityNew = sensitivityOpts.defaultValue
     }
-    if (isTS0601_PIR()) {
-        def val = sensitivityNew
-        cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
-        if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}" }
-    }
-    else if (isIAS()) {
-        def val = sensitivityNew
-        if (val != null) {
-            logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
-            cmds += sendSensitivityIAS(val)
+    //
+   
+    if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity == true))) {
+        if (isIAS()) {
+            def val = sensitivityNew
+            if (val != null) {
+                logDebug "changing IAS sensitivity to : ${sensitivityOpts.options[val]} (${val})"
+                cmds += sendSensitivityIAS(val)
+            }
+        }
+        else {      // TODO - move to dpMap !!
+            def val = sensitivityNew
+            cmds += sendTuyaCommand("09", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))
+            if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 sensitivity to : ${val}" }
         }
     }
+    
+
     // keep time
-    if (isTS0601_PIR()) {
-        def val = settings?.keepTime as int
-        cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-        if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}" }           
-    }
-    else if (isIAS()) {
-       if (settings?.keepTime != null) {
+    if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime == true))) {
+        if (isIAS() && (settings?.keepTime != null)) {
            cmds += sendKeepTimeIAS( settings?.keepTime )
            logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+        }        
+        else {  // TODO - move to dpMap !!
+            def val = settings?.keepTime as int
+            cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
+            if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${val}" }           
        }
     }
-    // 
 
     // new update method for all radars, WITHOUT Linptech - TODO !
     if (isLINPTECHradar()) {
@@ -2464,6 +2502,7 @@ def ping() {
     logInfo "ping() is not implemented" 
 }
 
+// TODO - remove SiHAS specific code !!!
 private getILLUMINANCE_MEASUREMENT_CLUSTER() { 0x0400 }
 private getRELATIVE_HUMIDITY_CLUSTER() { 0x0405 }
 private getOCCUPANCY_SENSING_CLUSTER() { 0x0406 }
@@ -2474,7 +2513,9 @@ private getRELATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
 private getILLUMINANCE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE() { 0x0000 }
 private getOCCUPANCY_SENSING_OCCUPANCY_ATTRIBUTE() { 0x0000 }
 
+// TODO - move to the standard Device Profile configuration settings !!!
 def refreshSiHAS() {
+    if (settings?.logEnable) {log.debug "${device.displayName} refreshSiHAS()"}
     def refreshCmds = []
 
     refreshCmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, POWER_CONFIGURATION_BATTERY_VOLTAGE_ATTRIBUTE, [:], delay=201)
@@ -2487,8 +2528,9 @@ def refreshSiHAS() {
     return refreshCmds
 }
 
+// TODO - move to the standard Device Profile configuration settings !!!
 def configureSiHAS() {
-    if (settings?.logEnable) {log.debug "${device.displayName} configure()"}
+    if (settings?.logEnable) {log.debug "${device.displayName} configureSiHAS()"}
     def configCmds = []
 
     // Device-Watch allows 2 check-in misses from device + ping (plus 1 min lag time)
@@ -2587,11 +2629,13 @@ def logInitializeRezults() {
 
 // delete all attributes
 void deleteAllCurrentStates() {
+    def ctr = 0
     device.properties.supportedAttributes.each { it->
-        logDebug "deleting $it"
+        //logDebug "deleting $it"
         device.deleteCurrentState("$it")
+        ctr++
     }
-    logInfo "All current states (attributes) DELETED"
+    logInfo "All ${ctr} current states (attributes) DELETED"
 }
 
 void resetStats() {
@@ -2690,10 +2734,10 @@ def configure() {
     }
     else if ("0x0001" in DEVICE.configuration) {    // Power Configuration cluster
         logDebug "configuring the battery reporting... (min=${intMinTime}, max=${intMaxTime}, delta=0x02)"
-        cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=225)  // delta 0x02 = 1% change
-        cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=226)  // TEST
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=227)    // try also battery voltage
+        cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=226)  // TEST - seems to be overwritten by the next line configuration?
+        cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=225)  // delta 0x02 = 1% change battery percentage remaining
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=228)    // try also battery voltage
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
     }
     else if (("0x0406" in DEVICE.configuration)) {
         cmds += "delay 200"
@@ -3758,5 +3802,7 @@ def test( val ) {
         log.info ("settings ${k} = ${v} (${x})")
     }   
 */
-    validateAndFixPreferences()
+    //validateAndFixPreferences()
+    //resetPreferencesToDefaults(true)
+    getPreferencesMap( "motionReset", true)
 }
