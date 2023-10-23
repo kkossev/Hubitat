@@ -60,10 +60,10 @@
  * ver. 1.6.2  2023-10-14 kkossev  - (dev. branch) LINPTECH preferences changed to enum type; enum preferences - set defaultValue; TS0601_PIR_PRESENCE - preference inductionTime changed to fadingTime, humanMotionState sent as event; TS0225_2AAELWXK_RADAR - preferences setting; _TZE204_ijxvkhd0 fixes; Linptech fixes; added radarAlarmMode radarAlarmVolume;
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
- * ver. 1.6.5  2023-10-22 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
- *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors;
+ * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
+ *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring;
  *
- *                                   TODO: W.I.P. 
+ *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
  *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: W.I.P.: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
@@ -91,7 +91,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/22 10:54 PM"}
+def timeStamp() {"2023/10/23 8:04 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -199,14 +199,6 @@ metadata {
         if (("ledEnable" in DEVICE?.preferences)) {            // 4in1()
             input (name: "ledEnable", type: "bool", title: "<b>Enable LED</b>", description: "<i>Enable LED blinking when motion is detected (4in1 only)</i>", defaultValue: true)
         }
-        /*
-        if (("keepTime" in DEVICE?.preferences) && (DEVICE?.preferences.keepTime != false)) {
-            input (name: "keepTime", type: "enum", title: "<b>Motion Keep Time</b>", description:"Select PIR sensor keep time (s)", options: getKeepTimeOpts().options, defaultValue: getKeepTimeOpts().defaultValue)
-        }
-        if (("sensitivity" in DEVICE?.preferences) && (DEVICE?.preferences.sensitivity != false)) {
-            input (name: "sensitivity", type: "enum", title: "<b>Motion Sensitivity</b>", description:"Select PIR sensor sensitivity", options: sensitivityOpts.options, defaultValue: sensitivityOpts.defaultValue)
-        }
-        */
         if (advancedOptions == true || advancedOptions == false) { 
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
                 input ("luxThreshold", "number", title: "<b>Lux threshold</b>", description: "Minimum change in the lux which will trigger an event", range: "0..999", defaultValue: 5)   
@@ -217,28 +209,25 @@ metadata {
             input (name: "ignoreDistance", type: "bool", title: "<b>Ignore distance reports</b>", description: "If not used, ignore the distance reports received every 1 second!", defaultValue: true)
         }
 
-        //if (DEVICE.device?.type == "radar") {
-            // itterate over all radars DEVICE.preferences map and inputIt
-            (DEVICE.preferences).each { key, value ->
-                if (inputIt(key) != null) {
-                    input inputIt(key)
-                }
+        // itterate over DEVICE.preferences map and inputIt all!
+        (DEVICE.preferences).each { key, value ->
+            if (inputIt(key) != null) {
+                input inputIt(key)
             }
-        //}
-
-    if (false) {
-        if ("textLargeMotion" in DEVICE?.preferences) {
-            input (name: 'textLargeMotion', type: 'text', title: "<b>Motion Detection Settigs &#8680;</b>", description: "<b>Settings for movement types such as walking, trotting, fast running, circling, jumping and other movements </b>")        
         }
 
-        if ("textSmallMotion" in DEVICE?.preferences) {
-            input (name: 'textSmallMotion', type: 'text', title: "<b>Small Motion Detection Settigs &#8658;</b>", description: "<b>Settings for small movement types such as tilting the head, waving, raising the hand, flicking the body, playing with the mobile phone, turning over the book, etc.. </b>")        
-        }
-        if ("textStaticDetection" in DEVICE?.preferences) {
-            input (name: 'textStaticDetection', type: 'text', title: "<b>Static Detection Settigs &#8680;</b>", description: "<b>The sensor can detect breathing within a certain range to determine people presence in the detection area (for example, while sleeping or reading).</b>")        
-        }
-    }
+        if (false) {
+            if ("textLargeMotion" in DEVICE?.preferences) {
+                input (name: 'textLargeMotion', type: 'text', title: "<b>Motion Detection Settigs &#8680;</b>", description: "<b>Settings for movement types such as walking, trotting, fast running, circling, jumping and other movements </b>")        
+            }
 
+            if ("textSmallMotion" in DEVICE?.preferences) {
+                input (name: 'textSmallMotion', type: 'text', title: "<b>Small Motion Detection Settigs &#8658;</b>", description: "<b>Settings for small movement types such as tilting the head, waving, raising the hand, flicking the body, playing with the mobile phone, turning over the book, etc.. </b>")        
+            }
+            if ("textStaticDetection" in DEVICE?.preferences) {
+                input (name: 'textStaticDetection', type: 'text', title: "<b>Static Detection Settigs &#8680;</b>", description: "<b>The sensor can detect breathing within a certain range to determine people presence in the detection area (for example, while sleeping or reading).</b>")        
+            }
+        }
        
         input (name: "advancedOptions", type: "bool", title: "<b>Advanced Options</b>", description: "<i>Enables showing the advanced options/preferences. Hit F5 in the browser to refresh the Preferences list<br>.May not work for all device types!</i>", defaultValue: false)
         if (advancedOptions == true) {
@@ -273,6 +262,7 @@ Static detection distance          600        600        400        0          0
 Static detection sensitivity       9x         9x         8x         8x         8x
 */
 
+// TODO - remove all the usused sensitivity and keepTime static maps!
 @Field static final Map sensitivityOpts =  [ defaultValue: 2, options: [0: 'low', 1: 'medium', 2: 'high']]
 @Field static final Map keepTime4in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds', 4: '240 seconds', 5: '480 seconds']]
 @Field static final Map keepTime2in1Opts = [ defaultValue: 0, options: [0: '10 seconds', 1: '30 seconds', 2: '60 seconds', 3: '120 seconds']]
@@ -358,14 +348,32 @@ def isChattyRadarReport(descMap) {
             configuration : ["battery": false]
     ],
     
+    // is3in1() 
     "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
             description   : "Tuya 3in1 (Motion/Temp/Humi) sensor",
             models        : ["TS0601"],
-            device        : [type: "PIR", powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
+            device        : [type: "PIR", powerSource: "dc", isSleepy:false],    // check powerSource !
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"],
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ppuj1vem", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
+            ],
+            tuyaDPs:        [
+                [dp:101, name:'motion',          type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"inactive", 1:"active"] ,   unit:"",  description:'<i>Motion</i>'], 
+                [dp:102, name:'battery',         type:"number",  rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%",          description:'<i>Battery level</i>'],
+                //            ^^^TODO^^^ 
+                [dp:103, name:'tamper',          type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"clear", 1:"detected"] ,   unit:"",  description:'<i>Tamper detection</i>'], 
+                [dp:104, name:'temperature',     type:"decimal", rw: "ro", min:-20.0, max:80.0, defaultValue:0.0,  step:1,  scale:10, unit:"deg.",       description:'<i>Temperature</i>'],
+                [dp:105, name:'humidity',        type:"number",  rw: "ro", min:1,     max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%RH",        description:'<i>Humidity</i>'],
+                [dp:106, name:'tempScale',       type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"Celsius", 1:"Fahrenheit"] ,   unit:"",  description:'<i>Temperature scale</i>'], 
+                [dp:107, name:'minTemp',         type:"number",  rw: "ro", min:-20,   max:80,   defaultValue:0,    step:1,  scale:1,  unit:"deg.",       description:'<i>Minimal temperature</i>'],
+                [dp:108, name:'maxTemp',         type:"number",  rw: "ro", min:-20,   max:80,   defaultValue:0,    step:1,  scale:1,  unit:"deg.",       description:'<i>Maximal temperature</i>'],
+                [dp:109, name:'minHumidity',     type:"number",  rw: "ro", min:0,     max:100,  defaultValue:0,    step:1,  scale:1,  unit:"%RH",        description:'<i>Minimal humidity</i>'],
+                [dp:110, name:'maxHumidity',     type:"number",  rw: "ro", min:0,     max:100,  defaultValue:0,    step:1,  scale:1,  unit:"%RH",        description:'<i>Maximal humidity</i>'],
+                [dp:111, name:'tempAlarm',       type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"inactive", 1:"active"] ,   unit:"",  description:'<i>Temperature alarm</i>'], 
+                [dp:112, name:'humidityAlarm',   type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"inactive", 1:"active"] ,   unit:"",  description:'<i>Humidity alarm</i>'], 
+                [dp:113, name:'alarmType',       type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"type0", 1:"type1"] ,   unit:"",  description:'<i>Alarm type</i>'], 
             ],
             deviceJoinName: "Tuya Multi Sensor 3 In 1",
             configuration : ["battery": false]
@@ -1881,6 +1889,8 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) {
     // TODO - check if DP is in the list of the received state.tuyaDPs - then we have something to compare !
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this dp is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the DP is not in the spammy list
+            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
+            descText  = "${name} is ${valueScaled} ${unitText}"        
             if (settings.logEnable) { logInfo "${descText}"}
         }
         // no more processing is needed, as this DP is not a preference and not an attribute
@@ -2010,16 +2020,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 logInfo "Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
                 device.updateSetting("keepTime", [value:fncmd.toString(), type:"enum"])                
                 break
-                /*
-            case 0x0C : // (12)
-                if (is2in1()) {
-                    illuminanceEventLux( fncmd )    // illuminance for TS0601 2-in-1
-                }
-                else {
-                    if (settings?.txtEnable) log.info "${device.displayName} reported unknown parameter dp=${dp} value=${fncmd}"
-                }                  
-                break
-                */
             case 0x19 : // (25) 
                 logDebug "Motion Switch battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 handleTuyaBatteryLevel( fncmd )
@@ -2037,26 +2037,11 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 else if (is3in1()) {     // battery level for 3 in 1;  
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )                    
-                } /*
-                else if (is2in1()) {     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/bf32ce2b74689328048b407e56ca936dc7a54a0b/src/devices/tuya.ts#L4568
-                    logDebug "Tuya 2in1 illuminance_interval time is ${fncmd} minutes"
-                    // TODO !!!
-                    //device.updateSetting("reportingTime4in1", [value:fncmd as int , type:"number"])                  
-                }  */          
+                }          
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }            
                 break
-            case 0x67 :     // (103)
-                if (is3in1()) {        //  Tuya 3 in 1 (103) -> tamper
-                    def value = fncmd==0 ? 'clear' : 'detected'
-                    if (settings?.txtEnable) log.info "${device.displayName} tamper alarm is ${value} (dp=67,fncmd=${fncmd})"
-                    sendEvent(name : "tamper",    value : value, isStateChange : true)
-                }
-                else {
-                    logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }            
-                break            
             case 0x68 :     // (104)
                 if (isYXZBRB58radar()) {    // [0x68, 'radar_scene', tuya.valueConverterBasic.lookup({ 'default': tuya.enum(0), 'bathroom': tuya.enum(1), 'bedroom': tuya.enum(2), 'sleeping': tuya.enum(3), })],
                     logInfo "YXZBRB58 radar reported radar_scene dp=${dp} value=${fncmd}"
@@ -2066,9 +2051,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     // for negative values produce complimentary hex (equivalent to negative values)
                     if (val > 4294967295) val = val - 4294967295;                    
                     logInfo "4-in-1 temperature calibration is ${val / 10.0}"
-                }
-                else if (is3in1()) {    //  Tuya 3 in 1 (104) -> temperature in ?C
-                    temperatureEvent( fncmd / getTemperatureDiv())
                 }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
@@ -2080,9 +2062,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (val > 4294967295) val = val - 4294967295;                    
                     logInfo "4-in-1 humidity calibration is ${val}"                
                 }
-                else if (is3in1()){    //  Tuya 3 in 1 (105) -> humidity in %
-                    humidityEvent(fncmd / getHumidityDiv())
-                }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
@@ -2093,9 +2072,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                     if (val > 4294967295) val = val - 4294967295;                    
                     logInfo "4-in-1 lux calibration is ${val}"                
                 }
-                else if (is3in1()) {    //  Tuya 3 in 1 temperature scale Celsius/Fahrenheit
-                    if (settings?.logEnable) log.info "${device.displayName} Temperature Scale is: ${fncmd == 0 ? 'Celsius' : 'Fahrenheit'} (DP=0x6A fncmd = ${fncmd})"  
-                }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
                 }
@@ -2103,9 +2079,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
             case 0x6B : // (107)
                 if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in ?C
                     temperatureEvent( fncmd / getTemperatureDiv())
-                }
-                else if (is3in1()) { // 3in1
-                    logDebug "Min Temp is: ${fncmd} (DP=0x6B)"  
                 }
                 else {
                     logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6B)"  
@@ -2115,9 +2088,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 if (is4in1()) {
                     humidityEvent (fncmd / getHumidityDiv())
                 }
-                else if (is3in1()) { // 3in1
-                    logDebug "(3in1) Max Temp is: ${fncmd} (DP=0x6C)"  
-                }
                 else {
                     logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6C)"  
                 }
@@ -2125,9 +2095,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
             case 0x6D :    // (109)
                 if (is4in1()) {   // case 109: 0x6d PIR enable (PIR power)
                     logInfo "4-in-1 enable is ${fncmd}"                
-                }
-                else if (is3in1()) { // 3in1
-                    if (settings?.logEnable) log.info "${device.displayName} Min Humidity is: ${fncmd} (DP=0x6D)"  
                 }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
@@ -2137,9 +2104,6 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 if (is4in1()) {
                     logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                     handleTuyaBatteryLevel( fncmd )
-                }
-                else if (is3in1()) {  //  3in1
-                    if (settings?.logEnable) log.info "${device.displayName} Max Humidity is: ${fncmd} (DP=0x6E)"  
                 }
                 else {
                     logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
