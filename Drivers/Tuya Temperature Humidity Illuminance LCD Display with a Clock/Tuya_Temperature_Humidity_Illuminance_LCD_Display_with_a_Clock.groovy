@@ -1,14 +1,14 @@
 /**
  *  Tuya Temperature Humidity Illuminance LCD Display with a Clock
  *
- *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *	in compliance with the License. You may obtain a copy of the License at:
+ *    Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *    in compliance with the License. You may obtain a copy of the License at:
  *
- *		http://www.apache.org/licenses/LICENSE-2.0
+ *        http://www.apache.org/licenses/LICENSE-2.0
  *
- *	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *	for the specific language governing permissions and limitations under the License.
+ *    Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *    on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *    for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0 2022-01-02 kkossev  - Inital test version
  * ver. 1.0.1 2022-02-05 kkossev  - Added Zemismart ZXZTH fingerprint; added _TZE200_locansqn; Fahrenheit scale + rounding; temperatureScaleParameter; temperatureSensitivity; minTempAlarm; maxTempAlarm
@@ -37,7 +37,8 @@
  * ver. 1.3.6  2023-06-10 kkossev - added _TZE200_yjjdcqsq to TS0601_Tuya group; 
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
- * ver. 1.3.9  2023-09-29 kkossev - (dev. branch) added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
+ * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
+ * ver. 1.3.10 2023-10-23 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv 
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -47,8 +48,8 @@
  *
 */
 
-def version() { "1.3.9" }
-def timeStamp() {"2023/09/29 10:54 PM"}
+def version() { "1.3.10" }
+def timeStamp() {"2023/10/23 5:57 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -118,7 +119,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yjjdcqsq", deviceJoinName: "Tuya Temperature Humidity"                                 // kk
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_9yapgbuv", deviceJoinName: "Tuya Temperature Humidity" 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_upagmta9", deviceJoinName: "Tuya Temperature Humidity" 
-        
         // kk
         //
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_whkgqxse", deviceJoinName: "Tuya Zigbee Temperature Humidity Sensor With Backlight"    // https://www.aliexpress.com/item/1005003980647546.html
@@ -140,6 +140,8 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0020,0000,0003,0402", outClusters:"0003", model:"THS317-ET", manufacturer:"OWON", deviceJoinName: "OWON Temperature sensor"                                             //https://community.hubitat.com/t/newbie-help-with-owon-ths317-et-multi-sensor/122671/5?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"eWeLink", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P"     // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/435?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0405,FC57,FC11", outClusters:"0019", model:"SNZB-02P", manufacturer:"SONOFF", deviceJoinName: "Sonoff Temperature and Humidity Sensor SNZB-02P" 
+        //
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0400,0402,0405,0B05,FCC0", outClusters:"0019", model:"TS0222", manufacturer:"_TYZB01_fi5yftwv", deviceJoinName: "Konke THI Sensor KK-ES-J01W" 
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -249,6 +251,7 @@ metadata {
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
     '_TYZB01_ftdkanlj'  : 'TS0222',             // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/419?u=kkossev 
+    '_TYZB01_fi5yftwv'  : 'TS0222',             // https://community.hubitat.com/t/konke-bond-series-enviroment-sensor/126445?u=kkossev 
     '_TYZB01_4mdqxxnn'  : 'TS0222_2',           // illuminance only sensor
     '_TZE200_pay2byax'  : 'TS0601_Contact',     // Contact and illuminance sensor
     '_TZ3000_itnrsufe'  : 'TS0201_TH',          // Temperature and humidity sensor; // reports both battery voltage and perceintage; cluster 0xE002, attr 0xE00B: 0-Celsius, 1: Fahrenheit ( 0x30 ENUM)
@@ -337,7 +340,7 @@ def parse(String description) {
                 log.warn "unparesed attrint $descMap.attrInt"
             }
         }
-		else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
+        else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
             def rawLux = Integer.parseInt(descMap.value,16)
             if (device.getDataValue("manufacturer") in ["ShinaSystem"]) {
                 illuminanceEventLux( rawLux )
@@ -348,25 +351,25 @@ def parse(String description) {
             if (getModelGroup() == 'TS0222') {
                 pollTS0222()
             }
-		}
-		else if (descMap.cluster == "0400" && descMap.attrId == "F001") {        //MOES ZSS-ZK-THL, also TS0201 Neo Coolcam!
+        }
+        else if (descMap.cluster == "0400" && descMap.attrId == "F001") {        //MOES ZSS-ZK-THL, also TS0201 Neo Coolcam!
             def raw = Integer.parseInt(descMap.value,16)
             if (settings?.txtEnable) log.info "${device.displayName} illuminance sensitivity is ${raw} Lux"
             device.updateSetting("illuminanceSensitivity", [value:raw, type:"number"])
         }
-		else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
+        else if (descMap.cluster == "0402" && descMap.attrId == "0000") {
             if (getModelGroup() != 'TS0222_2') {
                 def raw = Integer.parseInt(descMap.value,16)
                 if (raw > 32767) {
-            	    //Here we deal with negative values
-            	    raw = raw - 65536
+                    //Here we deal with negative values
+                    raw = raw - 65536
                 }   
                 temperatureEvent( raw / 100.0 )
             }
             else {
                 if (settings?.logEnable) log.warn "${device.displayName} Ignoring ${getModelGroup()} temperature event"
             }
-		}
+        }
         else if (descMap.cluster == "0405" && descMap.attrId == "0000") {
             def raw = Integer.parseInt(descMap.value,16)
             if (getModelGroup() != 'TS0201_TH') {
@@ -375,11 +378,11 @@ def parse(String description) {
             else {
                  humidityEvent( raw / 10.0 )    // also _TZE200_bjawzodf, _TZE200_zl1kmjqx ?
             }
-		}
+        }
         else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON, SiHAS
             def raw = Integer.parseInt(descMap.value,16)
             motionEvent( raw & 0x01 )
-		}
+        }
         else if (descMap.cluster == "0000" && descMap.attrId == "0001") {    // ping    
             // descMap = [raw:0D310100000A01002004, dni:0D31, endpoint:01, cluster:0000, size:0A, attrId:0001, encoding:20, command:01, value:04, clusterInt:0, attrInt:1]
             logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap?.value})"
@@ -606,8 +609,8 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
                 }
                 else if (getModelGroup() != "TS0601_AUBESS") { // temperature in C, including 'TS0601_Tuya_2'
                     if (fncmd > 32767) {
-                	    //Here we deal with negative values
-                	    fncmd = fncmd - 65536
+                        //Here we deal with negative values
+                        fncmd = fncmd - 65536
                     }
                     temperatureEvent( fncmd / 10.0 )
                 }
@@ -656,7 +659,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
             case 0x05 : // Soil Monitor
                 if (fncmd > 32767) {
                     // not good for the plants ...
-                	fncmd = fncmd - 65536
+                    fncmd = fncmd - 65536
                 }
                 temperatureEvent( fncmd )
                 break
@@ -828,13 +831,13 @@ def temperatureEvent( temperature, isDigital=false ) {
     def timeElapsed = Math.round((now() - lastRxMap['tempTime'])/1000)
     Integer timeRamaining = (minReportingTimeTemp - timeElapsed) as Integer
     if (timeElapsed >= minReportingTimeTemp) {
-		if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
-		unschedule("sendDelayedEventTemp")		//get rid of stale queued reports
+        if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText}"}
+        unschedule("sendDelayedEventTemp")        //get rid of stale queued reports
         lastRxMap['tempTime'] = now()
         sendEvent(map)
-	}		
+    }        
     else {         // queue the event
-    	map.type = "delayed"
+        map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventTemp',  [overwrite: true, data: map])
     }
@@ -871,7 +874,7 @@ def humidityEvent( humidity, isDigital=false ) {
         sendEvent(map)
     }
     else {         // queue the event 
-    	map.type = "delayed"
+        map.type = "delayed"
         if (settings?.logEnable) log.debug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${map}"
         runIn(timeRamaining, 'sendDelayedEventHumi',  [overwrite: true, data: map])
     }
@@ -880,9 +883,9 @@ def humidityEvent( humidity, isDigital=false ) {
 
 private void sendDelayedEventHumi(Map map) {
     if (settings?.txtEnable) {log.info "${device.displayName} ${map.descriptionText} (${map.type})"}
-	//state.lastHumi = now()
+    //state.lastHumi = now()
     Map lastRxMap = stringToJsonMap(state.lastRx); try {lastRxMap['humiTime'] = now()} catch (e) {lastRxMap['humiTime']=now()-(minReportingTimeHumidity * 2000)}; state.lastRx = mapToJsonString(lastRxMap)
-	sendEvent(map)
+    sendEvent(map)
 }
 
 def switchEvent( value ) {
@@ -905,7 +908,7 @@ def motionEvent( value ) {
 
 def illuminanceEvent( illuminance, isDigital=false ) {
     Map statsMap = stringToJsonMap(state.stats); try {statsMap['illumCtr']++ } catch (e) {statsMap['illumCtr']=1}; state.stats = mapToJsonString(statsMap)
-	def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
+    def lux = illuminance > 0 ? Math.round(Math.pow(10,(illuminance/10000))) : 0
     sendEvent("name": "illuminance", "value": lux, "type": isDigital == true ? 'digital':'physical', "unit": "lx")
     if (settings?.txtEnable) log.info "$device.displayName illuminance is ${lux} Lux"
 }
@@ -1005,7 +1008,7 @@ def updated() {
         lastTxMap.humiCfg = (settings?.minReportingTimeHumidity as int).toString() + "," + (settings?.maxReportingTimeHumidity as int).toString() + "," + ((settings?.humiditySensitivity *100) as int).toString()
         
         if (lastTxMap.tempCfg != lastRxMap.tempCfg) {
-    	    cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, settings?.maxReportingTimeTemp as int, (settings?.temperatureSensitivity * 100) as int, [:], 200)
+            cmds += zigbee.configureReporting(0x0402, 0x0000, DataType.INT16, settings?.minReportingTimeTemp as int, settings?.maxReportingTimeTemp as int, (settings?.temperatureSensitivity * 100) as int, [:], 200)
             log.info "configure temperature reporting (${lastTxMap.tempCfg}) pending ..."
             lastTxMap.tempCfgOK = false
         }
@@ -1014,7 +1017,7 @@ def updated() {
             lastTxMap.tempCfgOK = true
         }
         if (lastTxMap.humiCfg != lastRxMap.humiCfg) {
-    	    cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, settings?.maxReportingTimeHumidity as int, (settings?.humiditySensitivity *100) as int, [:], 200)
+            cmds += zigbee.configureReporting(0x0405, 0x0000, DataType.UINT16, settings?.minReportingTimeHumidity as int, settings?.maxReportingTimeHumidity as int, (settings?.humiditySensitivity *100) as int, [:], 200)
             log.info "configure humidity reporting (${lastTxMap.humiCfg}) pending ..."
             lastTxMap.humiCfgOK = false
         }
@@ -1065,7 +1068,7 @@ def ConfigurationStateMachine() {
     Map lastTxMap = stringToJsonMap(state.lastTx)
     if (lastTxMap.cfgFailure == true ) {
         updateInfo("configuration failure") 
-        unschedule("configTimer")	
+        unschedule("configTimer")    
         return
     }
     def configState = state.configState
@@ -1082,7 +1085,7 @@ def ConfigurationStateMachine() {
             }
             else {
                 logWarn "ConfigurationStateMachine called without isPendingConfig?"
-                unschedule("configTimer")	
+                unschedule("configTimer")    
             }
             break
         case 1 : // waiting 10 seconds for acknowledge from the device // TODO - process config ERRORS !!!
@@ -1090,13 +1093,13 @@ def ConfigurationStateMachine() {
                 updateInfo("configured") 
                 lastTxMap.cfgTimer = 0
                 configState = 0
-                unschedule("configTimer")	
+                unschedule("configTimer")    
             }
             else if (lastTxMap.cfgTimer == null || lastTxMap.cfgTimer == 0) {    // timeout
                 logDebug "Timeout!"
                 updateInfo("Timeout!") 
                 lastTxMap.cfgTimer = 0
-                unschedule("configTimer")	
+                unschedule("configTimer")    
                 configState = 0    // try again next time a packet is received from the device..
             }
             else {
@@ -1105,7 +1108,7 @@ def ConfigurationStateMachine() {
             break
         default : 
             logWarn "ConfigurationStateMachine() unknown state ${configState}"
-            unschedule("configTimer")	
+            unschedule("configTimer")    
             configState = 0
             break
     }
@@ -1144,10 +1147,10 @@ def configTimer() {
 
 def pollTS0222() {
     List<String> cmds = []
-	cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)  // Battery Percent
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)  // Battery Percent
     cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0x0402 0x0000 {}" //, "delay 200",
     cmds += "he rattr 0x${device.deviceNetworkId} 0x02 0x0405 0x0000 {}" //, "delay 200",
-	sendZigbeeCommands(cmds)
+    sendZigbeeCommands(cmds)
 }
 
 def refresh() {
@@ -1158,8 +1161,8 @@ def refresh() {
     else if (true /*getModelGroup() in ['TS0201_TH']*/) {
         List<String> cmds = []
         cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200) 
-	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)
-    	cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)
         sendZigbeeCommands( cmds )     
     }
     else {
@@ -1296,7 +1299,7 @@ def initializeDevice() {
     if (getModelGroup() == 'OWON') {    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/e8750f6f2a34a3a6ae87f61e989a00964fb1107f/devices/owon.js
         // It seem this device have 2 version, one using the endpoint 0x01 and one other using the endpoint 0x03
         // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5738#issuecomment-1579521543 
-        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67°C if the real sensor temperature is near -20°C e.g. in a fridge.
+        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67ï¿½C if the real sensor temperature is near -20ï¿½C e.g. in a fridge.
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 200",]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 200",]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0001 {${device.zigbeeId}} {}", "delay 200",]
@@ -1364,9 +1367,9 @@ private getPACKET_ID() {
 }
 
 private getDescriptionText(msg) {
-	def descriptionText = "${device.displayName} ${msg}"
-	if (settings?.txtEnable) log.info "${descriptionText}"
-	return descriptionText
+    def descriptionText = "${device.displayName} ${msg}"
+    if (settings?.txtEnable) log.info "${descriptionText}"
+    return descriptionText
 }
 
 def logsOff(){
@@ -1441,7 +1444,7 @@ def deviceHealthCheck() {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
             if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
- 	        powerSourceEvent("unknown")
+             powerSourceEvent("unknown")
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
                 handleMotion(false, isDigital=true)
                 if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
@@ -1477,11 +1480,11 @@ Map stringToJsonMap( String str) {
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
-	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 Double safeToDouble(val, Double defaultVal=0.0) {
-	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 def logDebug(msg) {
