@@ -61,13 +61,14 @@
  * ver. 1.6.3  2023-10-15 kkossev  - (dev. branch) setPar() and preferences updates bug fixes; automatic fix for preferences which type was changed between the versions, including bool; 
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
- *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring;
+ *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  *
+ *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
- *                                   TODO: W.I.P.: when device rejoins the network, read the battry percentage again!
- *                                   TODO: W.I.P.: check why only voltage is reported for SONOFF_MOTION_IAS;
- *                                   TODO: W.I.P.: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
- *                                   TODO: W.I.P.: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
+ *                                   TODO: when device rejoins the network, read the battry percentage again!
+ *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
+ *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
+ *                                   TODO: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: quickRef
  *                                   TODO: command for black radar LED
@@ -91,7 +92,7 @@
 */
 
 def version() { "1.6.5" }
-def timeStamp() {"2023/10/23 8:04 AM"}
+def timeStamp() {"2023/10/23 12:43 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -330,31 +331,59 @@ def isChattyRadarReport(descMap) {
 
 
 @Field static final Map deviceProfilesV2 = [
+    // is4in1()
     "TS0202_4IN1"  : [
             description   : "Tuya 4in1 (motion/temp/humi/lux) sensor",
-            models        : ["TS0202"],
+            models        : ["TS0202"],         // model: 'ZB003-X'  vendor: 'Fantem'
             device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true, "keepTime":true, "sensitivity":true],
-            commands      : ["reportingTime4in1", "reportingTime4in1"],
+            commands      : ["reportingTime4in1":"reportingTime4in1", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_zmy9hjay", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // pairing: double click!
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"5j6ifxj", manufacturer:"_TYST11_i5j6ifxj", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],       
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"hfcudw5", manufacturer:"_TYST11_7hfcudw5", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_rxqls8v0", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // not tested
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"]        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_wuhzzfqg", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1"],        // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/282?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,EF00", outClusters:"0019,000A", model:"TS0202",  manufacturer:"_TZ3210_0aqbrnts", deviceJoinName: "Tuya TS0202 Multi Sensor 4 In 1 is-thpl-zb"]
             ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',          type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"inactive", 1:"active"] ,   unit:"",  description:'<i>Motion</i>'], 
+                // ??? check ^^
+                [dp:5,   name:'tamper',          type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"clear", 1:"detected"] ,   unit:"",  description:'<i>Tamper detection</i>'], 
+                // ??? IAS cluster is used instead? {occupancy: (zoneStatus & 1) > 0, tamper: (zoneStatus & 4) > 0};
+                [dp:9,   name:"sensitivity",     type:"enum",    rw: "rw", min:0,     max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                // check ^^^^^ hasOwnProperty('currentZoneSensitivityLevel')    .read('ssIasZone', ['currentZoneSensitivityLevel', 61441, 'zoneStatus']
+                [dp:10,  name:"keepTime",        type:"enum",    rw: "rw", min:0,     max:4,    defaultValue:"0",  unit:"seconds",    map:[0:"0 seconds", 1:"30 seconds", 2:"60 seconds", 3:"120 seconds", 3:"240 seconds", 4:"480 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
+                // check ^^^^^  hasOwnProperty('61441')
+                [dp:25,  name:'battery2',        type:"number",  rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%",          description:'<i>Remaining battery 2 in %</i>'],
+                //            ^^^TODO^^^ 
+                [dp:102, name:'reportingTime4in1',type:"number", rw: "ro", min:0,     max:1440, defaultValue:10,   step:5,  scale:1,  unit:"minutes",  title:"<b>Reporting Interval</b>",  description:'<i>Reporting interval in minutes</i>'],
+                [dp:104, name:'tempCalibration',  type:"decimal", rw:"ro", min:-2.0,  max:2.0,  defaultValue:0.0,  step:1,  scale:10, unit:"deg.",  title:"<b>Temperature Calibration</b>",       description:'<i>Temperature calibration (-2.0...2.0)</i>'],
+                //           ^^^TODO^^ pre-process negative values !
+                [dp:105, name:'humiCalibration', type:"number",  rw: "ro", min:-15,   max:15,   defaultValue:0,    step:1,  scale:1,  unit:"%RH",    title:"<b>Huidity Calibration</b>",     description:'<i>Humidity Calibration</i>'],
+                [dp:106, name:'illumCalibration',type:"number",  rw: "ro", min:-20,   max:20,   defaultValue:0,    step:1,  scale:1,  unit:"Lx",    title:"<b>Illuminance Calibration</b>",  description:'<i>Illuminance calibration in lux/i>'],
+                [dp:107, name:'temperature',     type:"decimal", rw: "ro", min:-20.0, max:80.0, defaultValue:0.0,  step:1,  scale:10, unit:"deg.",       description:'<i>Temperature</i>'],
+                [dp:108, name:'humidity',        type:"number",  rw: "ro", min:1,     max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%RH",        description:'<i>Humidity</i>'],
+                [dp:109, name:'pirSensorEnable', type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"1",  step:1,  scale:1,  map:[0:"disabled", 1:"enabled"] ,   unit:"", title:"<b>MoPIR Sensor Enable</b>",  description:'<i>Enable PIR sensor</i>'], 
+                [dp:110, name:'battery',         type:"number",  rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,  scale:1,  unit:"%",          description:'<i>Battery level</i>'],
+                //            ^^^TODO^^^ 
+                [dp:111, name:'ledEnable',       type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"disabled", 1:"enabled"] ,   unit:"", title:"<b>LED Enable</b>",  description:'<i>Enable LED</i>'], 
+                [dp:112, name:'reportingEnable', type:"enum",    rw: "ro", min:0,     max:1 ,   defaultValue:"0",  step:1,  scale:1,  map:[0:"disabled", 1:"enabled"] ,   unit:"", title:"<b>Reporting Enable</b>",  description:'<i>Enable reporting</i>'], 
+            ],
+
             deviceJoinName: "Tuya Multi Sensor 4 In 1",
             configuration : ["battery": false]
     ],
-    
+
     // is3in1() 
     "TS0601_3IN1"  : [                                // https://szneo.com/en/products/show.php?id=239 // https://www.banggood.com/Tuya-Smart-Linkage-ZB-Motion-Sensor-Human-Infrared-Detector-Mobile-Phone-Remote-Monitoring-PIR-Sensor-p-1858413.html?cur_warehouse=CN 
             description   : "Tuya 3in1 (Motion/Temp/Humi) sensor",
             models        : ["TS0601"],
-            device        : [type: "PIR", powerSource: "dc", isSleepy:false],    // check powerSource !
+            device        : [type: "PIR", powerSource: "dc", isSleepy:false],    //  powerSource changes batt/DC dynamically!
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_7hfcudw5", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"],
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_ppuj1vem", deviceJoinName: "Tuya NAS-PD07 Multi Sensor 3 In 1"]
