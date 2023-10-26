@@ -62,7 +62,7 @@
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
- * ver. 1.6.6  2023-10-26 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; 
+ * ver. 1.6.6  2023-10-26 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -93,7 +93,7 @@
 */
 
 def version() { "1.6.6" }
-def timeStamp() {"2023/10/26 10:38 AM"}
+def timeStamp() {"2023/10/26 10:47 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -3400,6 +3400,10 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
         case "number" :
             value = safeToInt(val, -1)
             scaledValue = value
+            // scale the value - added 10/26/2023 also for integer values !
+            if (dpMap.scale != null) {
+                scaledValue = (value * dpMap.scale) as Integer
+            }            
             break
         case "decimal" :
              value = safeToDouble(val, -1.0)
@@ -3524,7 +3528,7 @@ def setPar( par=null, val=null )
         }
         logDebug "setFunction result is ${cmds}"
         if (cmds == null || cmds == []) {
-            logWarn "setPar: <b>$setFunction</b>(<b>$tuyaValue</b>) returned null or empty list"
+            logDebug "setPar: <b>$setFunction</b>(<b>$tuyaValue</b>) returned null or empty list"
             // try sending the parameter using the new universal method
             cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
             if (cmds == null || cmds == []) {
