@@ -62,7 +62,7 @@
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
- * ver. 1.6.6  2023-10-25 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix;
+ * ver. 1.6.6  2023-10-26 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; 
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -93,7 +93,7 @@
 */
 
 def version() { "1.6.6" }
-def timeStamp() {"2023/10/25 8:03 AM"}
+def timeStamp() {"2023/10/26 10:38 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -787,11 +787,11 @@ def isChattyRadarReport(descMap) {
                 [dp:2, name:"unknownDp2",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp2'],
                 [dp:104, name:'illuminance',            type:"number",  rw: "ro",                    scale:1, unit:"lx",                  description:'illuminance'],
                 [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0,   max:2,    defaultValue:"0", map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
-                [dp:106, name:'radarSensitivity',       type:"decimal", rw: "rw", min:1.0, max:10.0, defaultValue:6.0, scale:10,  unit:"x",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity</i>'],
+                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1,   max:10,   defaultValue:5 , scale:10,  unit:"x",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity</i>'],
                 [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0.0, max:10.0, defaultValue:7.0, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
                 [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0.0, max:10.0, defaultValue:0.0, scale:100, unit:"meters",             description:'Target distance'],
-                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:15,   defaultValue:10,  scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
-                [dp:111, name:'staticDetectionSensitivity', type:"decimal",  rw: "rw", min:1.0, max:10.0, defaultValue:7.0,   scale:10,  unit:"x",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
+                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:1500, defaultValue:10,  scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
+                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:10, defaultValue:5,   scale:10,  unit:"x",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
                 [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
             ],
@@ -1094,9 +1094,10 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     "SONOFF_SNZB-06P_RADAR" : [ 
             description   : "SONOFF SNZB-06P RADAR",
             models        : ["SONOFF"],
-            device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
+            device        : [type: "radar", powerSource: "dc", isIAS:true, isSleepy:false],
             capabilities  : ["MotionSensor": true],
             preferences   : [:],                             
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406,0500,FC57,FC11", outClusters:"0003,0019", model:"SNZB-06P", manufacturer:"SONOFF", deviceJoinName: "SONOFF SNZB-06P RADAR"]      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
@@ -1104,8 +1105,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             tuyaDPs       : [:],
             attributes    : [:],
             deviceJoinName: "SONOFF SNZB-06P RADAR",
-            //configuration : ["0x0406":"bind"]     // TODO !!
-            configuration : [:]
+            configuration : ["0x0406":"bind", "0x0FC57":"bind", "0xFC11":"bind"] 
     ],    
   
     
@@ -1395,10 +1395,11 @@ def parse(String description) {
         }
         else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
             def raw = Integer.parseInt(descMap.value,16)
+            /*
             if (isSONOFF()) {
                 occupancyEvent(raw)
             }
-            else {
+            else*/ {
                 handleMotion( raw & 0x01 )
             }
         }
@@ -1484,6 +1485,16 @@ def parse(String description) {
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
             logDebug "IAS write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
         } 
+        else if (descMap?.cluster == "FC11" && descMap?.command in ["01", "0A"] ) {
+            //  descMap = [raw:0DD001FC110801202001, dni:0DD0, endpoint:01, cluster:FC11, size:08, attrId:2001, encoding:20, command:0A, value:01, clusterInt:64529, attrInt:8193]
+            if (descMap?.attrId == "2001") {
+                logDebug "FC11 attribute 2001 value is ${descMap?.value}"
+                occupancyEvent( Integer.parseInt(descMap?.value, 16) )
+            }
+            else {
+                logWarn "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
+            }
+        }
         else if (descMap?.command == "04") {    // write attribute response (other)
             logDebug "write attribute response is ${descMap?.data[0] == '00' ? 'success' : '<b>FAILURE</b>'}"
         } 
@@ -1496,7 +1507,7 @@ def parse(String description) {
             logDebug "bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1]=="00" ? 'success' : '<b>FAILURE</b>'})"
         } 
         else {
-            logDebug "<b> NOT PARSED </b> : descMap = ${descMap}"
+            logDebug "<b>NOT PARSED </b> : descMap = ${descMap} description = ${description}"
         }
     } // if 'catchall:' or 'read attr -'
     else if (description.startsWith('raw')) {
@@ -1510,17 +1521,22 @@ def parse(String description) {
         */
         descMap = myParseDescriptionAsMap(description)
         logDebug "parsed raw : cluster=${descMap.cluster} clusterId=${descMap.clusterId} attrId=${descMap.attrId} descMap=${descMap}"
-        if (descMap.cluster  ==  "E002") {      // TODO !!!!!!!!!!! check if this is correct :  cluster vs clusterId
-            processE002Cluster( descMap )
+        if (descMap != null) {
+            if (descMap.cluster  ==  "E002") {      // TODO !!!!!!!!!!! check if this is correct :  cluster vs clusterId
+                processE002Cluster( descMap )
+            }
+            else if (descMap.profileId == "0000") {    // zdo
+                parseZDOcommand(descMap)
+            } 
+            if (descMap.cluster  ==  "0005") {
+                logDebug "<b>unprocessed cluster ${descMap.cluster}</b> description = ${description} descMap=${descMap}"
+            }        
+            else {
+                logWarn "<b>UNPROCESSED RAW cluster ${descMap.cluster}</b> description = ${description} descMap=${descMap}"
+            }
         }
-        else if (descMap.profileId == "0000") {    // zdo
-            parseZDOcommand(descMap)
-        } 
-        if (descMap.clusterId  ==  "0005") {
-            logDebug "<b>unprocessed cluster ${descMap.clusterId}</b> description = ${description}"
-        }        
         else {
-            logWarn "<b>UNPROCESSED RAW cluster ${descMap.clusterId}</b> description = ${description}"
+                logWarn "<b>CAN NOT PARSE RAW cluster</b> description = ${description} descMap=${descMap}"
         }
     }
     else {
@@ -2367,11 +2383,10 @@ def occupancyEvent( raw ) {
     map.value = raw ? "occupied" : "unoccupied"
     map.unit = ""
     map.type = "physical"
-    // map.isStateChange = true
+    map.isStateChange = true
     map.descriptionText = "${map.name} state is ${map.value}"
     logInfo "${map.descriptionText}"
     sendEvent(map)
-    //runIn( 1, formatAttrib, [overwrite: true])    
 }
 
 def buttonEvent( action, buttonNumber=1 ) {
@@ -2789,26 +2804,33 @@ def configure() {
     if (isSiHAS()) {
         cmds += configureSiHAS()
     }
-    else if ("0x0001" in DEVICE.configuration) {    // Power Configuration cluster
-        logDebug "configuring the battery reporting... (min=${intMinTime}, max=${intMaxTime}, delta=0x02)"
-        cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=226)  // TEST - seems to be overwritten by the next line configuration?
-        cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=225)  // delta 0x02 = 1% change battery percentage remaining
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=228)    // try also battery voltage
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
+    else  {
+        if ("0x0001" in DEVICE.configuration) {    // Power Configuration cluster
+            logDebug "configuring the battery reporting... (min=${intMinTime}, max=${intMaxTime}, delta=0x02)"
+            cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=226)  // TEST - seems to be overwritten by the next line configuration?
+            cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay=225)  // delta 0x02 = 1% change battery percentage remaining
+            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=228)    // try also battery voltage
+            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
+        }
+        if ("0x0500" in DEVICE.configuration) {
+            cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay=227)
+        }
+        if ("0x0400" in DEVICE.configuration) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", "delay 229", ]
+        }
+        if ("0x0402" in DEVICE.configuration) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", "delay 229", ]
+        }
+        if ("0x0405" in DEVICE.configuration) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", "delay 229", ]
+        }
+        if ("0x0406" in DEVICE.configuration) {
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", "delay 229", ]    // OWON and SONOFF motion/occupancy cluster
+        }
+        if ("0xFC11" in DEVICE.configuration) {
+            cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay=230)  // attribute 2001 - ??
+        }
     }
-    else if (("0x0406" in DEVICE.configuration)) {
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"    // OWON motion/occupancy cluster
-    }
-    else if (!(DEVICE.device?.type == "radar" || is2in1())) {    // skip the binding for all the radars!                // TODO: check EPs !!!
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0402 {${device.zigbeeId}} {}"
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x02 0x01 0x0405 {${device.zigbeeId}} {}"
-        cmds += "delay 200"
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0400 {${device.zigbeeId}} {}"
-    }
-
     sendZigbeeCommands(cmds)    
 }
 
@@ -3609,7 +3631,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
 // called from  initializeVars( fullInit = true)
 def setDeviceNameAndProfile( model=null, manufacturer=null) {
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
-    if (deviceProfile == null) {
+    if (deviceProfile == null || deviceProfile == UNKNOWN) {
         logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
