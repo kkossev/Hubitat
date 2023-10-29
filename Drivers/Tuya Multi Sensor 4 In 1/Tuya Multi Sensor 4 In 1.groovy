@@ -62,7 +62,7 @@
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
- * ver. 1.6.6  2023-10-27 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!
+ * ver. 1.6.6  2023-10-29 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -93,7 +93,7 @@
 */
 
 def version() { "1.6.6" }
-def timeStamp() {"2023/10/27 6:00 AM"}
+def timeStamp() {"2023/10/29 10:49 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -140,6 +140,7 @@ metadata {
         
         
         attribute "radarSensitivity", "number" 
+        attribute "staticDetectionSensitivity", "number"    // added 10/29/2023
         attribute "detectionDelay", "decimal" 
         attribute "fadingTime", "decimal" 
         attribute "minimumDistance", "decimal" 
@@ -771,8 +772,8 @@ def isChattyRadarReport(descMap) {
     ],    
     
     
-    // '24G MmWave radar human presence motion sensor'
-    "TS0601_IJXVKHD0_RADAR"   : [                                       // isIJXVKHD0radar() - TODO!    ZY-M100-24G
+    // isIJXVKHD0radar()  '24G MmWave radar human presence motion sensor' 
+    "TS0601_IJXVKHD0_RADAR"   : [ 
             description   : "Tuya Human Presence Detector IJXVKHD0",    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5acadaf16b0e85c1a8401223ddcae3d31ce970eb/src/devices/tuya.ts#L5747
             models        : ["TS0601"],
             device        : [type: "radar", powerSource: "dc", isSleepy:false],
@@ -782,16 +783,16 @@ def isChattyRadarReport(descMap) {
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE204_ijxvkhd0", deviceJoinName: "Tuya Human Presence Detector ZY-M100-24G"]       // 
             ],
-            tuyaDPs:        [        // TODO - use already defined DPs and preferences !!
+            tuyaDPs:        [                           // https://github.com/Koenkk/zigbee2mqtt/issues/18237
                 [dp:1, name:"unknownDp1",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp1'],
                 [dp:2, name:"unknownDp2",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp2'],
                 [dp:104, name:'illuminance',            type:"number",  rw: "ro",                    scale:1, unit:"lx",                  description:'illuminance'],
                 [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0,   max:2,    defaultValue:"0", map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
-                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1,   max:10,   defaultValue:5 , scale:10,  unit:"x",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity</i>'],
-                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:0.0, max:10.0, defaultValue:7.0, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
+                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1,   max:9,    defaultValue:2 , scale:10,  unit:"",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:1.5, max:5.5,  defaultValue:5.5, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
                 [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0.0, max:10.0, defaultValue:0.0, scale:100, unit:"meters",             description:'Target distance'],
-                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:1500, defaultValue:10,  scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
-                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:10, defaultValue:5,   scale:10,  unit:"x",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity</i>'],
+                [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:1500, defaultValue:5,   scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
+                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:9,  defaultValue:3,   scale:10,  unit:"",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
                 [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
             ],
