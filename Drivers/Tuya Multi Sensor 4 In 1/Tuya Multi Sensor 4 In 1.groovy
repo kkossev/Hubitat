@@ -93,7 +93,7 @@
 */
 
 def version() { "1.6.6" }
-def timeStamp() {"2023/10/31 6:26 AM"}
+def timeStamp() {"2023/10/31 6:42 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -788,11 +788,11 @@ def isChattyRadarReport(descMap) {
                 [dp:2, name:"unknownDp2",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp2'],
                 [dp:104, name:'illuminance',            type:"number",  rw: "ro",                    scale:1, unit:"lx",                  description:'illuminance'],
                 [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0,   max:2,    defaultValue:"0", map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
-                [dp:106, name:'radarSensitivity', preProc:'divideBy10',      type:"number",  rw: "rw", min:1,   max:9,    defaultValue:2 ,  scale:1,   unit:"",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:106, name:'radarSensitivity', /*preProc:'divideBy10',   */   type:"number",  rw: "rw", min:1,   max:9,    defaultValue:2 ,  scale:10,   unit:"",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
                 [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:1.5, max:5.5,  defaultValue:5.5, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
                 [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0.0, max:10.0, defaultValue:0.0, scale:100, unit:"meters",             description:'Target distance'],
                 [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:1500, defaultValue:5,   scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
-                [dp:111, name:'staticDetectionSensitivity', preProc:'divideBy10', type:"number",  rw: "rw", min:1, max:9,  defaultValue:3,   scale:1,   unit:"",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:111, name:'staticDetectionSensitivity', /*preProc:'divideBy10', */ type:"number",  rw: "rw", min:1, max:9,  defaultValue:3,   scale:10,   unit:"",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
                 [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
             ],
