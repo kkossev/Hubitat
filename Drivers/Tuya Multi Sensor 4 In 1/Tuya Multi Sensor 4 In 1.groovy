@@ -62,7 +62,7 @@
  * ver. 1.6.4  2023-10-18 kkossev  - (dev. branch) added TS0601 _TZE204_e5m9c5hl to SXM7L9XA profile; added a bunch of new manufacturers to SBYX0LM6 profile;
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
- * ver. 1.6.6  2023-10-31 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function;
+ * ver. 1.6.6  2023-11-01 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function;
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -93,7 +93,7 @@
 */
 
 def version() { "1.6.6" }
-def timeStamp() {"2023/10/31 9:03 PM"}
+def timeStamp() {"2023/10/31 6:26 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -2579,7 +2579,7 @@ def updated() {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     //    
-    if (cmds != null && cmds.size() > 10) {
+    if (cmds != null && cmds.size() >= 7) {
         logDebug "sending the changed AdvancedOptions (size=${cmds.size()}) to the device..."
         sendZigbeeCommands( cmds )  
         logInfo "preferencies updates are sent to the device..."
