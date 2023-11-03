@@ -31,7 +31,7 @@ metadata {
             capability "Battery"
             attribute "batteryVoltage", "number"
     }
-	 
+     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0402,0405,FC57,FC7C,042A,FC7E", outClusters:"0003,0019,0020,0202", model:"VINDSTYRKA", manufacturer:"IKEA of Sweden", deviceJoinName: "VINDSTYRKA Air Quality Monitor E2112" 
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0500,0001", outClusters:"0019", model:"lumi.airmonitor.acn01", manufacturer:"LUMI", deviceJoinName: "Aqara TVOC Air Quality Monitor" 
 
@@ -104,7 +104,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
         sendEvent(eventMap)
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap])
     }
@@ -113,7 +113,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
 private void sendDelayedPm25Event(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 
@@ -126,7 +126,7 @@ void parseAirQualityIndexCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())    
+    Float floatValue = Float.intBitsToFloat(value.intValue())    
     handleAirQualityIndexEvent(floatValue as Integer)
 }
 
@@ -173,7 +173,7 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
         }
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         //logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedtVocEvent',  [overwrite: true, data: eventMap])
     }
@@ -182,7 +182,7 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
 private void sendDelayedtVocEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['tVocTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
     if (isAqaraTVOC()) {
         sendAirQualityLevelEvent(airQualityIndexToLevel(safeToInt(eventMap.value)))
     }
@@ -252,14 +252,14 @@ def initializeDeviceAirQuality() {
     ArrayList<String> cmds = []
     if (isAqaraTVOC()) {
         logDebug 'initializeDeviceAirQuality() AqaraTVOC'
-	    return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+
-			zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+
-			zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000) +
-			zigbee.readAttribute(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE) +
-			zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) +
-			zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) +
-			zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) + 
-			zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    
+        return zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020)+
+            zigbee.readAttribute(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000)+
+            zigbee.readAttribute(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000) +
+            zigbee.readAttribute(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE) +
+            zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0x0000, DataType.UINT16, 30, 300, 1*100) +
+            zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0x0000, DataType.INT16, 30, 300, 0x1) +
+            zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, 30, 21600, 0x1) + 
+            zigbee.configureReporting(ANALOG_INPUT_BASIC_CLUSTER, ANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE, DataType.FLOAT4, 10, 3600, 5)    
     } 
     else if (isVINDSTYRKA()) {
         logDebug 'initializeDeviceAirQuality() VINDSTYRKA'
@@ -301,8 +301,8 @@ def refreshAirQuality() {
     List<String> cmds = []
     if (isAqaraTVOC()) {
             // TODO - check what is available for VINDSTYRKA
-	        cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance
-	        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+            cmds += zigbee.readAttribute(0x042a, 0x0000, [:], delay=200)                    // pm2.5    attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; 3:Tolerance
+            cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
         else if (false) {
             // TODO - check what is available for Aqara 

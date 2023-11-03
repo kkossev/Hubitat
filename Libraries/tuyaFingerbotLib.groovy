@@ -129,19 +129,19 @@ void initEventsFingerbot(boolean fullInit=false) {
 }
 
 /*
-Switch1 		    1
-Mode			    101
-Degree of declining	code: 102
-Duration 		    103
-Switch Reverse		104
-Battery Power		105
-Increase		    106
-Tact Switch 		107
-Click 			    108
-Custom Program		109
-Producion Test		110
-Sports Statistics	111
-Custom Timing		112
+Switch1             1
+Mode                101
+Degree of declining    code: 102
+Duration             103
+Switch Reverse        104
+Battery Power        105
+Increase            106
+Tact Switch         107
+Click                 108
+Custom Program        109
+Producion Test        110
+Sports Statistics    111
+Custom Timing        112
 */
 
 void processTuyaDpFingerbot(descMap, dp, dp_id, fncmd) {

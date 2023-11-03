@@ -46,7 +46,7 @@ metadata {
     command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["--- select ---"] + SwitchModeOpts.options.values() as List<String>, description: "Select dimmer or switch mode"]]
     if (_DEBUG) { command "testBD", [[name: "testBD", type: "STRING", description: "testBD", defaultValue : ""]]  }
 
-  	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000", outClusters:"0019,000A,0003,0004,0005,0006,0008,1000", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Scene Switch TS004F"
+      fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000", outClusters:"0019,000A,0003,0004,0005,0006,0008,1000", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Scene Switch TS004F"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000,E001", outClusters:"0019,000A,0003,0004,0006,0008,1000", model: "TS004F", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart Wireless Scene Switch"          
@@ -56,8 +56,8 @@ metadata {
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI on/off switch",      manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA on/off switch E1743"  
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0004,0005,0006,0008,0019,1000", model:"TRADFRI remote control",     manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA remote control E1810"  
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000",      outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button",    manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA TRADFRI SHORTCUT Button E1812"
-	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters:"0003,0006,0008,0019,1000",           model:"Remote Control N2",          manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"         // (stainless)
-	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0005,0006,0008,0019,1000",      model:"Remote Control N2",          manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57",      outClusters:"0003,0006,0008,0019,1000",           model:"Remote Control N2",          manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2001"         // (stainless)
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC57,FC7C", outClusters:"0003,0005,0006,0008,0019,1000",      model:"Remote Control N2",          manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA STYRBAR remote control E2002"         // (white)    // https://community.hubitat.com/t/beta-release-ikea-styrbar/82563/15?u=kkossev
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC7C",      outClusters:"0003,0004,0006,0008,0019,1000",      model:"RODRET Dimmer",              manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA RODRET Wireless Dimmer E2201"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0009,0020,1000,FC7C", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI open/close remote",  manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA TRADFRI open/close remote E1766"      // https://community.hubitat.com/t/compability-for-ikea/123672/22?u=kkossev
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,1000,FC7C",      outClusters:"0003,0004,0005,0006,0008,0019,1000", model:"SYMFONISK Sound Controller", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA SYMFONISK Sound Controller E1744"
@@ -206,9 +206,9 @@ void processIkeaWindowCoveringCluster(final Map descMap) {
     }
     if (buttonState != "unknown" && buttonNumber != 0) {
         def descriptionText = "button $buttonNumber was $buttonState"
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
         logInfo "${descriptionText}"
-		sendEvent(event)
+        sendEvent(event)
         if (needsDebouncing()) {
             startButtonDebounce()
         }
@@ -358,9 +358,9 @@ void processIkeaCommand(final Map descMap) {
     }
     if (buttonState != "unknown" && buttonNumber != 0) {
         def descriptionText = "button $buttonNumber was $buttonState"
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
         logInfo "${descriptionText}"
-		sendEvent(event)
+        sendEvent(event)
         if (needsDebouncing()) {
             startButtonDebounce()
         }
@@ -398,9 +398,9 @@ def soundReleaseEvent() {
     def buttonNumber = state.states["lastButtonNumber"] ?: 5
     def buttonState = "released"
     def descriptionText = "button $buttonNumber was $buttonState"
-	def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
     logInfo "${descriptionText}"
-	sendEvent(event)
+    sendEvent(event)
     state.states["debouncingActive"] = false
 }
 
@@ -437,22 +437,22 @@ void processTS004Fcommand(final Map descMap) {
     // when TS004F initialized in Scene switch mode!
     if (descMap.clusterInt == 0x0006 && descMap.command == "FD") {
         if (descMap.sourceEndpoint == "03") {
-     	    buttonNumber = reverseButton==true ? 3 : 1
+             buttonNumber = reverseButton==true ? 3 : 1
         }
         else if (descMap.sourceEndpoint == "04") {
-      	    buttonNumber = reverseButton==true  ? 4 : 2
+              buttonNumber = reverseButton==true  ? 4 : 2
         }
         else if (descMap.sourceEndpoint == "02") {
             buttonNumber = reverseButton==true  ? 2 : 3
         }
         else if (descMap.sourceEndpoint == "01") {
-       	    buttonNumber = reverseButton==true  ? 1 : 4
+               buttonNumber = reverseButton==true  ? 1 : 4
         }
-	    else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
-   	        buttonNumber = reverseButton==true  ? 5 : 5
+        else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
+               buttonNumber = reverseButton==true  ? 5 : 5
         }
         else if (descMap.sourceEndpoint == "06") {
-       	    buttonNumber = reverseButton==true  ? 6 : 6
+               buttonNumber = reverseButton==true  ? 6 : 6
         }            
         if (descMap.data[0] == "00") {
             buttonState = "pushed"
@@ -498,9 +498,9 @@ void processTS004Fcommand(final Map descMap) {
     }
     if (buttonState != "unknown" && buttonNumber != 0) {
         def descriptionText = "button $buttonNumber was $buttonState"
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
         logInfo "${descriptionText}"
-		sendEvent(event)
+        sendEvent(event)
         if (needsDebouncing()) {
             startButtonDebounce()
         }
