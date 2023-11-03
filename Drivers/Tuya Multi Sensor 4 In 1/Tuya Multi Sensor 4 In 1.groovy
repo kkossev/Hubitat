@@ -64,7 +64,7 @@
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - (dev. branch) _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
  *
- *                                   TODO: fix decimal sign issue for senstivivity attributes;
+ *                                   TODO: add Sensitivity Levels Presets
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: when device rejoins the network, read the battry percentage again!
@@ -93,8 +93,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.6" }
-def timeStamp() {"2023/11/02 10:40 AM"}
+def version() { "1.6.7" }
+def timeStamp() {"2023/11/02 11:23 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
