@@ -6,7 +6,7 @@ library (
     name: "thermostatLib",
     namespace: "kkossev",
     importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/thermostatLib.groovy",
-    version: "1.0.1",
+    version: "1.0.2",
     documentationLink: ""
 )
 /*
@@ -22,16 +22,18 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-09-07 kkossev  - added thermostatLib
- * ver. 1.0.0  2023-09-09 kkossev  - added temperaturePollingInterval
+ * ver. 1.0.1  2023-09-09 kkossev  - added temperaturePollingInterval
+ * ver. 1.0.2  2023-11-03 kkossev  - (dev. branch) - system_mode off/heat; 
  *
  *                                   TODO: temperature event for 20 degrees bug?
  *                                   TODO: debugLogss off not scheduled bug?
  *                                   TODO: thermostat polling scheduled bug?
 */
 
+def thermostatLibVersion()   {"1.0.2"}
+def thermostatLibStamp() {"2023/11/04 8:51 AM"}
 
-def thermostatLibVersion()   {"1.0.1"}
-def thermostatLibStamp() {"2023/09/09 12:27 AM"}
+//import groovy.transform.Field
 
 metadata {
     capability "ThermostatHeatingSetpoint"
@@ -42,10 +44,10 @@ metadata {
     //capability "Thermostat"
     
     /*
-		capability "Actuator"
+        capability "Actuator"
         capability "Refresh"
         capability "Sensor"
-		capability "Temperature Measurement"
+        capability "Temperature Measurement"
         capability "Thermostat"
         capability "ThermostatHeatingSetpoint"
         capability "ThermostatCoolingSetpoint"
@@ -53,17 +55,35 @@ metadata {
         capability "ThermostatSetpoint"
         capability "ThermostatMode"    
     */
-    
-    //attribute "switchMode", "enum", SwitchModeOpts.options.values() as List<String> // ["dimmer", "scene"] 
-    //command "switchMode", [[name: "mode*", type: "ENUM", constraints: ["--- select ---"] + SwitchModeOpts.options.values() as List<String>, description: "Select dimmer or switch mode"]]
-    
+
+    // Aqara E1 thermostat attributes
+    attribute "system_mode", 'enum', SystemModeOpts.options.values() as List<String>
+    attribute "preset", 'enum', PresetOpts.options.values() as List<String>
+    attribute "window_detection", 'enum', WindowDetectionOpts.options.values() as List<String>
+    attribute "valve_detection", 'enum', ValveDetectionOpts.options.values() as List<String>
+    attribute "valve_alarm", 'enum', ValveAlarmOpts.options.values() as List<String>
+    attribute "child_lock", 'enum', ChildLockOpts.options.values() as List<String>
+    attribute "away_preset_temperature", 'number'
+    attribute "window_open", 'enum', WindowOpenOpts.options.values() as List<String>
+    attribute "calibrated", 'enum', CalibratedOpts.options.values() as List<String>
+    attribute "sensor", 'enum', SensorOpts.options.values() as List<String>
+    attribute "battery", 'number'
+
+    command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]]
+
     if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
 
+    // TODO - add Sonoff TRVZB fingerprint
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"     // model: 'SRTS-A01'
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
     // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
     // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
     preferences {
         input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TemperaturePollingIntervalOpts.options, defaultValue: TemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
+        if (isAqaraTRV()) {
+            input name: 'windowDetection', type: 'enum', title: '<b>WindowDetection</b>', options: WindowDetectionOpts.options, defaultValue: WindowDetectionOpts.defaultValue, required: true, description: '<i>Window detection.</i>'
+
+        }
     }
 }
 
@@ -71,12 +91,6 @@ metadata {
     defaultValue: 600,
     options     : [0: 'Disabled', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
 ]
-
-
-//@Field static final Integer STYRBAR_IGNORE_TIMER = 1500  
-
-//def needsDebouncing()           { (settings.debounce  ?: 0) as int != 0 }
-//def isIkeaOnOffSwitch()         { device.getDataValue("model") == "TRADFRI on/off switch" }
 
 @Field static final Map SystemModeOpts = [        //system_mode
     defaultValue: 1,
@@ -120,12 +134,18 @@ void thermostatEvent(eventName, value, raw) {
     logInfo "${eventName} is ${value} (raw ${raw})"
 }
 
+// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 )
+//
 void parseXiaomiClusterThermostatLib(final Map descMap) {
     //logWarn "parseXiaomiClusterThermostatLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     final Integer raw
     final String  value
     switch (descMap.attrInt as Integer) {
-        case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
+        case 0x040a:    // E1 battery - read only
+            raw = hexStrToUnsignedInt(descMap.value)
+            thermostatEvent("battery", raw, raw)
+            break
+        case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterThermostatTags(tags)
             break
@@ -134,7 +154,7 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
             value = SystemModeOpts.options[raw as int]
             thermostatEvent("system_mode", value, raw)
             break;
-        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw
+        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday']
             raw = hexStrToUnsignedInt(descMap.value)
             value = PresetOpts.options[raw as int]
             thermostatEvent("preset", value, raw)
@@ -196,17 +216,13 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
             value = SensorOpts.options[raw as int]
             thermostatEvent("sensor", value, raw)
             break;
-        case 0x040a:    // E1 battery - read only
-            raw = hexStrToUnsignedInt(descMap.value)
-            thermostatEvent("battery", raw, raw)
-            break
         default:
             logWarn "parseXiaomiClusterThermostatLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
 }
 
-
+// called from parseXiaomiClusterThermostatLib 
 void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
@@ -273,12 +289,10 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
 }
 
 
-
-
-
 /*
  * -----------------------------------------------------------------------------
  * thermostat cluster 0x0201
+ * called from parseThermostatCluster() in the main code ...
  * -----------------------------------------------------------------------------
 */
 
@@ -370,12 +384,10 @@ def setHeatingSetpoint( temperature ) {
 
 private void sendHeatingSetpointEvent(Map eventMap) {
     if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
-
-
-
+// TODO - not called 
 void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
 
     switch (dp) {
@@ -388,7 +400,8 @@ void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
     }
 }
 
-
+//
+// called from updated() in the main code ...
 void updatedThermostat() {
         final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
         if (pollingInterval > 0) {
@@ -490,10 +503,76 @@ void initVarsThermostat(boolean fullInit=false) {
     
 }
 
+//     command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]]
+def preset( preset ) {
+    logDebug "preset(${preset}) called!"
+    if (preset == "auto") {
+        setPresetMode("auto")               // hand symbol NOT shown
+    }
+    else if (preset == "manual") {
+        setPresetMode("manual")             // hand symbol is shown on the LCD
+    }
+    else if (preset == "away") {
+        setPresetMode("away")               // 5 degreees 
+    }
+    else {
+        logWarn "preset: unknown preset ${preset}"
+    }
+}
+
+def setPresetMode(mode) {
+    List<String> cmds = []
+    logDebug "sending setPresetMode(${mode})"    
+    if (isAqaraTRV()) {
+        // {'manual': 0, 'auto': 1, 'away': 2}), type: 0x20}
+        if (mode == "auto") {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x01, [mfgCode: 0x115F], delay=200)
+        }
+        else if (mode == "manual") {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x00, [mfgCode: 0x115F], delay=200)
+        }
+        else if (mode == "away") {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x02, [mfgCode: 0x115F], delay=200)
+        }
+        else {
+            logWarn "setPresetMode: Aqara TRV unknown preset ${mode}"
+        }
+    }
+    else {
+        // TODO - set generic thermostat mode
+        log.warn "setPresetMode NOT IMPLEMENTED"
+        return
+    }
+    if (cmds == []) { cmds = ["delay 299"] }
+    sendZigbeeCommands(cmds)
+
+}
+
 def setThermostatMode( mode ) {
+    List<String> cmds = []
     logDebug "sending setThermostatMode(${mode})"
     //state.mode = mode
-    log.warn "setThermostatMode NOT IMPLEMENTED"
+    if (isAqaraTRV()) {
+        // TODO - set Aqara E1 thermostat mode
+        switch(mode) {
+            case "off":
+                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x00, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
+                break
+            case "heat":
+                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
+                break
+            default:
+                logWarn "setThermostatMode: unknown AqaraTRV mode ${mode}"
+                break
+        }
+    }
+    else {
+        // TODO - set generic thermostat mode
+        log.warn "setThermostatMode NOT IMPLEMENTED"
+        return
+    }
+    if (cmds == []) { cmds = ["delay 299"] }
+    sendZigbeeCommands(cmds)
 }
 
 def setCoolingSetpoint(temperature){
@@ -531,7 +610,6 @@ def sendThermostatOperatingStateEvent( st ) {
     state.lastThermostatOperatingState = st
 }
 
-
 void sendSupportedThermostatModes() {
     def supportedThermostatModes = []
     supportedThermostatModes = ["off", "heat", "auto"]
@@ -551,16 +629,15 @@ void initEventsThermostat(boolean fullInit=false) {
     sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
     sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
     sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")    
-    updateDataValue("lastRunningMode", "heat")	
+    updateDataValue("lastRunningMode", "heat")    
     
 }
 
 private getDescriptionText(msg) {
-	def descriptionText = "${device.displayName} ${msg}"
-	if (settings?.txtEnable) log.info "${descriptionText}"
-	return descriptionText
+    def descriptionText = "${device.displayName} ${msg}"
+    if (settings?.txtEnable) log.info "${descriptionText}"
+    return descriptionText
 }
-
 
 def testT(par) {
     logWarn "testT(${par})"

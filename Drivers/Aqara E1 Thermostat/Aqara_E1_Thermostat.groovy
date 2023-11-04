@@ -3,14 +3,14 @@
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
- * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- * 	in compliance with the License. You may obtain a copy of the License at:
+ *     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *     in compliance with the License. You may obtain a copy of the License at:
  *
- * 		http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * 	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- * 	for the specific language governing permissions and limitations under the License.
+ *     Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *     for the specific language governing permissions and limitations under the License.
  *
  * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
  * For a big portions of code all credits go to Jonathan Bradshaw.
@@ -27,6 +27,7 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-09 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766; added thermostatLib; added xiaomiLib
+ * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -42,8 +43,8 @@
  *                                   TODO: Configure: add custom Notes
  */
 
-static String version() { "2.1.4" }
-static String timeStamp() {"2023/09/09 11:40 AM"}
+static String version() { "2.1.5" }
+static String timeStamp() {"2023/11/04 9:09 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -220,7 +221,7 @@ metadata {
             capability "PushableButton"
             capability "DoubleTapableButton"
             capability "HoldableButton"
-   	        capability "ReleasableButton"
+            capability "ReleasableButton"
         }
         if (deviceType in  ["Device", "Fingerbot"]) {
             capability "Momentary"
@@ -336,7 +337,7 @@ void parse(final String description) {
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
     
-    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
+    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {    
         logDebug "parse: zone status: $description"
         if (true /*isHL0SS9OAradar() && _IGNORE_ZCL_REPORTS == true*/) {    // TODO!
             logDebug "ignored IAS zone status"
@@ -1793,13 +1794,13 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
         return
     }
     if (timeElapsed >= minTime) {
-		logInfo "${eventMap.descriptionText}"
-		unschedule("sendDelayedIllumEvent")		//get rid of stale queued reports
+        logInfo "${eventMap.descriptionText}"
+        unschedule("sendDelayedIllumEvent")        //get rid of stale queued reports
         state.lastRx['illumTime'] = now()
         sendEvent(eventMap)
-	}		
+    }        
     else {         // queue the event
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
     }
@@ -1847,13 +1848,13 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     if (timeElapsed >= minTime) {
-		logInfo "${eventMap.descriptionText}"
-		unschedule("sendDelayedTempEvent")		//get rid of stale queued reports
+        logInfo "${eventMap.descriptionText}"
+        unschedule("sendDelayedTempEvent")        //get rid of stale queued reports
         state.lastRx['tempTime'] = now()
         sendEvent(eventMap)
-	}		
+    }        
     else {         // queue the event
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap])
     }
@@ -1901,7 +1902,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
         sendEvent(eventMap)
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap])
     }
@@ -1910,7 +1911,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
 private void sendDelayedHumidityEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 /*
@@ -1959,7 +1960,7 @@ void parsePm25Cluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())
+    Float floatValue = Float.intBitsToFloat(value.intValue())
     //logDebug "pm25 float value = ${floatValue}"
     handlePm25Event(floatValue as Integer)
 }
@@ -1988,7 +1989,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
         sendEvent(eventMap)
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap])
     }
@@ -1997,7 +1998,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
 private void sendDelayedPm25Event(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 /*
@@ -2028,7 +2029,7 @@ void parseMultistateInputCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())
+    Float floatValue = Float.intBitsToFloat(value.intValue())
     if (DEVICE_TYPE in  ["AqaraCube"]) {
         parseMultistateInputClusterAqaraCube(descMap)
     }
@@ -2341,15 +2342,15 @@ def refresh() {
             cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage 
         }
         if (DEVICE_TYPE in  ["Plug", "Dimmer"]) {
-    	    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
+            cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
             cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
         }
         if (DEVICE_TYPE in  ["Dimmer"]) {
-    	    cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)        
         }
         if (DEVICE_TYPE in  ["THSensor", "AirQuality"]) {
-    	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)        
-    	    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)        
         }
     }
 
@@ -2517,7 +2518,7 @@ void autoPoll() {
     //state.states["isRefresh"] = true
     
     if (DEVICE_TYPE in  ["AirQuality"]) {
-	    cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
     
     if (cmds != null && cmds != [] ) {
@@ -2673,11 +2674,11 @@ void initialize() {
 */
 
 static Integer safeToInt(val, Integer defaultVal=0) {
-	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 static Double safeToDouble(val, Double defaultVal=0.0) {
-	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {

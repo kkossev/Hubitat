@@ -1,3 +1,16 @@
 {
-  "files": []
+  "files": [
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/thermostatLib.groovy",
+      "id": 140,
+      "codeType": "library",
+      "version": 105
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
+      "id": 141,
+      "codeType": "library",
+      "version": 15
+    }
+  ]
 }

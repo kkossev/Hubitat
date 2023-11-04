@@ -1,3 +1,10 @@
 {
-  "files": []
+  "files": [
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/Aqara E1 Thermostat/Aqara_E1_Thermostat.groovy",
+      "id": 2581,
+      "codeType": "driver",
+      "version": 93
+    }
+  ]
 }
