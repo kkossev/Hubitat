@@ -27,7 +27,7 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-09 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766; added thermostatLib; added xiaomiLib
- * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat
+ * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat; added deviceProfileLib; 
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/04 9:09 AM"}
+static String timeStamp() {"2023/11/04 10:17 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -81,6 +81,7 @@ import groovy.json.JsonOutput
 //#include kkossev.tuyaFingerbotLib
 deviceType = "Thermostat"
 @Field static final String DEVICE_TYPE = "Thermostat"
+
 
 
 //deviceType = "Switch"
@@ -3050,7 +3051,7 @@ library ( // library marker kkossev.xiaomiLib, line 1
     description: "Xiaomi Library", // library marker kkossev.xiaomiLib, line 5
     name: "xiaomiLib", // library marker kkossev.xiaomiLib, line 6
     namespace: "kkossev", // library marker kkossev.xiaomiLib, line 7
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/xiaomiLib.groovy", // library marker kkossev.xiaomiLib, line 8
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy", // library marker kkossev.xiaomiLib, line 8
     version: "1.0.1", // library marker kkossev.xiaomiLib, line 9
     documentationLink: "" // library marker kkossev.xiaomiLib, line 10
 ) // library marker kkossev.xiaomiLib, line 11
@@ -3074,7 +3075,7 @@ library ( // library marker kkossev.xiaomiLib, line 1
 
 
 def xiaomiLibVersion()   {"1.0.1"} // library marker kkossev.xiaomiLib, line 31
-def xiaomiLibStamp() {"2023/11/04 9:08 AM"} // library marker kkossev.xiaomiLib, line 32
+def xiaomiLibStamp() {"2023/11/04 10:17 PM"} // library marker kkossev.xiaomiLib, line 32
 
 // no metadata for this library! // library marker kkossev.xiaomiLib, line 34
 
@@ -3365,7 +3366,7 @@ library ( // library marker kkossev.thermostatLib, line 1
     description: "Thermostat Library", // library marker kkossev.thermostatLib, line 5
     name: "thermostatLib", // library marker kkossev.thermostatLib, line 6
     namespace: "kkossev", // library marker kkossev.thermostatLib, line 7
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/thermostatLib.groovy", // library marker kkossev.thermostatLib, line 8
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy", // library marker kkossev.thermostatLib, line 8
     version: "1.0.2", // library marker kkossev.thermostatLib, line 9
     documentationLink: "" // library marker kkossev.thermostatLib, line 10
 ) // library marker kkossev.thermostatLib, line 11
@@ -3391,7 +3392,7 @@ library ( // library marker kkossev.thermostatLib, line 1
 */ // library marker kkossev.thermostatLib, line 31
 
 def thermostatLibVersion()   {"1.0.2"} // library marker kkossev.thermostatLib, line 33
-def thermostatLibStamp() {"2023/11/04 8:51 AM"} // library marker kkossev.thermostatLib, line 34
+def thermostatLibStamp() {"2023/11/04 10:17 PM"} // library marker kkossev.thermostatLib, line 34
 
 //import groovy.transform.Field // library marker kkossev.thermostatLib, line 36
 
@@ -3489,519 +3490,776 @@ metadata { // library marker kkossev.thermostatLib, line 38
     options     : [0: 'internal', 1: 'external'] // library marker kkossev.thermostatLib, line 129
 ] // library marker kkossev.thermostatLib, line 130
 
-void thermostatEvent(eventName, value, raw) { // library marker kkossev.thermostatLib, line 132
-    sendEvent(name: eventName, value: value, type: "physical") // library marker kkossev.thermostatLib, line 133
-    logInfo "${eventName} is ${value} (raw ${raw})" // library marker kkossev.thermostatLib, line 134
-} // library marker kkossev.thermostatLib, line 135
+@Field static final Map deviceProfilesV2 = [ // library marker kkossev.thermostatLib, line 132
+    // isAqaraTRV() // library marker kkossev.thermostatLib, line 133
+    "AQARA_E1_TRV"   : [ // library marker kkossev.thermostatLib, line 134
+            description   : "Aqara E1`Thermostat model SRTS-A01", // library marker kkossev.thermostatLib, line 135
+            models        : ["LUMI"], // library marker kkossev.thermostatLib, line 136
+            device        : [type: "TRV", powerSource: "battery", isSleepy:false], // library marker kkossev.thermostatLib, line 137
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true], // library marker kkossev.thermostatLib, line 138
 
-// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 ) // library marker kkossev.thermostatLib, line 137
-// // library marker kkossev.thermostatLib, line 138
-void parseXiaomiClusterThermostatLib(final Map descMap) { // library marker kkossev.thermostatLib, line 139
-    //logWarn "parseXiaomiClusterThermostatLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 140
-    final Integer raw // library marker kkossev.thermostatLib, line 141
-    final String  value // library marker kkossev.thermostatLib, line 142
-    switch (descMap.attrInt as Integer) { // library marker kkossev.thermostatLib, line 143
-        case 0x040a:    // E1 battery - read only // library marker kkossev.thermostatLib, line 144
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 145
-            thermostatEvent("battery", raw, raw) // library marker kkossev.thermostatLib, line 146
-            break // library marker kkossev.thermostatLib, line 147
-        case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes // library marker kkossev.thermostatLib, line 148
-            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.thermostatLib, line 149
-            parseXiaomiClusterThermostatTags(tags) // library marker kkossev.thermostatLib, line 150
-            break // library marker kkossev.thermostatLib, line 151
-        case 0x0271:    // result['system_mode'] = {1: 'heat', 0: 'off'}[value]; (heating state) - rw // library marker kkossev.thermostatLib, line 152
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 153
-            value = SystemModeOpts.options[raw as int] // library marker kkossev.thermostatLib, line 154
-            thermostatEvent("system_mode", value, raw) // library marker kkossev.thermostatLib, line 155
-            break; // library marker kkossev.thermostatLib, line 156
-        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday'] // library marker kkossev.thermostatLib, line 157
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 158
-            value = PresetOpts.options[raw as int] // library marker kkossev.thermostatLib, line 159
-            thermostatEvent("preset", value, raw) // library marker kkossev.thermostatLib, line 160
-            break; // library marker kkossev.thermostatLib, line 161
-        case 0x0273:    // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value]; - rw // library marker kkossev.thermostatLib, line 162
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 163
-            value = WindowDetectionOpts.options[raw as int] // library marker kkossev.thermostatLib, line 164
-            thermostatEvent("window_detection", value, raw) // library marker kkossev.thermostatLib, line 165
-            break; // library marker kkossev.thermostatLib, line 166
-        case 0x0274:    // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value]; -rw  // library marker kkossev.thermostatLib, line 167
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 168
-            value = ValveDetectionOpts.options[raw as int] // library marker kkossev.thermostatLib, line 169
-            thermostatEvent("valve_detection", value, raw) // library marker kkossev.thermostatLib, line 170
-            break; // library marker kkossev.thermostatLib, line 171
-        case 0x0275:    // result['valve_alarm'] = {1: true, 0: false}[value]; - read only! // library marker kkossev.thermostatLib, line 172
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 173
-            value = ValveAlarmOpts.options[raw as int] // library marker kkossev.thermostatLib, line 174
-            thermostatEvent("valve_alarm", value, raw) // library marker kkossev.thermostatLib, line 175
-            break; // library marker kkossev.thermostatLib, line 176
-        case 0x0277:    // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value]; - rw // library marker kkossev.thermostatLib, line 177
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 178
-            value = ChildLockOpts.options[raw as int] // library marker kkossev.thermostatLib, line 179
-            thermostatEvent("child_lock", value, raw) // library marker kkossev.thermostatLib, line 180
-            break; // library marker kkossev.thermostatLib, line 181
-        case 0x0279:    // result['away_preset_temperature'] = (value / 100).toFixed(1); - rw // library marker kkossev.thermostatLib, line 182
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 183
-            value = raw / 100 // library marker kkossev.thermostatLib, line 184
-            thermostatEvent("away_preset_temperature", value, raw) // library marker kkossev.thermostatLib, line 185
-            break; // library marker kkossev.thermostatLib, line 186
-        case 0x027a:    // result['window_open'] = {1: true, 0: false}[value]; - read only // library marker kkossev.thermostatLib, line 187
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 188
-            value = WindowOpenOpts.options[raw as int] // library marker kkossev.thermostatLib, line 189
-            thermostatEvent("window_open", value, raw) // library marker kkossev.thermostatLib, line 190
-            break; // library marker kkossev.thermostatLib, line 191
-        case 0x027b:    // result['calibrated'] = {1: true, 0: false}[value]; - read only // library marker kkossev.thermostatLib, line 192
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 193
-            value = CalibratedOpts.options[raw as int] // library marker kkossev.thermostatLib, line 194
-            thermostatEvent("calibrated", value, raw) // library marker kkossev.thermostatLib, line 195
-            break; // library marker kkossev.thermostatLib, line 196
-        case 0x0276:    // unknown // library marker kkossev.thermostatLib, line 197
-        case 0x027c:    // unknown // library marker kkossev.thermostatLib, line 198
-        case 0x027d:    // unknown // library marker kkossev.thermostatLib, line 199
-        case 0x0280:    // unknown // library marker kkossev.thermostatLib, line 200
-        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 201
-        case 0x00ff:    // unknown // library marker kkossev.thermostatLib, line 202
-        case 0x00f7:    // unknown // library marker kkossev.thermostatLib, line 203
-        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 204
-        case 0x00FF: // library marker kkossev.thermostatLib, line 205
-            try { // library marker kkossev.thermostatLib, line 206
-                raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 207
-                logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${raw}" // library marker kkossev.thermostatLib, line 208
-            } // library marker kkossev.thermostatLib, line 209
-            catch (e) { // library marker kkossev.thermostatLib, line 210
-                logWarn "exception caught while processing Aqara E1 TRV unknown attribute ${descMap.attrInt} descMap.value = ${descMap.value}" // library marker kkossev.thermostatLib, line 211
-            } // library marker kkossev.thermostatLib, line 212
-            break; // library marker kkossev.thermostatLib, line 213
-        case 0x027e:    // result['sensor'] = {1: 'external', 0: 'internal'}[value]; - read only? // library marker kkossev.thermostatLib, line 214
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 215
-            value = SensorOpts.options[raw as int] // library marker kkossev.thermostatLib, line 216
-            thermostatEvent("sensor", value, raw) // library marker kkossev.thermostatLib, line 217
-            break; // library marker kkossev.thermostatLib, line 218
-        default: // library marker kkossev.thermostatLib, line 219
-            logWarn "parseXiaomiClusterThermostatLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 220
-            break // library marker kkossev.thermostatLib, line 221
-    } // library marker kkossev.thermostatLib, line 222
-} // library marker kkossev.thermostatLib, line 223
+            preferences   : ["window_detection":"0xFCC0:0x0273", "valve_detection":"0xFCC0:0x0274","valve_alarm":"0xFCC0:0x0275", "child_lock":"0xFCC0:0x0277", "away_preset_temperature":"0xFCC0:0x0279", "window_open":"0xFCC0:0x027A", "calibrated":"0xFCC0:0x027B", "sensor":"0xFCC0:0x027E"], // library marker kkossev.thermostatLib, line 140
+            fingerprints  : [ // library marker kkossev.thermostatLib, line 141
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"]  // library marker kkossev.thermostatLib, line 142
+            ], // library marker kkossev.thermostatLib, line 143
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"], // library marker kkossev.thermostatLib, line 144
+                            // system_mode, preset, window_detection, valve_detection, valve_alarm, child_lock, away_preset_temperature, window_open, calibrated, sensor, battery // library marker kkossev.thermostatLib, line 145
+            tuyaDPs       : [:], // library marker kkossev.thermostatLib, line 146
+            attributes    : [ // library marker kkossev.thermostatLib, line 147
+                [at:"0xFCC0:0x040A",  name:'battery',                       type:"number",  dt: "UINT16", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'], // library marker kkossev.thermostatLib, line 148
+                [at:"0xFCC0:0x0271",  name:'system_mode',                   type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>System Mode</i>'], // library marker kkossev.thermostatLib, line 149
+                [at:"0xFCC0:0x0272",  name:'preset',                        type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "manual", 1: "auto", 2: "away"], unit:"",         title: "<b>Preset</b>",                        description:'<i>Preset</i>'], // library marker kkossev.thermostatLib, line 150
+                [at:"0xFCC0:0x0273",  name:'window_detection',              type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Window Detection</b>",              description:'<i>Window detection</i>'], // library marker kkossev.thermostatLib, line 151
+                [at:"0xFCC0:0x0274",  name:'valve_detection',               type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Valve Detection</b>",               description:'<i>Valve detection</i>'], // library marker kkossev.thermostatLib, line 152
+                [at:"0xFCC0:0x0275",  name:'valve_alarm',                   type:"enum",    dt: "UINT8",  rw: "ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Valve Alarm</b>",                   description:'<i>Valve alarm</i>'], // library marker kkossev.thermostatLib, line 153
+                [at:"0xFCC0:0x0277",  name:'child_lock',                    type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "unlock", 1: "lock"], unit:"",         title: "<b>Child Lock</b>",                    description:'<i>Child lock</i>'], // library marker kkossev.thermostatLib, line 154
+                [at:"0xFCC0:0x0279",  name:'away_preset_temperature',       type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Away Preset Temperature</b>",       description:'<i>Away preset temperature</i>'], // library marker kkossev.thermostatLib, line 155
+                [at:"0xFCC0:0x027A",  name:'window_open',                   type:"enum",    dt: "UINT8",  rw: "ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Window Open</b>",                   description:'<i>Window open</i>'], // library marker kkossev.thermostatLib, line 156
+                [at:"0xFCC0:0x027B",  name:'calibrated',                    type:"enum",    dt: "UINT8",  rw: "ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Calibrated</b>",                    description:'<i>Calibrated</i>'], // library marker kkossev.thermostatLib, line 157
+                [at:"0xFCC0:0x027E",  name:'sensor',                        type:"enum",    dt: "UINT8",  rw: "ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "internal", 1: "external"], unit:"",         title: "<b>Sensor</b>",                        description:'<i>Sensor</i>'], // library marker kkossev.thermostatLib, line 158
+                // // library marker kkossev.thermostatLib, line 159
+                [at:"0x0201:0x0000",  name:'temperature',                   type:"decimal", dt: "UINT16", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'], // library marker kkossev.thermostatLib, line 160
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'], // library marker kkossev.thermostatLib, line 161
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'], // library marker kkossev.thermostatLib, line 162
+                [at:"0x0201:0x001C",  name:'mode',                          type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'], // library marker kkossev.thermostatLib, line 163
+                //                      ^^^^ TODO - check if this is the same as system_mode     // library marker kkossev.thermostatLib, line 164
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',             type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'], // library marker kkossev.thermostatLib, line 165
+                //                          ^^ TODO   // library marker kkossev.thermostatLib, line 166
+                [at:"0x0201:0x0020",  name:'battery2',                     type:"number",  dt: "UINT16", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'], // library marker kkossev.thermostatLib, line 167
+                //                          ^^ TODO   // library marker kkossev.thermostatLib, line 168
+                [at:"0x0201:0x0023",  name:'thermostatHoldMode',           type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'], // library marker kkossev.thermostatLib, line 169
+                //                          ^^ TODO   // library marker kkossev.thermostatLib, line 170
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState',      type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'], // library marker kkossev.thermostatLib, line 171
+                //                          ^^ TODO   // library marker kkossev.thermostatLib, line 172
+                [at:"0x0201:0xFFF2",  name:'unknown',                      type:"number",  dt: "UINT16", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'], // library marker kkossev.thermostatLib, line 173
+            ], // library marker kkossev.thermostatLib, line 174
+            deviceJoinName: "Aqara E1 Thermostat", // library marker kkossev.thermostatLib, line 175
+            configuration : [:] // library marker kkossev.thermostatLib, line 176
+    ], // library marker kkossev.thermostatLib, line 177
 
-// called from parseXiaomiClusterThermostatLib  // library marker kkossev.thermostatLib, line 225
-void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) { // library marker kkossev.thermostatLib, line 226
-    tags.each { final Integer tag, final Object value -> // library marker kkossev.thermostatLib, line 227
-        switch (tag) { // library marker kkossev.thermostatLib, line 228
-            case 0x01:    // battery voltage // library marker kkossev.thermostatLib, line 229
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.thermostatLib, line 230
-                break // library marker kkossev.thermostatLib, line 231
-            case 0x03: // library marker kkossev.thermostatLib, line 232
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)" // library marker kkossev.thermostatLib, line 233
-                break // library marker kkossev.thermostatLib, line 234
-            case 0x05: // library marker kkossev.thermostatLib, line 235
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.thermostatLib, line 236
-                break // library marker kkossev.thermostatLib, line 237
-            case 0x06: // library marker kkossev.thermostatLib, line 238
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.thermostatLib, line 239
-                break // library marker kkossev.thermostatLib, line 240
-            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.thermostatLib, line 241
-                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.thermostatLib, line 242
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.thermostatLib, line 243
-                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.thermostatLib, line 244
-                break // library marker kkossev.thermostatLib, line 245
-            case 0x0a: // library marker kkossev.thermostatLib, line 246
-                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.thermostatLib, line 247
-                if (state.health == null) { state.health = [:] } // library marker kkossev.thermostatLib, line 248
-                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.thermostatLib, line 249
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.thermostatLib, line 250
-                if (oldNWK != nwk ) { // library marker kkossev.thermostatLib, line 251
-                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.thermostatLib, line 252
-                    state.health['parentNWK']  = nwk // library marker kkossev.thermostatLib, line 253
-                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.thermostatLib, line 254
-                } // library marker kkossev.thermostatLib, line 255
-                break // library marker kkossev.thermostatLib, line 256
-            case 0x0d: // library marker kkossev.thermostatLib, line 257
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 258
-                break             // library marker kkossev.thermostatLib, line 259
-            case 0x11: // library marker kkossev.thermostatLib, line 260
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 261
-                break             // library marker kkossev.thermostatLib, line 262
-            case 0x64: // library marker kkossev.thermostatLib, line 263
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC // library marker kkossev.thermostatLib, line 264
-                break // library marker kkossev.thermostatLib, line 265
-            case 0x65: // library marker kkossev.thermostatLib, line 266
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 267
-                break // library marker kkossev.thermostatLib, line 268
-            case 0x66: // library marker kkossev.thermostatLib, line 269
-                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 270
-                handleTemperatureEvent(value/100.0) // library marker kkossev.thermostatLib, line 271
-                break // library marker kkossev.thermostatLib, line 272
-            case 0x67: // library marker kkossev.thermostatLib, line 273
-                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 274
-                break // library marker kkossev.thermostatLib, line 275
-            case 0x68: // library marker kkossev.thermostatLib, line 276
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 277
-                break // library marker kkossev.thermostatLib, line 278
-            case 0x69: // library marker kkossev.thermostatLib, line 279
-                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 280
-                break // library marker kkossev.thermostatLib, line 281
-            case 0x6a: // library marker kkossev.thermostatLib, line 282
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 283
-                break // library marker kkossev.thermostatLib, line 284
-            default: // library marker kkossev.thermostatLib, line 285
-                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 286
-        } // library marker kkossev.thermostatLib, line 287
-    } // library marker kkossev.thermostatLib, line 288
-} // library marker kkossev.thermostatLib, line 289
+    "UNKNOWN"   : [ // library marker kkossev.thermostatLib, line 179
+            description   : "GENERIC TRV", // library marker kkossev.thermostatLib, line 180
+            models        : ["*"], // library marker kkossev.thermostatLib, line 181
+            device        : [type: "TRV", powerSource: "battery", isSleepy:false], // library marker kkossev.thermostatLib, line 182
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true], // library marker kkossev.thermostatLib, line 183
+
+            preferences   : [], // library marker kkossev.thermostatLib, line 185
+            fingerprints  : [], // library marker kkossev.thermostatLib, line 186
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"], // library marker kkossev.thermostatLib, line 187
+            tuyaDPs       : [:], // library marker kkossev.thermostatLib, line 188
+            attributes    : [ // library marker kkossev.thermostatLib, line 189
+                [at:"0x0201:0x0000",  name:'temperature',                   type:"decimal", dt: "UINT16", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'], // library marker kkossev.thermostatLib, line 190
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'], // library marker kkossev.thermostatLib, line 191
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'], // library marker kkossev.thermostatLib, line 192
+                [at:"0x0201:0x001C",  name:'mode',                          type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'], // library marker kkossev.thermostatLib, line 193
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',             type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'], // library marker kkossev.thermostatLib, line 194
+                [at:"0x0201:0x0020",  name:'battery2',                     type:"number",  dt: "UINT16", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'], // library marker kkossev.thermostatLib, line 195
+                [at:"0x0201:0x0023",  name:'thermostatHoldMode',           type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'], // library marker kkossev.thermostatLib, line 196
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState',      type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'], // library marker kkossev.thermostatLib, line 197
+            ], // library marker kkossev.thermostatLib, line 198
+            deviceJoinName: "UNKWNOWN TRV", // library marker kkossev.thermostatLib, line 199
+            configuration : [:] // library marker kkossev.thermostatLib, line 200
+    ] // library marker kkossev.thermostatLib, line 201
+
+] // library marker kkossev.thermostatLib, line 203
 
 
-/* // library marker kkossev.thermostatLib, line 292
- * ----------------------------------------------------------------------------- // library marker kkossev.thermostatLib, line 293
- * thermostat cluster 0x0201 // library marker kkossev.thermostatLib, line 294
- * called from parseThermostatCluster() in the main code ... // library marker kkossev.thermostatLib, line 295
- * ----------------------------------------------------------------------------- // library marker kkossev.thermostatLib, line 296
-*/ // library marker kkossev.thermostatLib, line 297
 
-void parseThermostatClusterThermostat(final Map descMap) { // library marker kkossev.thermostatLib, line 299
-    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value)) // library marker kkossev.thermostatLib, line 300
-    if (settings.logEnable) { // library marker kkossev.thermostatLib, line 301
-        log.trace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})" // library marker kkossev.thermostatLib, line 302
-    } // library marker kkossev.thermostatLib, line 303
+void thermostatEvent(eventName, value, raw) { // library marker kkossev.thermostatLib, line 207
+    sendEvent(name: eventName, value: value, type: "physical") // library marker kkossev.thermostatLib, line 208
+    logInfo "${eventName} is ${value} (raw ${raw})" // library marker kkossev.thermostatLib, line 209
+} // library marker kkossev.thermostatLib, line 210
 
-    switch (descMap.attrInt as Integer) { // library marker kkossev.thermostatLib, line 305
-        case 0x000:                      // temperature // library marker kkossev.thermostatLib, line 306
-            logDebug "temperature = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 307
-            handleTemperatureEvent(value/100.0) // library marker kkossev.thermostatLib, line 308
-            break // library marker kkossev.thermostatLib, line 309
-        case 0x0011:                      // cooling setpoint // library marker kkossev.thermostatLib, line 310
-            logInfo "cooling setpoint = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 311
-            break // library marker kkossev.thermostatLib, line 312
-        case 0x0012:                      // heating setpoint // library marker kkossev.thermostatLib, line 313
-            logInfo "heating setpoint = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 314
-            handleHeatingSetpointEvent(value/100.0) // library marker kkossev.thermostatLib, line 315
-            break // library marker kkossev.thermostatLib, line 316
-        case 0x001c:                      // mode // library marker kkossev.thermostatLib, line 317
-            logInfo "mode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 318
-            break // library marker kkossev.thermostatLib, line 319
-        case 0x001e:                      // thermostatRunMode // library marker kkossev.thermostatLib, line 320
-            logInfo "thermostatRunMode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 321
-            break // library marker kkossev.thermostatLib, line 322
-        case 0x0020:                      // battery // library marker kkossev.thermostatLib, line 323
-            logInfo "battery = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 324
-            break // library marker kkossev.thermostatLib, line 325
-        case 0x0023:                      // thermostatHoldMode // library marker kkossev.thermostatLib, line 326
-            logInfo "thermostatHoldMode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 327
-            break // library marker kkossev.thermostatLib, line 328
-        case 0x0029:                      // thermostatOperatingState // library marker kkossev.thermostatLib, line 329
-            logInfo "thermostatOperatingState = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 330
-            break // library marker kkossev.thermostatLib, line 331
-        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 332
-            logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${value}" // library marker kkossev.thermostatLib, line 333
-            break; // library marker kkossev.thermostatLib, line 334
-        default: // library marker kkossev.thermostatLib, line 335
-            log.warn "zigbee received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 336
-            break // library marker kkossev.thermostatLib, line 337
-    } // library marker kkossev.thermostatLib, line 338
-} // library marker kkossev.thermostatLib, line 339
+// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 ) // library marker kkossev.thermostatLib, line 212
+// // library marker kkossev.thermostatLib, line 213
+void parseXiaomiClusterThermostatLib(final Map descMap) { // library marker kkossev.thermostatLib, line 214
+    //logWarn "parseXiaomiClusterThermostatLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 215
+    final Integer raw // library marker kkossev.thermostatLib, line 216
+    final String  value // library marker kkossev.thermostatLib, line 217
+    switch (descMap.attrInt as Integer) { // library marker kkossev.thermostatLib, line 218
+        case 0x040a:    // E1 battery - read only // library marker kkossev.thermostatLib, line 219
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 220
+            thermostatEvent("battery", raw, raw) // library marker kkossev.thermostatLib, line 221
+            break // library marker kkossev.thermostatLib, line 222
+        case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes // library marker kkossev.thermostatLib, line 223
+            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.thermostatLib, line 224
+            parseXiaomiClusterThermostatTags(tags) // library marker kkossev.thermostatLib, line 225
+            break // library marker kkossev.thermostatLib, line 226
+        case 0x0271:    // result['system_mode'] = {1: 'heat', 0: 'off'}[value]; (heating state) - rw // library marker kkossev.thermostatLib, line 227
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 228
+            value = SystemModeOpts.options[raw as int] // library marker kkossev.thermostatLib, line 229
+            thermostatEvent("system_mode", value, raw) // library marker kkossev.thermostatLib, line 230
+            break; // library marker kkossev.thermostatLib, line 231
+        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday'] // library marker kkossev.thermostatLib, line 232
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 233
+            value = PresetOpts.options[raw as int] // library marker kkossev.thermostatLib, line 234
+            thermostatEvent("preset", value, raw) // library marker kkossev.thermostatLib, line 235
+            break; // library marker kkossev.thermostatLib, line 236
+        case 0x0273:    // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value]; - rw // library marker kkossev.thermostatLib, line 237
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 238
+            value = WindowDetectionOpts.options[raw as int] // library marker kkossev.thermostatLib, line 239
+            thermostatEvent("window_detection", value, raw) // library marker kkossev.thermostatLib, line 240
+            break; // library marker kkossev.thermostatLib, line 241
+        case 0x0274:    // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value]; -rw  // library marker kkossev.thermostatLib, line 242
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 243
+            value = ValveDetectionOpts.options[raw as int] // library marker kkossev.thermostatLib, line 244
+            thermostatEvent("valve_detection", value, raw) // library marker kkossev.thermostatLib, line 245
+            break; // library marker kkossev.thermostatLib, line 246
+        case 0x0275:    // result['valve_alarm'] = {1: true, 0: false}[value]; - read only! // library marker kkossev.thermostatLib, line 247
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 248
+            value = ValveAlarmOpts.options[raw as int] // library marker kkossev.thermostatLib, line 249
+            thermostatEvent("valve_alarm", value, raw) // library marker kkossev.thermostatLib, line 250
+            break; // library marker kkossev.thermostatLib, line 251
+        case 0x0277:    // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value]; - rw // library marker kkossev.thermostatLib, line 252
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 253
+            value = ChildLockOpts.options[raw as int] // library marker kkossev.thermostatLib, line 254
+            thermostatEvent("child_lock", value, raw) // library marker kkossev.thermostatLib, line 255
+            break; // library marker kkossev.thermostatLib, line 256
+        case 0x0279:    // result['away_preset_temperature'] = (value / 100).toFixed(1); - rw // library marker kkossev.thermostatLib, line 257
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 258
+            value = raw / 100 // library marker kkossev.thermostatLib, line 259
+            thermostatEvent("away_preset_temperature", value, raw) // library marker kkossev.thermostatLib, line 260
+            break; // library marker kkossev.thermostatLib, line 261
+        case 0x027a:    // result['window_open'] = {1: true, 0: false}[value]; - read only // library marker kkossev.thermostatLib, line 262
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 263
+            value = WindowOpenOpts.options[raw as int] // library marker kkossev.thermostatLib, line 264
+            thermostatEvent("window_open", value, raw) // library marker kkossev.thermostatLib, line 265
+            break; // library marker kkossev.thermostatLib, line 266
+        case 0x027b:    // result['calibrated'] = {1: true, 0: false}[value]; - read only // library marker kkossev.thermostatLib, line 267
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 268
+            value = CalibratedOpts.options[raw as int] // library marker kkossev.thermostatLib, line 269
+            thermostatEvent("calibrated", value, raw) // library marker kkossev.thermostatLib, line 270
+            break; // library marker kkossev.thermostatLib, line 271
+        case 0x0276:    // unknown // library marker kkossev.thermostatLib, line 272
+        case 0x027c:    // unknown // library marker kkossev.thermostatLib, line 273
+        case 0x027d:    // unknown // library marker kkossev.thermostatLib, line 274
+        case 0x0280:    // unknown // library marker kkossev.thermostatLib, line 275
+        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 276
+        case 0x00ff:    // unknown // library marker kkossev.thermostatLib, line 277
+        case 0x00f7:    // unknown // library marker kkossev.thermostatLib, line 278
+        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 279
+        case 0x00FF: // library marker kkossev.thermostatLib, line 280
+            try { // library marker kkossev.thermostatLib, line 281
+                raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 282
+                logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${raw}" // library marker kkossev.thermostatLib, line 283
+            } // library marker kkossev.thermostatLib, line 284
+            catch (e) { // library marker kkossev.thermostatLib, line 285
+                logWarn "exception caught while processing Aqara E1 TRV unknown attribute ${descMap.attrInt} descMap.value = ${descMap.value}" // library marker kkossev.thermostatLib, line 286
+            } // library marker kkossev.thermostatLib, line 287
+            break; // library marker kkossev.thermostatLib, line 288
+        case 0x027e:    // result['sensor'] = {1: 'external', 0: 'internal'}[value]; - read only? // library marker kkossev.thermostatLib, line 289
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.thermostatLib, line 290
+            value = SensorOpts.options[raw as int] // library marker kkossev.thermostatLib, line 291
+            thermostatEvent("sensor", value, raw) // library marker kkossev.thermostatLib, line 292
+            break; // library marker kkossev.thermostatLib, line 293
+        default: // library marker kkossev.thermostatLib, line 294
+            logWarn "parseXiaomiClusterThermostatLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 295
+            break // library marker kkossev.thermostatLib, line 296
+    } // library marker kkossev.thermostatLib, line 297
+} // library marker kkossev.thermostatLib, line 298
 
-def handleHeatingSetpointEvent( temperature ) { // library marker kkossev.thermostatLib, line 341
-    setHeatingSetpoint(temperature) // library marker kkossev.thermostatLib, line 342
-} // library marker kkossev.thermostatLib, line 343
-
-//  ThermostatHeatingSetpoint command // library marker kkossev.thermostatLib, line 345
-//  sends TuyaCommand and checks after 4 seconds // library marker kkossev.thermostatLib, line 346
-//  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface) // library marker kkossev.thermostatLib, line 347
-def setHeatingSetpoint( temperature ) { // library marker kkossev.thermostatLib, line 348
-    def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0 // library marker kkossev.thermostatLib, line 349
-    double tempDouble // library marker kkossev.thermostatLib, line 350
-    //logDebug "setHeatingSetpoint temperature = ${temperature}  as int = ${temperature as int} (previousSetpointt = ${previousSetpoint})" // library marker kkossev.thermostatLib, line 351
-    if (true) { // library marker kkossev.thermostatLib, line 352
-        //logDebug "0.5 C correction of the heating setpoint${temperature}" // library marker kkossev.thermostatLib, line 353
-        tempDouble = safeToDouble(temperature) // library marker kkossev.thermostatLib, line 354
-        tempDouble = Math.round(tempDouble * 2) / 2.0 // library marker kkossev.thermostatLib, line 355
-    } // library marker kkossev.thermostatLib, line 356
-    else { // library marker kkossev.thermostatLib, line 357
-        if (temperature != (temperature as int)) { // library marker kkossev.thermostatLib, line 358
-            if ((temperature as double) > (previousSetpoint as double)) { // library marker kkossev.thermostatLib, line 359
-                temperature = (temperature + 0.5 ) as int // library marker kkossev.thermostatLib, line 360
-            } // library marker kkossev.thermostatLib, line 361
-            else { // library marker kkossev.thermostatLib, line 362
-                temperature = temperature as int // library marker kkossev.thermostatLib, line 363
-            } // library marker kkossev.thermostatLib, line 364
-        logDebug "corrected heating setpoint ${temperature}" // library marker kkossev.thermostatLib, line 365
-        } // library marker kkossev.thermostatLib, line 366
-        tempDouble = temperature // library marker kkossev.thermostatLib, line 367
-    } // library marker kkossev.thermostatLib, line 368
-    def maxTemp = settings?.maxThermostatTemp ?: 50 // library marker kkossev.thermostatLib, line 369
-    def minTemp = settings?.minThermostatTemp ?: 5 // library marker kkossev.thermostatLib, line 370
-    if (tempDouble > maxTemp ) tempDouble = maxTemp // library marker kkossev.thermostatLib, line 371
-    if (tempDouble < minTemp) tempDouble = minTemp // library marker kkossev.thermostatLib, line 372
-    tempDouble = tempDouble.round(1) // library marker kkossev.thermostatLib, line 373
-    Map eventMap = [name: "heatingSetpoint",  value: tempDouble, unit: "\u00B0"+"C"] // library marker kkossev.thermostatLib, line 374
-    eventMap.descriptionText = "heatingSetpoint is ${tempDouble}" // library marker kkossev.thermostatLib, line 375
-    sendHeatingSetpointEvent(eventMap) // library marker kkossev.thermostatLib, line 376
-    eventMap = [name: "thermostatSetpoint", value: tempDouble, unit: "\u00B0"+"C"] // library marker kkossev.thermostatLib, line 377
-    eventMap.descriptionText = null // library marker kkossev.thermostatLib, line 378
-    sendHeatingSetpointEvent(eventMap) // library marker kkossev.thermostatLib, line 379
-    updateDataValue("lastRunningMode", "heat") // library marker kkossev.thermostatLib, line 380
-    //  // library marker kkossev.thermostatLib, line 381
-    zigbee.writeAttribute(0x0201, 0x12, 0x29, (tempDouble * 100) as int)        // raw:F6690102010A1200299808, dni:F669, endpoint:01, cluster:0201, size:0A, attrId:0012, encoding:29, command:0A, value:0898, clusterInt:513, attrInt:18 // library marker kkossev.thermostatLib, line 382
-} // library marker kkossev.thermostatLib, line 383
-
-private void sendHeatingSetpointEvent(Map eventMap) { // library marker kkossev.thermostatLib, line 385
-    if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" } // library marker kkossev.thermostatLib, line 386
-    sendEvent(eventMap) // library marker kkossev.thermostatLib, line 387
-} // library marker kkossev.thermostatLib, line 388
-
-// TODO - not called  // library marker kkossev.thermostatLib, line 390
-void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) { // library marker kkossev.thermostatLib, line 391
-
-    switch (dp) { // library marker kkossev.thermostatLib, line 393
-        case 0x01 : // on/off // library marker kkossev.thermostatLib, line 394
-            sendSwitchEvent(fncmd) // library marker kkossev.thermostatLib, line 395
-            break // library marker kkossev.thermostatLib, line 396
-        default : // library marker kkossev.thermostatLib, line 397
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.thermostatLib, line 398
-            break             // library marker kkossev.thermostatLib, line 399
-    } // library marker kkossev.thermostatLib, line 400
-} // library marker kkossev.thermostatLib, line 401
-
-// // library marker kkossev.thermostatLib, line 403
-// called from updated() in the main code ... // library marker kkossev.thermostatLib, line 404
-void updatedThermostat() { // library marker kkossev.thermostatLib, line 405
-        final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0 // library marker kkossev.thermostatLib, line 406
-        if (pollingInterval > 0) { // library marker kkossev.thermostatLib, line 407
-            logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds" // library marker kkossev.thermostatLib, line 408
-            scheduleThermostatPolling(pollingInterval) // library marker kkossev.thermostatLib, line 409
-        } // library marker kkossev.thermostatLib, line 410
-        else { // library marker kkossev.thermostatLib, line 411
-            unScheduleThermostatPolling() // library marker kkossev.thermostatLib, line 412
-            logInfo "updatedThermostat: thermostat polling is disabled!" // library marker kkossev.thermostatLib, line 413
-        } // library marker kkossev.thermostatLib, line 414
-} // library marker kkossev.thermostatLib, line 415
-
-/** // library marker kkossev.thermostatLib, line 417
- * Schedule thermostat polling // library marker kkossev.thermostatLib, line 418
- * @param intervalMins interval in seconds // library marker kkossev.thermostatLib, line 419
- */ // library marker kkossev.thermostatLib, line 420
-private void scheduleThermostatPolling(final int intervalSecs) { // library marker kkossev.thermostatLib, line 421
-    String cron = getCron( intervalSecs ) // library marker kkossev.thermostatLib, line 422
-    logDebug "cron = ${cron}" // library marker kkossev.thermostatLib, line 423
-    schedule(cron, 'autoPollThermostat') // library marker kkossev.thermostatLib, line 424
-} // library marker kkossev.thermostatLib, line 425
-
-private void unScheduleThermostatPolling() { // library marker kkossev.thermostatLib, line 427
-    unschedule('autoPollThermostat') // library marker kkossev.thermostatLib, line 428
-} // library marker kkossev.thermostatLib, line 429
-
-/** // library marker kkossev.thermostatLib, line 431
- * Scheduled job for polling device specific attribute(s) // library marker kkossev.thermostatLib, line 432
- */ // library marker kkossev.thermostatLib, line 433
-void autoPollThermostat() { // library marker kkossev.thermostatLib, line 434
-    logDebug "autoPollThermostat()..." // library marker kkossev.thermostatLib, line 435
-    checkDriverVersion() // library marker kkossev.thermostatLib, line 436
-    List<String> cmds = [] // library marker kkossev.thermostatLib, line 437
-    if (state.states == null) state.states = [:] // library marker kkossev.thermostatLib, line 438
-    //state.states["isRefresh"] = true // library marker kkossev.thermostatLib, line 439
-
-    cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )        // library marker kkossev.thermostatLib, line 441
-
-    if (cmds != null && cmds != [] ) { // library marker kkossev.thermostatLib, line 443
-        sendZigbeeCommands(cmds) // library marker kkossev.thermostatLib, line 444
-    }     // library marker kkossev.thermostatLib, line 445
-} // library marker kkossev.thermostatLib, line 446
-
-def refreshThermostat() { // library marker kkossev.thermostatLib, line 448
-    List<String> cmds = [] // library marker kkossev.thermostatLib, line 449
-    //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage) // library marker kkossev.thermostatLib, line 450
-    cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )        // library marker kkossev.thermostatLib, line 451
-
-    cmds += zigbee.readAttribute(0xFCC0, [0x0271, 0x0272, 0x0273, 0x0274, 0x0275, 0x0277, 0x0279, 0x027A, 0x027B, 0x027E], [mfgCode: 0x115F], delay=3500)        // library marker kkossev.thermostatLib, line 453
-    cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay=500)        // library marker kkossev.thermostatLib, line 454
-
-    // stock Generic Zigbee Thermostat Refresh answer: // library marker kkossev.thermostatLib, line 456
-    // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]] // library marker kkossev.thermostatLib, line 457
-    // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings. // library marker kkossev.thermostatLib, line 458
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.thermostatLib, line 459
-    logDebug "refreshThermostat: ${cmds} " // library marker kkossev.thermostatLib, line 460
-    return cmds // library marker kkossev.thermostatLib, line 461
-} // library marker kkossev.thermostatLib, line 462
-
-def configureThermostat() { // library marker kkossev.thermostatLib, line 464
-    List<String> cmds = [] // library marker kkossev.thermostatLib, line 465
-    // TODO !! // library marker kkossev.thermostatLib, line 466
-    logDebug "configureThermostat() : ${cmds}" // library marker kkossev.thermostatLib, line 467
-    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.thermostatLib, line 468
-    return cmds     // library marker kkossev.thermostatLib, line 469
-} // library marker kkossev.thermostatLib, line 470
-
-def initializeThermostat() // library marker kkossev.thermostatLib, line 472
-{ // library marker kkossev.thermostatLib, line 473
-    List<String> cmds = [] // library marker kkossev.thermostatLib, line 474
-    int intMinTime = 300 // library marker kkossev.thermostatLib, line 475
-    int intMaxTime = 600    // report temperature every 10 minutes ! // library marker kkossev.thermostatLib, line 476
-
-    logDebug "configuring cluster 0x0201 ..." // library marker kkossev.thermostatLib, line 478
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.thermostatLib, line 479
-    //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541) // library marker kkossev.thermostatLib, line 480
-    //cmds += zigbee.configureReporting(0x0201, 0x0000, 0x29, 20, 120, 0x01, [:], delay=542) // library marker kkossev.thermostatLib, line 481
-
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 483
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 20 300 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 484
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 485
-
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work // library marker kkossev.thermostatLib, line 487
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't wor // library marker kkossev.thermostatLib, line 488
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor // library marker kkossev.thermostatLib, line 489
+// called from parseXiaomiClusterThermostatLib  // library marker kkossev.thermostatLib, line 300
+void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) { // library marker kkossev.thermostatLib, line 301
+    tags.each { final Integer tag, final Object value -> // library marker kkossev.thermostatLib, line 302
+        switch (tag) { // library marker kkossev.thermostatLib, line 303
+            case 0x01:    // battery voltage // library marker kkossev.thermostatLib, line 304
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.thermostatLib, line 305
+                break // library marker kkossev.thermostatLib, line 306
+            case 0x03: // library marker kkossev.thermostatLib, line 307
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)" // library marker kkossev.thermostatLib, line 308
+                break // library marker kkossev.thermostatLib, line 309
+            case 0x05: // library marker kkossev.thermostatLib, line 310
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.thermostatLib, line 311
+                break // library marker kkossev.thermostatLib, line 312
+            case 0x06: // library marker kkossev.thermostatLib, line 313
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.thermostatLib, line 314
+                break // library marker kkossev.thermostatLib, line 315
+            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.thermostatLib, line 316
+                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.thermostatLib, line 317
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.thermostatLib, line 318
+                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.thermostatLib, line 319
+                break // library marker kkossev.thermostatLib, line 320
+            case 0x0a: // library marker kkossev.thermostatLib, line 321
+                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.thermostatLib, line 322
+                if (state.health == null) { state.health = [:] } // library marker kkossev.thermostatLib, line 323
+                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.thermostatLib, line 324
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.thermostatLib, line 325
+                if (oldNWK != nwk ) { // library marker kkossev.thermostatLib, line 326
+                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.thermostatLib, line 327
+                    state.health['parentNWK']  = nwk // library marker kkossev.thermostatLib, line 328
+                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.thermostatLib, line 329
+                } // library marker kkossev.thermostatLib, line 330
+                break // library marker kkossev.thermostatLib, line 331
+            case 0x0d: // library marker kkossev.thermostatLib, line 332
+                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 333
+                break             // library marker kkossev.thermostatLib, line 334
+            case 0x11: // library marker kkossev.thermostatLib, line 335
+                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 336
+                break             // library marker kkossev.thermostatLib, line 337
+            case 0x64: // library marker kkossev.thermostatLib, line 338
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC // library marker kkossev.thermostatLib, line 339
+                break // library marker kkossev.thermostatLib, line 340
+            case 0x65: // library marker kkossev.thermostatLib, line 341
+                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 342
+                break // library marker kkossev.thermostatLib, line 343
+            case 0x66: // library marker kkossev.thermostatLib, line 344
+                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 345
+                handleTemperatureEvent(value/100.0) // library marker kkossev.thermostatLib, line 346
+                break // library marker kkossev.thermostatLib, line 347
+            case 0x67: // library marker kkossev.thermostatLib, line 348
+                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 349
+                break // library marker kkossev.thermostatLib, line 350
+            case 0x68: // library marker kkossev.thermostatLib, line 351
+                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 352
+                break // library marker kkossev.thermostatLib, line 353
+            case 0x69: // library marker kkossev.thermostatLib, line 354
+                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 355
+                break // library marker kkossev.thermostatLib, line 356
+            case 0x6a: // library marker kkossev.thermostatLib, line 357
+                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 358
+                break // library marker kkossev.thermostatLib, line 359
+            default: // library marker kkossev.thermostatLib, line 360
+                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.thermostatLib, line 361
+        } // library marker kkossev.thermostatLib, line 362
+    } // library marker kkossev.thermostatLib, line 363
+} // library marker kkossev.thermostatLib, line 364
 
 
-    logDebug "initializeThermostat() : ${cmds}" // library marker kkossev.thermostatLib, line 492
-    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.thermostatLib, line 493
-    return cmds         // library marker kkossev.thermostatLib, line 494
-} // library marker kkossev.thermostatLib, line 495
+/* // library marker kkossev.thermostatLib, line 367
+ * ----------------------------------------------------------------------------- // library marker kkossev.thermostatLib, line 368
+ * thermostat cluster 0x0201 // library marker kkossev.thermostatLib, line 369
+ * called from parseThermostatCluster() in the main code ... // library marker kkossev.thermostatLib, line 370
+ * ----------------------------------------------------------------------------- // library marker kkossev.thermostatLib, line 371
+*/ // library marker kkossev.thermostatLib, line 372
+
+void parseThermostatClusterThermostat(final Map descMap) { // library marker kkossev.thermostatLib, line 374
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value)) // library marker kkossev.thermostatLib, line 375
+    if (settings.logEnable) { // library marker kkossev.thermostatLib, line 376
+        log.trace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})" // library marker kkossev.thermostatLib, line 377
+    } // library marker kkossev.thermostatLib, line 378
+
+    switch (descMap.attrInt as Integer) { // library marker kkossev.thermostatLib, line 380
+        case 0x000:                      // temperature // library marker kkossev.thermostatLib, line 381
+            logDebug "temperature = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 382
+            handleTemperatureEvent(value/100.0) // library marker kkossev.thermostatLib, line 383
+            break // library marker kkossev.thermostatLib, line 384
+        case 0x0011:                      // cooling setpoint // library marker kkossev.thermostatLib, line 385
+            logInfo "cooling setpoint = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 386
+            break // library marker kkossev.thermostatLib, line 387
+        case 0x0012:                      // heating setpoint // library marker kkossev.thermostatLib, line 388
+            logInfo "heating setpoint = ${value/100.0} (raw ${value})" // library marker kkossev.thermostatLib, line 389
+            handleHeatingSetpointEvent(value/100.0) // library marker kkossev.thermostatLib, line 390
+            break // library marker kkossev.thermostatLib, line 391
+        case 0x001c:                      // mode // library marker kkossev.thermostatLib, line 392
+            logInfo "mode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 393
+            break // library marker kkossev.thermostatLib, line 394
+        case 0x001e:                      // thermostatRunMode // library marker kkossev.thermostatLib, line 395
+            logInfo "thermostatRunMode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 396
+            break // library marker kkossev.thermostatLib, line 397
+        case 0x0020:                      // battery // library marker kkossev.thermostatLib, line 398
+            logInfo "battery = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 399
+            break // library marker kkossev.thermostatLib, line 400
+        case 0x0023:                      // thermostatHoldMode // library marker kkossev.thermostatLib, line 401
+            logInfo "thermostatHoldMode = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 402
+            break // library marker kkossev.thermostatLib, line 403
+        case 0x0029:                      // thermostatOperatingState // library marker kkossev.thermostatLib, line 404
+            logInfo "thermostatOperatingState = ${value} (raw ${value})" // library marker kkossev.thermostatLib, line 405
+            break // library marker kkossev.thermostatLib, line 406
+        case 0xfff2:    // unknown // library marker kkossev.thermostatLib, line 407
+            logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${value}" // library marker kkossev.thermostatLib, line 408
+            break; // library marker kkossev.thermostatLib, line 409
+        default: // library marker kkossev.thermostatLib, line 410
+            log.warn "zigbee received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.thermostatLib, line 411
+            break // library marker kkossev.thermostatLib, line 412
+    } // library marker kkossev.thermostatLib, line 413
+} // library marker kkossev.thermostatLib, line 414
+
+def handleHeatingSetpointEvent( temperature ) { // library marker kkossev.thermostatLib, line 416
+    setHeatingSetpoint(temperature) // library marker kkossev.thermostatLib, line 417
+} // library marker kkossev.thermostatLib, line 418
+
+//  ThermostatHeatingSetpoint command // library marker kkossev.thermostatLib, line 420
+//  sends TuyaCommand and checks after 4 seconds // library marker kkossev.thermostatLib, line 421
+//  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface) // library marker kkossev.thermostatLib, line 422
+def setHeatingSetpoint( temperature ) { // library marker kkossev.thermostatLib, line 423
+    def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0 // library marker kkossev.thermostatLib, line 424
+    double tempDouble // library marker kkossev.thermostatLib, line 425
+    //logDebug "setHeatingSetpoint temperature = ${temperature}  as int = ${temperature as int} (previousSetpointt = ${previousSetpoint})" // library marker kkossev.thermostatLib, line 426
+    if (true) { // library marker kkossev.thermostatLib, line 427
+        //logDebug "0.5 C correction of the heating setpoint${temperature}" // library marker kkossev.thermostatLib, line 428
+        tempDouble = safeToDouble(temperature) // library marker kkossev.thermostatLib, line 429
+        tempDouble = Math.round(tempDouble * 2) / 2.0 // library marker kkossev.thermostatLib, line 430
+    } // library marker kkossev.thermostatLib, line 431
+    else { // library marker kkossev.thermostatLib, line 432
+        if (temperature != (temperature as int)) { // library marker kkossev.thermostatLib, line 433
+            if ((temperature as double) > (previousSetpoint as double)) { // library marker kkossev.thermostatLib, line 434
+                temperature = (temperature + 0.5 ) as int // library marker kkossev.thermostatLib, line 435
+            } // library marker kkossev.thermostatLib, line 436
+            else { // library marker kkossev.thermostatLib, line 437
+                temperature = temperature as int // library marker kkossev.thermostatLib, line 438
+            } // library marker kkossev.thermostatLib, line 439
+        logDebug "corrected heating setpoint ${temperature}" // library marker kkossev.thermostatLib, line 440
+        } // library marker kkossev.thermostatLib, line 441
+        tempDouble = temperature // library marker kkossev.thermostatLib, line 442
+    } // library marker kkossev.thermostatLib, line 443
+    def maxTemp = settings?.maxThermostatTemp ?: 50 // library marker kkossev.thermostatLib, line 444
+    def minTemp = settings?.minThermostatTemp ?: 5 // library marker kkossev.thermostatLib, line 445
+    if (tempDouble > maxTemp ) tempDouble = maxTemp // library marker kkossev.thermostatLib, line 446
+    if (tempDouble < minTemp) tempDouble = minTemp // library marker kkossev.thermostatLib, line 447
+    tempDouble = tempDouble.round(1) // library marker kkossev.thermostatLib, line 448
+    Map eventMap = [name: "heatingSetpoint",  value: tempDouble, unit: "\u00B0"+"C"] // library marker kkossev.thermostatLib, line 449
+    eventMap.descriptionText = "heatingSetpoint is ${tempDouble}" // library marker kkossev.thermostatLib, line 450
+    sendHeatingSetpointEvent(eventMap) // library marker kkossev.thermostatLib, line 451
+    eventMap = [name: "thermostatSetpoint", value: tempDouble, unit: "\u00B0"+"C"] // library marker kkossev.thermostatLib, line 452
+    eventMap.descriptionText = null // library marker kkossev.thermostatLib, line 453
+    sendHeatingSetpointEvent(eventMap) // library marker kkossev.thermostatLib, line 454
+    updateDataValue("lastRunningMode", "heat") // library marker kkossev.thermostatLib, line 455
+    //  // library marker kkossev.thermostatLib, line 456
+    zigbee.writeAttribute(0x0201, 0x12, 0x29, (tempDouble * 100) as int)        // raw:F6690102010A1200299808, dni:F669, endpoint:01, cluster:0201, size:0A, attrId:0012, encoding:29, command:0A, value:0898, clusterInt:513, attrInt:18 // library marker kkossev.thermostatLib, line 457
+} // library marker kkossev.thermostatLib, line 458
+
+private void sendHeatingSetpointEvent(Map eventMap) { // library marker kkossev.thermostatLib, line 460
+    if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" } // library marker kkossev.thermostatLib, line 461
+    sendEvent(eventMap) // library marker kkossev.thermostatLib, line 462
+} // library marker kkossev.thermostatLib, line 463
+
+// TODO - not called  // library marker kkossev.thermostatLib, line 465
+void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) { // library marker kkossev.thermostatLib, line 466
+
+    switch (dp) { // library marker kkossev.thermostatLib, line 468
+        case 0x01 : // on/off // library marker kkossev.thermostatLib, line 469
+            sendSwitchEvent(fncmd) // library marker kkossev.thermostatLib, line 470
+            break // library marker kkossev.thermostatLib, line 471
+        default : // library marker kkossev.thermostatLib, line 472
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.thermostatLib, line 473
+            break             // library marker kkossev.thermostatLib, line 474
+    } // library marker kkossev.thermostatLib, line 475
+} // library marker kkossev.thermostatLib, line 476
 
 
-void initVarsThermostat(boolean fullInit=false) { // library marker kkossev.thermostatLib, line 498
-    logDebug "initVarsThermostat(${fullInit})" // library marker kkossev.thermostatLib, line 499
-    if (fullInit == true || state.lastThermostatMode == null) state.lastThermostatMode = "unknown" // library marker kkossev.thermostatLib, line 500
-    if (fullInit == true || state.lastThermostatOperatingState == null) state.lastThermostatOperatingState = "unknown" // library marker kkossev.thermostatLib, line 501
-    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.thermostatLib, line 502
+def preset( preset ) { // library marker kkossev.thermostatLib, line 479
+    logDebug "preset(${preset}) called!" // library marker kkossev.thermostatLib, line 480
+    if (preset == "auto") { // library marker kkossev.thermostatLib, line 481
+        setPresetMode("auto")               // hand symbol NOT shown // library marker kkossev.thermostatLib, line 482
+    } // library marker kkossev.thermostatLib, line 483
+    else if (preset == "manual") { // library marker kkossev.thermostatLib, line 484
+        setPresetMode("manual")             // hand symbol is shown on the LCD // library marker kkossev.thermostatLib, line 485
+    } // library marker kkossev.thermostatLib, line 486
+    else if (preset == "away") { // library marker kkossev.thermostatLib, line 487
+        setPresetMode("away")               // 5 degreees  // library marker kkossev.thermostatLib, line 488
+    } // library marker kkossev.thermostatLib, line 489
+    else { // library marker kkossev.thermostatLib, line 490
+        logWarn "preset: unknown preset ${preset}" // library marker kkossev.thermostatLib, line 491
+    } // library marker kkossev.thermostatLib, line 492
+} // library marker kkossev.thermostatLib, line 493
 
-} // library marker kkossev.thermostatLib, line 504
-
-//     command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]] // library marker kkossev.thermostatLib, line 506
-def preset( preset ) { // library marker kkossev.thermostatLib, line 507
-    logDebug "preset(${preset}) called!" // library marker kkossev.thermostatLib, line 508
-    if (preset == "auto") { // library marker kkossev.thermostatLib, line 509
-        setPresetMode("auto")               // hand symbol NOT shown // library marker kkossev.thermostatLib, line 510
-    } // library marker kkossev.thermostatLib, line 511
-    else if (preset == "manual") { // library marker kkossev.thermostatLib, line 512
-        setPresetMode("manual")             // hand symbol is shown on the LCD // library marker kkossev.thermostatLib, line 513
-    } // library marker kkossev.thermostatLib, line 514
-    else if (preset == "away") { // library marker kkossev.thermostatLib, line 515
-        setPresetMode("away")               // 5 degreees  // library marker kkossev.thermostatLib, line 516
+def setPresetMode(mode) { // library marker kkossev.thermostatLib, line 495
+    List<String> cmds = [] // library marker kkossev.thermostatLib, line 496
+    logDebug "sending setPresetMode(${mode})"     // library marker kkossev.thermostatLib, line 497
+    if (isAqaraTRV()) { // library marker kkossev.thermostatLib, line 498
+        // {'manual': 0, 'auto': 1, 'away': 2}), type: 0x20} // library marker kkossev.thermostatLib, line 499
+        if (mode == "auto") { // library marker kkossev.thermostatLib, line 500
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x01, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 501
+        } // library marker kkossev.thermostatLib, line 502
+        else if (mode == "manual") { // library marker kkossev.thermostatLib, line 503
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x00, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 504
+        } // library marker kkossev.thermostatLib, line 505
+        else if (mode == "away") { // library marker kkossev.thermostatLib, line 506
+            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x02, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 507
+        } // library marker kkossev.thermostatLib, line 508
+        else { // library marker kkossev.thermostatLib, line 509
+            logWarn "setPresetMode: Aqara TRV unknown preset ${mode}" // library marker kkossev.thermostatLib, line 510
+        } // library marker kkossev.thermostatLib, line 511
+    } // library marker kkossev.thermostatLib, line 512
+    else { // library marker kkossev.thermostatLib, line 513
+        // TODO - set generic thermostat mode // library marker kkossev.thermostatLib, line 514
+        log.warn "setPresetMode NOT IMPLEMENTED" // library marker kkossev.thermostatLib, line 515
+        return // library marker kkossev.thermostatLib, line 516
     } // library marker kkossev.thermostatLib, line 517
-    else { // library marker kkossev.thermostatLib, line 518
-        logWarn "preset: unknown preset ${preset}" // library marker kkossev.thermostatLib, line 519
-    } // library marker kkossev.thermostatLib, line 520
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.thermostatLib, line 518
+    sendZigbeeCommands(cmds) // library marker kkossev.thermostatLib, line 519
+
 } // library marker kkossev.thermostatLib, line 521
 
-def setPresetMode(mode) { // library marker kkossev.thermostatLib, line 523
+def setThermostatMode( mode ) { // library marker kkossev.thermostatLib, line 523
     List<String> cmds = [] // library marker kkossev.thermostatLib, line 524
-    logDebug "sending setPresetMode(${mode})"     // library marker kkossev.thermostatLib, line 525
-    if (isAqaraTRV()) { // library marker kkossev.thermostatLib, line 526
-        // {'manual': 0, 'auto': 1, 'away': 2}), type: 0x20} // library marker kkossev.thermostatLib, line 527
-        if (mode == "auto") { // library marker kkossev.thermostatLib, line 528
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x01, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 529
-        } // library marker kkossev.thermostatLib, line 530
-        else if (mode == "manual") { // library marker kkossev.thermostatLib, line 531
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x00, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 532
-        } // library marker kkossev.thermostatLib, line 533
-        else if (mode == "away") { // library marker kkossev.thermostatLib, line 534
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x02, [mfgCode: 0x115F], delay=200) // library marker kkossev.thermostatLib, line 535
-        } // library marker kkossev.thermostatLib, line 536
-        else { // library marker kkossev.thermostatLib, line 537
-            logWarn "setPresetMode: Aqara TRV unknown preset ${mode}" // library marker kkossev.thermostatLib, line 538
+    logDebug "sending setThermostatMode(${mode})" // library marker kkossev.thermostatLib, line 525
+    //state.mode = mode // library marker kkossev.thermostatLib, line 526
+    if (isAqaraTRV()) { // library marker kkossev.thermostatLib, line 527
+        // TODO - set Aqara E1 thermostat mode // library marker kkossev.thermostatLib, line 528
+        switch(mode) { // library marker kkossev.thermostatLib, line 529
+            case "off": // library marker kkossev.thermostatLib, line 530
+                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x00, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1 // library marker kkossev.thermostatLib, line 531
+                break // library marker kkossev.thermostatLib, line 532
+            case "heat": // library marker kkossev.thermostatLib, line 533
+                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1 // library marker kkossev.thermostatLib, line 534
+                break // library marker kkossev.thermostatLib, line 535
+            default: // library marker kkossev.thermostatLib, line 536
+                logWarn "setThermostatMode: unknown AqaraTRV mode ${mode}" // library marker kkossev.thermostatLib, line 537
+                break // library marker kkossev.thermostatLib, line 538
         } // library marker kkossev.thermostatLib, line 539
     } // library marker kkossev.thermostatLib, line 540
     else { // library marker kkossev.thermostatLib, line 541
         // TODO - set generic thermostat mode // library marker kkossev.thermostatLib, line 542
-        log.warn "setPresetMode NOT IMPLEMENTED" // library marker kkossev.thermostatLib, line 543
+        log.warn "setThermostatMode NOT IMPLEMENTED" // library marker kkossev.thermostatLib, line 543
         return // library marker kkossev.thermostatLib, line 544
     } // library marker kkossev.thermostatLib, line 545
     if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.thermostatLib, line 546
     sendZigbeeCommands(cmds) // library marker kkossev.thermostatLib, line 547
+} // library marker kkossev.thermostatLib, line 548
 
-} // library marker kkossev.thermostatLib, line 549
-
-def setThermostatMode( mode ) { // library marker kkossev.thermostatLib, line 551
-    List<String> cmds = [] // library marker kkossev.thermostatLib, line 552
-    logDebug "sending setThermostatMode(${mode})" // library marker kkossev.thermostatLib, line 553
-    //state.mode = mode // library marker kkossev.thermostatLib, line 554
-    if (isAqaraTRV()) { // library marker kkossev.thermostatLib, line 555
-        // TODO - set Aqara E1 thermostat mode // library marker kkossev.thermostatLib, line 556
-        switch(mode) { // library marker kkossev.thermostatLib, line 557
-            case "off": // library marker kkossev.thermostatLib, line 558
-                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x00, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1 // library marker kkossev.thermostatLib, line 559
-                break // library marker kkossev.thermostatLib, line 560
-            case "heat": // library marker kkossev.thermostatLib, line 561
-                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1 // library marker kkossev.thermostatLib, line 562
-                break // library marker kkossev.thermostatLib, line 563
-            default: // library marker kkossev.thermostatLib, line 564
-                logWarn "setThermostatMode: unknown AqaraTRV mode ${mode}" // library marker kkossev.thermostatLib, line 565
-                break // library marker kkossev.thermostatLib, line 566
-        } // library marker kkossev.thermostatLib, line 567
-    } // library marker kkossev.thermostatLib, line 568
-    else { // library marker kkossev.thermostatLib, line 569
-        // TODO - set generic thermostat mode // library marker kkossev.thermostatLib, line 570
-        log.warn "setThermostatMode NOT IMPLEMENTED" // library marker kkossev.thermostatLib, line 571
-        return // library marker kkossev.thermostatLib, line 572
-    } // library marker kkossev.thermostatLib, line 573
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.thermostatLib, line 574
-    sendZigbeeCommands(cmds) // library marker kkossev.thermostatLib, line 575
-} // library marker kkossev.thermostatLib, line 576
-
-def setCoolingSetpoint(temperature){ // library marker kkossev.thermostatLib, line 578
-    logDebug "setCoolingSetpoint(${temperature}) called!" // library marker kkossev.thermostatLib, line 579
-    if (temperature != (temperature as int)) { // library marker kkossev.thermostatLib, line 580
-        temperature = (temperature + 0.5 ) as int // library marker kkossev.thermostatLib, line 581
-        logDebug "corrected temperature: ${temperature}" // library marker kkossev.thermostatLib, line 582
-    } // library marker kkossev.thermostatLib, line 583
-    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C") // library marker kkossev.thermostatLib, line 584
-} // library marker kkossev.thermostatLib, line 585
+def setCoolingSetpoint(temperature){ // library marker kkossev.thermostatLib, line 550
+    logDebug "setCoolingSetpoint(${temperature}) called!" // library marker kkossev.thermostatLib, line 551
+    if (temperature != (temperature as int)) { // library marker kkossev.thermostatLib, line 552
+        temperature = (temperature + 0.5 ) as int // library marker kkossev.thermostatLib, line 553
+        logDebug "corrected temperature: ${temperature}" // library marker kkossev.thermostatLib, line 554
+    } // library marker kkossev.thermostatLib, line 555
+    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C") // library marker kkossev.thermostatLib, line 556
+} // library marker kkossev.thermostatLib, line 557
 
 
-def heat(){ // library marker kkossev.thermostatLib, line 588
-    setThermostatMode("heat") // library marker kkossev.thermostatLib, line 589
+def heat(){ // library marker kkossev.thermostatLib, line 560
+    setThermostatMode("heat") // library marker kkossev.thermostatLib, line 561
+} // library marker kkossev.thermostatLib, line 562
+
+def thermostatOff(){ // library marker kkossev.thermostatLib, line 564
+    setThermostatMode("off") // library marker kkossev.thermostatLib, line 565
+} // library marker kkossev.thermostatLib, line 566
+
+def thermostatOn() { // library marker kkossev.thermostatLib, line 568
+    heat() // library marker kkossev.thermostatLib, line 569
+} // library marker kkossev.thermostatLib, line 570
+
+def setThermostatFanMode(fanMode) { sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) } // library marker kkossev.thermostatLib, line 572
+def auto() { setThermostatMode("auto") } // library marker kkossev.thermostatLib, line 573
+def emergencyHeat() { setThermostatMode("emergency heat") } // library marker kkossev.thermostatLib, line 574
+def cool() { setThermostatMode("cool") } // library marker kkossev.thermostatLib, line 575
+def fanAuto() { setThermostatFanMode("auto") } // library marker kkossev.thermostatLib, line 576
+def fanCirculate() { setThermostatFanMode("circulate") } // library marker kkossev.thermostatLib, line 577
+def fanOn() { setThermostatFanMode("on") } // library marker kkossev.thermostatLib, line 578
+
+def sendThermostatOperatingStateEvent( st ) { // library marker kkossev.thermostatLib, line 580
+    sendEvent(name: "thermostatOperatingState", value: st) // library marker kkossev.thermostatLib, line 581
+    state.lastThermostatOperatingState = st // library marker kkossev.thermostatLib, line 582
+} // library marker kkossev.thermostatLib, line 583
+
+void sendSupportedThermostatModes() { // library marker kkossev.thermostatLib, line 585
+    def supportedThermostatModes = [] // library marker kkossev.thermostatLib, line 586
+    supportedThermostatModes = ["off", "heat", "auto"] // library marker kkossev.thermostatLib, line 587
+    logInfo "supportedThermostatModes: ${supportedThermostatModes}" // library marker kkossev.thermostatLib, line 588
+    sendEvent(name: "supportedThermostatModes", value:  JsonOutput.toJson(supportedThermostatModes), isStateChange: true) // library marker kkossev.thermostatLib, line 589
 } // library marker kkossev.thermostatLib, line 590
 
-def thermostatOff(){ // library marker kkossev.thermostatLib, line 592
-    setThermostatMode("off") // library marker kkossev.thermostatLib, line 593
-} // library marker kkossev.thermostatLib, line 594
 
-def thermostatOn() { // library marker kkossev.thermostatLib, line 596
-    heat() // library marker kkossev.thermostatLib, line 597
-} // library marker kkossev.thermostatLib, line 598
+/** // library marker kkossev.thermostatLib, line 593
+ * Schedule thermostat polling // library marker kkossev.thermostatLib, line 594
+ * @param intervalMins interval in seconds // library marker kkossev.thermostatLib, line 595
+ */ // library marker kkossev.thermostatLib, line 596
+private void scheduleThermostatPolling(final int intervalSecs) { // library marker kkossev.thermostatLib, line 597
+    String cron = getCron( intervalSecs ) // library marker kkossev.thermostatLib, line 598
+    logDebug "cron = ${cron}" // library marker kkossev.thermostatLib, line 599
+    schedule(cron, 'autoPollThermostat') // library marker kkossev.thermostatLib, line 600
+} // library marker kkossev.thermostatLib, line 601
 
-def setThermostatFanMode(fanMode) { sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) } // library marker kkossev.thermostatLib, line 600
-def auto() { setThermostatMode("auto") } // library marker kkossev.thermostatLib, line 601
-def emergencyHeat() { setThermostatMode("emergency heat") } // library marker kkossev.thermostatLib, line 602
-def cool() { setThermostatMode("cool") } // library marker kkossev.thermostatLib, line 603
-def fanAuto() { setThermostatFanMode("auto") } // library marker kkossev.thermostatLib, line 604
-def fanCirculate() { setThermostatFanMode("circulate") } // library marker kkossev.thermostatLib, line 605
-def fanOn() { setThermostatFanMode("on") } // library marker kkossev.thermostatLib, line 606
+private void unScheduleThermostatPolling() { // library marker kkossev.thermostatLib, line 603
+    unschedule('autoPollThermostat') // library marker kkossev.thermostatLib, line 604
+} // library marker kkossev.thermostatLib, line 605
 
-def sendThermostatOperatingStateEvent( st ) { // library marker kkossev.thermostatLib, line 608
-    sendEvent(name: "thermostatOperatingState", value: st) // library marker kkossev.thermostatLib, line 609
-    state.lastThermostatOperatingState = st // library marker kkossev.thermostatLib, line 610
-} // library marker kkossev.thermostatLib, line 611
+/** // library marker kkossev.thermostatLib, line 607
+ * Scheduled job for polling device specific attribute(s) // library marker kkossev.thermostatLib, line 608
+ */ // library marker kkossev.thermostatLib, line 609
+void autoPollThermostat() { // library marker kkossev.thermostatLib, line 610
+    logDebug "autoPollThermostat()..." // library marker kkossev.thermostatLib, line 611
+    checkDriverVersion() // library marker kkossev.thermostatLib, line 612
+    List<String> cmds = [] // library marker kkossev.thermostatLib, line 613
+    if (state.states == null) state.states = [:] // library marker kkossev.thermostatLib, line 614
+    //state.states["isRefresh"] = true // library marker kkossev.thermostatLib, line 615
 
-void sendSupportedThermostatModes() { // library marker kkossev.thermostatLib, line 613
-    def supportedThermostatModes = [] // library marker kkossev.thermostatLib, line 614
-    supportedThermostatModes = ["off", "heat", "auto"] // library marker kkossev.thermostatLib, line 615
-    logInfo "supportedThermostatModes: ${supportedThermostatModes}" // library marker kkossev.thermostatLib, line 616
-    sendEvent(name: "supportedThermostatModes", value:  JsonOutput.toJson(supportedThermostatModes), isStateChange: true) // library marker kkossev.thermostatLib, line 617
-} // library marker kkossev.thermostatLib, line 618
+    cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )        // library marker kkossev.thermostatLib, line 617
 
-void initEventsThermostat(boolean fullInit=false) { // library marker kkossev.thermostatLib, line 620
-    sendSupportedThermostatModes() // library marker kkossev.thermostatLib, line 621
-    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto"]), isStateChange: true)     // library marker kkossev.thermostatLib, line 622
-    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 623
-    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 624
-    state.lastThermostatMode = "heat" // library marker kkossev.thermostatLib, line 625
-    sendThermostatOperatingStateEvent( "idle" ) // library marker kkossev.thermostatLib, line 626
-    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 627
-    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")        // Google Home compatibility // library marker kkossev.thermostatLib, line 628
-    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 629
-    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 630
-    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")     // library marker kkossev.thermostatLib, line 631
-    updateDataValue("lastRunningMode", "heat")     // library marker kkossev.thermostatLib, line 632
+    if (cmds != null && cmds != [] ) { // library marker kkossev.thermostatLib, line 619
+        sendZigbeeCommands(cmds) // library marker kkossev.thermostatLib, line 620
+    }     // library marker kkossev.thermostatLib, line 621
+} // library marker kkossev.thermostatLib, line 622
 
-} // library marker kkossev.thermostatLib, line 634
+// // library marker kkossev.thermostatLib, line 624
+// called from updated() in the main code ... // library marker kkossev.thermostatLib, line 625
+void updatedThermostat() { // library marker kkossev.thermostatLib, line 626
+        final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0 // library marker kkossev.thermostatLib, line 627
+        if (pollingInterval > 0) { // library marker kkossev.thermostatLib, line 628
+            logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds" // library marker kkossev.thermostatLib, line 629
+            scheduleThermostatPolling(pollingInterval) // library marker kkossev.thermostatLib, line 630
+        } // library marker kkossev.thermostatLib, line 631
+        else { // library marker kkossev.thermostatLib, line 632
+            unScheduleThermostatPolling() // library marker kkossev.thermostatLib, line 633
+            logInfo "updatedThermostat: thermostat polling is disabled!" // library marker kkossev.thermostatLib, line 634
+        } // library marker kkossev.thermostatLib, line 635
+} // library marker kkossev.thermostatLib, line 636
 
-private getDescriptionText(msg) { // library marker kkossev.thermostatLib, line 636
-    def descriptionText = "${device.displayName} ${msg}" // library marker kkossev.thermostatLib, line 637
-    if (settings?.txtEnable) log.info "${descriptionText}" // library marker kkossev.thermostatLib, line 638
-    return descriptionText // library marker kkossev.thermostatLib, line 639
-} // library marker kkossev.thermostatLib, line 640
+def refreshThermostat() { // library marker kkossev.thermostatLib, line 638
+    List<String> cmds = [] // library marker kkossev.thermostatLib, line 639
+    //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage) // library marker kkossev.thermostatLib, line 640
+    cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )        // library marker kkossev.thermostatLib, line 641
 
-def testT(par) { // library marker kkossev.thermostatLib, line 642
-    logWarn "testT(${par})" // library marker kkossev.thermostatLib, line 643
-} // library marker kkossev.thermostatLib, line 644
+    cmds += zigbee.readAttribute(0xFCC0, [0x0271, 0x0272, 0x0273, 0x0274, 0x0275, 0x0277, 0x0279, 0x027A, 0x027B, 0x027E], [mfgCode: 0x115F], delay=3500)        // library marker kkossev.thermostatLib, line 643
+    cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay=500)        // library marker kkossev.thermostatLib, line 644
+
+    // stock Generic Zigbee Thermostat Refresh answer: // library marker kkossev.thermostatLib, line 646
+    // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]] // library marker kkossev.thermostatLib, line 647
+    // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings. // library marker kkossev.thermostatLib, line 648
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.thermostatLib, line 649
+    logDebug "refreshThermostat: ${cmds} " // library marker kkossev.thermostatLib, line 650
+    return cmds // library marker kkossev.thermostatLib, line 651
+} // library marker kkossev.thermostatLib, line 652
+
+def configureThermostat() { // library marker kkossev.thermostatLib, line 654
+    List<String> cmds = [] // library marker kkossev.thermostatLib, line 655
+    // TODO !! // library marker kkossev.thermostatLib, line 656
+    logDebug "configureThermostat() : ${cmds}" // library marker kkossev.thermostatLib, line 657
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.thermostatLib, line 658
+    return cmds     // library marker kkossev.thermostatLib, line 659
+} // library marker kkossev.thermostatLib, line 660
+
+def initializeThermostat() // library marker kkossev.thermostatLib, line 662
+{ // library marker kkossev.thermostatLib, line 663
+    List<String> cmds = [] // library marker kkossev.thermostatLib, line 664
+    int intMinTime = 300 // library marker kkossev.thermostatLib, line 665
+    int intMaxTime = 600    // report temperature every 10 minutes ! // library marker kkossev.thermostatLib, line 666
+
+    logDebug "configuring cluster 0x0201 ..." // library marker kkossev.thermostatLib, line 668
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", "delay 251", ] // library marker kkossev.thermostatLib, line 669
+    //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541) // library marker kkossev.thermostatLib, line 670
+    //cmds += zigbee.configureReporting(0x0201, 0x0000, 0x29, 20, 120, 0x01, [:], delay=542) // library marker kkossev.thermostatLib, line 671
+
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 673
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 20 300 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 674
+    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 551", ] // library marker kkossev.thermostatLib, line 675
+
+    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work // library marker kkossev.thermostatLib, line 677
+    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't wor // library marker kkossev.thermostatLib, line 678
+    cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor // library marker kkossev.thermostatLib, line 679
+
+
+    logDebug "initializeThermostat() : ${cmds}" // library marker kkossev.thermostatLib, line 682
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.thermostatLib, line 683
+    return cmds         // library marker kkossev.thermostatLib, line 684
+} // library marker kkossev.thermostatLib, line 685
+
+
+void initVarsThermostat(boolean fullInit=false) { // library marker kkossev.thermostatLib, line 688
+    logDebug "initVarsThermostat(${fullInit})" // library marker kkossev.thermostatLib, line 689
+    if (state.deviceProfile == null) { // library marker kkossev.thermostatLib, line 690
+        setDeviceNameAndProfile()               // in deviceProfileiLib.groovy // library marker kkossev.thermostatLib, line 691
+    } // library marker kkossev.thermostatLib, line 692
+
+    if (fullInit == true || state.lastThermostatMode == null) state.lastThermostatMode = "unknown" // library marker kkossev.thermostatLib, line 694
+    if (fullInit == true || state.lastThermostatOperatingState == null) state.lastThermostatOperatingState = "unknown" // library marker kkossev.thermostatLib, line 695
+    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.thermostatLib, line 696
+
+} // library marker kkossev.thermostatLib, line 698
+
+
+void initEventsThermostat(boolean fullInit=false) { // library marker kkossev.thermostatLib, line 701
+    sendSupportedThermostatModes() // library marker kkossev.thermostatLib, line 702
+    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto"]), isStateChange: true)     // library marker kkossev.thermostatLib, line 703
+    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 704
+    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 705
+    state.lastThermostatMode = "heat" // library marker kkossev.thermostatLib, line 706
+    sendThermostatOperatingStateEvent( "idle" ) // library marker kkossev.thermostatLib, line 707
+    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 708
+    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")        // Google Home compatibility // library marker kkossev.thermostatLib, line 709
+    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 710
+    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting") // library marker kkossev.thermostatLib, line 711
+    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")     // library marker kkossev.thermostatLib, line 712
+    updateDataValue("lastRunningMode", "heat")     // library marker kkossev.thermostatLib, line 713
+
+} // library marker kkossev.thermostatLib, line 715
+
+private getDescriptionText(msg) { // library marker kkossev.thermostatLib, line 717
+    def descriptionText = "${device.displayName} ${msg}" // library marker kkossev.thermostatLib, line 718
+    if (settings?.txtEnable) log.info "${descriptionText}" // library marker kkossev.thermostatLib, line 719
+    return descriptionText // library marker kkossev.thermostatLib, line 720
+} // library marker kkossev.thermostatLib, line 721
+
+def testT(par) { // library marker kkossev.thermostatLib, line 723
+    logWarn "testT(${par})" // library marker kkossev.thermostatLib, line 724
+} // library marker kkossev.thermostatLib, line 725
 
 
 // ~~~~~ end include (140) kkossev.thermostatLib ~~~~~
+
+// ~~~~~ start include (142) kkossev.deviceProfileLib ~~~~~
+library ( // library marker kkossev.deviceProfileLib, line 1
+    base: "driver", // library marker kkossev.deviceProfileLib, line 2
+    author: "Krassimir Kossev", // library marker kkossev.deviceProfileLib, line 3
+    category: "zigbee", // library marker kkossev.deviceProfileLib, line 4
+    description: "Device Profile Library", // library marker kkossev.deviceProfileLib, line 5
+    name: "deviceProfileLib", // library marker kkossev.deviceProfileLib, line 6
+    namespace: "kkossev", // library marker kkossev.deviceProfileLib, line 7
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy", // library marker kkossev.deviceProfileLib, line 8
+    version: "1.0.0", // library marker kkossev.deviceProfileLib, line 9
+    documentationLink: "" // library marker kkossev.deviceProfileLib, line 10
+) // library marker kkossev.deviceProfileLib, line 11
+/* // library marker kkossev.deviceProfileLib, line 12
+ *  Device Profile Library // library marker kkossev.deviceProfileLib, line 13
+ * // library marker kkossev.deviceProfileLib, line 14
+ *  Licensed Virtual the Apache License, Version 2.0 (the "License"); you may not use this file except // library marker kkossev.deviceProfileLib, line 15
+ *  in compliance with the License. You may obtain a copy of the License at: // library marker kkossev.deviceProfileLib, line 16
+ * // library marker kkossev.deviceProfileLib, line 17
+ *      http://www.apache.org/licenses/LICENSE-2.0 // library marker kkossev.deviceProfileLib, line 18
+ * // library marker kkossev.deviceProfileLib, line 19
+ *  Unless required by applicable law or agreed to in writing, software distributed under the License is distributed // library marker kkossev.deviceProfileLib, line 20
+ *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License // library marker kkossev.deviceProfileLib, line 21
+ *  for the specific language governing permissions and limitations under the License. // library marker kkossev.deviceProfileLib, line 22
+ * // library marker kkossev.deviceProfileLib, line 23
+ * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver) // library marker kkossev.deviceProfileLib, line 24
+ * // library marker kkossev.deviceProfileLib, line 25
+ *                                   TODO:  // library marker kkossev.deviceProfileLib, line 26
+*/ // library marker kkossev.deviceProfileLib, line 27
+
+def deviceProfileLibVersion()   {"1.0.0"} // library marker kkossev.deviceProfileLib, line 29
+def deviceProfileLibtamp() {"2023/11/04 10:17 PM"} // library marker kkossev.deviceProfileLib, line 30
+
+metadata { // library marker kkossev.deviceProfileLib, line 32
+    // no capabilities // library marker kkossev.deviceProfileLib, line 33
+    // no attributes // library marker kkossev.deviceProfileLib, line 34
+    command "sendCommand", [[name: "sendCommand", type: "STRING", constraints: ["STRING"], description: "send device commands"]] // library marker kkossev.deviceProfileLib, line 35
+    // // library marker kkossev.deviceProfileLib, line 36
+    preferences { // library marker kkossev.deviceProfileLib, line 37
+        if (advancedOptions == true) { // library marker kkossev.deviceProfileLib, line 38
+            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfilesMap()) // library marker kkossev.deviceProfileLib, line 39
+        } // library marker kkossev.deviceProfileLib, line 40
+    } // library marker kkossev.deviceProfileLib, line 41
+} // library marker kkossev.deviceProfileLib, line 42
+
+def getDeviceGroup()     { state.deviceProfile ?: "UNKNOWN" } // library marker kkossev.deviceProfileLib, line 44
+def getDEVICE()          { deviceProfilesV2[getDeviceGroup()] } // library marker kkossev.deviceProfileLib, line 45
+def getDeviceProfiles()      { deviceProfilesV2.keySet() } // library marker kkossev.deviceProfileLib, line 46
+def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>} // library marker kkossev.deviceProfileLib, line 47
+
+/** // library marker kkossev.deviceProfileLib, line 49
+ * Sends a command to the device. // library marker kkossev.deviceProfileLib, line 50
+ * @param command The command to send. Must be one of the commands defined in the DEVICE.commands map. // library marker kkossev.deviceProfileLib, line 51
+ * @param val The value to send with the command. // library marker kkossev.deviceProfileLib, line 52
+ * @return void // library marker kkossev.deviceProfileLib, line 53
+ */ // library marker kkossev.deviceProfileLib, line 54
+def sendCommand( command=null, val=null ) // library marker kkossev.deviceProfileLib, line 55
+{ // library marker kkossev.deviceProfileLib, line 56
+    //logDebug "sending command ${command}(${val}))" // library marker kkossev.deviceProfileLib, line 57
+    ArrayList<String> cmds = [] // library marker kkossev.deviceProfileLib, line 58
+    def supportedCommandsMap = DEVICE.commands  // library marker kkossev.deviceProfileLib, line 59
+    if (supportedCommandsMap == null || supportedCommandsMap == []) { // library marker kkossev.deviceProfileLib, line 60
+        logWarn "sendCommand: no commands defined for device profile ${getDeviceGroup()} !" // library marker kkossev.deviceProfileLib, line 61
+        return // library marker kkossev.deviceProfileLib, line 62
+    } // library marker kkossev.deviceProfileLib, line 63
+    // TODO: compare ignoring the upper/lower case of the command. // library marker kkossev.deviceProfileLib, line 64
+    def supportedCommandsList =  DEVICE.commands.keySet() as List  // library marker kkossev.deviceProfileLib, line 65
+    // check if the command is defined in the DEVICE commands map // library marker kkossev.deviceProfileLib, line 66
+    if (command == null || !(command in supportedCommandsList)) { // library marker kkossev.deviceProfileLib, line 67
+        logWarn "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE.description}' must be one of these : ${supportedCommandsList}" // library marker kkossev.deviceProfileLib, line 68
+        return // library marker kkossev.deviceProfileLib, line 69
+    } // library marker kkossev.deviceProfileLib, line 70
+    def func // library marker kkossev.deviceProfileLib, line 71
+    try { // library marker kkossev.deviceProfileLib, line 72
+        func = DEVICE.commands.find { it.key == command }.value // library marker kkossev.deviceProfileLib, line 73
+        if (val != null) { // library marker kkossev.deviceProfileLib, line 74
+            cmds = "${func}"(val) // library marker kkossev.deviceProfileLib, line 75
+            logInfo "executed <b>$func</b>($val)" // library marker kkossev.deviceProfileLib, line 76
+        } // library marker kkossev.deviceProfileLib, line 77
+        else { // library marker kkossev.deviceProfileLib, line 78
+            cmds = "${func}"() // library marker kkossev.deviceProfileLib, line 79
+            logInfo "executed <b>$func</b>()" // library marker kkossev.deviceProfileLib, line 80
+        } // library marker kkossev.deviceProfileLib, line 81
+    } // library marker kkossev.deviceProfileLib, line 82
+    catch (e) { // library marker kkossev.deviceProfileLib, line 83
+        logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})" // library marker kkossev.deviceProfileLib, line 84
+        return // library marker kkossev.deviceProfileLib, line 85
+    } // library marker kkossev.deviceProfileLib, line 86
+    if (cmds != null && cmds != []) { // library marker kkossev.deviceProfileLib, line 87
+        sendZigbeeCommands( cmds ) // library marker kkossev.deviceProfileLib, line 88
+    } // library marker kkossev.deviceProfileLib, line 89
+} // library marker kkossev.deviceProfileLib, line 90
+
+/** // library marker kkossev.deviceProfileLib, line 92
+ * Returns the device name and profile based on the device model and manufacturer. // library marker kkossev.deviceProfileLib, line 93
+ * @param model The device model (optional). If not provided, it will be retrieved from the device data value. // library marker kkossev.deviceProfileLib, line 94
+ * @param manufacturer The device manufacturer (optional). If not provided, it will be retrieved from the device data value. // library marker kkossev.deviceProfileLib, line 95
+ * @return A list containing the device name and profile. // library marker kkossev.deviceProfileLib, line 96
+ */ // library marker kkossev.deviceProfileLib, line 97
+def getDeviceNameAndProfile( model=null, manufacturer=null) { // library marker kkossev.deviceProfileLib, line 98
+    def deviceName         = UNKNOWN // library marker kkossev.deviceProfileLib, line 99
+    def deviceProfile      = UNKNOWN // library marker kkossev.deviceProfileLib, line 100
+    String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 101
+    String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 102
+    deviceProfilesV2.each { profileName, profileMap -> // library marker kkossev.deviceProfileLib, line 103
+        profileMap.fingerprints.each { fingerprint -> // library marker kkossev.deviceProfileLib, line 104
+            if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) { // library marker kkossev.deviceProfileLib, line 105
+                deviceProfile = profileName // library marker kkossev.deviceProfileLib, line 106
+                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile].deviceJoinName ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 107
+                logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}" // library marker kkossev.deviceProfileLib, line 108
+                return [deviceName, deviceProfile] // library marker kkossev.deviceProfileLib, line 109
+            } // library marker kkossev.deviceProfileLib, line 110
+        } // library marker kkossev.deviceProfileLib, line 111
+    } // library marker kkossev.deviceProfileLib, line 112
+    if (deviceProfile == UNKNOWN) { // library marker kkossev.deviceProfileLib, line 113
+        logWarn "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}" // library marker kkossev.deviceProfileLib, line 114
+    } // library marker kkossev.deviceProfileLib, line 115
+    return [deviceName, deviceProfile] // library marker kkossev.deviceProfileLib, line 116
+} // library marker kkossev.deviceProfileLib, line 117
+
+// called from  initializeVars( fullInit = true) // library marker kkossev.deviceProfileLib, line 119
+def setDeviceNameAndProfile( model=null, manufacturer=null) { // library marker kkossev.deviceProfileLib, line 120
+    def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer) // library marker kkossev.deviceProfileLib, line 121
+    if (deviceProfile == null || deviceProfile == UNKNOWN) { // library marker kkossev.deviceProfileLib, line 122
+        logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}" // library marker kkossev.deviceProfileLib, line 123
+        // don't change the device name when unknown // library marker kkossev.deviceProfileLib, line 124
+        state.deviceProfile = UNKNOWN // library marker kkossev.deviceProfileLib, line 125
+    } // library marker kkossev.deviceProfileLib, line 126
+    def dataValueModel = model != null ? model : device.getDataValue('model') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 127
+    def dataValueManufacturer  = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN // library marker kkossev.deviceProfileLib, line 128
+    if (deviceName != NULL && deviceName != UNKNOWN  ) { // library marker kkossev.deviceProfileLib, line 129
+        device.setName(deviceName) // library marker kkossev.deviceProfileLib, line 130
+        state.deviceProfile = deviceProfile // library marker kkossev.deviceProfileLib, line 131
+        device.updateSetting("forcedProfile", [value:deviceProfilesV2[deviceProfile].description, type:"enum"]) // library marker kkossev.deviceProfileLib, line 132
+        //logDebug "after : forcedProfile = ${settings.forcedProfile}" // library marker kkossev.deviceProfileLib, line 133
+        logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>" // library marker kkossev.deviceProfileLib, line 134
+    } else { // library marker kkossev.deviceProfileLib, line 135
+        logWarn "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!" // library marker kkossev.deviceProfileLib, line 136
+    }     // library marker kkossev.deviceProfileLib, line 137
+} // library marker kkossev.deviceProfileLib, line 138
+
+def refreshDeviceProfile() { // library marker kkossev.deviceProfileLib, line 140
+    List<String> cmds = [] // library marker kkossev.deviceProfileLib, line 141
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.deviceProfileLib, line 142
+    logDebug "refreshDeviceProfile() : ${cmds}" // library marker kkossev.deviceProfileLib, line 143
+    return cmds // library marker kkossev.deviceProfileLib, line 144
+} // library marker kkossev.deviceProfileLib, line 145
+
+def configureDeviceProfile() { // library marker kkossev.deviceProfileLib, line 147
+    List<String> cmds = [] // library marker kkossev.deviceProfileLib, line 148
+    logDebug "configureDeviceProfile() : ${cmds}" // library marker kkossev.deviceProfileLib, line 149
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.deviceProfileLib, line 150
+    return cmds     // library marker kkossev.deviceProfileLib, line 151
+} // library marker kkossev.deviceProfileLib, line 152
+
+def initializeDeviceProfile() // library marker kkossev.deviceProfileLib, line 154
+{ // library marker kkossev.deviceProfileLib, line 155
+    List<String> cmds = [] // library marker kkossev.deviceProfileLib, line 156
+    logDebug "initializeDeviceProfile() : ${cmds}" // library marker kkossev.deviceProfileLib, line 157
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.deviceProfileLib, line 158
+    return cmds         // library marker kkossev.deviceProfileLib, line 159
+} // library marker kkossev.deviceProfileLib, line 160
+
+void initVarsDeviceProfile(boolean fullInit=false) { // library marker kkossev.deviceProfileLib, line 162
+    logDebug "initVarsDeviceProfile(${fullInit})" // library marker kkossev.deviceProfileLib, line 163
+    if (state.deviceProfile == null) { // library marker kkossev.deviceProfileLib, line 164
+        setDeviceNameAndProfile() // library marker kkossev.deviceProfileLib, line 165
+    }     // library marker kkossev.deviceProfileLib, line 166
+} // library marker kkossev.deviceProfileLib, line 167
+
+void initEventsDeviceProfile(boolean fullInit=false) { // library marker kkossev.deviceProfileLib, line 169
+    logDebug "initEventsDeviceProfile(${fullInit})" // library marker kkossev.deviceProfileLib, line 170
+} // library marker kkossev.deviceProfileLib, line 171
+
+
+// ~~~~~ end include (142) kkossev.deviceProfileLib ~~~~~

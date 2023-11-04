@@ -27,7 +27,7 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-09 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766; added thermostatLib; added xiaomiLib
- * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat
+ * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat; added deviceProfileLib; 
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/04 9:09 AM"}
+static String timeStamp() {"2023/11/04 10:17 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -83,6 +83,7 @@ deviceType = "Thermostat"
 @Field static final String DEVICE_TYPE = "Thermostat"
 #include kkossev.xiaomiLib
 #include kkossev.thermostatLib
+#include kkossev.deviceProfileLib
 //deviceType = "Switch"
 //@Field static final String DEVICE_TYPE = "Switch"
 //#include kkossev.tuyaZigbeeSwitchLib

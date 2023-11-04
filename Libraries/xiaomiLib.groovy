@@ -5,7 +5,7 @@ library (
     description: "Xiaomi Library",
     name: "xiaomiLib",
     namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/xiaomiLib.groovy",
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy",
     version: "1.0.1",
     documentationLink: ""
 )
@@ -29,7 +29,7 @@ library (
 
 
 def xiaomiLibVersion()   {"1.0.1"}
-def xiaomiLibStamp() {"2023/11/04 9:08 AM"}
+def xiaomiLibStamp() {"2023/11/04 10:17 PM"}
 
 // no metadata for this library!
 
