@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/thermostatLib.groovy",
       "id": 140,
       "codeType": "library",
-      "version": 114
+      "version": 127
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 11
+      "version": 28
     }
   ]
 }
