@@ -29,7 +29,7 @@ library (
 */
 
 def thermostatLibVersion()   {"1.0.0"}
-def thermostatLibStamp() {"2023/11/06 9:00 PM"}
+def thermostatLibStamp() {"2023/11/06 11:59 PM"}
 
 //import groovy.transform.Field
 import hubitat.helper.ColorUtils
@@ -352,7 +352,7 @@ dev:42212023-11-06 10:33:21.306debugAqara T1 LED lumi.light.acn132 parse: read a
 */
 
 // called from parseXiaomiClusterRgbLib 
-void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {
+void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420 
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
             case 0x01:    // battery voltage
@@ -438,21 +438,90 @@ def updateColor(rgb) {
     def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue])
     logTrace "updateColor: $color"
 
-    sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false)
-    sendEvent(name: "hue", value: hsv.hue, displayed: false)
-    sendEvent(name: "saturation", value: hsv.saturation, displayed: false)
-    if(hsv.hue == WHITE_HUE) {
+    //sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false)
+    sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false])
+    sendHueEvent([name: "hue", value: hsv.hue, displayed: false])
+    sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false])
+    if (hsv.hue == WHITE_HUE) {
         def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION)))
         def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent
         def val = Math.round(MIN_COLOR_TEMP + amount)
-        sendEvent(name: "colorTemperature", value: val)
-        sendEvent(name: "colorMode", value: "CT")
-        sendEvent(setGenericTempName(val))
-    } else {
-        sendEvent(name: "colorMode", value: "RGB")
-        sendEvent(setGenericName(hsv.hue))
+        sendColorTemperatureEvent([name: "colorTemperature", value: val])
+        sendColorModeEvent([name: "colorMode", value: "CT"])
+        sendColorNameEvent([setGenericTempName(val)])
+    } 
+    else {
+        sendColorModeEvent([name: "colorMode", value: "RGB"])
+        sendColorNameEvent(setGenericName(hsv.hue))
     }
 }
+
+void sendColorEvent(map) {
+    if (map.value == device.currentValue(map.name)) {
+        logDebug "sendColorEvent: ${map.name} is already ${map.value}"
+        return
+    }
+    // get the time of the last event named "color" and compare it to the current time
+ //   def lastColorEvent = device.currentState("color",true).date.time
+ //   if ((now() - lastColorEvent) < 1000) {
+       // logDebug "sendColorEvent: delaying ${map.name} event because the last color event was less than 1 second ago ${(now() - lastColorEvent)}"
+        runInMillis(500, "sendDelayedColorEvent",  [overwrite: true, data: map])
+        return
+//    }
+    //unschedule("sendDelayedColorEvent") // cancel any pending delayed events
+    //logDebug "sendColorEvent: lastColorEvent = ${lastColorEvent}, now = ${now()}, diff = ${(now() - lastColorEvent)}"
+    //sendEvent(map)
+}
+private void sendDelayedColorEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
+void sendHueEvent(map) {
+    if (map.value == device.currentValue(map.name)) { return }
+    runInMillis(500, "sendDelayedHueEvent",  [overwrite: true, data: map])
+}
+private void sendDelayedHueEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
+void sendSaturationEvent(map) {
+    if (map.value == device.currentValue(map.name)) { return }
+    runInMillis(500, "sendDelayedSaturationEvent",  [overwrite: true, data: map])
+}
+private void sendDelayedSaturationEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
+void sendColorModeEvent(map) {
+    if (map.value == device.currentValue(map.name)) { return }
+    runInMillis(500, "sendDelayedColorModeEvent",  [overwrite: true, data: map])
+}
+private void sendDelayedColorModeEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
+void sendColorNameEvent(map) {
+    if (map.value == device.currentValue(map.name)) { return }
+    runInMillis(500, "sendDelayedColorNameEvent",  [overwrite: true, data: map])
+}
+private void sendDelayedColorNameEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
+void sendColorTemperatureEvent(map) {
+    if (map.value == device.currentValue(map.name)) { return }
+    runInMillis(500, "sendDelayedColorTemperatureEvent",  [overwrite: true, data: map])
+}
+private void sendDelayedColorTemperatureEvent(Map map) {
+    sendEvent(map)
+    logInfo "${map.name} is now ${map.value}"
+}
+
 
 def sendZigbeeCommandsDelayed() {
     List cmds = state.cmds
@@ -525,7 +594,7 @@ def setColor(value) {
     state.pendingColorUpdate = true
 
     cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00")
-
+    if (state.cmds == null) { state.cmds = [] }   
     state.cmds += cmds
 
     logTrace "zigbee command: $cmds"
@@ -846,6 +915,7 @@ def refreshBulb() {
 def configureBulb() {
     List<String> cmds = []
     logDebug "configureBulb() : ${cmds}"
+    cmds = refreshBulb()
     if (cmds == []) { cmds = ["delay 299"] }    // no , 
     return cmds    
 }
@@ -860,6 +930,10 @@ def initializeBulb()
 
 
 void initVarsBulb(boolean fullInit=false) {
+    state.colorChanged = false
+    state.colorXReported = false
+    state.colorYReported = false
+    state.cmds = []
     logDebug "initVarsBulb(${fullInit})"
 }
 

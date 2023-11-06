@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/06 4:37 PM"}
+static String timeStamp() {"2023/11/06 11:59 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -3101,14 +3101,14 @@ library ( // library marker kkossev.xiaomiLib, line 1
  *  for the specific language governing permissions and limitations under the License. // library marker kkossev.xiaomiLib, line 22
  * // library marker kkossev.xiaomiLib, line 23
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib // library marker kkossev.xiaomiLib, line 24
- * ver. 1.0.1  2023-11-03 kkossev  - (dev. branch) // library marker kkossev.xiaomiLib, line 25
+ * ver. 1.0.1  2023-11-06 kkossev  - (dev. branch) // library marker kkossev.xiaomiLib, line 25
  * // library marker kkossev.xiaomiLib, line 26
  *                                   TODO:  // library marker kkossev.xiaomiLib, line 27
 */ // library marker kkossev.xiaomiLib, line 28
 
 
 def xiaomiLibVersion()   {"1.0.1"} // library marker kkossev.xiaomiLib, line 31
-def xiaomiLibStamp() {"2023/11/04 10:17 PM"} // library marker kkossev.xiaomiLib, line 32
+def xiaomiLibStamp() {"2023/11/06 9:01 PM"} // library marker kkossev.xiaomiLib, line 32
 
 // no metadata for this library! // library marker kkossev.xiaomiLib, line 34
 
@@ -3423,7 +3423,7 @@ library ( // library marker kkossev.rgbLib, line 1
 */ // library marker kkossev.rgbLib, line 29
 
 def thermostatLibVersion()   {"1.0.0"} // library marker kkossev.rgbLib, line 31
-def thermostatLibStamp() {"2023/11/06 4:26 PM"} // library marker kkossev.rgbLib, line 32
+def thermostatLibStamp() {"2023/11/06 11:59 PM"} // library marker kkossev.rgbLib, line 32
 
 //import groovy.transform.Field // library marker kkossev.rgbLib, line 34
 import hubitat.helper.ColorUtils // library marker kkossev.rgbLib, line 35
@@ -3746,7 +3746,7 @@ dev:42212023-11-06 10:33:21.306debugAqara T1 LED lumi.light.acn132 parse: read a
 */ // library marker kkossev.rgbLib, line 352
 
 // called from parseXiaomiClusterRgbLib  // library marker kkossev.rgbLib, line 354
-void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) { // library marker kkossev.rgbLib, line 355
+void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420  // library marker kkossev.rgbLib, line 355
     tags.each { final Integer tag, final Object value -> // library marker kkossev.rgbLib, line 356
         switch (tag) { // library marker kkossev.rgbLib, line 357
             case 0x01:    // battery voltage // library marker kkossev.rgbLib, line 358
@@ -3832,607 +3832,681 @@ def updateColor(rgb) { // library marker kkossev.rgbLib, line 425
     def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue]) // library marker kkossev.rgbLib, line 438
     logTrace "updateColor: $color" // library marker kkossev.rgbLib, line 439
 
-    sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false) // library marker kkossev.rgbLib, line 441
-    sendEvent(name: "hue", value: hsv.hue, displayed: false) // library marker kkossev.rgbLib, line 442
-    sendEvent(name: "saturation", value: hsv.saturation, displayed: false) // library marker kkossev.rgbLib, line 443
-    if(hsv.hue == WHITE_HUE) { // library marker kkossev.rgbLib, line 444
-        def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION))) // library marker kkossev.rgbLib, line 445
-        def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent // library marker kkossev.rgbLib, line 446
-        def val = Math.round(MIN_COLOR_TEMP + amount) // library marker kkossev.rgbLib, line 447
-        sendEvent(name: "colorTemperature", value: val) // library marker kkossev.rgbLib, line 448
-        sendEvent(name: "colorMode", value: "CT") // library marker kkossev.rgbLib, line 449
-        sendEvent(setGenericTempName(val)) // library marker kkossev.rgbLib, line 450
-    } else { // library marker kkossev.rgbLib, line 451
-        sendEvent(name: "colorMode", value: "RGB") // library marker kkossev.rgbLib, line 452
-        sendEvent(setGenericName(hsv.hue)) // library marker kkossev.rgbLib, line 453
-    } // library marker kkossev.rgbLib, line 454
-} // library marker kkossev.rgbLib, line 455
+    //sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false) // library marker kkossev.rgbLib, line 441
+    sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false]) // library marker kkossev.rgbLib, line 442
+    sendHueEvent([name: "hue", value: hsv.hue, displayed: false]) // library marker kkossev.rgbLib, line 443
+    sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false]) // library marker kkossev.rgbLib, line 444
+    if (hsv.hue == WHITE_HUE) { // library marker kkossev.rgbLib, line 445
+        def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION))) // library marker kkossev.rgbLib, line 446
+        def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent // library marker kkossev.rgbLib, line 447
+        def val = Math.round(MIN_COLOR_TEMP + amount) // library marker kkossev.rgbLib, line 448
+        sendColorTemperatureEvent([name: "colorTemperature", value: val]) // library marker kkossev.rgbLib, line 449
+        sendColorModeEvent([name: "colorMode", value: "CT"]) // library marker kkossev.rgbLib, line 450
+        sendColorNameEvent([setGenericTempName(val)]) // library marker kkossev.rgbLib, line 451
+    }  // library marker kkossev.rgbLib, line 452
+    else { // library marker kkossev.rgbLib, line 453
+        sendColorModeEvent([name: "colorMode", value: "RGB"]) // library marker kkossev.rgbLib, line 454
+        sendColorNameEvent(setGenericName(hsv.hue)) // library marker kkossev.rgbLib, line 455
+    } // library marker kkossev.rgbLib, line 456
+} // library marker kkossev.rgbLib, line 457
 
-def sendZigbeeCommandsDelayed() { // library marker kkossev.rgbLib, line 457
-    List cmds = state.cmds // library marker kkossev.rgbLib, line 458
-    if (cmds != null) { // library marker kkossev.rgbLib, line 459
-        state.cmds = [] // library marker kkossev.rgbLib, line 460
-        sendZigbeeCommands(cmds) // library marker kkossev.rgbLib, line 461
-    } // library marker kkossev.rgbLib, line 462
-} // library marker kkossev.rgbLib, line 463
-
-def setLevelBulb(value, rate=null) { // library marker kkossev.rgbLib, line 465
-    logDebug "setLevelBulb: $value, $rate" // library marker kkossev.rgbLib, line 466
-
-    state.pendingLevelChange = value // library marker kkossev.rgbLib, line 468
-
-    if (rate == null) { // library marker kkossev.rgbLib, line 470
-        state.cmds += zigbee.setLevel(value) // library marker kkossev.rgbLib, line 471
-    } else { // library marker kkossev.rgbLib, line 472
-        state.cmds += zigbee.setLevel(value, rate) // library marker kkossev.rgbLib, line 473
-    } // library marker kkossev.rgbLib, line 474
-
-    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 476
-    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 477
+void sendColorEvent(map) { // library marker kkossev.rgbLib, line 459
+    if (map.value == device.currentValue(map.name)) { // library marker kkossev.rgbLib, line 460
+        logDebug "sendColorEvent: ${map.name} is already ${map.value}" // library marker kkossev.rgbLib, line 461
+        return // library marker kkossev.rgbLib, line 462
+    } // library marker kkossev.rgbLib, line 463
+    // get the time of the last event named "color" and compare it to the current time // library marker kkossev.rgbLib, line 464
+ //   def lastColorEvent = device.currentState("color",true).date.time // library marker kkossev.rgbLib, line 465
+ //   if ((now() - lastColorEvent) < 1000) { // library marker kkossev.rgbLib, line 466
+       // logDebug "sendColorEvent: delaying ${map.name} event because the last color event was less than 1 second ago ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 467
+        runInMillis(500, "sendDelayedColorEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 468
+        return // library marker kkossev.rgbLib, line 469
+//    } // library marker kkossev.rgbLib, line 470
+    //unschedule("sendDelayedColorEvent") // cancel any pending delayed events // library marker kkossev.rgbLib, line 471
+    //logDebug "sendColorEvent: lastColorEvent = ${lastColorEvent}, now = ${now()}, diff = ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 472
+    //sendEvent(map) // library marker kkossev.rgbLib, line 473
+} // library marker kkossev.rgbLib, line 474
+private void sendDelayedColorEvent(Map map) { // library marker kkossev.rgbLib, line 475
+    sendEvent(map) // library marker kkossev.rgbLib, line 476
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 477
 } // library marker kkossev.rgbLib, line 478
 
-
-def setColorTemperature(value, level=null, rate=null) { // library marker kkossev.rgbLib, line 481
-    logDebug "Set color temperature $value" // library marker kkossev.rgbLib, line 482
-
-    def sat = MAX_WHITE_SATURATION - (((value - MIN_COLOR_TEMP) / (MAX_COLOR_TEMP - MIN_COLOR_TEMP)) * MAX_WHITE_SATURATION) // library marker kkossev.rgbLib, line 484
-    setColor([ // library marker kkossev.rgbLib, line 485
-            hue: WHITE_HUE, // library marker kkossev.rgbLib, line 486
-            saturation: sat, // library marker kkossev.rgbLib, line 487
-            level: level, // library marker kkossev.rgbLib, line 488
-            rate: rate // library marker kkossev.rgbLib, line 489
-    ]) // library marker kkossev.rgbLib, line 490
-} // library marker kkossev.rgbLib, line 491
-
-def setColor(value) { // library marker kkossev.rgbLib, line 493
-    logDebug "setColor($value)" // library marker kkossev.rgbLib, line 494
-    def rgb = colorHsv2Rgb(value.hue / 100, value.saturation / 100) // library marker kkossev.rgbLib, line 495
-
-    logTrace "setColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 497
-    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue); // library marker kkossev.rgbLib, line 498
-    logTrace "setColor: xy ($xy.x, $xy.y)" // library marker kkossev.rgbLib, line 499
-
-    def intX = Math.round(xy.x*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 501
-    def intY = Math.round(xy.y*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 502
-
-    logTrace "setColor: xy ($intX, $intY)" // library marker kkossev.rgbLib, line 504
-
-    state.colorX = xy.x // library marker kkossev.rgbLib, line 506
-    state.colorY = xy.y // library marker kkossev.rgbLib, line 507
-
-    def strX = DataType.pack(intX, DataType.UINT16, true); // library marker kkossev.rgbLib, line 509
-    def strY = DataType.pack(intY, DataType.UINT16, true); // library marker kkossev.rgbLib, line 510
-
-    List cmds = [] // library marker kkossev.rgbLib, line 512
-
-    def level = value.level // library marker kkossev.rgbLib, line 514
-    def rate = value.rate // library marker kkossev.rgbLib, line 515
-
-    if (level != null && rate != null) { // library marker kkossev.rgbLib, line 517
-        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 518
-        cmds += zigbee.setLevel(level, rate) // library marker kkossev.rgbLib, line 519
-    } else if (level != null) { // library marker kkossev.rgbLib, line 520
-        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 521
-        cmds += zigbee.setLevel(level) // library marker kkossev.rgbLib, line 522
-    } // library marker kkossev.rgbLib, line 523
-
-    state.pendingColorUpdate = true // library marker kkossev.rgbLib, line 525
-
-    cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00") // library marker kkossev.rgbLib, line 527
-
-    state.cmds += cmds // library marker kkossev.rgbLib, line 529
-
-    logTrace "zigbee command: $cmds" // library marker kkossev.rgbLib, line 531
-
-    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 533
-    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 534
-} // library marker kkossev.rgbLib, line 535
-
-
-def setHue(hue) { // library marker kkossev.rgbLib, line 538
-    logDebug "setHue: $hue" // library marker kkossev.rgbLib, line 539
-    setColor([ hue: hue, saturation: device.currentValue("saturation") ]) // library marker kkossev.rgbLib, line 540
-} // library marker kkossev.rgbLib, line 541
-
-def setSaturation(saturation) { // library marker kkossev.rgbLib, line 543
-    logDebug "setSaturation: $saturation" // library marker kkossev.rgbLib, line 544
-    setColor([ hue: device.currentValue("hue"), saturation: saturation ]) // library marker kkossev.rgbLib, line 545
-} // library marker kkossev.rgbLib, line 546
-
-def setGenericTempName(temp){ // library marker kkossev.rgbLib, line 548
-    if (!temp) return // library marker kkossev.rgbLib, line 549
-    String genericName // library marker kkossev.rgbLib, line 550
-    int value = temp.toInteger() // library marker kkossev.rgbLib, line 551
-    if (value <= 2000) genericName = "Sodium" // library marker kkossev.rgbLib, line 552
-    else if (value <= 2100) genericName = "Starlight" // library marker kkossev.rgbLib, line 553
-    else if (value < 2400) genericName = "Sunrise" // library marker kkossev.rgbLib, line 554
-    else if (value < 2800) genericName = "Incandescent" // library marker kkossev.rgbLib, line 555
-    else if (value < 3300) genericName = "Soft White" // library marker kkossev.rgbLib, line 556
-    else if (value < 3500) genericName = "Warm White" // library marker kkossev.rgbLib, line 557
-    else if (value < 4150) genericName = "Moonlight" // library marker kkossev.rgbLib, line 558
-    else if (value <= 5000) genericName = "Horizon" // library marker kkossev.rgbLib, line 559
-    else if (value < 5500) genericName = "Daylight" // library marker kkossev.rgbLib, line 560
-    else if (value < 6000) genericName = "Electronic" // library marker kkossev.rgbLib, line 561
-    else if (value <= 6500) genericName = "Skylight" // library marker kkossev.rgbLib, line 562
-    else if (value < 20000) genericName = "Polar" // library marker kkossev.rgbLib, line 563
-    String descriptionText = "${device.getDisplayName()} color is ${genericName}" // library marker kkossev.rgbLib, line 564
-    return createEvent(name: "colorName", value: genericName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 565
-} // library marker kkossev.rgbLib, line 566
-
-def setGenericName(hue){ // library marker kkossev.rgbLib, line 568
-    String colorName // library marker kkossev.rgbLib, line 569
-    hue = hue.toInteger() // library marker kkossev.rgbLib, line 570
-    hue = (hue * 3.6) // library marker kkossev.rgbLib, line 571
-    switch (hue.toInteger()){ // library marker kkossev.rgbLib, line 572
-        case 0..15: colorName = "Red" // library marker kkossev.rgbLib, line 573
-            break // library marker kkossev.rgbLib, line 574
-        case 16..45: colorName = "Orange" // library marker kkossev.rgbLib, line 575
-            break // library marker kkossev.rgbLib, line 576
-        case 46..75: colorName = "Yellow" // library marker kkossev.rgbLib, line 577
-            break // library marker kkossev.rgbLib, line 578
-        case 76..105: colorName = "Chartreuse" // library marker kkossev.rgbLib, line 579
-            break // library marker kkossev.rgbLib, line 580
-        case 106..135: colorName = "Green" // library marker kkossev.rgbLib, line 581
-            break // library marker kkossev.rgbLib, line 582
-        case 136..165: colorName = "Spring" // library marker kkossev.rgbLib, line 583
-            break // library marker kkossev.rgbLib, line 584
-        case 166..195: colorName = "Cyan" // library marker kkossev.rgbLib, line 585
-            break // library marker kkossev.rgbLib, line 586
-        case 196..225: colorName = "Azure" // library marker kkossev.rgbLib, line 587
-            break // library marker kkossev.rgbLib, line 588
-        case 226..255: colorName = "Blue" // library marker kkossev.rgbLib, line 589
-            break // library marker kkossev.rgbLib, line 590
-        case 256..285: colorName = "Violet" // library marker kkossev.rgbLib, line 591
-            break // library marker kkossev.rgbLib, line 592
-        case 286..315: colorName = "Magenta" // library marker kkossev.rgbLib, line 593
-            break // library marker kkossev.rgbLib, line 594
-        case 316..345: colorName = "Rose" // library marker kkossev.rgbLib, line 595
-            break // library marker kkossev.rgbLib, line 596
-        case 346..360: colorName = "Red" // library marker kkossev.rgbLib, line 597
-            break // library marker kkossev.rgbLib, line 598
-    } // library marker kkossev.rgbLib, line 599
-    String descriptionText = "${device.getDisplayName()} color is ${colorName}" // library marker kkossev.rgbLib, line 600
-    return createEvent(name: "colorName", value: colorName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 601
-} // library marker kkossev.rgbLib, line 602
-
-
-def startLevelChange(direction) { // library marker kkossev.rgbLib, line 605
-    def dir = direction == "up"? 0 : 1 // library marker kkossev.rgbLib, line 606
-	def rate = 100 // library marker kkossev.rgbLib, line 607
-
-    if (levelChangeRate != null) { // library marker kkossev.rgbLib, line 609
-        rate = levelChangeRate // library marker kkossev.rgbLib, line 610
-    } // library marker kkossev.rgbLib, line 611
-
-	return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}") // library marker kkossev.rgbLib, line 613
-} // library marker kkossev.rgbLib, line 614
-
-def stopLevelChange() { // library marker kkossev.rgbLib, line 616
-    return zigbee.command(0x0008, 0x03, "") + zigbee.levelRefresh() // library marker kkossev.rgbLib, line 617
-} // library marker kkossev.rgbLib, line 618
-
-
-// Color Management functions // library marker kkossev.rgbLib, line 621
-
-def min(first, ... rest) { // library marker kkossev.rgbLib, line 623
-    def min = first; // library marker kkossev.rgbLib, line 624
-    for(next in rest) { // library marker kkossev.rgbLib, line 625
-        if(next < min) min = next // library marker kkossev.rgbLib, line 626
-    } // library marker kkossev.rgbLib, line 627
-
-    min // library marker kkossev.rgbLib, line 629
-} // library marker kkossev.rgbLib, line 630
-
-def max(first, ... rest) { // library marker kkossev.rgbLib, line 632
-    def max = first; // library marker kkossev.rgbLib, line 633
-    for(next in rest) { // library marker kkossev.rgbLib, line 634
-        if(next > max) max = next // library marker kkossev.rgbLib, line 635
-    } // library marker kkossev.rgbLib, line 636
-
-    max // library marker kkossev.rgbLib, line 638
-} // library marker kkossev.rgbLib, line 639
-
-def colorGammaAdjust(component) { // library marker kkossev.rgbLib, line 641
-    return (component > 0.04045) ? Math.pow((component + 0.055) / (1.0 + 0.055), 2.4) : (component / 12.92) // library marker kkossev.rgbLib, line 642
-} // library marker kkossev.rgbLib, line 643
-
-def colorGammaRevert(component) { // library marker kkossev.rgbLib, line 645
-    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055; // library marker kkossev.rgbLib, line 646
-} // library marker kkossev.rgbLib, line 647
-
-def colorXy2Rgb(x = 255, y = 255) { // library marker kkossev.rgbLib, line 649
-
-    logTrace "< Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 651
-
-    def Y = 1; // library marker kkossev.rgbLib, line 653
-    def X = (Y / y) * x; // library marker kkossev.rgbLib, line 654
-    def Z = (Y / y) * (1.0 - x - y); // library marker kkossev.rgbLib, line 655
-
-    logTrace "< Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 657
-
-    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 659
-    def M = [ // library marker kkossev.rgbLib, line 660
-            [  3.2410032, -1.5373990, -0.4986159 ], // library marker kkossev.rgbLib, line 661
-            [ -0.9692243,  1.8759300,  0.0415542 ], // library marker kkossev.rgbLib, line 662
-            [  0.0556394, -0.2040112,  1.0571490 ] // library marker kkossev.rgbLib, line 663
-    ] // library marker kkossev.rgbLib, line 664
-
-    def r = X * M[0][0] + Y * M[0][1] + Z * M[0][2] // library marker kkossev.rgbLib, line 666
-    def g = X * M[1][0] + Y * M[1][1] + Z * M[1][2] // library marker kkossev.rgbLib, line 667
-    def b = X * M[2][0] + Y * M[2][1] + Z * M[2][2] // library marker kkossev.rgbLib, line 668
-
-    def max = max(r, g, b) // library marker kkossev.rgbLib, line 670
-    r = colorGammaRevert(r / max) // library marker kkossev.rgbLib, line 671
-    g = colorGammaRevert(g / max) // library marker kkossev.rgbLib, line 672
-    b = colorGammaRevert(b / max) // library marker kkossev.rgbLib, line 673
-
-    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 675
-
-    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 677
-} // library marker kkossev.rgbLib, line 678
-
-def colorRgb2Xy(r, g, b) { // library marker kkossev.rgbLib, line 680
-
-    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 682
-
-    r = colorGammaAdjust(r) // library marker kkossev.rgbLib, line 684
-    g = colorGammaAdjust(g) // library marker kkossev.rgbLib, line 685
-    b = colorGammaAdjust(b) // library marker kkossev.rgbLib, line 686
-
-    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 688
-    // D65	0.31271	0.32902 // library marker kkossev.rgbLib, line 689
-    //  R  0.64000 0.33000 // library marker kkossev.rgbLib, line 690
-    //  G  0.30000 0.60000 // library marker kkossev.rgbLib, line 691
-    //  B  0.15000 0.06000 // library marker kkossev.rgbLib, line 692
-    def M = [ // library marker kkossev.rgbLib, line 693
-            [  0.4123866,  0.3575915,  0.1804505 ], // library marker kkossev.rgbLib, line 694
-            [  0.2126368,  0.7151830,  0.0721802 ], // library marker kkossev.rgbLib, line 695
-            [  0.0193306,  0.1191972,  0.9503726 ] // library marker kkossev.rgbLib, line 696
-    ] // library marker kkossev.rgbLib, line 697
-
-    def X = r * M[0][0] + g * M[0][1] + b * M[0][2] // library marker kkossev.rgbLib, line 699
-    def Y = r * M[1][0] + g * M[1][1] + b * M[1][2] // library marker kkossev.rgbLib, line 700
-    def Z = r * M[2][0] + g * M[2][1] + b * M[2][2] // library marker kkossev.rgbLib, line 701
-
-    logTrace "> Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 703
-
-    def x = X / (X + Y + Z) // library marker kkossev.rgbLib, line 705
-    def y = Y / (X + Y + Z) // library marker kkossev.rgbLib, line 706
-
-    logTrace "> Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 708
-
-    [x: x, y: y] // library marker kkossev.rgbLib, line 710
-} // library marker kkossev.rgbLib, line 711
-
-def colorHsv2Rgb(h, s) { // library marker kkossev.rgbLib, line 713
-    logTrace "< Color HSV: ($h, $s, 1)" // library marker kkossev.rgbLib, line 714
-
-    def r // library marker kkossev.rgbLib, line 716
-    def g // library marker kkossev.rgbLib, line 717
-    def b // library marker kkossev.rgbLib, line 718
-
-    if (s == 0) { // library marker kkossev.rgbLib, line 720
-        r = 1 // library marker kkossev.rgbLib, line 721
-        g = 1 // library marker kkossev.rgbLib, line 722
-        b = 1 // library marker kkossev.rgbLib, line 723
-    } // library marker kkossev.rgbLib, line 724
-    else { // library marker kkossev.rgbLib, line 725
-        def region = (6 * h).intValue() // library marker kkossev.rgbLib, line 726
-        def remainder = 6 * h - region // library marker kkossev.rgbLib, line 727
-
-        def p = 1 - s // library marker kkossev.rgbLib, line 729
-        def q = 1 - s * remainder // library marker kkossev.rgbLib, line 730
-        def t = 1 - s * (1 - remainder) // library marker kkossev.rgbLib, line 731
-
-        if(region == 0) { // library marker kkossev.rgbLib, line 733
-            r = 1 // library marker kkossev.rgbLib, line 734
-            g = t // library marker kkossev.rgbLib, line 735
-            b = p // library marker kkossev.rgbLib, line 736
-        } // library marker kkossev.rgbLib, line 737
-        else if(region == 1) { // library marker kkossev.rgbLib, line 738
-            r = q // library marker kkossev.rgbLib, line 739
-            g = 1 // library marker kkossev.rgbLib, line 740
-            b = p // library marker kkossev.rgbLib, line 741
-        } // library marker kkossev.rgbLib, line 742
-        else if(region == 2) { // library marker kkossev.rgbLib, line 743
-            r = p // library marker kkossev.rgbLib, line 744
-            g = 1 // library marker kkossev.rgbLib, line 745
-            b = t // library marker kkossev.rgbLib, line 746
-        } // library marker kkossev.rgbLib, line 747
-        else if(region == 3) { // library marker kkossev.rgbLib, line 748
-            r = p // library marker kkossev.rgbLib, line 749
-            g = q // library marker kkossev.rgbLib, line 750
-            b = 1 // library marker kkossev.rgbLib, line 751
-        } // library marker kkossev.rgbLib, line 752
-        else if(region == 4) { // library marker kkossev.rgbLib, line 753
-            r = t // library marker kkossev.rgbLib, line 754
-            g = p // library marker kkossev.rgbLib, line 755
-            b = 1 // library marker kkossev.rgbLib, line 756
-        } // library marker kkossev.rgbLib, line 757
-        else { // library marker kkossev.rgbLib, line 758
-            r = 1 // library marker kkossev.rgbLib, line 759
-            g = p // library marker kkossev.rgbLib, line 760
-            b = q // library marker kkossev.rgbLib, line 761
-        } // library marker kkossev.rgbLib, line 762
-    } // library marker kkossev.rgbLib, line 763
-
-    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 765
-
-    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 767
-} // library marker kkossev.rgbLib, line 768
-
-
-def colorRgb2Hsv(r, g, b) // library marker kkossev.rgbLib, line 771
-{ // library marker kkossev.rgbLib, line 772
-    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 773
-
-    def min = min(r, g, b) // library marker kkossev.rgbLib, line 775
-    def max = max(r, g, b) // library marker kkossev.rgbLib, line 776
-    def delta = max - min // library marker kkossev.rgbLib, line 777
-
-    def h // library marker kkossev.rgbLib, line 779
-    def s // library marker kkossev.rgbLib, line 780
-    def v = max // library marker kkossev.rgbLib, line 781
-
-    if (delta == 0) { // library marker kkossev.rgbLib, line 783
-        h = 0 // library marker kkossev.rgbLib, line 784
-        s = 0 // library marker kkossev.rgbLib, line 785
-    } // library marker kkossev.rgbLib, line 786
-    else { // library marker kkossev.rgbLib, line 787
-        s = delta / max // library marker kkossev.rgbLib, line 788
-        if (r == max) h = ( g - b ) / delta			// between yellow & magenta // library marker kkossev.rgbLib, line 789
-        else if(g == max) h = 2 + ( b - r ) / delta	// between cyan & yellow // library marker kkossev.rgbLib, line 790
-        else h = 4 + ( r - g ) / delta				// between magenta & cyan // library marker kkossev.rgbLib, line 791
-        h /= 6 // library marker kkossev.rgbLib, line 792
-
-        if(h < 0) h += 1 // library marker kkossev.rgbLib, line 794
-    } // library marker kkossev.rgbLib, line 795
-
-    logTrace "> Color HSV: ($h, $s, $v)" // library marker kkossev.rgbLib, line 797
-
-    return [ hue: h, saturation: s, level: v ] // library marker kkossev.rgbLib, line 799
-} // library marker kkossev.rgbLib, line 800
-
-def iTo8bitHex(value) { // library marker kkossev.rgbLib, line 802
-    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.rgbLib, line 803
-} // library marker kkossev.rgbLib, line 804
-
-def logTrace(msg) { // library marker kkossev.rgbLib, line 806
-    if(traceEnable) log.trace msg // library marker kkossev.rgbLib, line 807
-} // library marker kkossev.rgbLib, line 808
-
-
-// ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------ // library marker kkossev.rgbLib, line 811
-
-
-// // library marker kkossev.rgbLib, line 814
-// called from updated() in the main code ... // library marker kkossev.rgbLib, line 815
-void updatedBulb() { // library marker kkossev.rgbLib, line 816
-    logDebug "updatedBulb()..." // library marker kkossev.rgbLib, line 817
-} // library marker kkossev.rgbLib, line 818
-
-def colorControlRefresh() { // library marker kkossev.rgbLib, line 820
-    def commands = [] // library marker kkossev.rgbLib, line 821
-    commands += zigbee.readAttribute(0x0300, 0x03) // currentColorX // library marker kkossev.rgbLib, line 822
-    commands += zigbee.readAttribute(0x0300, 0x04) // currentColorY // library marker kkossev.rgbLib, line 823
-    commands // library marker kkossev.rgbLib, line 824
-} // library marker kkossev.rgbLib, line 825
-
-def colorControlConfig(min, max, step) { // library marker kkossev.rgbLib, line 827
-    def commands = [] // library marker kkossev.rgbLib, line 828
-    commands += zigbee.configureReporting(0x0300, 0x03, DataType.UINT16, min, max, step) // currentColorX // library marker kkossev.rgbLib, line 829
-    commands += zigbee.configureReporting(0x0300, 0x04, DataType.UINT16, min, max, step) // currentColorY // library marker kkossev.rgbLib, line 830
-    commands // library marker kkossev.rgbLib, line 831
-} // library marker kkossev.rgbLib, line 832
-
-def refreshBulb() { // library marker kkossev.rgbLib, line 834
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 835
-    state.colorChanged = false // library marker kkossev.rgbLib, line 836
-    state.colorXReported = false // library marker kkossev.rgbLib, line 837
-    state.colorYReported = false     // library marker kkossev.rgbLib, line 838
-    state.cmds = [] // library marker kkossev.rgbLib, line 839
-    cmds = zigbee.onOffRefresh() + zigbee.levelRefresh() + colorControlRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1) // library marker kkossev.rgbLib, line 840
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.rgbLib, line 841
-    logDebug "refreshBulb: ${cmds} " // library marker kkossev.rgbLib, line 842
-    return cmds // library marker kkossev.rgbLib, line 843
-} // library marker kkossev.rgbLib, line 844
-
-def configureBulb() { // library marker kkossev.rgbLib, line 846
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 847
-    logDebug "configureBulb() : ${cmds}" // library marker kkossev.rgbLib, line 848
-    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.rgbLib, line 849
-    return cmds     // library marker kkossev.rgbLib, line 850
-} // library marker kkossev.rgbLib, line 851
-
-def initializeBulb() // library marker kkossev.rgbLib, line 853
-{ // library marker kkossev.rgbLib, line 854
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 855
-    logDebug "initializeBulb() : ${cmds}" // library marker kkossev.rgbLib, line 856
-    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.rgbLib, line 857
-    return cmds         // library marker kkossev.rgbLib, line 858
-} // library marker kkossev.rgbLib, line 859
-
-
-void initVarsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 862
-    logDebug "initVarsBulb(${fullInit})" // library marker kkossev.rgbLib, line 863
-} // library marker kkossev.rgbLib, line 864
-
-
-void initEventsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 867
-    logDebug "initEventsBulb(${fullInit})" // library marker kkossev.rgbLib, line 868
-    if((device.currentState("saturation")?.value == null)) { // library marker kkossev.rgbLib, line 869
-        sendEvent(name: "saturation", value: 0); // library marker kkossev.rgbLib, line 870
-    } // library marker kkossev.rgbLib, line 871
-    if((device.currentState("hue")?.value == null)) { // library marker kkossev.rgbLib, line 872
-        sendEvent(name: "hue", value: 0); // library marker kkossev.rgbLib, line 873
-    } // library marker kkossev.rgbLib, line 874
-    if ((device.currentState("level")?.value == null) || (device.currentState("level")?.value == 0)) { // library marker kkossev.rgbLib, line 875
-        sendEvent(name: "level", value: 100) // library marker kkossev.rgbLib, line 876
-    }     // library marker kkossev.rgbLib, line 877
-} // library marker kkossev.rgbLib, line 878
-/* // library marker kkossev.rgbLib, line 879
-================================================================================================ // library marker kkossev.rgbLib, line 880
-Node Descriptor // library marker kkossev.rgbLib, line 881
-================================================================================================ // library marker kkossev.rgbLib, line 882
-▸ Logical Type                              = Zigbee Router // library marker kkossev.rgbLib, line 883
-▸ Complex Descriptor Available              = No // library marker kkossev.rgbLib, line 884
-▸ User Descriptor Available                 = No // library marker kkossev.rgbLib, line 885
-▸ Frequency Band                            = 2400 - 2483.5 MHz // library marker kkossev.rgbLib, line 886
-▸ Alternate PAN Coordinator                 = No // library marker kkossev.rgbLib, line 887
-▸ Device Type                               = Full Function Device (FFD) // library marker kkossev.rgbLib, line 888
-▸ Mains Power Source                        = Yes // library marker kkossev.rgbLib, line 889
-▸ Receiver On When Idle                     = Yes (always on) // library marker kkossev.rgbLib, line 890
-▸ Security Capability                       = No // library marker kkossev.rgbLib, line 891
-▸ Allocate Address                          = Yes // library marker kkossev.rgbLib, line 892
-▸ Manufacturer Code                         = 0x115F = XIAOMI // library marker kkossev.rgbLib, line 893
-▸ Maximum Buffer Size                       = 82 bytes // library marker kkossev.rgbLib, line 894
-▸ Maximum Incoming Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 895
-▸ Primary Trust Center                      = No // library marker kkossev.rgbLib, line 896
-▸ Backup Trust Center                       = No // library marker kkossev.rgbLib, line 897
-▸ Primary Binding Table Cache               = Yes // library marker kkossev.rgbLib, line 898
-▸ Backup Binding Table Cache                = No // library marker kkossev.rgbLib, line 899
-▸ Primary Discovery Cache                   = Yes // library marker kkossev.rgbLib, line 900
-▸ Backup Discovery Cache                    = Yes // library marker kkossev.rgbLib, line 901
-▸ Network Manager                           = Yes // library marker kkossev.rgbLib, line 902
-▸ Maximum Outgoing Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 903
-▸ Extended Active Endpoint List Available   = No // library marker kkossev.rgbLib, line 904
-▸ Extended Simple Descriptor List Available = No // library marker kkossev.rgbLib, line 905
-================================================================================================ // library marker kkossev.rgbLib, line 906
-Power Descriptor // library marker kkossev.rgbLib, line 907
-================================================================================================ // library marker kkossev.rgbLib, line 908
-▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above // library marker kkossev.rgbLib, line 909
-▸ Available Power Sources    = [Constant (mains) power] // library marker kkossev.rgbLib, line 910
-▸ Current Power Sources      = [Constant (mains) power] // library marker kkossev.rgbLib, line 911
-▸ Current Power Source Level = 100% // library marker kkossev.rgbLib, line 912
-================================================================================================ // library marker kkossev.rgbLib, line 913
-Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster) // library marker kkossev.rgbLib, line 914
-================================================================================================ // library marker kkossev.rgbLib, line 915
-Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster) // library marker kkossev.rgbLib, line 916
-================================================================================================ // library marker kkossev.rgbLib, line 917
-▸ 0x0000 | ZCL Version          | req | r-- | uint8  | 03                | -- // library marker kkossev.rgbLib, line 918
-▸ 0x0001 | Application Version  | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 919
-▸ 0x0002 | Stack Version        | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 920
-▸ 0x0003 | HW Version           | opt | r-- | uint8  | 01                | -- // library marker kkossev.rgbLib, line 921
-▸ 0x0004 | Manufacturer Name    | opt | r-- | string | Aqara             | -- // library marker kkossev.rgbLib, line 922
-▸ 0x0005 | Model Identifier     | opt | r-- | string | lumi.light.acn132 | -- // library marker kkossev.rgbLib, line 923
-▸ 0x0006 | Date Code            | req | r-- | string | 20230606          | -- // library marker kkossev.rgbLib, line 924
-▸ 0x0007 | Power Source         | opt | r-- | enum8  | 04 = DC source    | -- // library marker kkossev.rgbLib, line 925
-▸ 0x000A | Product Code         | opt | r-- | octstr | --                | -- // library marker kkossev.rgbLib, line 926
-▸ 0x000D | Serial Number        | opt | r-- | string | --                | -- // library marker kkossev.rgbLib, line 927
-▸ 0x0010 | Location Description | opt | rw- | string | é»è®¤æ¿é´     | -- // library marker kkossev.rgbLib, line 928
-▸ 0xF000 | --                   | --  | r-- | uint16 | 0000              | -- // library marker kkossev.rgbLib, line 929
-▸ 0xFFFD | Cluster Revision     | req | r-- | uint16 | 0002              | -- // library marker kkossev.rgbLib, line 930
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 931
-▸ No commands found // library marker kkossev.rgbLib, line 932
-================================================================================================ // library marker kkossev.rgbLib, line 933
-Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster) // library marker kkossev.rgbLib, line 934
-================================================================================================ // library marker kkossev.rgbLib, line 935
-▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | -- // library marker kkossev.rgbLib, line 936
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0001             | -- // library marker kkossev.rgbLib, line 937
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 938
-▸ 0x00 | Identify       | req // library marker kkossev.rgbLib, line 939
-▸ 0x01 | Identify Query | req // library marker kkossev.rgbLib, line 940
-================================================================================================ // library marker kkossev.rgbLib, line 941
-Endpoint 0x01 | In Cluster: 0x0004 (Groups Cluster) // library marker kkossev.rgbLib, line 942
-================================================================================================ // library marker kkossev.rgbLib, line 943
-▸ 0x0000 | Name Support     | req | r-- | map8   | 00   | -- // library marker kkossev.rgbLib, line 944
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002 | -- // library marker kkossev.rgbLib, line 945
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 946
-▸ 0x00 | Add Group                | req // library marker kkossev.rgbLib, line 947
-▸ 0x01 | View Group               | req // library marker kkossev.rgbLib, line 948
-▸ 0x02 | Get Group Membership     | req // library marker kkossev.rgbLib, line 949
-▸ 0x03 | Remove Group             | req // library marker kkossev.rgbLib, line 950
-▸ 0x04 | Remove All Groups        | req // library marker kkossev.rgbLib, line 951
-▸ 0x05 | Add Group If Identifying | req // library marker kkossev.rgbLib, line 952
-================================================================================================ // library marker kkossev.rgbLib, line 953
-Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster) // library marker kkossev.rgbLib, line 954
-================================================================================================ // library marker kkossev.rgbLib, line 955
-▸ 0x0000 | Scene Count      | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 956
-▸ 0x0001 | Current Scene    | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 957
-▸ 0x0002 | Current Group    | req | r-- | uint16 | 0000       | -- // library marker kkossev.rgbLib, line 958
-▸ 0x0003 | Scene Valid      | req | r-- | bool   | 00 = False | -- // library marker kkossev.rgbLib, line 959
-▸ 0x0004 | Name Support     | req | r-- | map8   | 00         | -- // library marker kkossev.rgbLib, line 960
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002       | -- // library marker kkossev.rgbLib, line 961
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 962
-▸ 0x00 | Add Scene            | req // library marker kkossev.rgbLib, line 963
-▸ 0x01 | View Scene           | req // library marker kkossev.rgbLib, line 964
-▸ 0x02 | Remove Scene         | req // library marker kkossev.rgbLib, line 965
-▸ 0x03 | Remove All Scenes    | req // library marker kkossev.rgbLib, line 966
-▸ 0x04 | Store Scene          | req // library marker kkossev.rgbLib, line 967
-▸ 0x05 | Recall Scene         | req // library marker kkossev.rgbLib, line 968
-▸ 0x06 | Get Scene Membership | req // library marker kkossev.rgbLib, line 969
-================================================================================================ // library marker kkossev.rgbLib, line 970
-Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster) // library marker kkossev.rgbLib, line 971
-================================================================================================ // library marker kkossev.rgbLib, line 972
-▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On  | 0..300 // library marker kkossev.rgbLib, line 973
-▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --     // library marker kkossev.rgbLib, line 974
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 975
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 976
-▸ 0x00 | Off    | req // library marker kkossev.rgbLib, line 977
-▸ 0x01 | On     | req // library marker kkossev.rgbLib, line 978
-▸ 0x02 | Toggle | req // library marker kkossev.rgbLib, line 979
+void sendHueEvent(map) { // library marker kkossev.rgbLib, line 480
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 481
+    runInMillis(500, "sendDelayedHueEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 482
+} // library marker kkossev.rgbLib, line 483
+private void sendDelayedHueEvent(Map map) { // library marker kkossev.rgbLib, line 484
+    sendEvent(map) // library marker kkossev.rgbLib, line 485
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 486
+} // library marker kkossev.rgbLib, line 487
+
+void sendSaturationEvent(map) { // library marker kkossev.rgbLib, line 489
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 490
+    runInMillis(500, "sendDelayedSaturationEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 491
+} // library marker kkossev.rgbLib, line 492
+private void sendDelayedSaturationEvent(Map map) { // library marker kkossev.rgbLib, line 493
+    sendEvent(map) // library marker kkossev.rgbLib, line 494
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 495
+} // library marker kkossev.rgbLib, line 496
+
+void sendColorModeEvent(map) { // library marker kkossev.rgbLib, line 498
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 499
+    runInMillis(500, "sendDelayedColorModeEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 500
+} // library marker kkossev.rgbLib, line 501
+private void sendDelayedColorModeEvent(Map map) { // library marker kkossev.rgbLib, line 502
+    sendEvent(map) // library marker kkossev.rgbLib, line 503
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 504
+} // library marker kkossev.rgbLib, line 505
+
+void sendColorNameEvent(map) { // library marker kkossev.rgbLib, line 507
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 508
+    runInMillis(500, "sendDelayedColorNameEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 509
+} // library marker kkossev.rgbLib, line 510
+private void sendDelayedColorNameEvent(Map map) { // library marker kkossev.rgbLib, line 511
+    sendEvent(map) // library marker kkossev.rgbLib, line 512
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 513
+} // library marker kkossev.rgbLib, line 514
+
+void sendColorTemperatureEvent(map) { // library marker kkossev.rgbLib, line 516
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 517
+    runInMillis(500, "sendDelayedColorTemperatureEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 518
+} // library marker kkossev.rgbLib, line 519
+private void sendDelayedColorTemperatureEvent(Map map) { // library marker kkossev.rgbLib, line 520
+    sendEvent(map) // library marker kkossev.rgbLib, line 521
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 522
+} // library marker kkossev.rgbLib, line 523
+
+
+def sendZigbeeCommandsDelayed() { // library marker kkossev.rgbLib, line 526
+    List cmds = state.cmds // library marker kkossev.rgbLib, line 527
+    if (cmds != null) { // library marker kkossev.rgbLib, line 528
+        state.cmds = [] // library marker kkossev.rgbLib, line 529
+        sendZigbeeCommands(cmds) // library marker kkossev.rgbLib, line 530
+    } // library marker kkossev.rgbLib, line 531
+} // library marker kkossev.rgbLib, line 532
+
+def setLevelBulb(value, rate=null) { // library marker kkossev.rgbLib, line 534
+    logDebug "setLevelBulb: $value, $rate" // library marker kkossev.rgbLib, line 535
+
+    state.pendingLevelChange = value // library marker kkossev.rgbLib, line 537
+
+    if (rate == null) { // library marker kkossev.rgbLib, line 539
+        state.cmds += zigbee.setLevel(value) // library marker kkossev.rgbLib, line 540
+    } else { // library marker kkossev.rgbLib, line 541
+        state.cmds += zigbee.setLevel(value, rate) // library marker kkossev.rgbLib, line 542
+    } // library marker kkossev.rgbLib, line 543
+
+    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 545
+    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 546
+} // library marker kkossev.rgbLib, line 547
+
+
+def setColorTemperature(value, level=null, rate=null) { // library marker kkossev.rgbLib, line 550
+    logDebug "Set color temperature $value" // library marker kkossev.rgbLib, line 551
+
+    def sat = MAX_WHITE_SATURATION - (((value - MIN_COLOR_TEMP) / (MAX_COLOR_TEMP - MIN_COLOR_TEMP)) * MAX_WHITE_SATURATION) // library marker kkossev.rgbLib, line 553
+    setColor([ // library marker kkossev.rgbLib, line 554
+            hue: WHITE_HUE, // library marker kkossev.rgbLib, line 555
+            saturation: sat, // library marker kkossev.rgbLib, line 556
+            level: level, // library marker kkossev.rgbLib, line 557
+            rate: rate // library marker kkossev.rgbLib, line 558
+    ]) // library marker kkossev.rgbLib, line 559
+} // library marker kkossev.rgbLib, line 560
+
+def setColor(value) { // library marker kkossev.rgbLib, line 562
+    logDebug "setColor($value)" // library marker kkossev.rgbLib, line 563
+    def rgb = colorHsv2Rgb(value.hue / 100, value.saturation / 100) // library marker kkossev.rgbLib, line 564
+
+    logTrace "setColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 566
+    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue); // library marker kkossev.rgbLib, line 567
+    logTrace "setColor: xy ($xy.x, $xy.y)" // library marker kkossev.rgbLib, line 568
+
+    def intX = Math.round(xy.x*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 570
+    def intY = Math.round(xy.y*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 571
+
+    logTrace "setColor: xy ($intX, $intY)" // library marker kkossev.rgbLib, line 573
+
+    state.colorX = xy.x // library marker kkossev.rgbLib, line 575
+    state.colorY = xy.y // library marker kkossev.rgbLib, line 576
+
+    def strX = DataType.pack(intX, DataType.UINT16, true); // library marker kkossev.rgbLib, line 578
+    def strY = DataType.pack(intY, DataType.UINT16, true); // library marker kkossev.rgbLib, line 579
+
+    List cmds = [] // library marker kkossev.rgbLib, line 581
+
+    def level = value.level // library marker kkossev.rgbLib, line 583
+    def rate = value.rate // library marker kkossev.rgbLib, line 584
+
+    if (level != null && rate != null) { // library marker kkossev.rgbLib, line 586
+        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 587
+        cmds += zigbee.setLevel(level, rate) // library marker kkossev.rgbLib, line 588
+    } else if (level != null) { // library marker kkossev.rgbLib, line 589
+        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 590
+        cmds += zigbee.setLevel(level) // library marker kkossev.rgbLib, line 591
+    } // library marker kkossev.rgbLib, line 592
+
+    state.pendingColorUpdate = true // library marker kkossev.rgbLib, line 594
+
+    cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00") // library marker kkossev.rgbLib, line 596
+    if (state.cmds == null) { state.cmds = [] }    // library marker kkossev.rgbLib, line 597
+    state.cmds += cmds // library marker kkossev.rgbLib, line 598
+
+    logTrace "zigbee command: $cmds" // library marker kkossev.rgbLib, line 600
+
+    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 602
+    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 603
+} // library marker kkossev.rgbLib, line 604
+
+
+def setHue(hue) { // library marker kkossev.rgbLib, line 607
+    logDebug "setHue: $hue" // library marker kkossev.rgbLib, line 608
+    setColor([ hue: hue, saturation: device.currentValue("saturation") ]) // library marker kkossev.rgbLib, line 609
+} // library marker kkossev.rgbLib, line 610
+
+def setSaturation(saturation) { // library marker kkossev.rgbLib, line 612
+    logDebug "setSaturation: $saturation" // library marker kkossev.rgbLib, line 613
+    setColor([ hue: device.currentValue("hue"), saturation: saturation ]) // library marker kkossev.rgbLib, line 614
+} // library marker kkossev.rgbLib, line 615
+
+def setGenericTempName(temp){ // library marker kkossev.rgbLib, line 617
+    if (!temp) return // library marker kkossev.rgbLib, line 618
+    String genericName // library marker kkossev.rgbLib, line 619
+    int value = temp.toInteger() // library marker kkossev.rgbLib, line 620
+    if (value <= 2000) genericName = "Sodium" // library marker kkossev.rgbLib, line 621
+    else if (value <= 2100) genericName = "Starlight" // library marker kkossev.rgbLib, line 622
+    else if (value < 2400) genericName = "Sunrise" // library marker kkossev.rgbLib, line 623
+    else if (value < 2800) genericName = "Incandescent" // library marker kkossev.rgbLib, line 624
+    else if (value < 3300) genericName = "Soft White" // library marker kkossev.rgbLib, line 625
+    else if (value < 3500) genericName = "Warm White" // library marker kkossev.rgbLib, line 626
+    else if (value < 4150) genericName = "Moonlight" // library marker kkossev.rgbLib, line 627
+    else if (value <= 5000) genericName = "Horizon" // library marker kkossev.rgbLib, line 628
+    else if (value < 5500) genericName = "Daylight" // library marker kkossev.rgbLib, line 629
+    else if (value < 6000) genericName = "Electronic" // library marker kkossev.rgbLib, line 630
+    else if (value <= 6500) genericName = "Skylight" // library marker kkossev.rgbLib, line 631
+    else if (value < 20000) genericName = "Polar" // library marker kkossev.rgbLib, line 632
+    String descriptionText = "${device.getDisplayName()} color is ${genericName}" // library marker kkossev.rgbLib, line 633
+    return createEvent(name: "colorName", value: genericName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 634
+} // library marker kkossev.rgbLib, line 635
+
+def setGenericName(hue){ // library marker kkossev.rgbLib, line 637
+    String colorName // library marker kkossev.rgbLib, line 638
+    hue = hue.toInteger() // library marker kkossev.rgbLib, line 639
+    hue = (hue * 3.6) // library marker kkossev.rgbLib, line 640
+    switch (hue.toInteger()){ // library marker kkossev.rgbLib, line 641
+        case 0..15: colorName = "Red" // library marker kkossev.rgbLib, line 642
+            break // library marker kkossev.rgbLib, line 643
+        case 16..45: colorName = "Orange" // library marker kkossev.rgbLib, line 644
+            break // library marker kkossev.rgbLib, line 645
+        case 46..75: colorName = "Yellow" // library marker kkossev.rgbLib, line 646
+            break // library marker kkossev.rgbLib, line 647
+        case 76..105: colorName = "Chartreuse" // library marker kkossev.rgbLib, line 648
+            break // library marker kkossev.rgbLib, line 649
+        case 106..135: colorName = "Green" // library marker kkossev.rgbLib, line 650
+            break // library marker kkossev.rgbLib, line 651
+        case 136..165: colorName = "Spring" // library marker kkossev.rgbLib, line 652
+            break // library marker kkossev.rgbLib, line 653
+        case 166..195: colorName = "Cyan" // library marker kkossev.rgbLib, line 654
+            break // library marker kkossev.rgbLib, line 655
+        case 196..225: colorName = "Azure" // library marker kkossev.rgbLib, line 656
+            break // library marker kkossev.rgbLib, line 657
+        case 226..255: colorName = "Blue" // library marker kkossev.rgbLib, line 658
+            break // library marker kkossev.rgbLib, line 659
+        case 256..285: colorName = "Violet" // library marker kkossev.rgbLib, line 660
+            break // library marker kkossev.rgbLib, line 661
+        case 286..315: colorName = "Magenta" // library marker kkossev.rgbLib, line 662
+            break // library marker kkossev.rgbLib, line 663
+        case 316..345: colorName = "Rose" // library marker kkossev.rgbLib, line 664
+            break // library marker kkossev.rgbLib, line 665
+        case 346..360: colorName = "Red" // library marker kkossev.rgbLib, line 666
+            break // library marker kkossev.rgbLib, line 667
+    } // library marker kkossev.rgbLib, line 668
+    String descriptionText = "${device.getDisplayName()} color is ${colorName}" // library marker kkossev.rgbLib, line 669
+    return createEvent(name: "colorName", value: colorName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 670
+} // library marker kkossev.rgbLib, line 671
+
+
+def startLevelChange(direction) { // library marker kkossev.rgbLib, line 674
+    def dir = direction == "up"? 0 : 1 // library marker kkossev.rgbLib, line 675
+    def rate = 100 // library marker kkossev.rgbLib, line 676
+
+    if (levelChangeRate != null) { // library marker kkossev.rgbLib, line 678
+        rate = levelChangeRate // library marker kkossev.rgbLib, line 679
+    } // library marker kkossev.rgbLib, line 680
+
+    return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}") // library marker kkossev.rgbLib, line 682
+} // library marker kkossev.rgbLib, line 683
+
+def stopLevelChange() { // library marker kkossev.rgbLib, line 685
+    return zigbee.command(0x0008, 0x03, "") + zigbee.levelRefresh() // library marker kkossev.rgbLib, line 686
+} // library marker kkossev.rgbLib, line 687
+
+
+// Color Management functions // library marker kkossev.rgbLib, line 690
+
+def min(first, ... rest) { // library marker kkossev.rgbLib, line 692
+    def min = first; // library marker kkossev.rgbLib, line 693
+    for(next in rest) { // library marker kkossev.rgbLib, line 694
+        if(next < min) min = next // library marker kkossev.rgbLib, line 695
+    } // library marker kkossev.rgbLib, line 696
+
+    min // library marker kkossev.rgbLib, line 698
+} // library marker kkossev.rgbLib, line 699
+
+def max(first, ... rest) { // library marker kkossev.rgbLib, line 701
+    def max = first; // library marker kkossev.rgbLib, line 702
+    for(next in rest) { // library marker kkossev.rgbLib, line 703
+        if(next > max) max = next // library marker kkossev.rgbLib, line 704
+    } // library marker kkossev.rgbLib, line 705
+
+    max // library marker kkossev.rgbLib, line 707
+} // library marker kkossev.rgbLib, line 708
+
+def colorGammaAdjust(component) { // library marker kkossev.rgbLib, line 710
+    return (component > 0.04045) ? Math.pow((component + 0.055) / (1.0 + 0.055), 2.4) : (component / 12.92) // library marker kkossev.rgbLib, line 711
+} // library marker kkossev.rgbLib, line 712
+
+def colorGammaRevert(component) { // library marker kkossev.rgbLib, line 714
+    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055; // library marker kkossev.rgbLib, line 715
+} // library marker kkossev.rgbLib, line 716
+
+def colorXy2Rgb(x = 255, y = 255) { // library marker kkossev.rgbLib, line 718
+
+    logTrace "< Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 720
+
+    def Y = 1; // library marker kkossev.rgbLib, line 722
+    def X = (Y / y) * x; // library marker kkossev.rgbLib, line 723
+    def Z = (Y / y) * (1.0 - x - y); // library marker kkossev.rgbLib, line 724
+
+    logTrace "< Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 726
+
+    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 728
+    def M = [ // library marker kkossev.rgbLib, line 729
+            [  3.2410032, -1.5373990, -0.4986159 ], // library marker kkossev.rgbLib, line 730
+            [ -0.9692243,  1.8759300,  0.0415542 ], // library marker kkossev.rgbLib, line 731
+            [  0.0556394, -0.2040112,  1.0571490 ] // library marker kkossev.rgbLib, line 732
+    ] // library marker kkossev.rgbLib, line 733
+
+    def r = X * M[0][0] + Y * M[0][1] + Z * M[0][2] // library marker kkossev.rgbLib, line 735
+    def g = X * M[1][0] + Y * M[1][1] + Z * M[1][2] // library marker kkossev.rgbLib, line 736
+    def b = X * M[2][0] + Y * M[2][1] + Z * M[2][2] // library marker kkossev.rgbLib, line 737
+
+    def max = max(r, g, b) // library marker kkossev.rgbLib, line 739
+    r = colorGammaRevert(r / max) // library marker kkossev.rgbLib, line 740
+    g = colorGammaRevert(g / max) // library marker kkossev.rgbLib, line 741
+    b = colorGammaRevert(b / max) // library marker kkossev.rgbLib, line 742
+
+    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 744
+
+    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 746
+} // library marker kkossev.rgbLib, line 747
+
+def colorRgb2Xy(r, g, b) { // library marker kkossev.rgbLib, line 749
+
+    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 751
+
+    r = colorGammaAdjust(r) // library marker kkossev.rgbLib, line 753
+    g = colorGammaAdjust(g) // library marker kkossev.rgbLib, line 754
+    b = colorGammaAdjust(b) // library marker kkossev.rgbLib, line 755
+
+    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 757
+    // D65    0.31271    0.32902 // library marker kkossev.rgbLib, line 758
+    //  R  0.64000 0.33000 // library marker kkossev.rgbLib, line 759
+    //  G  0.30000 0.60000 // library marker kkossev.rgbLib, line 760
+    //  B  0.15000 0.06000 // library marker kkossev.rgbLib, line 761
+    def M = [ // library marker kkossev.rgbLib, line 762
+            [  0.4123866,  0.3575915,  0.1804505 ], // library marker kkossev.rgbLib, line 763
+            [  0.2126368,  0.7151830,  0.0721802 ], // library marker kkossev.rgbLib, line 764
+            [  0.0193306,  0.1191972,  0.9503726 ] // library marker kkossev.rgbLib, line 765
+    ] // library marker kkossev.rgbLib, line 766
+
+    def X = r * M[0][0] + g * M[0][1] + b * M[0][2] // library marker kkossev.rgbLib, line 768
+    def Y = r * M[1][0] + g * M[1][1] + b * M[1][2] // library marker kkossev.rgbLib, line 769
+    def Z = r * M[2][0] + g * M[2][1] + b * M[2][2] // library marker kkossev.rgbLib, line 770
+
+    logTrace "> Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 772
+
+    def x = X / (X + Y + Z) // library marker kkossev.rgbLib, line 774
+    def y = Y / (X + Y + Z) // library marker kkossev.rgbLib, line 775
+
+    logTrace "> Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 777
+
+    [x: x, y: y] // library marker kkossev.rgbLib, line 779
+} // library marker kkossev.rgbLib, line 780
+
+def colorHsv2Rgb(h, s) { // library marker kkossev.rgbLib, line 782
+    logTrace "< Color HSV: ($h, $s, 1)" // library marker kkossev.rgbLib, line 783
+
+    def r // library marker kkossev.rgbLib, line 785
+    def g // library marker kkossev.rgbLib, line 786
+    def b // library marker kkossev.rgbLib, line 787
+
+    if (s == 0) { // library marker kkossev.rgbLib, line 789
+        r = 1 // library marker kkossev.rgbLib, line 790
+        g = 1 // library marker kkossev.rgbLib, line 791
+        b = 1 // library marker kkossev.rgbLib, line 792
+    } // library marker kkossev.rgbLib, line 793
+    else { // library marker kkossev.rgbLib, line 794
+        def region = (6 * h).intValue() // library marker kkossev.rgbLib, line 795
+        def remainder = 6 * h - region // library marker kkossev.rgbLib, line 796
+
+        def p = 1 - s // library marker kkossev.rgbLib, line 798
+        def q = 1 - s * remainder // library marker kkossev.rgbLib, line 799
+        def t = 1 - s * (1 - remainder) // library marker kkossev.rgbLib, line 800
+
+        if(region == 0) { // library marker kkossev.rgbLib, line 802
+            r = 1 // library marker kkossev.rgbLib, line 803
+            g = t // library marker kkossev.rgbLib, line 804
+            b = p // library marker kkossev.rgbLib, line 805
+        } // library marker kkossev.rgbLib, line 806
+        else if(region == 1) { // library marker kkossev.rgbLib, line 807
+            r = q // library marker kkossev.rgbLib, line 808
+            g = 1 // library marker kkossev.rgbLib, line 809
+            b = p // library marker kkossev.rgbLib, line 810
+        } // library marker kkossev.rgbLib, line 811
+        else if(region == 2) { // library marker kkossev.rgbLib, line 812
+            r = p // library marker kkossev.rgbLib, line 813
+            g = 1 // library marker kkossev.rgbLib, line 814
+            b = t // library marker kkossev.rgbLib, line 815
+        } // library marker kkossev.rgbLib, line 816
+        else if(region == 3) { // library marker kkossev.rgbLib, line 817
+            r = p // library marker kkossev.rgbLib, line 818
+            g = q // library marker kkossev.rgbLib, line 819
+            b = 1 // library marker kkossev.rgbLib, line 820
+        } // library marker kkossev.rgbLib, line 821
+        else if(region == 4) { // library marker kkossev.rgbLib, line 822
+            r = t // library marker kkossev.rgbLib, line 823
+            g = p // library marker kkossev.rgbLib, line 824
+            b = 1 // library marker kkossev.rgbLib, line 825
+        } // library marker kkossev.rgbLib, line 826
+        else { // library marker kkossev.rgbLib, line 827
+            r = 1 // library marker kkossev.rgbLib, line 828
+            g = p // library marker kkossev.rgbLib, line 829
+            b = q // library marker kkossev.rgbLib, line 830
+        } // library marker kkossev.rgbLib, line 831
+    } // library marker kkossev.rgbLib, line 832
+
+    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 834
+
+    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 836
+} // library marker kkossev.rgbLib, line 837
+
+
+def colorRgb2Hsv(r, g, b) // library marker kkossev.rgbLib, line 840
+{ // library marker kkossev.rgbLib, line 841
+    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 842
+
+    def min = min(r, g, b) // library marker kkossev.rgbLib, line 844
+    def max = max(r, g, b) // library marker kkossev.rgbLib, line 845
+    def delta = max - min // library marker kkossev.rgbLib, line 846
+
+    def h // library marker kkossev.rgbLib, line 848
+    def s // library marker kkossev.rgbLib, line 849
+    def v = max // library marker kkossev.rgbLib, line 850
+
+    if (delta == 0) { // library marker kkossev.rgbLib, line 852
+        h = 0 // library marker kkossev.rgbLib, line 853
+        s = 0 // library marker kkossev.rgbLib, line 854
+    } // library marker kkossev.rgbLib, line 855
+    else { // library marker kkossev.rgbLib, line 856
+        s = delta / max // library marker kkossev.rgbLib, line 857
+        if (r == max) h = ( g - b ) / delta            // between yellow & magenta // library marker kkossev.rgbLib, line 858
+        else if(g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow // library marker kkossev.rgbLib, line 859
+        else h = 4 + ( r - g ) / delta                // between magenta & cyan // library marker kkossev.rgbLib, line 860
+        h /= 6 // library marker kkossev.rgbLib, line 861
+
+        if(h < 0) h += 1 // library marker kkossev.rgbLib, line 863
+    } // library marker kkossev.rgbLib, line 864
+
+    logTrace "> Color HSV: ($h, $s, $v)" // library marker kkossev.rgbLib, line 866
+
+    return [ hue: h, saturation: s, level: v ] // library marker kkossev.rgbLib, line 868
+} // library marker kkossev.rgbLib, line 869
+
+def iTo8bitHex(value) { // library marker kkossev.rgbLib, line 871
+    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.rgbLib, line 872
+} // library marker kkossev.rgbLib, line 873
+
+def logTrace(msg) { // library marker kkossev.rgbLib, line 875
+    if(traceEnable) log.trace msg // library marker kkossev.rgbLib, line 876
+} // library marker kkossev.rgbLib, line 877
+
+
+// ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------ // library marker kkossev.rgbLib, line 880
+
+
+// // library marker kkossev.rgbLib, line 883
+// called from updated() in the main code ... // library marker kkossev.rgbLib, line 884
+void updatedBulb() { // library marker kkossev.rgbLib, line 885
+    logDebug "updatedBulb()..." // library marker kkossev.rgbLib, line 886
+} // library marker kkossev.rgbLib, line 887
+
+def colorControlRefresh() { // library marker kkossev.rgbLib, line 889
+    def commands = [] // library marker kkossev.rgbLib, line 890
+    commands += zigbee.readAttribute(0x0300, 0x03) // currentColorX // library marker kkossev.rgbLib, line 891
+    commands += zigbee.readAttribute(0x0300, 0x04) // currentColorY // library marker kkossev.rgbLib, line 892
+    commands // library marker kkossev.rgbLib, line 893
+} // library marker kkossev.rgbLib, line 894
+
+def colorControlConfig(min, max, step) { // library marker kkossev.rgbLib, line 896
+    def commands = [] // library marker kkossev.rgbLib, line 897
+    commands += zigbee.configureReporting(0x0300, 0x03, DataType.UINT16, min, max, step) // currentColorX // library marker kkossev.rgbLib, line 898
+    commands += zigbee.configureReporting(0x0300, 0x04, DataType.UINT16, min, max, step) // currentColorY // library marker kkossev.rgbLib, line 899
+    commands // library marker kkossev.rgbLib, line 900
+} // library marker kkossev.rgbLib, line 901
+
+def refreshBulb() { // library marker kkossev.rgbLib, line 903
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 904
+    state.colorChanged = false // library marker kkossev.rgbLib, line 905
+    state.colorXReported = false // library marker kkossev.rgbLib, line 906
+    state.colorYReported = false     // library marker kkossev.rgbLib, line 907
+    state.cmds = [] // library marker kkossev.rgbLib, line 908
+    cmds = zigbee.onOffRefresh() + zigbee.levelRefresh() + colorControlRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1) // library marker kkossev.rgbLib, line 909
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.rgbLib, line 910
+    logDebug "refreshBulb: ${cmds} " // library marker kkossev.rgbLib, line 911
+    return cmds // library marker kkossev.rgbLib, line 912
+} // library marker kkossev.rgbLib, line 913
+
+def configureBulb() { // library marker kkossev.rgbLib, line 915
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 916
+    logDebug "configureBulb() : ${cmds}" // library marker kkossev.rgbLib, line 917
+    cmds = refreshBulb() // library marker kkossev.rgbLib, line 918
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.rgbLib, line 919
+    return cmds     // library marker kkossev.rgbLib, line 920
+} // library marker kkossev.rgbLib, line 921
+
+def initializeBulb() // library marker kkossev.rgbLib, line 923
+{ // library marker kkossev.rgbLib, line 924
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 925
+    logDebug "initializeBulb() : ${cmds}" // library marker kkossev.rgbLib, line 926
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.rgbLib, line 927
+    return cmds         // library marker kkossev.rgbLib, line 928
+} // library marker kkossev.rgbLib, line 929
+
+
+void initVarsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 932
+    state.colorChanged = false // library marker kkossev.rgbLib, line 933
+    state.colorXReported = false // library marker kkossev.rgbLib, line 934
+    state.colorYReported = false // library marker kkossev.rgbLib, line 935
+    state.cmds = [] // library marker kkossev.rgbLib, line 936
+    logDebug "initVarsBulb(${fullInit})" // library marker kkossev.rgbLib, line 937
+} // library marker kkossev.rgbLib, line 938
+
+
+void initEventsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 941
+    logDebug "initEventsBulb(${fullInit})" // library marker kkossev.rgbLib, line 942
+    if((device.currentState("saturation")?.value == null)) { // library marker kkossev.rgbLib, line 943
+        sendEvent(name: "saturation", value: 0); // library marker kkossev.rgbLib, line 944
+    } // library marker kkossev.rgbLib, line 945
+    if((device.currentState("hue")?.value == null)) { // library marker kkossev.rgbLib, line 946
+        sendEvent(name: "hue", value: 0); // library marker kkossev.rgbLib, line 947
+    } // library marker kkossev.rgbLib, line 948
+    if ((device.currentState("level")?.value == null) || (device.currentState("level")?.value == 0)) { // library marker kkossev.rgbLib, line 949
+        sendEvent(name: "level", value: 100) // library marker kkossev.rgbLib, line 950
+    }     // library marker kkossev.rgbLib, line 951
+} // library marker kkossev.rgbLib, line 952
+/* // library marker kkossev.rgbLib, line 953
+================================================================================================ // library marker kkossev.rgbLib, line 954
+Node Descriptor // library marker kkossev.rgbLib, line 955
+================================================================================================ // library marker kkossev.rgbLib, line 956
+▸ Logical Type                              = Zigbee Router // library marker kkossev.rgbLib, line 957
+▸ Complex Descriptor Available              = No // library marker kkossev.rgbLib, line 958
+▸ User Descriptor Available                 = No // library marker kkossev.rgbLib, line 959
+▸ Frequency Band                            = 2400 - 2483.5 MHz // library marker kkossev.rgbLib, line 960
+▸ Alternate PAN Coordinator                 = No // library marker kkossev.rgbLib, line 961
+▸ Device Type                               = Full Function Device (FFD) // library marker kkossev.rgbLib, line 962
+▸ Mains Power Source                        = Yes // library marker kkossev.rgbLib, line 963
+▸ Receiver On When Idle                     = Yes (always on) // library marker kkossev.rgbLib, line 964
+▸ Security Capability                       = No // library marker kkossev.rgbLib, line 965
+▸ Allocate Address                          = Yes // library marker kkossev.rgbLib, line 966
+▸ Manufacturer Code                         = 0x115F = XIAOMI // library marker kkossev.rgbLib, line 967
+▸ Maximum Buffer Size                       = 82 bytes // library marker kkossev.rgbLib, line 968
+▸ Maximum Incoming Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 969
+▸ Primary Trust Center                      = No // library marker kkossev.rgbLib, line 970
+▸ Backup Trust Center                       = No // library marker kkossev.rgbLib, line 971
+▸ Primary Binding Table Cache               = Yes // library marker kkossev.rgbLib, line 972
+▸ Backup Binding Table Cache                = No // library marker kkossev.rgbLib, line 973
+▸ Primary Discovery Cache                   = Yes // library marker kkossev.rgbLib, line 974
+▸ Backup Discovery Cache                    = Yes // library marker kkossev.rgbLib, line 975
+▸ Network Manager                           = Yes // library marker kkossev.rgbLib, line 976
+▸ Maximum Outgoing Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 977
+▸ Extended Active Endpoint List Available   = No // library marker kkossev.rgbLib, line 978
+▸ Extended Simple Descriptor List Available = No // library marker kkossev.rgbLib, line 979
 ================================================================================================ // library marker kkossev.rgbLib, line 980
-Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster) // library marker kkossev.rgbLib, line 981
+Power Descriptor // library marker kkossev.rgbLib, line 981
 ================================================================================================ // library marker kkossev.rgbLib, line 982
-▸ 0x0000 | Current Level          | req | r-p | uint8  | 0C = 4%          | 1..3600 // library marker kkossev.rgbLib, line 983
-▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --      // library marker kkossev.rgbLib, line 984
-▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --      // library marker kkossev.rgbLib, line 985
-▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --      // library marker kkossev.rgbLib, line 986
-▸ 0x000F | --                     | --  | rw- | map8   | 00               | --      // library marker kkossev.rgbLib, line 987
-▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 988
-▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --      // library marker kkossev.rgbLib, line 989
-▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 990
-▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 991
-▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --      // library marker kkossev.rgbLib, line 992
-▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --      // library marker kkossev.rgbLib, line 993
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 994
-▸ 0x00 | Move To Level             | req // library marker kkossev.rgbLib, line 995
-▸ 0x01 | Move                      | req // library marker kkossev.rgbLib, line 996
-▸ 0x02 | Step                      | req // library marker kkossev.rgbLib, line 997
-▸ 0x03 | Stop                      | req // library marker kkossev.rgbLib, line 998
-▸ 0x04 | Move To Level With On/Off | req // library marker kkossev.rgbLib, line 999
-▸ 0x05 | Move With On/Off          | req // library marker kkossev.rgbLib, line 1000
-▸ 0x06 | Step With On/Off          | req // library marker kkossev.rgbLib, line 1001
-▸ 0x07 | Stop                      | req // library marker kkossev.rgbLib, line 1002
-================================================================================================ // library marker kkossev.rgbLib, line 1003
-Endpoint 0x01 | In Cluster: 0x0300 (Color Control Cluster) // library marker kkossev.rgbLib, line 1004
-================================================================================================ // library marker kkossev.rgbLib, line 1005
-▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --     // library marker kkossev.rgbLib, line 1006
-▸ 0x0003 | CurrentX                         | req | r-p | uint16 | 4A3C     | 0..300 // library marker kkossev.rgbLib, line 1007
-▸ 0x0004 | CurrentY                         | req | r-p | uint16 | 8FEB     | 0..300 // library marker kkossev.rgbLib, line 1008
-▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1009
-▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1010
-▸ 0x000F | --                               | --  | rw- | map8   | 00       | --     // library marker kkossev.rgbLib, line 1011
-▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --     // library marker kkossev.rgbLib, line 1012
-▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --     // library marker kkossev.rgbLib, line 1013
-▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1014
-▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --     // library marker kkossev.rgbLib, line 1015
-▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1016
-▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --     // library marker kkossev.rgbLib, line 1017
-▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1018
-▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --     // library marker kkossev.rgbLib, line 1019
-▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1020
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1021
-▸ 0x07 | Move to Color             | req // library marker kkossev.rgbLib, line 1022
-▸ 0x08 | Move Color                | req // library marker kkossev.rgbLib, line 1023
-▸ 0x09 | Step Color                | req // library marker kkossev.rgbLib, line 1024
-▸ 0x0A | Move to Color Temperature | req // library marker kkossev.rgbLib, line 1025
-▸ 0x47 | Stop Move Step            | req // library marker kkossev.rgbLib, line 1026
-▸ 0x4B | Move Color Temperature    | req // library marker kkossev.rgbLib, line 1027
-▸ 0x4C | Step Color Temperature    | req // library marker kkossev.rgbLib, line 1028
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above // library marker kkossev.rgbLib, line 983
+▸ Available Power Sources    = [Constant (mains) power] // library marker kkossev.rgbLib, line 984
+▸ Current Power Sources      = [Constant (mains) power] // library marker kkossev.rgbLib, line 985
+▸ Current Power Source Level = 100% // library marker kkossev.rgbLib, line 986
+================================================================================================ // library marker kkossev.rgbLib, line 987
+Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster) // library marker kkossev.rgbLib, line 988
+================================================================================================ // library marker kkossev.rgbLib, line 989
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster) // library marker kkossev.rgbLib, line 990
+================================================================================================ // library marker kkossev.rgbLib, line 991
+▸ 0x0000 | ZCL Version          | req | r-- | uint8  | 03                | -- // library marker kkossev.rgbLib, line 992
+▸ 0x0001 | Application Version  | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 993
+▸ 0x0002 | Stack Version        | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 994
+▸ 0x0003 | HW Version           | opt | r-- | uint8  | 01                | -- // library marker kkossev.rgbLib, line 995
+▸ 0x0004 | Manufacturer Name    | opt | r-- | string | Aqara             | -- // library marker kkossev.rgbLib, line 996
+▸ 0x0005 | Model Identifier     | opt | r-- | string | lumi.light.acn132 | -- // library marker kkossev.rgbLib, line 997
+▸ 0x0006 | Date Code            | req | r-- | string | 20230606          | -- // library marker kkossev.rgbLib, line 998
+▸ 0x0007 | Power Source         | opt | r-- | enum8  | 04 = DC source    | -- // library marker kkossev.rgbLib, line 999
+▸ 0x000A | Product Code         | opt | r-- | octstr | --                | -- // library marker kkossev.rgbLib, line 1000
+▸ 0x000D | Serial Number        | opt | r-- | string | --                | -- // library marker kkossev.rgbLib, line 1001
+▸ 0x0010 | Location Description | opt | rw- | string | é»è®¤æ¿é´     | -- // library marker kkossev.rgbLib, line 1002
+▸ 0xF000 | --                   | --  | r-- | uint16 | 0000              | -- // library marker kkossev.rgbLib, line 1003
+▸ 0xFFFD | Cluster Revision     | req | r-- | uint16 | 0002              | -- // library marker kkossev.rgbLib, line 1004
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1005
+▸ No commands found // library marker kkossev.rgbLib, line 1006
+================================================================================================ // library marker kkossev.rgbLib, line 1007
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster) // library marker kkossev.rgbLib, line 1008
+================================================================================================ // library marker kkossev.rgbLib, line 1009
+▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | -- // library marker kkossev.rgbLib, line 1010
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0001             | -- // library marker kkossev.rgbLib, line 1011
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1012
+▸ 0x00 | Identify       | req // library marker kkossev.rgbLib, line 1013
+▸ 0x01 | Identify Query | req // library marker kkossev.rgbLib, line 1014
+================================================================================================ // library marker kkossev.rgbLib, line 1015
+Endpoint 0x01 | In Cluster: 0x0004 (Groups Cluster) // library marker kkossev.rgbLib, line 1016
+================================================================================================ // library marker kkossev.rgbLib, line 1017
+▸ 0x0000 | Name Support     | req | r-- | map8   | 00   | -- // library marker kkossev.rgbLib, line 1018
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002 | -- // library marker kkossev.rgbLib, line 1019
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1020
+▸ 0x00 | Add Group                | req // library marker kkossev.rgbLib, line 1021
+▸ 0x01 | View Group               | req // library marker kkossev.rgbLib, line 1022
+▸ 0x02 | Get Group Membership     | req // library marker kkossev.rgbLib, line 1023
+▸ 0x03 | Remove Group             | req // library marker kkossev.rgbLib, line 1024
+▸ 0x04 | Remove All Groups        | req // library marker kkossev.rgbLib, line 1025
+▸ 0x05 | Add Group If Identifying | req // library marker kkossev.rgbLib, line 1026
+================================================================================================ // library marker kkossev.rgbLib, line 1027
+Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster) // library marker kkossev.rgbLib, line 1028
 ================================================================================================ // library marker kkossev.rgbLib, line 1029
-Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster) // library marker kkossev.rgbLib, line 1030
-================================================================================================ // library marker kkossev.rgbLib, line 1031
-▸ No attributes found // library marker kkossev.rgbLib, line 1032
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1033
-▸ No commands found // library marker kkossev.rgbLib, line 1034
-================================================================================================ // library marker kkossev.rgbLib, line 1035
+▸ 0x0000 | Scene Count      | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 1030
+▸ 0x0001 | Current Scene    | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 1031
+▸ 0x0002 | Current Group    | req | r-- | uint16 | 0000       | -- // library marker kkossev.rgbLib, line 1032
+▸ 0x0003 | Scene Valid      | req | r-- | bool   | 00 = False | -- // library marker kkossev.rgbLib, line 1033
+▸ 0x0004 | Name Support     | req | r-- | map8   | 00         | -- // library marker kkossev.rgbLib, line 1034
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002       | -- // library marker kkossev.rgbLib, line 1035
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1036
+▸ 0x00 | Add Scene            | req // library marker kkossev.rgbLib, line 1037
+▸ 0x01 | View Scene           | req // library marker kkossev.rgbLib, line 1038
+▸ 0x02 | Remove Scene         | req // library marker kkossev.rgbLib, line 1039
+▸ 0x03 | Remove All Scenes    | req // library marker kkossev.rgbLib, line 1040
+▸ 0x04 | Store Scene          | req // library marker kkossev.rgbLib, line 1041
+▸ 0x05 | Recall Scene         | req // library marker kkossev.rgbLib, line 1042
+▸ 0x06 | Get Scene Membership | req // library marker kkossev.rgbLib, line 1043
+================================================================================================ // library marker kkossev.rgbLib, line 1044
+Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster) // library marker kkossev.rgbLib, line 1045
+================================================================================================ // library marker kkossev.rgbLib, line 1046
+▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On  | 0..300 // library marker kkossev.rgbLib, line 1047
+▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --     // library marker kkossev.rgbLib, line 1048
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1049
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1050
+▸ 0x00 | Off    | req // library marker kkossev.rgbLib, line 1051
+▸ 0x01 | On     | req // library marker kkossev.rgbLib, line 1052
+▸ 0x02 | Toggle | req // library marker kkossev.rgbLib, line 1053
+================================================================================================ // library marker kkossev.rgbLib, line 1054
+Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster) // library marker kkossev.rgbLib, line 1055
+================================================================================================ // library marker kkossev.rgbLib, line 1056
+▸ 0x0000 | Current Level          | req | r-p | uint8  | 0C = 4%          | 1..3600 // library marker kkossev.rgbLib, line 1057
+▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --      // library marker kkossev.rgbLib, line 1058
+▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --      // library marker kkossev.rgbLib, line 1059
+▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --      // library marker kkossev.rgbLib, line 1060
+▸ 0x000F | --                     | --  | rw- | map8   | 00               | --      // library marker kkossev.rgbLib, line 1061
+▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1062
+▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --      // library marker kkossev.rgbLib, line 1063
+▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1064
+▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1065
+▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --      // library marker kkossev.rgbLib, line 1066
+▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --      // library marker kkossev.rgbLib, line 1067
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1068
+▸ 0x00 | Move To Level             | req // library marker kkossev.rgbLib, line 1069
+▸ 0x01 | Move                      | req // library marker kkossev.rgbLib, line 1070
+▸ 0x02 | Step                      | req // library marker kkossev.rgbLib, line 1071
+▸ 0x03 | Stop                      | req // library marker kkossev.rgbLib, line 1072
+▸ 0x04 | Move To Level With On/Off | req // library marker kkossev.rgbLib, line 1073
+▸ 0x05 | Move With On/Off          | req // library marker kkossev.rgbLib, line 1074
+▸ 0x06 | Step With On/Off          | req // library marker kkossev.rgbLib, line 1075
+▸ 0x07 | Stop                      | req // library marker kkossev.rgbLib, line 1076
+================================================================================================ // library marker kkossev.rgbLib, line 1077
+Endpoint 0x01 | In Cluster: 0x0300 (Color Control Cluster) // library marker kkossev.rgbLib, line 1078
+================================================================================================ // library marker kkossev.rgbLib, line 1079
+▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --     // library marker kkossev.rgbLib, line 1080
+▸ 0x0003 | CurrentX                         | req | r-p | uint16 | 4A3C     | 0..300 // library marker kkossev.rgbLib, line 1081
+▸ 0x0004 | CurrentY                         | req | r-p | uint16 | 8FEB     | 0..300 // library marker kkossev.rgbLib, line 1082
+▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1083
+▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1084
+▸ 0x000F | --                               | --  | rw- | map8   | 00       | --     // library marker kkossev.rgbLib, line 1085
+▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --     // library marker kkossev.rgbLib, line 1086
+▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --     // library marker kkossev.rgbLib, line 1087
+▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1088
+▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --     // library marker kkossev.rgbLib, line 1089
+▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1090
+▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --     // library marker kkossev.rgbLib, line 1091
+▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1092
+▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --     // library marker kkossev.rgbLib, line 1093
+▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1094
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1095
+▸ 0x07 | Move to Color             | req // library marker kkossev.rgbLib, line 1096
+▸ 0x08 | Move Color                | req // library marker kkossev.rgbLib, line 1097
+▸ 0x09 | Step Color                | req // library marker kkossev.rgbLib, line 1098
+▸ 0x0A | Move to Color Temperature | req // library marker kkossev.rgbLib, line 1099
+▸ 0x47 | Stop Move Step            | req // library marker kkossev.rgbLib, line 1100
+▸ 0x4B | Move Color Temperature    | req // library marker kkossev.rgbLib, line 1101
+▸ 0x4C | Step Color Temperature    | req // library marker kkossev.rgbLib, line 1102
+================================================================================================ // library marker kkossev.rgbLib, line 1103
+Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster) // library marker kkossev.rgbLib, line 1104
+================================================================================================ // library marker kkossev.rgbLib, line 1105
+▸ No attributes found // library marker kkossev.rgbLib, line 1106
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1107
+▸ No commands found // library marker kkossev.rgbLib, line 1108
+================================================================================================ // library marker kkossev.rgbLib, line 1109
 
-*/ // library marker kkossev.rgbLib, line 1037
+*/ // library marker kkossev.rgbLib, line 1111
 
-def testT(par) { // library marker kkossev.rgbLib, line 1039
-    logWarn "testT(${par})" // library marker kkossev.rgbLib, line 1040
-} // library marker kkossev.rgbLib, line 1041
+def testT(par) { // library marker kkossev.rgbLib, line 1113
+    logWarn "testT(${par})" // library marker kkossev.rgbLib, line 1114
+} // library marker kkossev.rgbLib, line 1115
 
 
 // ~~~~~ end include (143) kkossev.rgbLib ~~~~~
