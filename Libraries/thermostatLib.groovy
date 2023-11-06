@@ -23,15 +23,19 @@ library (
  *
  * ver. 1.0.0  2023-09-07 kkossev  - added thermostatLib
  * ver. 1.0.1  2023-09-09 kkossev  - added temperaturePollingInterval
- * ver. 1.0.2  2023-11-03 kkossev  - (dev. branch) - system_mode off/heat; 
+ * ver. 1.0.2  2023-11-03 kkossev  - (dev. branch) - Aqara E1 thermostat support; 
  *
+ *                                   TODO: add Calibrate command for Aqara
+ *                                   TODO: updated() for Aqara
+ *                                   TODO: refresh() for Aqara
+ *                                   TODO: configure/bind() for Aqara
  *                                   TODO: temperature event for 20 degrees bug?
  *                                   TODO: debugLogss off not scheduled bug?
  *                                   TODO: thermostat polling scheduled bug?
 */
 
 def thermostatLibVersion()   {"1.0.2"}
-def thermostatLibStamp() {"2023/11/04 10:17 PM"}
+def thermostatLibStamp() {"2023/11/04 10:59 AM"}
 
 //import groovy.transform.Field
 
@@ -136,7 +140,7 @@ metadata {
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
-            preferences   : ["window_detection":"0xFCC0:0x0273", "valve_detection":"0xFCC0:0x0274",, "child_lock":"0xFCC0:0x0277", "away_preset_temperature":"0xFCC0:0x0279", "window_open":"0xFCC0:0x027A", "calibrated":"0xFCC0:0x027B", "sensor":"0xFCC0:0x027E"],
+            preferences   : ["window_detection":"0xFCC0:0x0273", "valve_detection":"0xFCC0:0x0274",, "child_lock":"0xFCC0:0x0277", "away_preset_temperature":"0xFCC0:0x0279"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"] 
             ],
