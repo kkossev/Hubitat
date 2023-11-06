@@ -22,14 +22,14 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
- * ver. 1.0.1  2023-11-03 kkossev  - (dev. branch)
+ * ver. 1.0.1  2023-11-06 kkossev  - (dev. branch)
  *
  *                                   TODO: 
 */
 
 
 def xiaomiLibVersion()   {"1.0.1"}
-def xiaomiLibStamp() {"2023/11/04 10:17 PM"}
+def xiaomiLibStamp() {"2023/11/06 9:01 PM"}
 
 // no metadata for this library!
 

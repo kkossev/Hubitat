@@ -29,7 +29,7 @@ library (
 */
 
 def thermostatLibVersion()   {"1.0.0"}
-def thermostatLibStamp() {"2023/11/06 4:26 PM"}
+def thermostatLibStamp() {"2023/11/06 9:00 PM"}
 
 //import groovy.transform.Field
 import hubitat.helper.ColorUtils
@@ -604,13 +604,13 @@ def setGenericName(hue){
 
 def startLevelChange(direction) {
     def dir = direction == "up"? 0 : 1
-	def rate = 100
+    def rate = 100
 
     if (levelChangeRate != null) {
         rate = levelChangeRate
     }
 
-	return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}")
+    return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}")
 }
 
 def stopLevelChange() {
@@ -686,7 +686,7 @@ def colorRgb2Xy(r, g, b) {
     b = colorGammaAdjust(b)
 
     // sRGB, Reference White D65
-    // D65	0.31271	0.32902
+    // D65    0.31271    0.32902
     //  R  0.64000 0.33000
     //  G  0.30000 0.60000
     //  B  0.15000 0.06000
@@ -786,9 +786,9 @@ def colorRgb2Hsv(r, g, b)
     }
     else {
         s = delta / max
-        if (r == max) h = ( g - b ) / delta			// between yellow & magenta
-        else if(g == max) h = 2 + ( b - r ) / delta	// between cyan & yellow
-        else h = 4 + ( r - g ) / delta				// between magenta & cyan
+        if (r == max) h = ( g - b ) / delta            // between yellow & magenta
+        else if(g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow
+        else h = 4 + ( r - g ) / delta                // between magenta & cyan
         h /= 6
 
         if(h < 0) h += 1
