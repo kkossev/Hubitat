@@ -5,8 +5,8 @@ library (
     description: "Xiaomi Library",
     name: "xiaomiLib",
     namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/main/libraries/xiaomiLib.groovy",
-    version: "1.0.0",
+    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy",
+    version: "1.0.1",
     documentationLink: ""
 )
 /*
@@ -22,13 +22,14 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
+ * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  *
  *                                   TODO: 
 */
 
 
-def xiaomiLibVersion()   {"1.0.0"}
-def xiaomiLibStamp() {"2023/09/09 10:10 AM"}
+def xiaomiLibVersion()   {"1.0.1"}
+def xiaomiLibStamp() {"2023/11/07 5:23 PM"}
 
 // no metadata for this library!
 
@@ -59,7 +60,8 @@ def xiaomiLibStamp() {"2023/09/09 10:10 AM"}
 @Field static final int PRESENCE_ACTIONS_TAG_ID = 0x66
 @Field static final int PRESENCE_TAG_ID = 0x65
 
-
+// called from parseXiaomiCluster() in the main code ...
+//
 void parseXiaomiClusterLib(final Map descMap) {
     if (settings.logEnable) {
         //log.trace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -68,6 +70,12 @@ void parseXiaomiClusterLib(final Map descMap) {
         parseXiaomiClusterThermostatLib(descMap)
         return
     }
+    if (DEVICE_TYPE in  ["Bulb"]) {
+        parseXiaomiClusterRgbLib(descMap)
+        return
+    }
+    // TODO - refactor AqaraCube specific code
+    // TODO - refactor FP1 specific code
     switch (descMap.attrInt as Integer) {
         case 0x0009:                      // Aqara Cube T1 Pro
             if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
