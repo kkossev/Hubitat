@@ -10,7 +10,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
       "id": 141,
       "codeType": "library",
-      "version": 20
+      "version": 21
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
@@ -22,7 +22,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
       "id": 143,
       "codeType": "library",
-      "version": 70
+      "version": 93
     }
   ]
 }

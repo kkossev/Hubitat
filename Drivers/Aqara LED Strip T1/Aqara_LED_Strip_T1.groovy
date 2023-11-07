@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/07 7:11 AM"}
+static String timeStamp() {"2023/11/07 5:23 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -282,7 +282,8 @@ metadata {
             if ((deviceType in  ["Switch", "Plug", "Dimmer"]) && _THREE_STATE == true) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>What\'s wrong with the three-state concept?</i>', defaultValue: false
             }
-        }
+            input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
+    }
     }
 }
 
@@ -372,7 +373,7 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
-    if (!isChattyDeviceReport(description)) {logDebug "descMap = ${descMap}"}
+    if (!isChattyDeviceReport(description)) {logDebug "parse: descMap = ${descMap} description=${description}"}
     //
     final String clusterName = clusterLookup(descMap.clusterInt)
     final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
@@ -2339,8 +2340,8 @@ def configureDevice() {
     else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureDeviceIrBlaster() }
     else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() }
     else if (DEVICE_TYPE in  ["ButtonDimmer"]) { cmds += configureDeviceButtonDimmer() }
-        
-    if (cmds == []) {
+    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += configureBulb() }
+    if (cmds == []) { 
         cmds = ["delay 277",]
     }
     sendZigbeeCommands(cmds)  
@@ -2572,6 +2573,10 @@ void updated() {
         logDebug settings
         runIn(86400, logsOff)
     }
+    if (settings.traceEnable) {
+        logDebug settings
+        runIn(1800, traceOff)
+    }    
 
     final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
     if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
@@ -2603,6 +2608,10 @@ void updated() {
 void logsOff() {
     logInfo "debug logging disabled..."
     device.updateSetting('logEnable', [value: 'false', type: 'bool'])
+}
+void traceOff() {
+    logInfo "trace logging disabled..."
+    device.updateSetting('traceEnable', [value: 'false', type: 'bool'])
 }
 
 @Field static final Map ConfigureOpts = [
@@ -2839,8 +2848,9 @@ void initializeVars( boolean fullInit = false ) {
     if (state.health == null) { state.health = [:] }
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     
-    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
@@ -2919,6 +2929,14 @@ def logWarn(msg) {
         log.warn "${device.displayName} " + msg
     }
 }
+
+def logTrace(msg) {
+    if (settings.traceEnable) {
+        log.trace "${device.displayName} " + msg
+    }
+}
+
+
 
 // _DEBUG mode only
 void getAllProperties() {
@@ -3068,7 +3086,7 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    handleTemperatureEvent(safeToDouble(par) as float)
+    parse(par)
     
    // sendZigbeeCommands(cmds)    
 }

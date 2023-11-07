@@ -23,15 +23,14 @@ library (
  *
  *  Credits: Ivar Holand for 'IKEA Tradfri RGBW Light HE v2' driver code
  *
- * ver. 1.0.0  2023-11-06 kkossev  - added rgbLib
+ * ver. 1.0.0  2023-11-06 kkossev  - added rgbLib; musicMode;
  *
  *                                   TODO: 
 */
 
 def thermostatLibVersion()   {"1.0.0"}
-def thermostatLibStamp() {"2023/11/06 11:59 PM"}
+def thermostatLibStamp() {"2023/11/07 5:23 PM"}
 
-//import groovy.transform.Field
 import hubitat.helper.ColorUtils
 
 metadata {
@@ -46,10 +45,15 @@ metadata {
     capability "ChangeLevel"
 
     attribute "deviceTemperature", "number"
+    attribute "musicMode", "enum", MusicModeOpts.options.values() as List<String>
+
+    command "musicMode", [[name:"Select Music Mode", type: "ENUM",   constraints: ["--- select ---"]+MusicModeOpts.options.values() as List<String>]]
+
 
     if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0005,0004,0003,0000,0300,0008,0006,FCC0", outClusters:"0019,000A", model:"lumi.light.acn132", manufacturer:"Aqara"
+    // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/7200
     //https://github.com/dresden-elektronik/deconz-rest-plugin/blob/50555f9350dc1872f266ebe9a5b3620b76e99af6/devices/xiaomi/lumi_light_acn132.json#L4
     preferences {
     }
@@ -62,6 +66,10 @@ private getWHITE_HUE() { 8 }
 private getMIN_COLOR_TEMP() { 2700 }
 private getMAX_COLOR_TEMP() { 6500 }
 
+@Field static final Map MusicModeOpts = [            // preset
+    defaultValue: 0,
+    options     : [0: 'off', 1: 'on']
+]
 
 /*
  * -----------------------------------------------------------------------------
@@ -99,13 +107,15 @@ void parseColorControlClusterBulb(final Map descMap, description) {
 
 
 void processColorControlCluster(final Map descMap, description) {
+    logDebug "processColorControlCluster : ${descMap}"
     def map = [:]
+    def parsed
 
     if (description instanceof String)  {
         map = stringToMap(description)
     }
 
-    logTrace "Map - $map"
+    logDebug "Map - $map"
     def raw = map["read attr - raw"]
 
     if(raw) {
@@ -162,7 +172,7 @@ def parseColorAttribute(id, value) {
         state.colorChanged |= value != colorY
         state.colorY = value
     }
-    else {
+    else {  // TODO: parse atttribute 7 (color temperature in mireds)
         logDebug "Not parsing Color cluster attribute $id: $value"
     }
 
@@ -269,7 +279,8 @@ void parseXiaomiClusterRgbLib(final Map descMap) {
             break
         case 0x051C:    // state/music_sync                 // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
             raw = hexStrToUnsignedInt(descMap.value)
-            logInfo "Aqara music sync is ${raw}"
+            value = MusicModeOpts.options[raw as int]
+            aqaraEvent("musicMode", value, raw)
             break
         case 0x0509:    // state/gradient                   // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
             raw = hexStrToUnsignedInt(descMap.value)
@@ -294,35 +305,9 @@ void aqaraEvent(eventName, value, raw) {
     logInfo "${eventName} is ${value} (raw ${raw})"
 }
 
-/*
-dev:42212023-11-06 10:33:21.660debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x74=2
-dev:42212023-11-06 10:33:21.655debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x72=10
-dev:42212023-11-06 10:33:21.651debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x71=1
-dev:42212023-11-06 10:33:21.644debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6E=2
-dev:42212023-11-06 10:33:21.638debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6D=2
-dev:42212023-11-06 10:33:21.631debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC026F700410F6D20026E200271200172200A742002, dni:D8A0, endpoint:01, cluster:FCC0, size:26, attrId:00F7, encoding:41, command:0A, value:6D20026E200271200172200A742002, clusterInt:64704, attrInt:247]
-dev:42212023-11-06 10:33:21.619debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC026F700410F6D20026E200271200172200A742002, dni: D8A0, endpoint: 01, cluster: FCC0, size: 26, attrId: 00F7, encoding: 41, command: 0A, value: 0F6D20026E200271200172200A742002
-dev:42212023-11-06 10:33:21.453debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6C=0
-dev:42212023-11-06 10:33:21.446debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x73=1245482987
-dev:42212023-11-06 10:33:21.441debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x69=0
-dev:42212023-11-06 10:33:21.436debugAqara T1 LED lumi.light.acn132 xiaomi decode MOTION SENSITIVITY tag: 0x6A=425986700
-dev:42212023-11-06 10:33:21.431debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x66 presure is 153
-dev:42212023-11-06 10:33:21.426debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x65 humidity is 0.05 (raw 5)
-dev:42212023-11-06 10:33:21.421debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x64 temperature is 0.01 (raw 1)
-dev:42212023-11-06 10:33:21.416debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x9A=0
-dev:42212023-11-06 10:33:21.411debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x11=513
-dev:42212023-11-06 10:33:21.406debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0D=6683
-dev:42212023-11-06 10:33:21.401debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0C=10
-dev:42212023-11-06 10:33:21.396debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0B light level is 0
-dev:42212023-11-06 10:33:21.391debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0A Parent NWK is 0000
-dev:42212023-11-06 10:33:21.386debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x09=1536
-dev:42212023-11-06 10:33:21.380debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x05 RSSI is 17
-dev:42212023-11-06 10:33:21.375debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x03 device temperature is 36°
-dev:42212023-11-06 10:33:21.323debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni:D8A0, endpoint:01, cluster:FCC0, size:88, attrId:00F7, encoding:41, command:0A, value:03282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, clusterInt:64704, attrInt:247]
-dev:42212023-11-06 10:33:21.306debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni: D8A0, endpoint: 01, cluster: FCC0, size: 88, attrId: 00F7, encoding: 41, command: 0A, value: 4003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000
-*/
-
+//
 // called from parseXiaomiClusterRgbLib 
+//
 void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420 
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
@@ -382,7 +367,6 @@ def updateColor(rgb) {
     def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue])
     logTrace "updateColor: $color"
 
-    //sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false)
     sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false])
     sendHueEvent([name: "hue", value: hsv.hue, displayed: false])
     sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false])
@@ -816,12 +800,28 @@ def iTo8bitHex(value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
-def logTrace(msg) {
-    if(traceEnable) log.trace msg
-}
-
 
 // ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------
+
+def musicMode(mode) {
+    List<String> cmds = []
+    if (mode in MusicModeOpts.options.values()) {
+        logDebug "sending musicMode: ${mode}"
+        if (mode == "on") {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x01, [mfgCode: 0x115F], delay=200)
+        }
+        else if (mode == "off") {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x00, [mfgCode: 0x115F], delay=200)
+        }
+    }
+    else {
+        logWarn "musicMode: invalid mode ${mode}"
+        return
+    }
+    if (cmds == []) { cmds = ["delay 299"] }
+    sendZigbeeCommands(cmds)
+
+}
 
 
 //
@@ -832,8 +832,8 @@ void updatedBulb() {
 
 def colorControlRefresh() {
     def commands = []
-    commands += zigbee.readAttribute(0x0300, 0x03) // currentColorX
-    commands += zigbee.readAttribute(0x0300, 0x04) // currentColorY
+    commands += zigbee.readAttribute(0x0300, 0x03,[:],200) // currentColorX
+    commands += zigbee.readAttribute(0x0300, 0x04,[:],201) // currentColorY
     commands
 }
 
@@ -850,7 +850,11 @@ def refreshBulb() {
     state.colorXReported = false
     state.colorYReported = false    
     state.cmds = []
-    cmds = zigbee.onOffRefresh() + zigbee.levelRefresh() + colorControlRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1)
+    cmds =  zigbee.onOffRefresh(200) + zigbee.levelRefresh(201) + colorControlRefresh()
+    cmds += zigbee.readAttribute(0x0300,[0x4001,0x400a,0x400b,0x400c,0x000f],[:],204)    // colormode and color/capabilities
+    cmds += zigbee.readAttribute(0x0008,[0x000f,0x0010,0x0011],[:],204)                  // config/bri/execute_if_off
+    cmds += zigbee.readAttribute(0xFCC0,[0x0515,0x0516,0x517],[mfgCode:0x115F],204)      // config/bri/min & max * startup
+    cmds += zigbee.readAttribute(0xFCC0,[0x051B,0x051c],[mfgCode:0x115F],204)            // pixel count & musicMode
     if (cmds == []) { cmds = ["delay 299"] }
     logDebug "refreshBulb: ${cmds} "
     return cmds
@@ -859,7 +863,7 @@ def refreshBulb() {
 def configureBulb() {
     List<String> cmds = []
     logDebug "configureBulb() : ${cmds}"
-    cmds = refreshBulb()
+    cmds = refreshBulb() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1)
     if (cmds == []) { cmds = ["delay 299"] }    // no , 
     return cmds    
 }
@@ -877,7 +881,11 @@ void initVarsBulb(boolean fullInit=false) {
     state.colorChanged = false
     state.colorXReported = false
     state.colorYReported = false
+    state.colorX = 0.9999
+    state.colorY = 0.9999
     state.cmds = []
+    //if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
+
     logDebug "initVarsBulb(${fullInit})"
 }
 
