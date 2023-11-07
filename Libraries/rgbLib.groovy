@@ -45,10 +45,12 @@ metadata {
     capability "Light"
     capability "ChangeLevel"
 
+    attribute "deviceTemperature", "number"
+
     if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0005,0004,0003,0000,0300,0008,0006,FCC0", outClusters:"0019,000A", model:"lumi.light.acn132", manufacturer:"Aqara"
-
+    //https://github.com/dresden-elektronik/deconz-rest-plugin/blob/50555f9350dc1872f266ebe9a5b3620b76e99af6/devices/xiaomi/lumi_light_acn132.json#L4
     preferences {
     }
 }
@@ -241,87 +243,56 @@ void parseXiaomiClusterRgbLib(final Map descMap) {
     final Integer raw
     final String  value
     switch (descMap.attrInt as Integer) {
-        case 0x040a:    // E1 battery - read only
-            raw = hexStrToUnsignedInt(descMap.value)
-            thermostatEvent("battery", raw, raw)
+        case 0x00EE:    // attr/swversion"
+            raw = hexStrToUnsignedInt(descMap.value)        // val = '0.0.0_' + ('0000' + ((Attr.val & 0xFF00) >> 8).toString() + (Attr.val & 0xFF).toString()).slice(-4)"
+            logInfo "Aqara Version is ${raw}"
             break
         case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
-            parseXiaomiClusterThermostatTags(tags)
+            parseXiaomiClusterRgbTags(tags)
             break
-        case 0x0271:    // result['system_mode'] = {1: 'heat', 0: 'off'}[value]; (heating state) - rw
+        case 0x0515:    // config/bri/min                   // r/w "dt": "0x20" 
+            raw = hexStrToUnsignedInt(descMap.value)        // .val = Math.round(Attr.val * 2.54)
+            logInfo "Aqara min brightness is ${raw}"
+            break
+        case 0x0516:    // config/bri/max                   // r/w "dt": "0x20" 
             raw = hexStrToUnsignedInt(descMap.value)
-            value = SystemModeOpts.options[raw as int]
-            thermostatEvent("system_mode", value, raw)
-            break;
-        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday']
+            logInfo "Aqara max brightness is ${raw}"
+            break
+        case 0x0517:    // config/on/startup               // r/w "dt": "0x20" 
+            raw = hexStrToUnsignedInt(descMap.value)       // val = [1, 255, 0][Attr.val]       // val === 1 ? 0 : Item.val === 0 ? 2 : 1" 
+            logInfo "Aqara on startup is ${raw}"
+            break
+        case 0x051B:    // config/color/gradient/pixel_count                  // r/w "dt": "0x20" , Math.max(5, Math.min(Item.val, 50))
             raw = hexStrToUnsignedInt(descMap.value)
-            value = PresetOpts.options[raw as int]
-            thermostatEvent("preset", value, raw)
-            break;
-        case 0x0273:    // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value]; - rw
+            logInfo "Aqara pixel count is ${raw}"
+            break
+        case 0x051C:    // state/music_sync                 // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
             raw = hexStrToUnsignedInt(descMap.value)
-            value = WindowDetectionOpts.options[raw as int]
-            thermostatEvent("window_detection", value, raw)
-            break;
-        case 0x0274:    // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value]; -rw 
+            logInfo "Aqara music sync is ${raw}"
+            break
+        case 0x0509:    // state/gradient                   // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
             raw = hexStrToUnsignedInt(descMap.value)
-            value = ValveDetectionOpts.options[raw as int]
-            thermostatEvent("valve_detection", value, raw)
-            break;
-        case 0x0275:    // result['valve_alarm'] = {1: true, 0: false}[value]; - read only!
+            logInfo "Aqara gradient is ${raw}"
+            break
+        case 0x051F:    // state/gradient/flow              // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
             raw = hexStrToUnsignedInt(descMap.value)
-            value = ValveAlarmOpts.options[raw as int]
-            thermostatEvent("valve_alarm", value, raw)
-            break;
-        case 0x0277:    // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value]; - rw
+            logInfo "Aqara gradient flow is ${raw}"
+            break
+        case 0x051D:    // state/gradient/flow/speed        // r/w "dt": "0x20" , val = Math.max(1, Math.min(Item.val, 10))
             raw = hexStrToUnsignedInt(descMap.value)
-            value = ChildLockOpts.options[raw as int]
-            thermostatEvent("child_lock", value, raw)
-            break;
-        case 0x0279:    // result['away_preset_temperature'] = (value / 100).toFixed(1); - rw
-            raw = hexStrToUnsignedInt(descMap.value)
-            value = raw / 100
-            thermostatEvent("away_preset_temperature", value, raw)
-            break;
-        case 0x027a:    // result['window_open'] = {1: true, 0: false}[value]; - read only
-            raw = hexStrToUnsignedInt(descMap.value)
-            value = WindowOpenOpts.options[raw as int]
-            thermostatEvent("window_open", value, raw)
-            break;
-        case 0x027b:    // result['calibrated'] = {1: true, 0: false}[value]; - read only
-            raw = hexStrToUnsignedInt(descMap.value)
-            value = CalibratedOpts.options[raw as int]
-            thermostatEvent("calibrated", value, raw)
-            break;
-        case 0x0276:    // unknown
-        case 0x027c:    // unknown
-        case 0x027d:    // unknown
-        case 0x0280:    // unknown
-        case 0xfff2:    // unknown
-        case 0x00ff:    // unknown
-        case 0x00f7:    // unknown
-        case 0xfff2:    // unknown
-        case 0x00FF:
-            try {
-                raw = hexStrToUnsignedInt(descMap.value)
-                logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${raw}"
-            }
-            catch (e) {
-                logWarn "exception caught while processing Aqara E1 TRV unknown attribute ${descMap.attrInt} descMap.value = ${descMap.value}"
-            }
-            break;
-        case 0x027e:    // result['sensor'] = {1: 'external', 0: 'internal'}[value]; - read only?
-            raw = hexStrToUnsignedInt(descMap.value)
-            value = SensorOpts.options[raw as int]
-            thermostatEvent("sensor", value, raw)
-            break;
+            logInfo "Aqara gradient flow speed is ${raw}"
+            break
         default:
             logWarn "parseXiaomiClusterRgbLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
 }
 
+void aqaraEvent(eventName, value, raw) {
+    sendEvent(name: eventName, value: value, type: "physical")
+    logInfo "${eventName} is ${value} (raw ${raw})"
+}
 
 /*
 dev:42212023-11-06 10:33:21.660debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x74=2
@@ -359,7 +330,8 @@ void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})"
                 break
             case 0x03:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)"
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg;"
+                sendEvent(name: "deviceTemperature", value: value, unit: "C")
                 break
             case 0x05:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
@@ -382,34 +354,6 @@ void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO:
                     state.health['parentNWK']  = nwk
                     state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1
                 }
-                break
-            case 0x0d:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break            
-            case 0x11:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break            
-            case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC
-                break
-            case 0x65:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x66:
-                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}"
-                handleTemperatureEvent(value/100.0)
-                break
-            case 0x67:
-                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x68:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x69:
-                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}"
-                break
-            case 0x6a:
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}"
                 break
             default:
                 logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}"

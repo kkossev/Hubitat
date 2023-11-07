@@ -1,5 +1,5 @@
 /**
- *  Aqara E1 Thermostat - Device Driver for Hubitat Elevation
+ *  Aqara LED Strip T1 - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/06 11:59 PM"}
+static String timeStamp() {"2023/11/07 7:11 AM"}
 
 @Field static final Boolean _DEBUG = false
 

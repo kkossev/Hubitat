@@ -22,14 +22,14 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
- * ver. 1.0.1  2023-11-06 kkossev  - (dev. branch)
+ * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  *
  *                                   TODO: 
 */
 
 
 def xiaomiLibVersion()   {"1.0.1"}
-def xiaomiLibStamp() {"2023/11/06 9:01 PM"}
+def xiaomiLibStamp() {"2023/11/07 7:ee AM"}
 
 // no metadata for this library!
 
@@ -68,6 +68,10 @@ void parseXiaomiClusterLib(final Map descMap) {
     }
     if (DEVICE_TYPE in  ["Thermostat"]) {
         parseXiaomiClusterThermostatLib(descMap)
+        return
+    }
+    if (DEVICE_TYPE in  ["Bulb"]) {
+        parseXiaomiClusterRgbLib(descMap)
         return
     }
     // TODO - refactor AqaraCube specific code

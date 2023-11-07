@@ -1,5 +1,5 @@
 /**
- *  Aqara E1 Thermostat - Device Driver for Hubitat Elevation
+ *  Aqara LED Strip T1 - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -44,7 +44,7 @@
  */
 
 static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/06 11:59 PM"}
+static String timeStamp() {"2023/11/07 7:11 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -3101,14 +3101,14 @@ library ( // library marker kkossev.xiaomiLib, line 1
  *  for the specific language governing permissions and limitations under the License. // library marker kkossev.xiaomiLib, line 22
  * // library marker kkossev.xiaomiLib, line 23
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib // library marker kkossev.xiaomiLib, line 24
- * ver. 1.0.1  2023-11-06 kkossev  - (dev. branch) // library marker kkossev.xiaomiLib, line 25
+ * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch) // library marker kkossev.xiaomiLib, line 25
  * // library marker kkossev.xiaomiLib, line 26
  *                                   TODO:  // library marker kkossev.xiaomiLib, line 27
 */ // library marker kkossev.xiaomiLib, line 28
 
 
 def xiaomiLibVersion()   {"1.0.1"} // library marker kkossev.xiaomiLib, line 31
-def xiaomiLibStamp() {"2023/11/06 9:01 PM"} // library marker kkossev.xiaomiLib, line 32
+def xiaomiLibStamp() {"2023/11/07 7:ee AM"} // library marker kkossev.xiaomiLib, line 32
 
 // no metadata for this library! // library marker kkossev.xiaomiLib, line 34
 
@@ -3149,244 +3149,248 @@ void parseXiaomiClusterLib(final Map descMap) { // library marker kkossev.xiaomi
         parseXiaomiClusterThermostatLib(descMap) // library marker kkossev.xiaomiLib, line 70
         return // library marker kkossev.xiaomiLib, line 71
     } // library marker kkossev.xiaomiLib, line 72
-    // TODO - refactor AqaraCube specific code // library marker kkossev.xiaomiLib, line 73
-    // TODO - refactor FP1 specific code // library marker kkossev.xiaomiLib, line 74
-    switch (descMap.attrInt as Integer) { // library marker kkossev.xiaomiLib, line 75
-        case 0x0009:                      // Aqara Cube T1 Pro // library marker kkossev.xiaomiLib, line 76
-            if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 77
-            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 78
-            break // library marker kkossev.xiaomiLib, line 79
-        case 0x00FC:                      // FP1 // library marker kkossev.xiaomiLib, line 80
-            log.info "unknown attribute - resetting?" // library marker kkossev.xiaomiLib, line 81
-            break // library marker kkossev.xiaomiLib, line 82
-        case PRESENCE_ATTR_ID:            // 0x0142 FP1 // library marker kkossev.xiaomiLib, line 83
-            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 84
-            parseXiaomiClusterPresence(value) // library marker kkossev.xiaomiLib, line 85
+    if (DEVICE_TYPE in  ["Bulb"]) { // library marker kkossev.xiaomiLib, line 73
+        parseXiaomiClusterRgbLib(descMap) // library marker kkossev.xiaomiLib, line 74
+        return // library marker kkossev.xiaomiLib, line 75
+    } // library marker kkossev.xiaomiLib, line 76
+    // TODO - refactor AqaraCube specific code // library marker kkossev.xiaomiLib, line 77
+    // TODO - refactor FP1 specific code // library marker kkossev.xiaomiLib, line 78
+    switch (descMap.attrInt as Integer) { // library marker kkossev.xiaomiLib, line 79
+        case 0x0009:                      // Aqara Cube T1 Pro // library marker kkossev.xiaomiLib, line 80
+            if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 81
+            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 82
+            break // library marker kkossev.xiaomiLib, line 83
+        case 0x00FC:                      // FP1 // library marker kkossev.xiaomiLib, line 84
+            log.info "unknown attribute - resetting?" // library marker kkossev.xiaomiLib, line 85
             break // library marker kkossev.xiaomiLib, line 86
-        case PRESENCE_ACTIONS_ATTR_ID:    // 0x0143 FP1 // library marker kkossev.xiaomiLib, line 87
+        case PRESENCE_ATTR_ID:            // 0x0142 FP1 // library marker kkossev.xiaomiLib, line 87
             final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 88
-            parseXiaomiClusterPresenceAction(value) // library marker kkossev.xiaomiLib, line 89
+            parseXiaomiClusterPresence(value) // library marker kkossev.xiaomiLib, line 89
             break // library marker kkossev.xiaomiLib, line 90
-        case REGION_EVENT_ATTR_ID:        // 0x0151 FP1 // library marker kkossev.xiaomiLib, line 91
-            // Region events can be sent fast and furious so buffer them // library marker kkossev.xiaomiLib, line 92
-            final Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1]) // library marker kkossev.xiaomiLib, line 93
-            final Integer value = HexUtils.hexStringToInt(descMap.value[2..3]) // library marker kkossev.xiaomiLib, line 94
-            if (settings.logEnable) { // library marker kkossev.xiaomiLib, line 95
-                log.debug "xiaomi: region ${regionId} action is ${value}" // library marker kkossev.xiaomiLib, line 96
-            } // library marker kkossev.xiaomiLib, line 97
-            if (device.currentValue("region${regionId}") != null) { // library marker kkossev.xiaomiLib, line 98
-                RegionUpdateBuffer.get(device.id).put(regionId, value) // library marker kkossev.xiaomiLib, line 99
-                runInMillis(REGION_UPDATE_DELAY_MS, 'updateRegions') // library marker kkossev.xiaomiLib, line 100
+        case PRESENCE_ACTIONS_ATTR_ID:    // 0x0143 FP1 // library marker kkossev.xiaomiLib, line 91
+            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 92
+            parseXiaomiClusterPresenceAction(value) // library marker kkossev.xiaomiLib, line 93
+            break // library marker kkossev.xiaomiLib, line 94
+        case REGION_EVENT_ATTR_ID:        // 0x0151 FP1 // library marker kkossev.xiaomiLib, line 95
+            // Region events can be sent fast and furious so buffer them // library marker kkossev.xiaomiLib, line 96
+            final Integer regionId = HexUtils.hexStringToInt(descMap.value[0..1]) // library marker kkossev.xiaomiLib, line 97
+            final Integer value = HexUtils.hexStringToInt(descMap.value[2..3]) // library marker kkossev.xiaomiLib, line 98
+            if (settings.logEnable) { // library marker kkossev.xiaomiLib, line 99
+                log.debug "xiaomi: region ${regionId} action is ${value}" // library marker kkossev.xiaomiLib, line 100
             } // library marker kkossev.xiaomiLib, line 101
-            break // library marker kkossev.xiaomiLib, line 102
-        case SENSITIVITY_LEVEL_ATTR_ID:   // 0x010C FP1 // library marker kkossev.xiaomiLib, line 103
-            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 104
-            log.info "sensitivity level is '${SensitivityLevelOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 105
-            device.updateSetting('sensitivityLevel', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 106
-            break // library marker kkossev.xiaomiLib, line 107
-        case TRIGGER_DISTANCE_ATTR_ID:    // 0x0146 FP1 // library marker kkossev.xiaomiLib, line 108
-            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 109
-            log.info "approach distance is '${ApproachDistanceOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 110
-            device.updateSetting('approachDistance', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 111
-            break // library marker kkossev.xiaomiLib, line 112
-        case DIRECTION_MODE_ATTR_ID:     // 0x0144 FP1 // library marker kkossev.xiaomiLib, line 113
-            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 114
-            log.info "monitoring direction mode is '${DirectionModeOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 115
-            device.updateSetting('directionMode', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 116
-            break // library marker kkossev.xiaomiLib, line 117
-        case 0x0148 :                    // Aqara Cube T1 Pro - Mode // library marker kkossev.xiaomiLib, line 118
-            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) } // library marker kkossev.xiaomiLib, line 119
-            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 120
+            if (device.currentValue("region${regionId}") != null) { // library marker kkossev.xiaomiLib, line 102
+                RegionUpdateBuffer.get(device.id).put(regionId, value) // library marker kkossev.xiaomiLib, line 103
+                runInMillis(REGION_UPDATE_DELAY_MS, 'updateRegions') // library marker kkossev.xiaomiLib, line 104
+            } // library marker kkossev.xiaomiLib, line 105
+            break // library marker kkossev.xiaomiLib, line 106
+        case SENSITIVITY_LEVEL_ATTR_ID:   // 0x010C FP1 // library marker kkossev.xiaomiLib, line 107
+            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 108
+            log.info "sensitivity level is '${SensitivityLevelOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 109
+            device.updateSetting('sensitivityLevel', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 110
+            break // library marker kkossev.xiaomiLib, line 111
+        case TRIGGER_DISTANCE_ATTR_ID:    // 0x0146 FP1 // library marker kkossev.xiaomiLib, line 112
+            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 113
+            log.info "approach distance is '${ApproachDistanceOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 114
+            device.updateSetting('approachDistance', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 115
+            break // library marker kkossev.xiaomiLib, line 116
+        case DIRECTION_MODE_ATTR_ID:     // 0x0144 FP1 // library marker kkossev.xiaomiLib, line 117
+            final Integer value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.xiaomiLib, line 118
+            log.info "monitoring direction mode is '${DirectionModeOpts.options[value]}' (0x${descMap.value})" // library marker kkossev.xiaomiLib, line 119
+            device.updateSetting('directionMode', [value: value.toString(), type: 'enum']) // library marker kkossev.xiaomiLib, line 120
             break // library marker kkossev.xiaomiLib, line 121
-        case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5) // library marker kkossev.xiaomiLib, line 122
+        case 0x0148 :                    // Aqara Cube T1 Pro - Mode // library marker kkossev.xiaomiLib, line 122
             if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) } // library marker kkossev.xiaomiLib, line 123
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 124
             break // library marker kkossev.xiaomiLib, line 125
-        case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes // library marker kkossev.xiaomiLib, line 126
-            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.xiaomiLib, line 127
-            parseXiaomiClusterTags(tags) // library marker kkossev.xiaomiLib, line 128
-            if (isAqaraCube()) { // library marker kkossev.xiaomiLib, line 129
-                sendZigbeeCommands(refreshAqaraCube()) // library marker kkossev.xiaomiLib, line 130
-            } // library marker kkossev.xiaomiLib, line 131
-            break // library marker kkossev.xiaomiLib, line 132
-        case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1  // library marker kkossev.xiaomiLib, line 133
-            final byte[] rawData = HexUtils.hexStringToByteArray(descMap.value) // library marker kkossev.xiaomiLib, line 134
-            if (rawData.size() == 24 && settings.enableDistanceDirection) { // library marker kkossev.xiaomiLib, line 135
-                final int degrees = rawData[19] // library marker kkossev.xiaomiLib, line 136
-                final int distanceCm = (rawData[17] << 8) | (rawData[18] & 0x00ff) // library marker kkossev.xiaomiLib, line 137
-                if (settings.logEnable) { // library marker kkossev.xiaomiLib, line 138
-                    log.debug "location ${degrees}&deg;, ${distanceCm}cm" // library marker kkossev.xiaomiLib, line 139
-                } // library marker kkossev.xiaomiLib, line 140
-                runIn(1, 'updateLocation', [ data: [ degrees: degrees, distanceCm: distanceCm ] ]) // library marker kkossev.xiaomiLib, line 141
-            } // library marker kkossev.xiaomiLib, line 142
-            break // library marker kkossev.xiaomiLib, line 143
-        default: // library marker kkossev.xiaomiLib, line 144
-            log.warn "zigbee received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.xiaomiLib, line 145
-            break // library marker kkossev.xiaomiLib, line 146
-    } // library marker kkossev.xiaomiLib, line 147
-} // library marker kkossev.xiaomiLib, line 148
+        case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5) // library marker kkossev.xiaomiLib, line 126
+            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) } // library marker kkossev.xiaomiLib, line 127
+            else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" } // library marker kkossev.xiaomiLib, line 128
+            break // library marker kkossev.xiaomiLib, line 129
+        case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes // library marker kkossev.xiaomiLib, line 130
+            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.xiaomiLib, line 131
+            parseXiaomiClusterTags(tags) // library marker kkossev.xiaomiLib, line 132
+            if (isAqaraCube()) { // library marker kkossev.xiaomiLib, line 133
+                sendZigbeeCommands(refreshAqaraCube()) // library marker kkossev.xiaomiLib, line 134
+            } // library marker kkossev.xiaomiLib, line 135
+            break // library marker kkossev.xiaomiLib, line 136
+        case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1  // library marker kkossev.xiaomiLib, line 137
+            final byte[] rawData = HexUtils.hexStringToByteArray(descMap.value) // library marker kkossev.xiaomiLib, line 138
+            if (rawData.size() == 24 && settings.enableDistanceDirection) { // library marker kkossev.xiaomiLib, line 139
+                final int degrees = rawData[19] // library marker kkossev.xiaomiLib, line 140
+                final int distanceCm = (rawData[17] << 8) | (rawData[18] & 0x00ff) // library marker kkossev.xiaomiLib, line 141
+                if (settings.logEnable) { // library marker kkossev.xiaomiLib, line 142
+                    log.debug "location ${degrees}&deg;, ${distanceCm}cm" // library marker kkossev.xiaomiLib, line 143
+                } // library marker kkossev.xiaomiLib, line 144
+                runIn(1, 'updateLocation', [ data: [ degrees: degrees, distanceCm: distanceCm ] ]) // library marker kkossev.xiaomiLib, line 145
+            } // library marker kkossev.xiaomiLib, line 146
+            break // library marker kkossev.xiaomiLib, line 147
+        default: // library marker kkossev.xiaomiLib, line 148
+            log.warn "zigbee received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.xiaomiLib, line 149
+            break // library marker kkossev.xiaomiLib, line 150
+    } // library marker kkossev.xiaomiLib, line 151
+} // library marker kkossev.xiaomiLib, line 152
 
-void parseXiaomiClusterTags(final Map<Integer, Object> tags) { // library marker kkossev.xiaomiLib, line 150
-    tags.each { final Integer tag, final Object value -> // library marker kkossev.xiaomiLib, line 151
-        switch (tag) { // library marker kkossev.xiaomiLib, line 152
-            case 0x01:    // battery voltage // library marker kkossev.xiaomiLib, line 153
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.xiaomiLib, line 154
-                break // library marker kkossev.xiaomiLib, line 155
-            case 0x03: // library marker kkossev.xiaomiLib, line 156
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;" // library marker kkossev.xiaomiLib, line 157
-                break // library marker kkossev.xiaomiLib, line 158
-            case 0x05: // library marker kkossev.xiaomiLib, line 159
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.xiaomiLib, line 160
-                break // library marker kkossev.xiaomiLib, line 161
-            case 0x06: // library marker kkossev.xiaomiLib, line 162
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.xiaomiLib, line 163
-                break // library marker kkossev.xiaomiLib, line 164
-            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.xiaomiLib, line 165
-                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.xiaomiLib, line 166
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.xiaomiLib, line 167
-                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.xiaomiLib, line 168
-                break // library marker kkossev.xiaomiLib, line 169
-            case 0x0a: // library marker kkossev.xiaomiLib, line 170
-                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.xiaomiLib, line 171
-                if (state.health == null) { state.health = [:] } // library marker kkossev.xiaomiLib, line 172
-                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.xiaomiLib, line 173
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.xiaomiLib, line 174
-                if (oldNWK != nwk ) { // library marker kkossev.xiaomiLib, line 175
-                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.xiaomiLib, line 176
-                    state.health['parentNWK']  = nwk // library marker kkossev.xiaomiLib, line 177
-                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.xiaomiLib, line 178
-                } // library marker kkossev.xiaomiLib, line 179
-                break // library marker kkossev.xiaomiLib, line 180
-            case 0x0b: // library marker kkossev.xiaomiLib, line 181
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} light level is ${value}" // library marker kkossev.xiaomiLib, line 182
-                break // library marker kkossev.xiaomiLib, line 183
-            case 0x64: // library marker kkossev.xiaomiLib, line 184
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC // library marker kkossev.xiaomiLib, line 185
-                // TODO - also smoke gas/density if UINT ! // library marker kkossev.xiaomiLib, line 186
+void parseXiaomiClusterTags(final Map<Integer, Object> tags) { // library marker kkossev.xiaomiLib, line 154
+    tags.each { final Integer tag, final Object value -> // library marker kkossev.xiaomiLib, line 155
+        switch (tag) { // library marker kkossev.xiaomiLib, line 156
+            case 0x01:    // battery voltage // library marker kkossev.xiaomiLib, line 157
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.xiaomiLib, line 158
+                break // library marker kkossev.xiaomiLib, line 159
+            case 0x03: // library marker kkossev.xiaomiLib, line 160
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;" // library marker kkossev.xiaomiLib, line 161
+                break // library marker kkossev.xiaomiLib, line 162
+            case 0x05: // library marker kkossev.xiaomiLib, line 163
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.xiaomiLib, line 164
+                break // library marker kkossev.xiaomiLib, line 165
+            case 0x06: // library marker kkossev.xiaomiLib, line 166
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.xiaomiLib, line 167
+                break // library marker kkossev.xiaomiLib, line 168
+            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.xiaomiLib, line 169
+                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.xiaomiLib, line 170
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.xiaomiLib, line 171
+                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.xiaomiLib, line 172
+                break // library marker kkossev.xiaomiLib, line 173
+            case 0x0a: // library marker kkossev.xiaomiLib, line 174
+                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.xiaomiLib, line 175
+                if (state.health == null) { state.health = [:] } // library marker kkossev.xiaomiLib, line 176
+                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.xiaomiLib, line 177
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.xiaomiLib, line 178
+                if (oldNWK != nwk ) { // library marker kkossev.xiaomiLib, line 179
+                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.xiaomiLib, line 180
+                    state.health['parentNWK']  = nwk // library marker kkossev.xiaomiLib, line 181
+                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.xiaomiLib, line 182
+                } // library marker kkossev.xiaomiLib, line 183
+                break // library marker kkossev.xiaomiLib, line 184
+            case 0x0b: // library marker kkossev.xiaomiLib, line 185
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} light level is ${value}" // library marker kkossev.xiaomiLib, line 186
                 break // library marker kkossev.xiaomiLib, line 187
-            case 0x65: // library marker kkossev.xiaomiLib, line 188
-                if (isAqaraFP1()) { logDebug "xiaomi decode PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 189
-                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value/100} (raw ${value})" }    // Aqara TVOC // library marker kkossev.xiaomiLib, line 190
+            case 0x64: // library marker kkossev.xiaomiLib, line 188
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC // library marker kkossev.xiaomiLib, line 189
+                // TODO - also smoke gas/density if UINT ! // library marker kkossev.xiaomiLib, line 190
                 break // library marker kkossev.xiaomiLib, line 191
-            case 0x66: // library marker kkossev.xiaomiLib, line 192
-                if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 193
-                else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb) // library marker kkossev.xiaomiLib, line 194
-                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }  // library marker kkossev.xiaomiLib, line 195
-                break // library marker kkossev.xiaomiLib, line 196
-            case 0x67: // library marker kkossev.xiaomiLib, line 197
-                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }     // library marker kkossev.xiaomiLib, line 198
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:  // library marker kkossev.xiaomiLib, line 199
-                // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1] // library marker kkossev.xiaomiLib, line 200
-                break // library marker kkossev.xiaomiLib, line 201
-            case 0x69: // library marker kkossev.xiaomiLib, line 202
-                if (isAqaraFP1()) { logDebug "xiaomi decode TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 203
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 204
+            case 0x65: // library marker kkossev.xiaomiLib, line 192
+                if (isAqaraFP1()) { logDebug "xiaomi decode PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 193
+                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value/100} (raw ${value})" }    // Aqara TVOC // library marker kkossev.xiaomiLib, line 194
+                break // library marker kkossev.xiaomiLib, line 195
+            case 0x66: // library marker kkossev.xiaomiLib, line 196
+                if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 197
+                else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb) // library marker kkossev.xiaomiLib, line 198
+                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }  // library marker kkossev.xiaomiLib, line 199
+                break // library marker kkossev.xiaomiLib, line 200
+            case 0x67: // library marker kkossev.xiaomiLib, line 201
+                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }     // library marker kkossev.xiaomiLib, line 202
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:  // library marker kkossev.xiaomiLib, line 203
+                // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1] // library marker kkossev.xiaomiLib, line 204
                 break // library marker kkossev.xiaomiLib, line 205
-            case 0x6a: // library marker kkossev.xiaomiLib, line 206
-                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 207
-                else              { logDebug "xiaomi decode MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 208
+            case 0x69: // library marker kkossev.xiaomiLib, line 206
+                if (isAqaraFP1()) { logDebug "xiaomi decode TRIGGER_DISTANCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 207
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 208
                 break // library marker kkossev.xiaomiLib, line 209
-            case 0x6b: // library marker kkossev.xiaomiLib, line 210
+            case 0x6a: // library marker kkossev.xiaomiLib, line 210
                 if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 211
-                else              { logDebug "xiaomi decode MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 212
+                else              { logDebug "xiaomi decode MOTION SENSITIVITY tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 212
                 break // library marker kkossev.xiaomiLib, line 213
-            case 0x95: // library marker kkossev.xiaomiLib, line 214
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} energy is ${value}" // library marker kkossev.xiaomiLib, line 215
-                break // library marker kkossev.xiaomiLib, line 216
-            case 0x96: // library marker kkossev.xiaomiLib, line 217
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} voltage is ${value}" // library marker kkossev.xiaomiLib, line 218
-                break // library marker kkossev.xiaomiLib, line 219
-            case 0x97: // library marker kkossev.xiaomiLib, line 220
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} current is ${value}" // library marker kkossev.xiaomiLib, line 221
-                break // library marker kkossev.xiaomiLib, line 222
-            case 0x98: // library marker kkossev.xiaomiLib, line 223
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power is ${value}" // library marker kkossev.xiaomiLib, line 224
-                break // library marker kkossev.xiaomiLib, line 225
-            case 0x9b: // library marker kkossev.xiaomiLib, line 226
-                if (isAqaraCube()) {  // library marker kkossev.xiaomiLib, line 227
-                    logDebug "Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"  // library marker kkossev.xiaomiLib, line 228
-                    sendAqaraCubeOperationModeEvent(value as int) // library marker kkossev.xiaomiLib, line 229
-                } // library marker kkossev.xiaomiLib, line 230
-                else { logDebug "xiaomi decode CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 231
-                break // library marker kkossev.xiaomiLib, line 232
-            default: // library marker kkossev.xiaomiLib, line 233
-                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.xiaomiLib, line 234
-        } // library marker kkossev.xiaomiLib, line 235
-    } // library marker kkossev.xiaomiLib, line 236
-} // library marker kkossev.xiaomiLib, line 237
+            case 0x6b: // library marker kkossev.xiaomiLib, line 214
+                if (isAqaraFP1()) { logDebug "xiaomi decode FP1 unknown tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 215
+                else              { logDebug "xiaomi decode MOTION LED tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 216
+                break // library marker kkossev.xiaomiLib, line 217
+            case 0x95: // library marker kkossev.xiaomiLib, line 218
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} energy is ${value}" // library marker kkossev.xiaomiLib, line 219
+                break // library marker kkossev.xiaomiLib, line 220
+            case 0x96: // library marker kkossev.xiaomiLib, line 221
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} voltage is ${value}" // library marker kkossev.xiaomiLib, line 222
+                break // library marker kkossev.xiaomiLib, line 223
+            case 0x97: // library marker kkossev.xiaomiLib, line 224
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} current is ${value}" // library marker kkossev.xiaomiLib, line 225
+                break // library marker kkossev.xiaomiLib, line 226
+            case 0x98: // library marker kkossev.xiaomiLib, line 227
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power is ${value}" // library marker kkossev.xiaomiLib, line 228
+                break // library marker kkossev.xiaomiLib, line 229
+            case 0x9b: // library marker kkossev.xiaomiLib, line 230
+                if (isAqaraCube()) {  // library marker kkossev.xiaomiLib, line 231
+                    logDebug "Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"  // library marker kkossev.xiaomiLib, line 232
+                    sendAqaraCubeOperationModeEvent(value as int) // library marker kkossev.xiaomiLib, line 233
+                } // library marker kkossev.xiaomiLib, line 234
+                else { logDebug "xiaomi decode CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" } // library marker kkossev.xiaomiLib, line 235
+                break // library marker kkossev.xiaomiLib, line 236
+            default: // library marker kkossev.xiaomiLib, line 237
+                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.xiaomiLib, line 238
+        } // library marker kkossev.xiaomiLib, line 239
+    } // library marker kkossev.xiaomiLib, line 240
+} // library marker kkossev.xiaomiLib, line 241
 
 
-/** // library marker kkossev.xiaomiLib, line 240
- *  Reads a specified number of little-endian bytes from a given // library marker kkossev.xiaomiLib, line 241
- *  ByteArrayInputStream and returns a BigInteger. // library marker kkossev.xiaomiLib, line 242
- */ // library marker kkossev.xiaomiLib, line 243
-private static BigInteger readBigIntegerBytes(final ByteArrayInputStream stream, final int length) { // library marker kkossev.xiaomiLib, line 244
-    final byte[] byteArr = new byte[length] // library marker kkossev.xiaomiLib, line 245
-    stream.read(byteArr, 0, length) // library marker kkossev.xiaomiLib, line 246
-    BigInteger bigInt = BigInteger.ZERO // library marker kkossev.xiaomiLib, line 247
-    for (int i = byteArr.length - 1; i >= 0; i--) { // library marker kkossev.xiaomiLib, line 248
-        bigInt |= (BigInteger.valueOf((byteArr[i] & 0xFF) << (8 * i))) // library marker kkossev.xiaomiLib, line 249
-    } // library marker kkossev.xiaomiLib, line 250
-    return bigInt // library marker kkossev.xiaomiLib, line 251
-} // library marker kkossev.xiaomiLib, line 252
+/** // library marker kkossev.xiaomiLib, line 244
+ *  Reads a specified number of little-endian bytes from a given // library marker kkossev.xiaomiLib, line 245
+ *  ByteArrayInputStream and returns a BigInteger. // library marker kkossev.xiaomiLib, line 246
+ */ // library marker kkossev.xiaomiLib, line 247
+private static BigInteger readBigIntegerBytes(final ByteArrayInputStream stream, final int length) { // library marker kkossev.xiaomiLib, line 248
+    final byte[] byteArr = new byte[length] // library marker kkossev.xiaomiLib, line 249
+    stream.read(byteArr, 0, length) // library marker kkossev.xiaomiLib, line 250
+    BigInteger bigInt = BigInteger.ZERO // library marker kkossev.xiaomiLib, line 251
+    for (int i = byteArr.length - 1; i >= 0; i--) { // library marker kkossev.xiaomiLib, line 252
+        bigInt |= (BigInteger.valueOf((byteArr[i] & 0xFF) << (8 * i))) // library marker kkossev.xiaomiLib, line 253
+    } // library marker kkossev.xiaomiLib, line 254
+    return bigInt // library marker kkossev.xiaomiLib, line 255
+} // library marker kkossev.xiaomiLib, line 256
 
-/** // library marker kkossev.xiaomiLib, line 254
- *  Decodes a Xiaomi Zigbee cluster attribute payload in hexadecimal format and // library marker kkossev.xiaomiLib, line 255
- *  returns a map of decoded tag number and value pairs where the value is either a // library marker kkossev.xiaomiLib, line 256
- *  BigInteger for fixed values or a String for variable length. // library marker kkossev.xiaomiLib, line 257
- */ // library marker kkossev.xiaomiLib, line 258
-private static Map<Integer, Object> decodeXiaomiTags(final String hexString) { // library marker kkossev.xiaomiLib, line 259
-    final Map<Integer, Object> results = [:] // library marker kkossev.xiaomiLib, line 260
-    final byte[] bytes = HexUtils.hexStringToByteArray(hexString) // library marker kkossev.xiaomiLib, line 261
-    new ByteArrayInputStream(bytes).withCloseable { final stream -> // library marker kkossev.xiaomiLib, line 262
-        while (stream.available() > 2) { // library marker kkossev.xiaomiLib, line 263
-            int tag = stream.read() // library marker kkossev.xiaomiLib, line 264
-            int dataType = stream.read() // library marker kkossev.xiaomiLib, line 265
-            Object value // library marker kkossev.xiaomiLib, line 266
-            if (DataType.isDiscrete(dataType)) { // library marker kkossev.xiaomiLib, line 267
-                int length = stream.read() // library marker kkossev.xiaomiLib, line 268
-                byte[] byteArr = new byte[length] // library marker kkossev.xiaomiLib, line 269
-                stream.read(byteArr, 0, length) // library marker kkossev.xiaomiLib, line 270
-                value = new String(byteArr) // library marker kkossev.xiaomiLib, line 271
-            } else { // library marker kkossev.xiaomiLib, line 272
-                int length = DataType.getLength(dataType) // library marker kkossev.xiaomiLib, line 273
-                value = readBigIntegerBytes(stream, length) // library marker kkossev.xiaomiLib, line 274
-            } // library marker kkossev.xiaomiLib, line 275
-            results[tag] = value // library marker kkossev.xiaomiLib, line 276
-        } // library marker kkossev.xiaomiLib, line 277
-    } // library marker kkossev.xiaomiLib, line 278
-    return results // library marker kkossev.xiaomiLib, line 279
-} // library marker kkossev.xiaomiLib, line 280
+/** // library marker kkossev.xiaomiLib, line 258
+ *  Decodes a Xiaomi Zigbee cluster attribute payload in hexadecimal format and // library marker kkossev.xiaomiLib, line 259
+ *  returns a map of decoded tag number and value pairs where the value is either a // library marker kkossev.xiaomiLib, line 260
+ *  BigInteger for fixed values or a String for variable length. // library marker kkossev.xiaomiLib, line 261
+ */ // library marker kkossev.xiaomiLib, line 262
+private static Map<Integer, Object> decodeXiaomiTags(final String hexString) { // library marker kkossev.xiaomiLib, line 263
+    final Map<Integer, Object> results = [:] // library marker kkossev.xiaomiLib, line 264
+    final byte[] bytes = HexUtils.hexStringToByteArray(hexString) // library marker kkossev.xiaomiLib, line 265
+    new ByteArrayInputStream(bytes).withCloseable { final stream -> // library marker kkossev.xiaomiLib, line 266
+        while (stream.available() > 2) { // library marker kkossev.xiaomiLib, line 267
+            int tag = stream.read() // library marker kkossev.xiaomiLib, line 268
+            int dataType = stream.read() // library marker kkossev.xiaomiLib, line 269
+            Object value // library marker kkossev.xiaomiLib, line 270
+            if (DataType.isDiscrete(dataType)) { // library marker kkossev.xiaomiLib, line 271
+                int length = stream.read() // library marker kkossev.xiaomiLib, line 272
+                byte[] byteArr = new byte[length] // library marker kkossev.xiaomiLib, line 273
+                stream.read(byteArr, 0, length) // library marker kkossev.xiaomiLib, line 274
+                value = new String(byteArr) // library marker kkossev.xiaomiLib, line 275
+            } else { // library marker kkossev.xiaomiLib, line 276
+                int length = DataType.getLength(dataType) // library marker kkossev.xiaomiLib, line 277
+                value = readBigIntegerBytes(stream, length) // library marker kkossev.xiaomiLib, line 278
+            } // library marker kkossev.xiaomiLib, line 279
+            results[tag] = value // library marker kkossev.xiaomiLib, line 280
+        } // library marker kkossev.xiaomiLib, line 281
+    } // library marker kkossev.xiaomiLib, line 282
+    return results // library marker kkossev.xiaomiLib, line 283
+} // library marker kkossev.xiaomiLib, line 284
 
 
-def refreshXiaomi() { // library marker kkossev.xiaomiLib, line 283
-    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 284
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.xiaomiLib, line 285
-    return cmds // library marker kkossev.xiaomiLib, line 286
-} // library marker kkossev.xiaomiLib, line 287
+def refreshXiaomi() { // library marker kkossev.xiaomiLib, line 287
+    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 288
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.xiaomiLib, line 289
+    return cmds // library marker kkossev.xiaomiLib, line 290
+} // library marker kkossev.xiaomiLib, line 291
 
-def configureXiaomi() { // library marker kkossev.xiaomiLib, line 289
-    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 290
-    logDebug "configureThermostat() : ${cmds}" // library marker kkossev.xiaomiLib, line 291
-    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.xiaomiLib, line 292
-    return cmds     // library marker kkossev.xiaomiLib, line 293
-} // library marker kkossev.xiaomiLib, line 294
+def configureXiaomi() { // library marker kkossev.xiaomiLib, line 293
+    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 294
+    logDebug "configureThermostat() : ${cmds}" // library marker kkossev.xiaomiLib, line 295
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.xiaomiLib, line 296
+    return cmds     // library marker kkossev.xiaomiLib, line 297
+} // library marker kkossev.xiaomiLib, line 298
 
-def initializeXiaomi() // library marker kkossev.xiaomiLib, line 296
-{ // library marker kkossev.xiaomiLib, line 297
-    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 298
-    logDebug "initializeXiaomi() : ${cmds}" // library marker kkossev.xiaomiLib, line 299
-    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.xiaomiLib, line 300
-    return cmds         // library marker kkossev.xiaomiLib, line 301
-} // library marker kkossev.xiaomiLib, line 302
-
-void initVarsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLib, line 304
-    logDebug "initVarsXiaomi(${fullInit})" // library marker kkossev.xiaomiLib, line 305
+def initializeXiaomi() // library marker kkossev.xiaomiLib, line 300
+{ // library marker kkossev.xiaomiLib, line 301
+    List<String> cmds = [] // library marker kkossev.xiaomiLib, line 302
+    logDebug "initializeXiaomi() : ${cmds}" // library marker kkossev.xiaomiLib, line 303
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.xiaomiLib, line 304
+    return cmds         // library marker kkossev.xiaomiLib, line 305
 } // library marker kkossev.xiaomiLib, line 306
 
-void initEventsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLib, line 308
-    logDebug "initEventsXiaomi(${fullInit})" // library marker kkossev.xiaomiLib, line 309
+void initVarsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLib, line 308
+    logDebug "initVarsXiaomi(${fullInit})" // library marker kkossev.xiaomiLib, line 309
 } // library marker kkossev.xiaomiLib, line 310
+
+void initEventsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLib, line 312
+    logDebug "initEventsXiaomi(${fullInit})" // library marker kkossev.xiaomiLib, line 313
+} // library marker kkossev.xiaomiLib, line 314
 
 
 // ~~~~~ end include (141) kkossev.xiaomiLib ~~~~~
@@ -3439,1074 +3443,1018 @@ metadata { // library marker kkossev.rgbLib, line 37
     capability "Light" // library marker kkossev.rgbLib, line 45
     capability "ChangeLevel" // library marker kkossev.rgbLib, line 46
 
-    if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  } // library marker kkossev.rgbLib, line 48
+    attribute "deviceTemperature", "number" // library marker kkossev.rgbLib, line 48
 
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0005,0004,0003,0000,0300,0008,0006,FCC0", outClusters:"0019,000A", model:"lumi.light.acn132", manufacturer:"Aqara" // library marker kkossev.rgbLib, line 50
+    if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  } // library marker kkossev.rgbLib, line 50
 
-    preferences { // library marker kkossev.rgbLib, line 52
-    } // library marker kkossev.rgbLib, line 53
-} // library marker kkossev.rgbLib, line 54
-
-
-
-private getMAX_WHITE_SATURATION() { 70 } // library marker kkossev.rgbLib, line 58
-private getWHITE_HUE() { 8 } // library marker kkossev.rgbLib, line 59
-private getMIN_COLOR_TEMP() { 2700 } // library marker kkossev.rgbLib, line 60
-private getMAX_COLOR_TEMP() { 6500 } // library marker kkossev.rgbLib, line 61
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0005,0004,0003,0000,0300,0008,0006,FCC0", outClusters:"0019,000A", model:"lumi.light.acn132", manufacturer:"Aqara" // library marker kkossev.rgbLib, line 52
+    //https://github.com/dresden-elektronik/deconz-rest-plugin/blob/50555f9350dc1872f266ebe9a5b3620b76e99af6/devices/xiaomi/lumi_light_acn132.json#L4 // library marker kkossev.rgbLib, line 53
+    preferences { // library marker kkossev.rgbLib, line 54
+    } // library marker kkossev.rgbLib, line 55
+} // library marker kkossev.rgbLib, line 56
 
 
-/* // library marker kkossev.rgbLib, line 64
- * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 65
- * Level Control Cluster            0x0008 // library marker kkossev.rgbLib, line 66
+
+private getMAX_WHITE_SATURATION() { 70 } // library marker kkossev.rgbLib, line 60
+private getWHITE_HUE() { 8 } // library marker kkossev.rgbLib, line 61
+private getMIN_COLOR_TEMP() { 2700 } // library marker kkossev.rgbLib, line 62
+private getMAX_COLOR_TEMP() { 6500 } // library marker kkossev.rgbLib, line 63
+
+
+/* // library marker kkossev.rgbLib, line 66
  * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 67
-*/ // library marker kkossev.rgbLib, line 68
-void parseLevelControlClusterBulb(final Map descMap) { // library marker kkossev.rgbLib, line 69
-    logDebug "parseLevelControlClusterBulb: 0x${descMap.value}" // library marker kkossev.rgbLib, line 70
-    if (descMap.attrId == "0000") { // library marker kkossev.rgbLib, line 71
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.rgbLib, line 72
-        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 73
-        // Aqara LED Strip T1 sends the level in the range 0..255 // library marker kkossev.rgbLib, line 74
-        def scaledValue = ((rawValue as double) / 2.55F + 0.5) as int // library marker kkossev.rgbLib, line 75
-        sendLevelControlEvent(scaledValue) // library marker kkossev.rgbLib, line 76
-    } // library marker kkossev.rgbLib, line 77
-    else { // library marker kkossev.rgbLib, line 78
-        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.rgbLib, line 79
-    } // library marker kkossev.rgbLib, line 80
-} // library marker kkossev.rgbLib, line 81
+ * Level Control Cluster            0x0008 // library marker kkossev.rgbLib, line 68
+ * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 69
+*/ // library marker kkossev.rgbLib, line 70
+void parseLevelControlClusterBulb(final Map descMap) { // library marker kkossev.rgbLib, line 71
+    logDebug "parseLevelControlClusterBulb: 0x${descMap.value}" // library marker kkossev.rgbLib, line 72
+    if (descMap.attrId == "0000") { // library marker kkossev.rgbLib, line 73
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.rgbLib, line 74
+        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 75
+        // Aqara LED Strip T1 sends the level in the range 0..255 // library marker kkossev.rgbLib, line 76
+        def scaledValue = ((rawValue as double) / 2.55F + 0.5) as int // library marker kkossev.rgbLib, line 77
+        sendLevelControlEvent(scaledValue) // library marker kkossev.rgbLib, line 78
+    } // library marker kkossev.rgbLib, line 79
+    else { // library marker kkossev.rgbLib, line 80
+        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.rgbLib, line 81
+    } // library marker kkossev.rgbLib, line 82
+} // library marker kkossev.rgbLib, line 83
 
-/* // library marker kkossev.rgbLib, line 83
- * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 84
- * ColorControl Cluster            0x0300 // library marker kkossev.rgbLib, line 85
+/* // library marker kkossev.rgbLib, line 85
  * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 86
-*/ // library marker kkossev.rgbLib, line 87
-void parseColorControlClusterBulb(final Map descMap, description) { // library marker kkossev.rgbLib, line 88
-    if (descMap.attrId != null) { // library marker kkossev.rgbLib, line 89
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseColorControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.rgbLib, line 90
-        processColorControlCluster(descMap, description) // library marker kkossev.rgbLib, line 91
-    } // library marker kkossev.rgbLib, line 92
-    else { // library marker kkossev.rgbLib, line 93
-        logWarn "unprocessed ColorControl attribute ${descMap.attrId}" // library marker kkossev.rgbLib, line 94
-    } // library marker kkossev.rgbLib, line 95
-} // library marker kkossev.rgbLib, line 96
+ * ColorControl Cluster            0x0300 // library marker kkossev.rgbLib, line 87
+ * ----------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 88
+*/ // library marker kkossev.rgbLib, line 89
+void parseColorControlClusterBulb(final Map descMap, description) { // library marker kkossev.rgbLib, line 90
+    if (descMap.attrId != null) { // library marker kkossev.rgbLib, line 91
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseColorControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.rgbLib, line 92
+        processColorControlCluster(descMap, description) // library marker kkossev.rgbLib, line 93
+    } // library marker kkossev.rgbLib, line 94
+    else { // library marker kkossev.rgbLib, line 95
+        logWarn "unprocessed ColorControl attribute ${descMap.attrId}" // library marker kkossev.rgbLib, line 96
+    } // library marker kkossev.rgbLib, line 97
+} // library marker kkossev.rgbLib, line 98
 
 
-void processColorControlCluster(final Map descMap, description) { // library marker kkossev.rgbLib, line 99
-    def map = [:] // library marker kkossev.rgbLib, line 100
+void processColorControlCluster(final Map descMap, description) { // library marker kkossev.rgbLib, line 101
+    def map = [:] // library marker kkossev.rgbLib, line 102
 
-    if (description instanceof String)  { // library marker kkossev.rgbLib, line 102
-        map = stringToMap(description) // library marker kkossev.rgbLib, line 103
-    } // library marker kkossev.rgbLib, line 104
+    if (description instanceof String)  { // library marker kkossev.rgbLib, line 104
+        map = stringToMap(description) // library marker kkossev.rgbLib, line 105
+    } // library marker kkossev.rgbLib, line 106
 
-    logTrace "Map - $map" // library marker kkossev.rgbLib, line 106
-    def raw = map["read attr - raw"] // library marker kkossev.rgbLib, line 107
+    logTrace "Map - $map" // library marker kkossev.rgbLib, line 108
+    def raw = map["read attr - raw"] // library marker kkossev.rgbLib, line 109
 
-    if(raw) { // library marker kkossev.rgbLib, line 109
-        def clusterId = map.cluster // library marker kkossev.rgbLib, line 110
-        def attrList = raw.substring(12) // library marker kkossev.rgbLib, line 111
+    if(raw) { // library marker kkossev.rgbLib, line 111
+        def clusterId = map.cluster // library marker kkossev.rgbLib, line 112
+        def attrList = raw.substring(12) // library marker kkossev.rgbLib, line 113
 
-        parsed = parseAttributeList(clusterId, attrList) // library marker kkossev.rgbLib, line 113
+        parsed = parseAttributeList(clusterId, attrList) // library marker kkossev.rgbLib, line 115
 
-        if(state.colorChanged || (state.colorXReported && state.colorYReported)) { // library marker kkossev.rgbLib, line 115
-            state.colorChanged = false; // library marker kkossev.rgbLib, line 116
-            state.colorXReported = false; // library marker kkossev.rgbLib, line 117
-            state.colorYReported = false; // library marker kkossev.rgbLib, line 118
-            logTrace "Color Change: xy ($state.colorX, $state.colorY)" // library marker kkossev.rgbLib, line 119
-            def rgb = colorXy2Rgb(state.colorX, state.colorY) // library marker kkossev.rgbLib, line 120
-            logTrace "Color Change: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 121
-            updateColor(rgb)        // sends a bunch of events! // library marker kkossev.rgbLib, line 122
-        } // library marker kkossev.rgbLib, line 123
-    } // library marker kkossev.rgbLib, line 124
-    else { // library marker kkossev.rgbLib, line 125
-        logDebug "Sending color event based on pending values" // library marker kkossev.rgbLib, line 126
-        if (state.pendingColorUpdate) { // library marker kkossev.rgbLib, line 127
-            parsed = true // library marker kkossev.rgbLib, line 128
-            def rgb = colorXy2Rgb(state.colorX, state.colorY) // library marker kkossev.rgbLib, line 129
-            updateColor(rgb)            // sends a bunch of events! // library marker kkossev.rgbLib, line 130
-            state.pendingColorUpdate = false // library marker kkossev.rgbLib, line 131
-        } // library marker kkossev.rgbLib, line 132
-    } // library marker kkossev.rgbLib, line 133
-} // library marker kkossev.rgbLib, line 134
+        if(state.colorChanged || (state.colorXReported && state.colorYReported)) { // library marker kkossev.rgbLib, line 117
+            state.colorChanged = false; // library marker kkossev.rgbLib, line 118
+            state.colorXReported = false; // library marker kkossev.rgbLib, line 119
+            state.colorYReported = false; // library marker kkossev.rgbLib, line 120
+            logTrace "Color Change: xy ($state.colorX, $state.colorY)" // library marker kkossev.rgbLib, line 121
+            def rgb = colorXy2Rgb(state.colorX, state.colorY) // library marker kkossev.rgbLib, line 122
+            logTrace "Color Change: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 123
+            updateColor(rgb)        // sends a bunch of events! // library marker kkossev.rgbLib, line 124
+        } // library marker kkossev.rgbLib, line 125
+    } // library marker kkossev.rgbLib, line 126
+    else { // library marker kkossev.rgbLib, line 127
+        logDebug "Sending color event based on pending values" // library marker kkossev.rgbLib, line 128
+        if (state.pendingColorUpdate) { // library marker kkossev.rgbLib, line 129
+            parsed = true // library marker kkossev.rgbLib, line 130
+            def rgb = colorXy2Rgb(state.colorX, state.colorY) // library marker kkossev.rgbLib, line 131
+            updateColor(rgb)            // sends a bunch of events! // library marker kkossev.rgbLib, line 132
+            state.pendingColorUpdate = false // library marker kkossev.rgbLib, line 133
+        } // library marker kkossev.rgbLib, line 134
+    } // library marker kkossev.rgbLib, line 135
+} // library marker kkossev.rgbLib, line 136
 
-def parseHex4le(hex) { // library marker kkossev.rgbLib, line 136
-    Integer.parseInt(hex.substring(2, 4) + hex.substring(0, 2), 16) // library marker kkossev.rgbLib, line 137
-} // library marker kkossev.rgbLib, line 138
+def parseHex4le(hex) { // library marker kkossev.rgbLib, line 138
+    Integer.parseInt(hex.substring(2, 4) + hex.substring(0, 2), 16) // library marker kkossev.rgbLib, line 139
+} // library marker kkossev.rgbLib, line 140
 
-def parseColorAttribute(id, value) { // library marker kkossev.rgbLib, line 140
-    def parsed = false // library marker kkossev.rgbLib, line 141
+def parseColorAttribute(id, value) { // library marker kkossev.rgbLib, line 142
+    def parsed = false // library marker kkossev.rgbLib, line 143
 
-    if(id == 0x03) { // library marker kkossev.rgbLib, line 143
-        // currentColorX // library marker kkossev.rgbLib, line 144
-        value = parseHex4le(value) // library marker kkossev.rgbLib, line 145
-        logTrace "Parsed ColorX: $value" // library marker kkossev.rgbLib, line 146
-        value /= 65536 // library marker kkossev.rgbLib, line 147
-        parsed = true // library marker kkossev.rgbLib, line 148
-        state.colorXReported = true; // library marker kkossev.rgbLib, line 149
-        state.colorChanged |= value != colorX // library marker kkossev.rgbLib, line 150
-        state.colorX = value // library marker kkossev.rgbLib, line 151
-    } // library marker kkossev.rgbLib, line 152
-    else if(id == 0x04) { // library marker kkossev.rgbLib, line 153
-        // currentColorY // library marker kkossev.rgbLib, line 154
-        value = parseHex4le(value) // library marker kkossev.rgbLib, line 155
-        logTrace "Parsed ColorY: $value" // library marker kkossev.rgbLib, line 156
-        value /= 65536 // library marker kkossev.rgbLib, line 157
-        parsed = true // library marker kkossev.rgbLib, line 158
-        state.colorYReported = true; // library marker kkossev.rgbLib, line 159
-        state.colorChanged |= value != colorY // library marker kkossev.rgbLib, line 160
-        state.colorY = value // library marker kkossev.rgbLib, line 161
-    } // library marker kkossev.rgbLib, line 162
-    else { // library marker kkossev.rgbLib, line 163
-        logDebug "Not parsing Color cluster attribute $id: $value" // library marker kkossev.rgbLib, line 164
-    } // library marker kkossev.rgbLib, line 165
+    if(id == 0x03) { // library marker kkossev.rgbLib, line 145
+        // currentColorX // library marker kkossev.rgbLib, line 146
+        value = parseHex4le(value) // library marker kkossev.rgbLib, line 147
+        logTrace "Parsed ColorX: $value" // library marker kkossev.rgbLib, line 148
+        value /= 65536 // library marker kkossev.rgbLib, line 149
+        parsed = true // library marker kkossev.rgbLib, line 150
+        state.colorXReported = true; // library marker kkossev.rgbLib, line 151
+        state.colorChanged |= value != colorX // library marker kkossev.rgbLib, line 152
+        state.colorX = value // library marker kkossev.rgbLib, line 153
+    } // library marker kkossev.rgbLib, line 154
+    else if(id == 0x04) { // library marker kkossev.rgbLib, line 155
+        // currentColorY // library marker kkossev.rgbLib, line 156
+        value = parseHex4le(value) // library marker kkossev.rgbLib, line 157
+        logTrace "Parsed ColorY: $value" // library marker kkossev.rgbLib, line 158
+        value /= 65536 // library marker kkossev.rgbLib, line 159
+        parsed = true // library marker kkossev.rgbLib, line 160
+        state.colorYReported = true; // library marker kkossev.rgbLib, line 161
+        state.colorChanged |= value != colorY // library marker kkossev.rgbLib, line 162
+        state.colorY = value // library marker kkossev.rgbLib, line 163
+    } // library marker kkossev.rgbLib, line 164
+    else { // library marker kkossev.rgbLib, line 165
+        logDebug "Not parsing Color cluster attribute $id: $value" // library marker kkossev.rgbLib, line 166
+    } // library marker kkossev.rgbLib, line 167
 
-    parsed // library marker kkossev.rgbLib, line 167
-} // library marker kkossev.rgbLib, line 168
-
-
-
-
-def parseAttributeList(cluster, list) { // library marker kkossev.rgbLib, line 173
-    logTrace "Cluster: $cluster, AttrList: $list" // library marker kkossev.rgbLib, line 174
-    def parsed = true // library marker kkossev.rgbLib, line 175
-
-    while(list.length()) { // library marker kkossev.rgbLib, line 177
-        def attrId = parseHex4le(list.substring(0, 4)) // library marker kkossev.rgbLib, line 178
-        def attrType = Integer.parseInt(list.substring(4, 6), 16) // library marker kkossev.rgbLib, line 179
-        def attrShift = 0 // library marker kkossev.rgbLib, line 180
-
-        if(!attrType) { // library marker kkossev.rgbLib, line 182
-            attrType = Integer.parseInt(list.substring(6, 8), 16) // library marker kkossev.rgbLib, line 183
-            attrShift = 1 // library marker kkossev.rgbLib, line 184
-        } // library marker kkossev.rgbLib, line 185
-
-        def attrLen = DataType.getLength(attrType) // library marker kkossev.rgbLib, line 187
-        def attrValue = list.substring(6 + 2*attrShift, 6 + 2*(attrShift+attrLen)) // library marker kkossev.rgbLib, line 188
-
-        logTrace "Attr - Id: $attrId($attrLen), Type: $attrType, Value: $attrValue" // library marker kkossev.rgbLib, line 190
-
-        if(cluster == 300) { // library marker kkossev.rgbLib, line 192
-            parsed &= parseColorAttribute(attrId, attrValue) // library marker kkossev.rgbLib, line 193
-        } // library marker kkossev.rgbLib, line 194
-        else { // library marker kkossev.rgbLib, line 195
-            log.info "Not parsing cluster $cluster attribute: $list" // library marker kkossev.rgbLib, line 196
-            parsed = false; // library marker kkossev.rgbLib, line 197
-        } // library marker kkossev.rgbLib, line 198
-
-        list = list.substring(6 + 2*(attrShift+attrLen)) // library marker kkossev.rgbLib, line 200
-    } // library marker kkossev.rgbLib, line 201
-
-    parsed // library marker kkossev.rgbLib, line 203
-} // library marker kkossev.rgbLib, line 204
+    parsed // library marker kkossev.rgbLib, line 169
+} // library marker kkossev.rgbLib, line 170
 
 
 
-/* // library marker kkossev.rgbLib, line 208
-def sendColorControlEvent( rawValue ) { // library marker kkossev.rgbLib, line 209
-    logWarn "TODO: sendColorControlEvent ($rawValue)" // library marker kkossev.rgbLib, line 210
-    return // library marker kkossev.rgbLib, line 211
 
-    def value = rawValue as int // library marker kkossev.rgbLib, line 213
-    if (value <0) value = 0 // library marker kkossev.rgbLib, line 214
-    if (value >100) value = 100 // library marker kkossev.rgbLib, line 215
-    def map = [:]  // library marker kkossev.rgbLib, line 216
+def parseAttributeList(cluster, list) { // library marker kkossev.rgbLib, line 175
+    logTrace "Cluster: $cluster, AttrList: $list" // library marker kkossev.rgbLib, line 176
+    def parsed = true // library marker kkossev.rgbLib, line 177
 
-    def isDigital = state.states["isDigital"] // library marker kkossev.rgbLib, line 218
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.rgbLib, line 219
+    while(list.length()) { // library marker kkossev.rgbLib, line 179
+        def attrId = parseHex4le(list.substring(0, 4)) // library marker kkossev.rgbLib, line 180
+        def attrType = Integer.parseInt(list.substring(4, 6), 16) // library marker kkossev.rgbLib, line 181
+        def attrShift = 0 // library marker kkossev.rgbLib, line 182
 
-    map.name = "level" // library marker kkossev.rgbLib, line 221
-    map.value = value // library marker kkossev.rgbLib, line 222
-    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.rgbLib, line 223
-    if (isRefresh == true) { // library marker kkossev.rgbLib, line 224
-        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.rgbLib, line 225
-        map.isStateChange = true // library marker kkossev.rgbLib, line 226
-    } // library marker kkossev.rgbLib, line 227
-    else { // library marker kkossev.rgbLib, line 228
-        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]" // library marker kkossev.rgbLib, line 229
-    } // library marker kkossev.rgbLib, line 230
-    logInfo "${map.descriptionText}" // library marker kkossev.rgbLib, line 231
-    sendEvent(map) // library marker kkossev.rgbLib, line 232
-    clearIsDigital() // library marker kkossev.rgbLib, line 233
-} // library marker kkossev.rgbLib, line 234
-*/ // library marker kkossev.rgbLib, line 235
+        if(!attrType) { // library marker kkossev.rgbLib, line 184
+            attrType = Integer.parseInt(list.substring(6, 8), 16) // library marker kkossev.rgbLib, line 185
+            attrShift = 1 // library marker kkossev.rgbLib, line 186
+        } // library marker kkossev.rgbLib, line 187
 
-// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 ) // library marker kkossev.rgbLib, line 237
-// // library marker kkossev.rgbLib, line 238
-void parseXiaomiClusterRgbLib(final Map descMap) { // library marker kkossev.rgbLib, line 239
-    //logWarn "parseXiaomiClusterRgbLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.rgbLib, line 240
-    final Integer raw // library marker kkossev.rgbLib, line 241
-    final String  value // library marker kkossev.rgbLib, line 242
-    switch (descMap.attrInt as Integer) { // library marker kkossev.rgbLib, line 243
-        case 0x040a:    // E1 battery - read only // library marker kkossev.rgbLib, line 244
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 245
-            thermostatEvent("battery", raw, raw) // library marker kkossev.rgbLib, line 246
-            break // library marker kkossev.rgbLib, line 247
-        case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes // library marker kkossev.rgbLib, line 248
-            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.rgbLib, line 249
-            parseXiaomiClusterThermostatTags(tags) // library marker kkossev.rgbLib, line 250
-            break // library marker kkossev.rgbLib, line 251
-        case 0x0271:    // result['system_mode'] = {1: 'heat', 0: 'off'}[value]; (heating state) - rw // library marker kkossev.rgbLib, line 252
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 253
-            value = SystemModeOpts.options[raw as int] // library marker kkossev.rgbLib, line 254
-            thermostatEvent("system_mode", value, raw) // library marker kkossev.rgbLib, line 255
-            break; // library marker kkossev.rgbLib, line 256
-        case 0x0272:    // result['preset'] = {2: 'away', 1: 'auto', 0: 'manual'}[value]; - rw  ['manual', 'auto', 'holiday'] // library marker kkossev.rgbLib, line 257
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 258
-            value = PresetOpts.options[raw as int] // library marker kkossev.rgbLib, line 259
-            thermostatEvent("preset", value, raw) // library marker kkossev.rgbLib, line 260
-            break; // library marker kkossev.rgbLib, line 261
-        case 0x0273:    // result['window_detection'] = {1: 'ON', 0: 'OFF'}[value]; - rw // library marker kkossev.rgbLib, line 262
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 263
-            value = WindowDetectionOpts.options[raw as int] // library marker kkossev.rgbLib, line 264
-            thermostatEvent("window_detection", value, raw) // library marker kkossev.rgbLib, line 265
-            break; // library marker kkossev.rgbLib, line 266
-        case 0x0274:    // result['valve_detection'] = {1: 'ON', 0: 'OFF'}[value]; -rw  // library marker kkossev.rgbLib, line 267
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 268
-            value = ValveDetectionOpts.options[raw as int] // library marker kkossev.rgbLib, line 269
-            thermostatEvent("valve_detection", value, raw) // library marker kkossev.rgbLib, line 270
-            break; // library marker kkossev.rgbLib, line 271
-        case 0x0275:    // result['valve_alarm'] = {1: true, 0: false}[value]; - read only! // library marker kkossev.rgbLib, line 272
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 273
-            value = ValveAlarmOpts.options[raw as int] // library marker kkossev.rgbLib, line 274
-            thermostatEvent("valve_alarm", value, raw) // library marker kkossev.rgbLib, line 275
-            break; // library marker kkossev.rgbLib, line 276
-        case 0x0277:    // result['child_lock'] = {1: 'LOCK', 0: 'UNLOCK'}[value]; - rw // library marker kkossev.rgbLib, line 277
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 278
-            value = ChildLockOpts.options[raw as int] // library marker kkossev.rgbLib, line 279
-            thermostatEvent("child_lock", value, raw) // library marker kkossev.rgbLib, line 280
-            break; // library marker kkossev.rgbLib, line 281
-        case 0x0279:    // result['away_preset_temperature'] = (value / 100).toFixed(1); - rw // library marker kkossev.rgbLib, line 282
+        def attrLen = DataType.getLength(attrType) // library marker kkossev.rgbLib, line 189
+        def attrValue = list.substring(6 + 2*attrShift, 6 + 2*(attrShift+attrLen)) // library marker kkossev.rgbLib, line 190
+
+        logTrace "Attr - Id: $attrId($attrLen), Type: $attrType, Value: $attrValue" // library marker kkossev.rgbLib, line 192
+
+        if(cluster == 300) { // library marker kkossev.rgbLib, line 194
+            parsed &= parseColorAttribute(attrId, attrValue) // library marker kkossev.rgbLib, line 195
+        } // library marker kkossev.rgbLib, line 196
+        else { // library marker kkossev.rgbLib, line 197
+            log.info "Not parsing cluster $cluster attribute: $list" // library marker kkossev.rgbLib, line 198
+            parsed = false; // library marker kkossev.rgbLib, line 199
+        } // library marker kkossev.rgbLib, line 200
+
+        list = list.substring(6 + 2*(attrShift+attrLen)) // library marker kkossev.rgbLib, line 202
+    } // library marker kkossev.rgbLib, line 203
+
+    parsed // library marker kkossev.rgbLib, line 205
+} // library marker kkossev.rgbLib, line 206
+
+
+
+/* // library marker kkossev.rgbLib, line 210
+def sendColorControlEvent( rawValue ) { // library marker kkossev.rgbLib, line 211
+    logWarn "TODO: sendColorControlEvent ($rawValue)" // library marker kkossev.rgbLib, line 212
+    return // library marker kkossev.rgbLib, line 213
+
+    def value = rawValue as int // library marker kkossev.rgbLib, line 215
+    if (value <0) value = 0 // library marker kkossev.rgbLib, line 216
+    if (value >100) value = 100 // library marker kkossev.rgbLib, line 217
+    def map = [:]  // library marker kkossev.rgbLib, line 218
+
+    def isDigital = state.states["isDigital"] // library marker kkossev.rgbLib, line 220
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.rgbLib, line 221
+
+    map.name = "level" // library marker kkossev.rgbLib, line 223
+    map.value = value // library marker kkossev.rgbLib, line 224
+    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.rgbLib, line 225
+    if (isRefresh == true) { // library marker kkossev.rgbLib, line 226
+        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.rgbLib, line 227
+        map.isStateChange = true // library marker kkossev.rgbLib, line 228
+    } // library marker kkossev.rgbLib, line 229
+    else { // library marker kkossev.rgbLib, line 230
+        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]" // library marker kkossev.rgbLib, line 231
+    } // library marker kkossev.rgbLib, line 232
+    logInfo "${map.descriptionText}" // library marker kkossev.rgbLib, line 233
+    sendEvent(map) // library marker kkossev.rgbLib, line 234
+    clearIsDigital() // library marker kkossev.rgbLib, line 235
+} // library marker kkossev.rgbLib, line 236
+*/ // library marker kkossev.rgbLib, line 237
+
+// called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 ) // library marker kkossev.rgbLib, line 239
+// // library marker kkossev.rgbLib, line 240
+void parseXiaomiClusterRgbLib(final Map descMap) { // library marker kkossev.rgbLib, line 241
+    //logWarn "parseXiaomiClusterRgbLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.rgbLib, line 242
+    final Integer raw // library marker kkossev.rgbLib, line 243
+    final String  value // library marker kkossev.rgbLib, line 244
+    switch (descMap.attrInt as Integer) { // library marker kkossev.rgbLib, line 245
+        case 0x00EE:    // attr/swversion" // library marker kkossev.rgbLib, line 246
+            raw = hexStrToUnsignedInt(descMap.value)        // val = '0.0.0_' + ('0000' + ((Attr.val & 0xFF00) >> 8).toString() + (Attr.val & 0xFF).toString()).slice(-4)" // library marker kkossev.rgbLib, line 247
+            logInfo "Aqara Version is ${raw}" // library marker kkossev.rgbLib, line 248
+            break // library marker kkossev.rgbLib, line 249
+        case 0x00F7 :   // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes // library marker kkossev.rgbLib, line 250
+            final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value) // library marker kkossev.rgbLib, line 251
+            parseXiaomiClusterRgbTags(tags) // library marker kkossev.rgbLib, line 252
+            break // library marker kkossev.rgbLib, line 253
+        case 0x0515:    // config/bri/min                   // r/w "dt": "0x20"  // library marker kkossev.rgbLib, line 254
+            raw = hexStrToUnsignedInt(descMap.value)        // .val = Math.round(Attr.val * 2.54) // library marker kkossev.rgbLib, line 255
+            logInfo "Aqara min brightness is ${raw}" // library marker kkossev.rgbLib, line 256
+            break // library marker kkossev.rgbLib, line 257
+        case 0x0516:    // config/bri/max                   // r/w "dt": "0x20"  // library marker kkossev.rgbLib, line 258
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 259
+            logInfo "Aqara max brightness is ${raw}" // library marker kkossev.rgbLib, line 260
+            break // library marker kkossev.rgbLib, line 261
+        case 0x0517:    // config/on/startup               // r/w "dt": "0x20"  // library marker kkossev.rgbLib, line 262
+            raw = hexStrToUnsignedInt(descMap.value)       // val = [1, 255, 0][Attr.val]       // val === 1 ? 0 : Item.val === 0 ? 2 : 1"  // library marker kkossev.rgbLib, line 263
+            logInfo "Aqara on startup is ${raw}" // library marker kkossev.rgbLib, line 264
+            break // library marker kkossev.rgbLib, line 265
+        case 0x051B:    // config/color/gradient/pixel_count                  // r/w "dt": "0x20" , Math.max(5, Math.min(Item.val, 50)) // library marker kkossev.rgbLib, line 266
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 267
+            logInfo "Aqara pixel count is ${raw}" // library marker kkossev.rgbLib, line 268
+            break // library marker kkossev.rgbLib, line 269
+        case 0x051C:    // state/music_sync                 // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0  // library marker kkossev.rgbLib, line 270
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 271
+            logInfo "Aqara music sync is ${raw}" // library marker kkossev.rgbLib, line 272
+            break // library marker kkossev.rgbLib, line 273
+        case 0x0509:    // state/gradient                   // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0  // library marker kkossev.rgbLib, line 274
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 275
+            logInfo "Aqara gradient is ${raw}" // library marker kkossev.rgbLib, line 276
+            break // library marker kkossev.rgbLib, line 277
+        case 0x051F:    // state/gradient/flow              // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0  // library marker kkossev.rgbLib, line 278
+            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 279
+            logInfo "Aqara gradient flow is ${raw}" // library marker kkossev.rgbLib, line 280
+            break // library marker kkossev.rgbLib, line 281
+        case 0x051D:    // state/gradient/flow/speed        // r/w "dt": "0x20" , val = Math.max(1, Math.min(Item.val, 10)) // library marker kkossev.rgbLib, line 282
             raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 283
-            value = raw / 100 // library marker kkossev.rgbLib, line 284
-            thermostatEvent("away_preset_temperature", value, raw) // library marker kkossev.rgbLib, line 285
-            break; // library marker kkossev.rgbLib, line 286
-        case 0x027a:    // result['window_open'] = {1: true, 0: false}[value]; - read only // library marker kkossev.rgbLib, line 287
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 288
-            value = WindowOpenOpts.options[raw as int] // library marker kkossev.rgbLib, line 289
-            thermostatEvent("window_open", value, raw) // library marker kkossev.rgbLib, line 290
-            break; // library marker kkossev.rgbLib, line 291
-        case 0x027b:    // result['calibrated'] = {1: true, 0: false}[value]; - read only // library marker kkossev.rgbLib, line 292
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 293
-            value = CalibratedOpts.options[raw as int] // library marker kkossev.rgbLib, line 294
-            thermostatEvent("calibrated", value, raw) // library marker kkossev.rgbLib, line 295
-            break; // library marker kkossev.rgbLib, line 296
-        case 0x0276:    // unknown // library marker kkossev.rgbLib, line 297
-        case 0x027c:    // unknown // library marker kkossev.rgbLib, line 298
-        case 0x027d:    // unknown // library marker kkossev.rgbLib, line 299
-        case 0x0280:    // unknown // library marker kkossev.rgbLib, line 300
-        case 0xfff2:    // unknown // library marker kkossev.rgbLib, line 301
-        case 0x00ff:    // unknown // library marker kkossev.rgbLib, line 302
-        case 0x00f7:    // unknown // library marker kkossev.rgbLib, line 303
-        case 0xfff2:    // unknown // library marker kkossev.rgbLib, line 304
-        case 0x00FF: // library marker kkossev.rgbLib, line 305
-            try { // library marker kkossev.rgbLib, line 306
-                raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 307
-                logDebug "Aqara E1 TRV unknown attribute ${descMap.attrInt} value raw = ${raw}" // library marker kkossev.rgbLib, line 308
-            } // library marker kkossev.rgbLib, line 309
-            catch (e) { // library marker kkossev.rgbLib, line 310
-                logWarn "exception caught while processing Aqara E1 TRV unknown attribute ${descMap.attrInt} descMap.value = ${descMap.value}" // library marker kkossev.rgbLib, line 311
-            } // library marker kkossev.rgbLib, line 312
-            break; // library marker kkossev.rgbLib, line 313
-        case 0x027e:    // result['sensor'] = {1: 'external', 0: 'internal'}[value]; - read only? // library marker kkossev.rgbLib, line 314
-            raw = hexStrToUnsignedInt(descMap.value) // library marker kkossev.rgbLib, line 315
-            value = SensorOpts.options[raw as int] // library marker kkossev.rgbLib, line 316
-            thermostatEvent("sensor", value, raw) // library marker kkossev.rgbLib, line 317
-            break; // library marker kkossev.rgbLib, line 318
-        default: // library marker kkossev.rgbLib, line 319
-            logWarn "parseXiaomiClusterRgbLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.rgbLib, line 320
-            break // library marker kkossev.rgbLib, line 321
-    } // library marker kkossev.rgbLib, line 322
-} // library marker kkossev.rgbLib, line 323
+            logInfo "Aqara gradient flow speed is ${raw}" // library marker kkossev.rgbLib, line 284
+            break // library marker kkossev.rgbLib, line 285
+        default: // library marker kkossev.rgbLib, line 286
+            logWarn "parseXiaomiClusterRgbLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.rgbLib, line 287
+            break // library marker kkossev.rgbLib, line 288
+    } // library marker kkossev.rgbLib, line 289
+} // library marker kkossev.rgbLib, line 290
+
+void aqaraEvent(eventName, value, raw) { // library marker kkossev.rgbLib, line 292
+    sendEvent(name: eventName, value: value, type: "physical") // library marker kkossev.rgbLib, line 293
+    logInfo "${eventName} is ${value} (raw ${raw})" // library marker kkossev.rgbLib, line 294
+} // library marker kkossev.rgbLib, line 295
+
+/* // library marker kkossev.rgbLib, line 297
+dev:42212023-11-06 10:33:21.660debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x74=2 // library marker kkossev.rgbLib, line 298
+dev:42212023-11-06 10:33:21.655debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x72=10 // library marker kkossev.rgbLib, line 299
+dev:42212023-11-06 10:33:21.651debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x71=1 // library marker kkossev.rgbLib, line 300
+dev:42212023-11-06 10:33:21.644debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6E=2 // library marker kkossev.rgbLib, line 301
+dev:42212023-11-06 10:33:21.638debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6D=2 // library marker kkossev.rgbLib, line 302
+dev:42212023-11-06 10:33:21.631debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC026F700410F6D20026E200271200172200A742002, dni:D8A0, endpoint:01, cluster:FCC0, size:26, attrId:00F7, encoding:41, command:0A, value:6D20026E200271200172200A742002, clusterInt:64704, attrInt:247] // library marker kkossev.rgbLib, line 303
+dev:42212023-11-06 10:33:21.619debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC026F700410F6D20026E200271200172200A742002, dni: D8A0, endpoint: 01, cluster: FCC0, size: 26, attrId: 00F7, encoding: 41, command: 0A, value: 0F6D20026E200271200172200A742002 // library marker kkossev.rgbLib, line 304
+dev:42212023-11-06 10:33:21.453debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6C=0 // library marker kkossev.rgbLib, line 305
+dev:42212023-11-06 10:33:21.446debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x73=1245482987 // library marker kkossev.rgbLib, line 306
+dev:42212023-11-06 10:33:21.441debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x69=0 // library marker kkossev.rgbLib, line 307
+dev:42212023-11-06 10:33:21.436debugAqara T1 LED lumi.light.acn132 xiaomi decode MOTION SENSITIVITY tag: 0x6A=425986700 // library marker kkossev.rgbLib, line 308
+dev:42212023-11-06 10:33:21.431debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x66 presure is 153 // library marker kkossev.rgbLib, line 309
+dev:42212023-11-06 10:33:21.426debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x65 humidity is 0.05 (raw 5) // library marker kkossev.rgbLib, line 310
+dev:42212023-11-06 10:33:21.421debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x64 temperature is 0.01 (raw 1) // library marker kkossev.rgbLib, line 311
+dev:42212023-11-06 10:33:21.416debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x9A=0 // library marker kkossev.rgbLib, line 312
+dev:42212023-11-06 10:33:21.411debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x11=513 // library marker kkossev.rgbLib, line 313
+dev:42212023-11-06 10:33:21.406debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0D=6683 // library marker kkossev.rgbLib, line 314
+dev:42212023-11-06 10:33:21.401debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0C=10 // library marker kkossev.rgbLib, line 315
+dev:42212023-11-06 10:33:21.396debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0B light level is 0 // library marker kkossev.rgbLib, line 316
+dev:42212023-11-06 10:33:21.391debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0A Parent NWK is 0000 // library marker kkossev.rgbLib, line 317
+dev:42212023-11-06 10:33:21.386debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x09=1536 // library marker kkossev.rgbLib, line 318
+dev:42212023-11-06 10:33:21.380debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x05 RSSI is 17 // library marker kkossev.rgbLib, line 319
+dev:42212023-11-06 10:33:21.375debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x03 device temperature is 36° // library marker kkossev.rgbLib, line 320
+dev:42212023-11-06 10:33:21.323debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni:D8A0, endpoint:01, cluster:FCC0, size:88, attrId:00F7, encoding:41, command:0A, value:03282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, clusterInt:64704, attrInt:247] // library marker kkossev.rgbLib, line 321
+dev:42212023-11-06 10:33:21.306debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni: D8A0, endpoint: 01, cluster: FCC0, size: 88, attrId: 00F7, encoding: 41, command: 0A, value: 4003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000 // library marker kkossev.rgbLib, line 322
+*/ // library marker kkossev.rgbLib, line 323
+
+// called from parseXiaomiClusterRgbLib  // library marker kkossev.rgbLib, line 325
+void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420  // library marker kkossev.rgbLib, line 326
+    tags.each { final Integer tag, final Object value -> // library marker kkossev.rgbLib, line 327
+        switch (tag) { // library marker kkossev.rgbLib, line 328
+            case 0x01:    // battery voltage // library marker kkossev.rgbLib, line 329
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.rgbLib, line 330
+                break // library marker kkossev.rgbLib, line 331
+            case 0x03: // library marker kkossev.rgbLib, line 332
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg;" // library marker kkossev.rgbLib, line 333
+                sendEvent(name: "deviceTemperature", value: value, unit: "C") // library marker kkossev.rgbLib, line 334
+                break // library marker kkossev.rgbLib, line 335
+            case 0x05: // library marker kkossev.rgbLib, line 336
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.rgbLib, line 337
+                break // library marker kkossev.rgbLib, line 338
+            case 0x06: // library marker kkossev.rgbLib, line 339
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.rgbLib, line 340
+                break // library marker kkossev.rgbLib, line 341
+            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.rgbLib, line 342
+                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.rgbLib, line 343
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.rgbLib, line 344
+                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.rgbLib, line 345
+                break // library marker kkossev.rgbLib, line 346
+            case 0x0a: // library marker kkossev.rgbLib, line 347
+                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.rgbLib, line 348
+                if (state.health == null) { state.health = [:] } // library marker kkossev.rgbLib, line 349
+                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.rgbLib, line 350
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.rgbLib, line 351
+                if (oldNWK != nwk ) { // library marker kkossev.rgbLib, line 352
+                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.rgbLib, line 353
+                    state.health['parentNWK']  = nwk // library marker kkossev.rgbLib, line 354
+                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.rgbLib, line 355
+                } // library marker kkossev.rgbLib, line 356
+                break // library marker kkossev.rgbLib, line 357
+            default: // library marker kkossev.rgbLib, line 358
+                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 359
+        } // library marker kkossev.rgbLib, line 360
+    } // library marker kkossev.rgbLib, line 361
+} // library marker kkossev.rgbLib, line 362
 
 
-/* // library marker kkossev.rgbLib, line 326
-dev:42212023-11-06 10:33:21.660debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x74=2 // library marker kkossev.rgbLib, line 327
-dev:42212023-11-06 10:33:21.655debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x72=10 // library marker kkossev.rgbLib, line 328
-dev:42212023-11-06 10:33:21.651debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x71=1 // library marker kkossev.rgbLib, line 329
-dev:42212023-11-06 10:33:21.644debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6E=2 // library marker kkossev.rgbLib, line 330
-dev:42212023-11-06 10:33:21.638debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6D=2 // library marker kkossev.rgbLib, line 331
-dev:42212023-11-06 10:33:21.631debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC026F700410F6D20026E200271200172200A742002, dni:D8A0, endpoint:01, cluster:FCC0, size:26, attrId:00F7, encoding:41, command:0A, value:6D20026E200271200172200A742002, clusterInt:64704, attrInt:247] // library marker kkossev.rgbLib, line 332
-dev:42212023-11-06 10:33:21.619debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC026F700410F6D20026E200271200172200A742002, dni: D8A0, endpoint: 01, cluster: FCC0, size: 26, attrId: 00F7, encoding: 41, command: 0A, value: 0F6D20026E200271200172200A742002 // library marker kkossev.rgbLib, line 333
-dev:42212023-11-06 10:33:21.453debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x6C=0 // library marker kkossev.rgbLib, line 334
-dev:42212023-11-06 10:33:21.446debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x73=1245482987 // library marker kkossev.rgbLib, line 335
-dev:42212023-11-06 10:33:21.441debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x69=0 // library marker kkossev.rgbLib, line 336
-dev:42212023-11-06 10:33:21.436debugAqara T1 LED lumi.light.acn132 xiaomi decode MOTION SENSITIVITY tag: 0x6A=425986700 // library marker kkossev.rgbLib, line 337
-dev:42212023-11-06 10:33:21.431debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x66 presure is 153 // library marker kkossev.rgbLib, line 338
-dev:42212023-11-06 10:33:21.426debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x65 humidity is 0.05 (raw 5) // library marker kkossev.rgbLib, line 339
-dev:42212023-11-06 10:33:21.421debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x64 temperature is 0.01 (raw 1) // library marker kkossev.rgbLib, line 340
-dev:42212023-11-06 10:33:21.416debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x9A=0 // library marker kkossev.rgbLib, line 341
-dev:42212023-11-06 10:33:21.411debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x11=513 // library marker kkossev.rgbLib, line 342
-dev:42212023-11-06 10:33:21.406debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0D=6683 // library marker kkossev.rgbLib, line 343
-dev:42212023-11-06 10:33:21.401debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x0C=10 // library marker kkossev.rgbLib, line 344
-dev:42212023-11-06 10:33:21.396debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0B light level is 0 // library marker kkossev.rgbLib, line 345
-dev:42212023-11-06 10:33:21.391debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x0A Parent NWK is 0000 // library marker kkossev.rgbLib, line 346
-dev:42212023-11-06 10:33:21.386debugAqara T1 LED lumi.light.acn132 xiaomi decode unknown tag: 0x09=1536 // library marker kkossev.rgbLib, line 347
-dev:42212023-11-06 10:33:21.380debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x05 RSSI is 17 // library marker kkossev.rgbLib, line 348
-dev:42212023-11-06 10:33:21.375debugAqara T1 LED lumi.light.acn132 xiaomi decode tag: 0x03 device temperature is 36° // library marker kkossev.rgbLib, line 349
-dev:42212023-11-06 10:33:21.323debugAqara T1 LED lumi.light.acn132 descMap = [raw:D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni:D8A0, endpoint:01, cluster:FCC0, size:88, attrId:00F7, encoding:41, command:0A, value:03282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, clusterInt:64704, attrInt:247] // library marker kkossev.rgbLib, line 350
-dev:42212023-11-06 10:33:21.306debugAqara T1 LED lumi.light.acn132 parse: read attr - raw: D8A001FCC088F700414003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000, dni: D8A0, endpoint: 01, cluster: FCC0, size: 88, attrId: 00F7, encoding: 41, command: 0A, value: 4003282405211100092100060A2100000B20000C200A0D231B1A00001123010200009A2000642001652005662199006A238C0A64196920007323EB8F3C4A6C2000 // library marker kkossev.rgbLib, line 351
-*/ // library marker kkossev.rgbLib, line 352
+// all the code below is borrowed from Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver // library marker kkossev.rgbLib, line 365
+// ----------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 366
 
-// called from parseXiaomiClusterRgbLib  // library marker kkossev.rgbLib, line 354
-void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420  // library marker kkossev.rgbLib, line 355
-    tags.each { final Integer tag, final Object value -> // library marker kkossev.rgbLib, line 356
-        switch (tag) { // library marker kkossev.rgbLib, line 357
-            case 0x01:    // battery voltage // library marker kkossev.rgbLib, line 358
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})" // library marker kkossev.rgbLib, line 359
-                break // library marker kkossev.rgbLib, line 360
-            case 0x03: // library marker kkossev.rgbLib, line 361
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg; (ignore it!)" // library marker kkossev.rgbLib, line 362
-                break // library marker kkossev.rgbLib, line 363
-            case 0x05: // library marker kkossev.rgbLib, line 364
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}" // library marker kkossev.rgbLib, line 365
-                break // library marker kkossev.rgbLib, line 366
-            case 0x06: // library marker kkossev.rgbLib, line 367
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} LQI is ${value}" // library marker kkossev.rgbLib, line 368
-                break // library marker kkossev.rgbLib, line 369
-            case 0x08:            // SWBUILD_TAG_ID: // library marker kkossev.rgbLib, line 370
-                final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0') // library marker kkossev.rgbLib, line 371
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})" // library marker kkossev.rgbLib, line 372
-                device.updateDataValue("aqaraVersion", swBuild) // library marker kkossev.rgbLib, line 373
-                break // library marker kkossev.rgbLib, line 374
-            case 0x0a: // library marker kkossev.rgbLib, line 375
-                String nwk = intToHexStr(value as Integer,2) // library marker kkossev.rgbLib, line 376
-                if (state.health == null) { state.health = [:] } // library marker kkossev.rgbLib, line 377
-                String oldNWK = state.health['parentNWK'] ?: 'n/a' // library marker kkossev.rgbLib, line 378
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>" // library marker kkossev.rgbLib, line 379
-                if (oldNWK != nwk ) { // library marker kkossev.rgbLib, line 380
-                    logWarn "parentNWK changed from ${oldNWK} to ${nwk}" // library marker kkossev.rgbLib, line 381
-                    state.health['parentNWK']  = nwk // library marker kkossev.rgbLib, line 382
-                    state.health['nwkCtr'] = (state.health['nwkCtr'] ?: 0) + 1 // library marker kkossev.rgbLib, line 383
-                } // library marker kkossev.rgbLib, line 384
-                break // library marker kkossev.rgbLib, line 385
-            case 0x0d: // library marker kkossev.rgbLib, line 386
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 387
-                break             // library marker kkossev.rgbLib, line 388
-            case 0x11: // library marker kkossev.rgbLib, line 389
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 390
-                break             // library marker kkossev.rgbLib, line 391
-            case 0x64: // library marker kkossev.rgbLib, line 392
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC // library marker kkossev.rgbLib, line 393
-                break // library marker kkossev.rgbLib, line 394
-            case 0x65: // library marker kkossev.rgbLib, line 395
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 396
-                break // library marker kkossev.rgbLib, line 397
-            case 0x66: // library marker kkossev.rgbLib, line 398
-                logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 399
-                handleTemperatureEvent(value/100.0) // library marker kkossev.rgbLib, line 400
-                break // library marker kkossev.rgbLib, line 401
-            case 0x67: // library marker kkossev.rgbLib, line 402
-                logDebug "xiaomi decode E1 thermostat heatingSetpoint tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 403
-                break // library marker kkossev.rgbLib, line 404
-            case 0x68: // library marker kkossev.rgbLib, line 405
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 406
-                break // library marker kkossev.rgbLib, line 407
-            case 0x69: // library marker kkossev.rgbLib, line 408
-                logDebug "xiaomi decode E1 thermostat battery tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 409
-                break // library marker kkossev.rgbLib, line 410
-            case 0x6a: // library marker kkossev.rgbLib, line 411
-                logDebug "xiaomi decode E1 thermostat unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 412
-                break // library marker kkossev.rgbLib, line 413
-            default: // library marker kkossev.rgbLib, line 414
-                logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" // library marker kkossev.rgbLib, line 415
-        } // library marker kkossev.rgbLib, line 416
-    } // library marker kkossev.rgbLib, line 417
+
+def updateColor(rgb) { // library marker kkossev.rgbLib, line 369
+    logTrace "updateColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 370
+    def hsv = colorRgb2Hsv(rgb.red, rgb.green, rgb.blue) // library marker kkossev.rgbLib, line 371
+    hsv.hue = Math.round(hsv.hue * 100).intValue() // library marker kkossev.rgbLib, line 372
+    hsv.saturation = Math.round(hsv.saturation * 100).intValue() // library marker kkossev.rgbLib, line 373
+    hsv.level = Math.round(hsv.level * 100).intValue() // library marker kkossev.rgbLib, line 374
+    logTrace "updateColor: HSV ($hsv.hue, $hsv.saturation, $hsv.level)" // library marker kkossev.rgbLib, line 375
+
+    rgb.red = Math.round(rgb.red * 255).intValue() // library marker kkossev.rgbLib, line 377
+    rgb.green = Math.round(rgb.green * 255).intValue() // library marker kkossev.rgbLib, line 378
+    rgb.blue = Math.round(rgb.blue * 255).intValue() // library marker kkossev.rgbLib, line 379
+    logTrace "updateColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 380
+
+    def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue]) // library marker kkossev.rgbLib, line 382
+    logTrace "updateColor: $color" // library marker kkossev.rgbLib, line 383
+
+    //sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false) // library marker kkossev.rgbLib, line 385
+    sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false]) // library marker kkossev.rgbLib, line 386
+    sendHueEvent([name: "hue", value: hsv.hue, displayed: false]) // library marker kkossev.rgbLib, line 387
+    sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false]) // library marker kkossev.rgbLib, line 388
+    if (hsv.hue == WHITE_HUE) { // library marker kkossev.rgbLib, line 389
+        def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION))) // library marker kkossev.rgbLib, line 390
+        def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent // library marker kkossev.rgbLib, line 391
+        def val = Math.round(MIN_COLOR_TEMP + amount) // library marker kkossev.rgbLib, line 392
+        sendColorTemperatureEvent([name: "colorTemperature", value: val]) // library marker kkossev.rgbLib, line 393
+        sendColorModeEvent([name: "colorMode", value: "CT"]) // library marker kkossev.rgbLib, line 394
+        sendColorNameEvent([setGenericTempName(val)]) // library marker kkossev.rgbLib, line 395
+    }  // library marker kkossev.rgbLib, line 396
+    else { // library marker kkossev.rgbLib, line 397
+        sendColorModeEvent([name: "colorMode", value: "RGB"]) // library marker kkossev.rgbLib, line 398
+        sendColorNameEvent(setGenericName(hsv.hue)) // library marker kkossev.rgbLib, line 399
+    } // library marker kkossev.rgbLib, line 400
+} // library marker kkossev.rgbLib, line 401
+
+void sendColorEvent(map) { // library marker kkossev.rgbLib, line 403
+    if (map.value == device.currentValue(map.name)) { // library marker kkossev.rgbLib, line 404
+        logDebug "sendColorEvent: ${map.name} is already ${map.value}" // library marker kkossev.rgbLib, line 405
+        return // library marker kkossev.rgbLib, line 406
+    } // library marker kkossev.rgbLib, line 407
+    // get the time of the last event named "color" and compare it to the current time // library marker kkossev.rgbLib, line 408
+ //   def lastColorEvent = device.currentState("color",true).date.time // library marker kkossev.rgbLib, line 409
+ //   if ((now() - lastColorEvent) < 1000) { // library marker kkossev.rgbLib, line 410
+       // logDebug "sendColorEvent: delaying ${map.name} event because the last color event was less than 1 second ago ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 411
+        runInMillis(500, "sendDelayedColorEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 412
+        return // library marker kkossev.rgbLib, line 413
+//    } // library marker kkossev.rgbLib, line 414
+    //unschedule("sendDelayedColorEvent") // cancel any pending delayed events // library marker kkossev.rgbLib, line 415
+    //logDebug "sendColorEvent: lastColorEvent = ${lastColorEvent}, now = ${now()}, diff = ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 416
+    //sendEvent(map) // library marker kkossev.rgbLib, line 417
 } // library marker kkossev.rgbLib, line 418
+private void sendDelayedColorEvent(Map map) { // library marker kkossev.rgbLib, line 419
+    sendEvent(map) // library marker kkossev.rgbLib, line 420
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 421
+} // library marker kkossev.rgbLib, line 422
+
+void sendHueEvent(map) { // library marker kkossev.rgbLib, line 424
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 425
+    runInMillis(500, "sendDelayedHueEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 426
+} // library marker kkossev.rgbLib, line 427
+private void sendDelayedHueEvent(Map map) { // library marker kkossev.rgbLib, line 428
+    sendEvent(map) // library marker kkossev.rgbLib, line 429
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 430
+} // library marker kkossev.rgbLib, line 431
+
+void sendSaturationEvent(map) { // library marker kkossev.rgbLib, line 433
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 434
+    runInMillis(500, "sendDelayedSaturationEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 435
+} // library marker kkossev.rgbLib, line 436
+private void sendDelayedSaturationEvent(Map map) { // library marker kkossev.rgbLib, line 437
+    sendEvent(map) // library marker kkossev.rgbLib, line 438
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 439
+} // library marker kkossev.rgbLib, line 440
+
+void sendColorModeEvent(map) { // library marker kkossev.rgbLib, line 442
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 443
+    runInMillis(500, "sendDelayedColorModeEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 444
+} // library marker kkossev.rgbLib, line 445
+private void sendDelayedColorModeEvent(Map map) { // library marker kkossev.rgbLib, line 446
+    sendEvent(map) // library marker kkossev.rgbLib, line 447
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 448
+} // library marker kkossev.rgbLib, line 449
+
+void sendColorNameEvent(map) { // library marker kkossev.rgbLib, line 451
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 452
+    runInMillis(500, "sendDelayedColorNameEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 453
+} // library marker kkossev.rgbLib, line 454
+private void sendDelayedColorNameEvent(Map map) { // library marker kkossev.rgbLib, line 455
+    sendEvent(map) // library marker kkossev.rgbLib, line 456
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 457
+} // library marker kkossev.rgbLib, line 458
+
+void sendColorTemperatureEvent(map) { // library marker kkossev.rgbLib, line 460
+    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 461
+    runInMillis(500, "sendDelayedColorTemperatureEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 462
+} // library marker kkossev.rgbLib, line 463
+private void sendDelayedColorTemperatureEvent(Map map) { // library marker kkossev.rgbLib, line 464
+    sendEvent(map) // library marker kkossev.rgbLib, line 465
+    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 466
+} // library marker kkossev.rgbLib, line 467
 
 
-// all the code below is borrowed from Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver // library marker kkossev.rgbLib, line 421
-// ----------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 422
+def sendZigbeeCommandsDelayed() { // library marker kkossev.rgbLib, line 470
+    List cmds = state.cmds // library marker kkossev.rgbLib, line 471
+    if (cmds != null) { // library marker kkossev.rgbLib, line 472
+        state.cmds = [] // library marker kkossev.rgbLib, line 473
+        sendZigbeeCommands(cmds) // library marker kkossev.rgbLib, line 474
+    } // library marker kkossev.rgbLib, line 475
+} // library marker kkossev.rgbLib, line 476
+
+def setLevelBulb(value, rate=null) { // library marker kkossev.rgbLib, line 478
+    logDebug "setLevelBulb: $value, $rate" // library marker kkossev.rgbLib, line 479
+
+    state.pendingLevelChange = value // library marker kkossev.rgbLib, line 481
+
+    if (rate == null) { // library marker kkossev.rgbLib, line 483
+        state.cmds += zigbee.setLevel(value) // library marker kkossev.rgbLib, line 484
+    } else { // library marker kkossev.rgbLib, line 485
+        state.cmds += zigbee.setLevel(value, rate) // library marker kkossev.rgbLib, line 486
+    } // library marker kkossev.rgbLib, line 487
+
+    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 489
+    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 490
+} // library marker kkossev.rgbLib, line 491
 
 
-def updateColor(rgb) { // library marker kkossev.rgbLib, line 425
-    logTrace "updateColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 426
-    def hsv = colorRgb2Hsv(rgb.red, rgb.green, rgb.blue) // library marker kkossev.rgbLib, line 427
-    hsv.hue = Math.round(hsv.hue * 100).intValue() // library marker kkossev.rgbLib, line 428
-    hsv.saturation = Math.round(hsv.saturation * 100).intValue() // library marker kkossev.rgbLib, line 429
-    hsv.level = Math.round(hsv.level * 100).intValue() // library marker kkossev.rgbLib, line 430
-    logTrace "updateColor: HSV ($hsv.hue, $hsv.saturation, $hsv.level)" // library marker kkossev.rgbLib, line 431
+def setColorTemperature(value, level=null, rate=null) { // library marker kkossev.rgbLib, line 494
+    logDebug "Set color temperature $value" // library marker kkossev.rgbLib, line 495
 
-    rgb.red = Math.round(rgb.red * 255).intValue() // library marker kkossev.rgbLib, line 433
-    rgb.green = Math.round(rgb.green * 255).intValue() // library marker kkossev.rgbLib, line 434
-    rgb.blue = Math.round(rgb.blue * 255).intValue() // library marker kkossev.rgbLib, line 435
-    logTrace "updateColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 436
+    def sat = MAX_WHITE_SATURATION - (((value - MIN_COLOR_TEMP) / (MAX_COLOR_TEMP - MIN_COLOR_TEMP)) * MAX_WHITE_SATURATION) // library marker kkossev.rgbLib, line 497
+    setColor([ // library marker kkossev.rgbLib, line 498
+            hue: WHITE_HUE, // library marker kkossev.rgbLib, line 499
+            saturation: sat, // library marker kkossev.rgbLib, line 500
+            level: level, // library marker kkossev.rgbLib, line 501
+            rate: rate // library marker kkossev.rgbLib, line 502
+    ]) // library marker kkossev.rgbLib, line 503
+} // library marker kkossev.rgbLib, line 504
 
-    def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue]) // library marker kkossev.rgbLib, line 438
-    logTrace "updateColor: $color" // library marker kkossev.rgbLib, line 439
+def setColor(value) { // library marker kkossev.rgbLib, line 506
+    logDebug "setColor($value)" // library marker kkossev.rgbLib, line 507
+    def rgb = colorHsv2Rgb(value.hue / 100, value.saturation / 100) // library marker kkossev.rgbLib, line 508
 
-    //sendEvent(name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false) // library marker kkossev.rgbLib, line 441
-    sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false]) // library marker kkossev.rgbLib, line 442
-    sendHueEvent([name: "hue", value: hsv.hue, displayed: false]) // library marker kkossev.rgbLib, line 443
-    sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false]) // library marker kkossev.rgbLib, line 444
-    if (hsv.hue == WHITE_HUE) { // library marker kkossev.rgbLib, line 445
-        def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION))) // library marker kkossev.rgbLib, line 446
-        def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent // library marker kkossev.rgbLib, line 447
-        def val = Math.round(MIN_COLOR_TEMP + amount) // library marker kkossev.rgbLib, line 448
-        sendColorTemperatureEvent([name: "colorTemperature", value: val]) // library marker kkossev.rgbLib, line 449
-        sendColorModeEvent([name: "colorMode", value: "CT"]) // library marker kkossev.rgbLib, line 450
-        sendColorNameEvent([setGenericTempName(val)]) // library marker kkossev.rgbLib, line 451
-    }  // library marker kkossev.rgbLib, line 452
-    else { // library marker kkossev.rgbLib, line 453
-        sendColorModeEvent([name: "colorMode", value: "RGB"]) // library marker kkossev.rgbLib, line 454
-        sendColorNameEvent(setGenericName(hsv.hue)) // library marker kkossev.rgbLib, line 455
-    } // library marker kkossev.rgbLib, line 456
-} // library marker kkossev.rgbLib, line 457
+    logTrace "setColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 510
+    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue); // library marker kkossev.rgbLib, line 511
+    logTrace "setColor: xy ($xy.x, $xy.y)" // library marker kkossev.rgbLib, line 512
 
-void sendColorEvent(map) { // library marker kkossev.rgbLib, line 459
-    if (map.value == device.currentValue(map.name)) { // library marker kkossev.rgbLib, line 460
-        logDebug "sendColorEvent: ${map.name} is already ${map.value}" // library marker kkossev.rgbLib, line 461
-        return // library marker kkossev.rgbLib, line 462
-    } // library marker kkossev.rgbLib, line 463
-    // get the time of the last event named "color" and compare it to the current time // library marker kkossev.rgbLib, line 464
- //   def lastColorEvent = device.currentState("color",true).date.time // library marker kkossev.rgbLib, line 465
- //   if ((now() - lastColorEvent) < 1000) { // library marker kkossev.rgbLib, line 466
-       // logDebug "sendColorEvent: delaying ${map.name} event because the last color event was less than 1 second ago ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 467
-        runInMillis(500, "sendDelayedColorEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 468
-        return // library marker kkossev.rgbLib, line 469
-//    } // library marker kkossev.rgbLib, line 470
-    //unschedule("sendDelayedColorEvent") // cancel any pending delayed events // library marker kkossev.rgbLib, line 471
-    //logDebug "sendColorEvent: lastColorEvent = ${lastColorEvent}, now = ${now()}, diff = ${(now() - lastColorEvent)}" // library marker kkossev.rgbLib, line 472
-    //sendEvent(map) // library marker kkossev.rgbLib, line 473
-} // library marker kkossev.rgbLib, line 474
-private void sendDelayedColorEvent(Map map) { // library marker kkossev.rgbLib, line 475
-    sendEvent(map) // library marker kkossev.rgbLib, line 476
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 477
-} // library marker kkossev.rgbLib, line 478
+    def intX = Math.round(xy.x*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 514
+    def intY = Math.round(xy.y*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 515
 
-void sendHueEvent(map) { // library marker kkossev.rgbLib, line 480
-    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 481
-    runInMillis(500, "sendDelayedHueEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 482
-} // library marker kkossev.rgbLib, line 483
-private void sendDelayedHueEvent(Map map) { // library marker kkossev.rgbLib, line 484
-    sendEvent(map) // library marker kkossev.rgbLib, line 485
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 486
-} // library marker kkossev.rgbLib, line 487
+    logTrace "setColor: xy ($intX, $intY)" // library marker kkossev.rgbLib, line 517
 
-void sendSaturationEvent(map) { // library marker kkossev.rgbLib, line 489
-    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 490
-    runInMillis(500, "sendDelayedSaturationEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 491
-} // library marker kkossev.rgbLib, line 492
-private void sendDelayedSaturationEvent(Map map) { // library marker kkossev.rgbLib, line 493
-    sendEvent(map) // library marker kkossev.rgbLib, line 494
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 495
-} // library marker kkossev.rgbLib, line 496
+    state.colorX = xy.x // library marker kkossev.rgbLib, line 519
+    state.colorY = xy.y // library marker kkossev.rgbLib, line 520
 
-void sendColorModeEvent(map) { // library marker kkossev.rgbLib, line 498
-    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 499
-    runInMillis(500, "sendDelayedColorModeEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 500
-} // library marker kkossev.rgbLib, line 501
-private void sendDelayedColorModeEvent(Map map) { // library marker kkossev.rgbLib, line 502
-    sendEvent(map) // library marker kkossev.rgbLib, line 503
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 504
-} // library marker kkossev.rgbLib, line 505
+    def strX = DataType.pack(intX, DataType.UINT16, true); // library marker kkossev.rgbLib, line 522
+    def strY = DataType.pack(intY, DataType.UINT16, true); // library marker kkossev.rgbLib, line 523
 
-void sendColorNameEvent(map) { // library marker kkossev.rgbLib, line 507
-    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 508
-    runInMillis(500, "sendDelayedColorNameEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 509
-} // library marker kkossev.rgbLib, line 510
-private void sendDelayedColorNameEvent(Map map) { // library marker kkossev.rgbLib, line 511
-    sendEvent(map) // library marker kkossev.rgbLib, line 512
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 513
-} // library marker kkossev.rgbLib, line 514
+    List cmds = [] // library marker kkossev.rgbLib, line 525
 
-void sendColorTemperatureEvent(map) { // library marker kkossev.rgbLib, line 516
-    if (map.value == device.currentValue(map.name)) { return } // library marker kkossev.rgbLib, line 517
-    runInMillis(500, "sendDelayedColorTemperatureEvent",  [overwrite: true, data: map]) // library marker kkossev.rgbLib, line 518
-} // library marker kkossev.rgbLib, line 519
-private void sendDelayedColorTemperatureEvent(Map map) { // library marker kkossev.rgbLib, line 520
-    sendEvent(map) // library marker kkossev.rgbLib, line 521
-    logInfo "${map.name} is now ${map.value}" // library marker kkossev.rgbLib, line 522
-} // library marker kkossev.rgbLib, line 523
+    def level = value.level // library marker kkossev.rgbLib, line 527
+    def rate = value.rate // library marker kkossev.rgbLib, line 528
+
+    if (level != null && rate != null) { // library marker kkossev.rgbLib, line 530
+        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 531
+        cmds += zigbee.setLevel(level, rate) // library marker kkossev.rgbLib, line 532
+    } else if (level != null) { // library marker kkossev.rgbLib, line 533
+        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 534
+        cmds += zigbee.setLevel(level) // library marker kkossev.rgbLib, line 535
+    } // library marker kkossev.rgbLib, line 536
+
+    state.pendingColorUpdate = true // library marker kkossev.rgbLib, line 538
+
+    cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00") // library marker kkossev.rgbLib, line 540
+    if (state.cmds == null) { state.cmds = [] }    // library marker kkossev.rgbLib, line 541
+    state.cmds += cmds // library marker kkossev.rgbLib, line 542
+
+    logTrace "zigbee command: $cmds" // library marker kkossev.rgbLib, line 544
+
+    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 546
+    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 547
+} // library marker kkossev.rgbLib, line 548
 
 
-def sendZigbeeCommandsDelayed() { // library marker kkossev.rgbLib, line 526
-    List cmds = state.cmds // library marker kkossev.rgbLib, line 527
-    if (cmds != null) { // library marker kkossev.rgbLib, line 528
-        state.cmds = [] // library marker kkossev.rgbLib, line 529
-        sendZigbeeCommands(cmds) // library marker kkossev.rgbLib, line 530
-    } // library marker kkossev.rgbLib, line 531
-} // library marker kkossev.rgbLib, line 532
+def setHue(hue) { // library marker kkossev.rgbLib, line 551
+    logDebug "setHue: $hue" // library marker kkossev.rgbLib, line 552
+    setColor([ hue: hue, saturation: device.currentValue("saturation") ]) // library marker kkossev.rgbLib, line 553
+} // library marker kkossev.rgbLib, line 554
 
-def setLevelBulb(value, rate=null) { // library marker kkossev.rgbLib, line 534
-    logDebug "setLevelBulb: $value, $rate" // library marker kkossev.rgbLib, line 535
+def setSaturation(saturation) { // library marker kkossev.rgbLib, line 556
+    logDebug "setSaturation: $saturation" // library marker kkossev.rgbLib, line 557
+    setColor([ hue: device.currentValue("hue"), saturation: saturation ]) // library marker kkossev.rgbLib, line 558
+} // library marker kkossev.rgbLib, line 559
 
-    state.pendingLevelChange = value // library marker kkossev.rgbLib, line 537
+def setGenericTempName(temp){ // library marker kkossev.rgbLib, line 561
+    if (!temp) return // library marker kkossev.rgbLib, line 562
+    String genericName // library marker kkossev.rgbLib, line 563
+    int value = temp.toInteger() // library marker kkossev.rgbLib, line 564
+    if (value <= 2000) genericName = "Sodium" // library marker kkossev.rgbLib, line 565
+    else if (value <= 2100) genericName = "Starlight" // library marker kkossev.rgbLib, line 566
+    else if (value < 2400) genericName = "Sunrise" // library marker kkossev.rgbLib, line 567
+    else if (value < 2800) genericName = "Incandescent" // library marker kkossev.rgbLib, line 568
+    else if (value < 3300) genericName = "Soft White" // library marker kkossev.rgbLib, line 569
+    else if (value < 3500) genericName = "Warm White" // library marker kkossev.rgbLib, line 570
+    else if (value < 4150) genericName = "Moonlight" // library marker kkossev.rgbLib, line 571
+    else if (value <= 5000) genericName = "Horizon" // library marker kkossev.rgbLib, line 572
+    else if (value < 5500) genericName = "Daylight" // library marker kkossev.rgbLib, line 573
+    else if (value < 6000) genericName = "Electronic" // library marker kkossev.rgbLib, line 574
+    else if (value <= 6500) genericName = "Skylight" // library marker kkossev.rgbLib, line 575
+    else if (value < 20000) genericName = "Polar" // library marker kkossev.rgbLib, line 576
+    String descriptionText = "${device.getDisplayName()} color is ${genericName}" // library marker kkossev.rgbLib, line 577
+    return createEvent(name: "colorName", value: genericName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 578
+} // library marker kkossev.rgbLib, line 579
 
-    if (rate == null) { // library marker kkossev.rgbLib, line 539
-        state.cmds += zigbee.setLevel(value) // library marker kkossev.rgbLib, line 540
-    } else { // library marker kkossev.rgbLib, line 541
-        state.cmds += zigbee.setLevel(value, rate) // library marker kkossev.rgbLib, line 542
-    } // library marker kkossev.rgbLib, line 543
-
-    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 545
-    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 546
-} // library marker kkossev.rgbLib, line 547
-
-
-def setColorTemperature(value, level=null, rate=null) { // library marker kkossev.rgbLib, line 550
-    logDebug "Set color temperature $value" // library marker kkossev.rgbLib, line 551
-
-    def sat = MAX_WHITE_SATURATION - (((value - MIN_COLOR_TEMP) / (MAX_COLOR_TEMP - MIN_COLOR_TEMP)) * MAX_WHITE_SATURATION) // library marker kkossev.rgbLib, line 553
-    setColor([ // library marker kkossev.rgbLib, line 554
-            hue: WHITE_HUE, // library marker kkossev.rgbLib, line 555
-            saturation: sat, // library marker kkossev.rgbLib, line 556
-            level: level, // library marker kkossev.rgbLib, line 557
-            rate: rate // library marker kkossev.rgbLib, line 558
-    ]) // library marker kkossev.rgbLib, line 559
-} // library marker kkossev.rgbLib, line 560
-
-def setColor(value) { // library marker kkossev.rgbLib, line 562
-    logDebug "setColor($value)" // library marker kkossev.rgbLib, line 563
-    def rgb = colorHsv2Rgb(value.hue / 100, value.saturation / 100) // library marker kkossev.rgbLib, line 564
-
-    logTrace "setColor: RGB ($rgb.red, $rgb.green, $rgb.blue)" // library marker kkossev.rgbLib, line 566
-    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue); // library marker kkossev.rgbLib, line 567
-    logTrace "setColor: xy ($xy.x, $xy.y)" // library marker kkossev.rgbLib, line 568
-
-    def intX = Math.round(xy.x*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 570
-    def intY = Math.round(xy.y*65536).intValue() // 0..65279 // library marker kkossev.rgbLib, line 571
-
-    logTrace "setColor: xy ($intX, $intY)" // library marker kkossev.rgbLib, line 573
-
-    state.colorX = xy.x // library marker kkossev.rgbLib, line 575
-    state.colorY = xy.y // library marker kkossev.rgbLib, line 576
-
-    def strX = DataType.pack(intX, DataType.UINT16, true); // library marker kkossev.rgbLib, line 578
-    def strY = DataType.pack(intY, DataType.UINT16, true); // library marker kkossev.rgbLib, line 579
-
-    List cmds = [] // library marker kkossev.rgbLib, line 581
-
-    def level = value.level // library marker kkossev.rgbLib, line 583
-    def rate = value.rate // library marker kkossev.rgbLib, line 584
-
-    if (level != null && rate != null) { // library marker kkossev.rgbLib, line 586
-        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 587
-        cmds += zigbee.setLevel(level, rate) // library marker kkossev.rgbLib, line 588
-    } else if (level != null) { // library marker kkossev.rgbLib, line 589
-        state.pendingLevelChange = level // library marker kkossev.rgbLib, line 590
-        cmds += zigbee.setLevel(level) // library marker kkossev.rgbLib, line 591
-    } // library marker kkossev.rgbLib, line 592
-
-    state.pendingColorUpdate = true // library marker kkossev.rgbLib, line 594
-
-    cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00") // library marker kkossev.rgbLib, line 596
-    if (state.cmds == null) { state.cmds = [] }    // library marker kkossev.rgbLib, line 597
-    state.cmds += cmds // library marker kkossev.rgbLib, line 598
-
-    logTrace "zigbee command: $cmds" // library marker kkossev.rgbLib, line 600
-
-    unschedule(sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 602
-    runInMillis(100, sendZigbeeCommandsDelayed) // library marker kkossev.rgbLib, line 603
-} // library marker kkossev.rgbLib, line 604
-
-
-def setHue(hue) { // library marker kkossev.rgbLib, line 607
-    logDebug "setHue: $hue" // library marker kkossev.rgbLib, line 608
-    setColor([ hue: hue, saturation: device.currentValue("saturation") ]) // library marker kkossev.rgbLib, line 609
-} // library marker kkossev.rgbLib, line 610
-
-def setSaturation(saturation) { // library marker kkossev.rgbLib, line 612
-    logDebug "setSaturation: $saturation" // library marker kkossev.rgbLib, line 613
-    setColor([ hue: device.currentValue("hue"), saturation: saturation ]) // library marker kkossev.rgbLib, line 614
+def setGenericName(hue){ // library marker kkossev.rgbLib, line 581
+    String colorName // library marker kkossev.rgbLib, line 582
+    hue = hue.toInteger() // library marker kkossev.rgbLib, line 583
+    hue = (hue * 3.6) // library marker kkossev.rgbLib, line 584
+    switch (hue.toInteger()){ // library marker kkossev.rgbLib, line 585
+        case 0..15: colorName = "Red" // library marker kkossev.rgbLib, line 586
+            break // library marker kkossev.rgbLib, line 587
+        case 16..45: colorName = "Orange" // library marker kkossev.rgbLib, line 588
+            break // library marker kkossev.rgbLib, line 589
+        case 46..75: colorName = "Yellow" // library marker kkossev.rgbLib, line 590
+            break // library marker kkossev.rgbLib, line 591
+        case 76..105: colorName = "Chartreuse" // library marker kkossev.rgbLib, line 592
+            break // library marker kkossev.rgbLib, line 593
+        case 106..135: colorName = "Green" // library marker kkossev.rgbLib, line 594
+            break // library marker kkossev.rgbLib, line 595
+        case 136..165: colorName = "Spring" // library marker kkossev.rgbLib, line 596
+            break // library marker kkossev.rgbLib, line 597
+        case 166..195: colorName = "Cyan" // library marker kkossev.rgbLib, line 598
+            break // library marker kkossev.rgbLib, line 599
+        case 196..225: colorName = "Azure" // library marker kkossev.rgbLib, line 600
+            break // library marker kkossev.rgbLib, line 601
+        case 226..255: colorName = "Blue" // library marker kkossev.rgbLib, line 602
+            break // library marker kkossev.rgbLib, line 603
+        case 256..285: colorName = "Violet" // library marker kkossev.rgbLib, line 604
+            break // library marker kkossev.rgbLib, line 605
+        case 286..315: colorName = "Magenta" // library marker kkossev.rgbLib, line 606
+            break // library marker kkossev.rgbLib, line 607
+        case 316..345: colorName = "Rose" // library marker kkossev.rgbLib, line 608
+            break // library marker kkossev.rgbLib, line 609
+        case 346..360: colorName = "Red" // library marker kkossev.rgbLib, line 610
+            break // library marker kkossev.rgbLib, line 611
+    } // library marker kkossev.rgbLib, line 612
+    String descriptionText = "${device.getDisplayName()} color is ${colorName}" // library marker kkossev.rgbLib, line 613
+    return createEvent(name: "colorName", value: colorName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 614
 } // library marker kkossev.rgbLib, line 615
 
-def setGenericTempName(temp){ // library marker kkossev.rgbLib, line 617
-    if (!temp) return // library marker kkossev.rgbLib, line 618
-    String genericName // library marker kkossev.rgbLib, line 619
-    int value = temp.toInteger() // library marker kkossev.rgbLib, line 620
-    if (value <= 2000) genericName = "Sodium" // library marker kkossev.rgbLib, line 621
-    else if (value <= 2100) genericName = "Starlight" // library marker kkossev.rgbLib, line 622
-    else if (value < 2400) genericName = "Sunrise" // library marker kkossev.rgbLib, line 623
-    else if (value < 2800) genericName = "Incandescent" // library marker kkossev.rgbLib, line 624
-    else if (value < 3300) genericName = "Soft White" // library marker kkossev.rgbLib, line 625
-    else if (value < 3500) genericName = "Warm White" // library marker kkossev.rgbLib, line 626
-    else if (value < 4150) genericName = "Moonlight" // library marker kkossev.rgbLib, line 627
-    else if (value <= 5000) genericName = "Horizon" // library marker kkossev.rgbLib, line 628
-    else if (value < 5500) genericName = "Daylight" // library marker kkossev.rgbLib, line 629
-    else if (value < 6000) genericName = "Electronic" // library marker kkossev.rgbLib, line 630
-    else if (value <= 6500) genericName = "Skylight" // library marker kkossev.rgbLib, line 631
-    else if (value < 20000) genericName = "Polar" // library marker kkossev.rgbLib, line 632
-    String descriptionText = "${device.getDisplayName()} color is ${genericName}" // library marker kkossev.rgbLib, line 633
-    return createEvent(name: "colorName", value: genericName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 634
-} // library marker kkossev.rgbLib, line 635
 
-def setGenericName(hue){ // library marker kkossev.rgbLib, line 637
-    String colorName // library marker kkossev.rgbLib, line 638
-    hue = hue.toInteger() // library marker kkossev.rgbLib, line 639
-    hue = (hue * 3.6) // library marker kkossev.rgbLib, line 640
-    switch (hue.toInteger()){ // library marker kkossev.rgbLib, line 641
-        case 0..15: colorName = "Red" // library marker kkossev.rgbLib, line 642
-            break // library marker kkossev.rgbLib, line 643
-        case 16..45: colorName = "Orange" // library marker kkossev.rgbLib, line 644
-            break // library marker kkossev.rgbLib, line 645
-        case 46..75: colorName = "Yellow" // library marker kkossev.rgbLib, line 646
-            break // library marker kkossev.rgbLib, line 647
-        case 76..105: colorName = "Chartreuse" // library marker kkossev.rgbLib, line 648
-            break // library marker kkossev.rgbLib, line 649
-        case 106..135: colorName = "Green" // library marker kkossev.rgbLib, line 650
-            break // library marker kkossev.rgbLib, line 651
-        case 136..165: colorName = "Spring" // library marker kkossev.rgbLib, line 652
-            break // library marker kkossev.rgbLib, line 653
-        case 166..195: colorName = "Cyan" // library marker kkossev.rgbLib, line 654
-            break // library marker kkossev.rgbLib, line 655
-        case 196..225: colorName = "Azure" // library marker kkossev.rgbLib, line 656
-            break // library marker kkossev.rgbLib, line 657
-        case 226..255: colorName = "Blue" // library marker kkossev.rgbLib, line 658
-            break // library marker kkossev.rgbLib, line 659
-        case 256..285: colorName = "Violet" // library marker kkossev.rgbLib, line 660
-            break // library marker kkossev.rgbLib, line 661
-        case 286..315: colorName = "Magenta" // library marker kkossev.rgbLib, line 662
-            break // library marker kkossev.rgbLib, line 663
-        case 316..345: colorName = "Rose" // library marker kkossev.rgbLib, line 664
-            break // library marker kkossev.rgbLib, line 665
-        case 346..360: colorName = "Red" // library marker kkossev.rgbLib, line 666
-            break // library marker kkossev.rgbLib, line 667
-    } // library marker kkossev.rgbLib, line 668
-    String descriptionText = "${device.getDisplayName()} color is ${colorName}" // library marker kkossev.rgbLib, line 669
-    return createEvent(name: "colorName", value: colorName ,descriptionText: descriptionText) // library marker kkossev.rgbLib, line 670
-} // library marker kkossev.rgbLib, line 671
+def startLevelChange(direction) { // library marker kkossev.rgbLib, line 618
+    def dir = direction == "up"? 0 : 1 // library marker kkossev.rgbLib, line 619
+    def rate = 100 // library marker kkossev.rgbLib, line 620
+
+    if (levelChangeRate != null) { // library marker kkossev.rgbLib, line 622
+        rate = levelChangeRate // library marker kkossev.rgbLib, line 623
+    } // library marker kkossev.rgbLib, line 624
+
+    return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}") // library marker kkossev.rgbLib, line 626
+} // library marker kkossev.rgbLib, line 627
+
+def stopLevelChange() { // library marker kkossev.rgbLib, line 629
+    return zigbee.command(0x0008, 0x03, "") + zigbee.levelRefresh() // library marker kkossev.rgbLib, line 630
+} // library marker kkossev.rgbLib, line 631
 
 
-def startLevelChange(direction) { // library marker kkossev.rgbLib, line 674
-    def dir = direction == "up"? 0 : 1 // library marker kkossev.rgbLib, line 675
-    def rate = 100 // library marker kkossev.rgbLib, line 676
+// Color Management functions // library marker kkossev.rgbLib, line 634
 
-    if (levelChangeRate != null) { // library marker kkossev.rgbLib, line 678
-        rate = levelChangeRate // library marker kkossev.rgbLib, line 679
-    } // library marker kkossev.rgbLib, line 680
+def min(first, ... rest) { // library marker kkossev.rgbLib, line 636
+    def min = first; // library marker kkossev.rgbLib, line 637
+    for(next in rest) { // library marker kkossev.rgbLib, line 638
+        if(next < min) min = next // library marker kkossev.rgbLib, line 639
+    } // library marker kkossev.rgbLib, line 640
 
-    return zigbee.command(0x0008, 0x01, "0x${iTo8bitHex(dir)} 0x${iTo8bitHex(rate)}") // library marker kkossev.rgbLib, line 682
-} // library marker kkossev.rgbLib, line 683
+    min // library marker kkossev.rgbLib, line 642
+} // library marker kkossev.rgbLib, line 643
 
-def stopLevelChange() { // library marker kkossev.rgbLib, line 685
-    return zigbee.command(0x0008, 0x03, "") + zigbee.levelRefresh() // library marker kkossev.rgbLib, line 686
-} // library marker kkossev.rgbLib, line 687
+def max(first, ... rest) { // library marker kkossev.rgbLib, line 645
+    def max = first; // library marker kkossev.rgbLib, line 646
+    for(next in rest) { // library marker kkossev.rgbLib, line 647
+        if(next > max) max = next // library marker kkossev.rgbLib, line 648
+    } // library marker kkossev.rgbLib, line 649
 
+    max // library marker kkossev.rgbLib, line 651
+} // library marker kkossev.rgbLib, line 652
 
-// Color Management functions // library marker kkossev.rgbLib, line 690
+def colorGammaAdjust(component) { // library marker kkossev.rgbLib, line 654
+    return (component > 0.04045) ? Math.pow((component + 0.055) / (1.0 + 0.055), 2.4) : (component / 12.92) // library marker kkossev.rgbLib, line 655
+} // library marker kkossev.rgbLib, line 656
 
-def min(first, ... rest) { // library marker kkossev.rgbLib, line 692
-    def min = first; // library marker kkossev.rgbLib, line 693
-    for(next in rest) { // library marker kkossev.rgbLib, line 694
-        if(next < min) min = next // library marker kkossev.rgbLib, line 695
-    } // library marker kkossev.rgbLib, line 696
+def colorGammaRevert(component) { // library marker kkossev.rgbLib, line 658
+    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055; // library marker kkossev.rgbLib, line 659
+} // library marker kkossev.rgbLib, line 660
 
-    min // library marker kkossev.rgbLib, line 698
-} // library marker kkossev.rgbLib, line 699
+def colorXy2Rgb(x = 255, y = 255) { // library marker kkossev.rgbLib, line 662
 
-def max(first, ... rest) { // library marker kkossev.rgbLib, line 701
-    def max = first; // library marker kkossev.rgbLib, line 702
-    for(next in rest) { // library marker kkossev.rgbLib, line 703
-        if(next > max) max = next // library marker kkossev.rgbLib, line 704
-    } // library marker kkossev.rgbLib, line 705
+    logTrace "< Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 664
 
-    max // library marker kkossev.rgbLib, line 707
-} // library marker kkossev.rgbLib, line 708
+    def Y = 1; // library marker kkossev.rgbLib, line 666
+    def X = (Y / y) * x; // library marker kkossev.rgbLib, line 667
+    def Z = (Y / y) * (1.0 - x - y); // library marker kkossev.rgbLib, line 668
 
-def colorGammaAdjust(component) { // library marker kkossev.rgbLib, line 710
-    return (component > 0.04045) ? Math.pow((component + 0.055) / (1.0 + 0.055), 2.4) : (component / 12.92) // library marker kkossev.rgbLib, line 711
-} // library marker kkossev.rgbLib, line 712
+    logTrace "< Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 670
 
-def colorGammaRevert(component) { // library marker kkossev.rgbLib, line 714
-    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055; // library marker kkossev.rgbLib, line 715
-} // library marker kkossev.rgbLib, line 716
+    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 672
+    def M = [ // library marker kkossev.rgbLib, line 673
+            [  3.2410032, -1.5373990, -0.4986159 ], // library marker kkossev.rgbLib, line 674
+            [ -0.9692243,  1.8759300,  0.0415542 ], // library marker kkossev.rgbLib, line 675
+            [  0.0556394, -0.2040112,  1.0571490 ] // library marker kkossev.rgbLib, line 676
+    ] // library marker kkossev.rgbLib, line 677
 
-def colorXy2Rgb(x = 255, y = 255) { // library marker kkossev.rgbLib, line 718
+    def r = X * M[0][0] + Y * M[0][1] + Z * M[0][2] // library marker kkossev.rgbLib, line 679
+    def g = X * M[1][0] + Y * M[1][1] + Z * M[1][2] // library marker kkossev.rgbLib, line 680
+    def b = X * M[2][0] + Y * M[2][1] + Z * M[2][2] // library marker kkossev.rgbLib, line 681
 
-    logTrace "< Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 720
+    def max = max(r, g, b) // library marker kkossev.rgbLib, line 683
+    r = colorGammaRevert(r / max) // library marker kkossev.rgbLib, line 684
+    g = colorGammaRevert(g / max) // library marker kkossev.rgbLib, line 685
+    b = colorGammaRevert(b / max) // library marker kkossev.rgbLib, line 686
 
-    def Y = 1; // library marker kkossev.rgbLib, line 722
-    def X = (Y / y) * x; // library marker kkossev.rgbLib, line 723
-    def Z = (Y / y) * (1.0 - x - y); // library marker kkossev.rgbLib, line 724
+    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 688
 
-    logTrace "< Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 726
+    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 690
+} // library marker kkossev.rgbLib, line 691
 
-    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 728
-    def M = [ // library marker kkossev.rgbLib, line 729
-            [  3.2410032, -1.5373990, -0.4986159 ], // library marker kkossev.rgbLib, line 730
-            [ -0.9692243,  1.8759300,  0.0415542 ], // library marker kkossev.rgbLib, line 731
-            [  0.0556394, -0.2040112,  1.0571490 ] // library marker kkossev.rgbLib, line 732
-    ] // library marker kkossev.rgbLib, line 733
+def colorRgb2Xy(r, g, b) { // library marker kkossev.rgbLib, line 693
 
-    def r = X * M[0][0] + Y * M[0][1] + Z * M[0][2] // library marker kkossev.rgbLib, line 735
-    def g = X * M[1][0] + Y * M[1][1] + Z * M[1][2] // library marker kkossev.rgbLib, line 736
-    def b = X * M[2][0] + Y * M[2][1] + Z * M[2][2] // library marker kkossev.rgbLib, line 737
+    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 695
 
-    def max = max(r, g, b) // library marker kkossev.rgbLib, line 739
-    r = colorGammaRevert(r / max) // library marker kkossev.rgbLib, line 740
-    g = colorGammaRevert(g / max) // library marker kkossev.rgbLib, line 741
-    b = colorGammaRevert(b / max) // library marker kkossev.rgbLib, line 742
+    r = colorGammaAdjust(r) // library marker kkossev.rgbLib, line 697
+    g = colorGammaAdjust(g) // library marker kkossev.rgbLib, line 698
+    b = colorGammaAdjust(b) // library marker kkossev.rgbLib, line 699
 
-    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 744
+    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 701
+    // D65    0.31271    0.32902 // library marker kkossev.rgbLib, line 702
+    //  R  0.64000 0.33000 // library marker kkossev.rgbLib, line 703
+    //  G  0.30000 0.60000 // library marker kkossev.rgbLib, line 704
+    //  B  0.15000 0.06000 // library marker kkossev.rgbLib, line 705
+    def M = [ // library marker kkossev.rgbLib, line 706
+            [  0.4123866,  0.3575915,  0.1804505 ], // library marker kkossev.rgbLib, line 707
+            [  0.2126368,  0.7151830,  0.0721802 ], // library marker kkossev.rgbLib, line 708
+            [  0.0193306,  0.1191972,  0.9503726 ] // library marker kkossev.rgbLib, line 709
+    ] // library marker kkossev.rgbLib, line 710
 
-    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 746
-} // library marker kkossev.rgbLib, line 747
+    def X = r * M[0][0] + g * M[0][1] + b * M[0][2] // library marker kkossev.rgbLib, line 712
+    def Y = r * M[1][0] + g * M[1][1] + b * M[1][2] // library marker kkossev.rgbLib, line 713
+    def Z = r * M[2][0] + g * M[2][1] + b * M[2][2] // library marker kkossev.rgbLib, line 714
 
-def colorRgb2Xy(r, g, b) { // library marker kkossev.rgbLib, line 749
+    logTrace "> Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 716
 
-    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 751
+    def x = X / (X + Y + Z) // library marker kkossev.rgbLib, line 718
+    def y = Y / (X + Y + Z) // library marker kkossev.rgbLib, line 719
 
-    r = colorGammaAdjust(r) // library marker kkossev.rgbLib, line 753
-    g = colorGammaAdjust(g) // library marker kkossev.rgbLib, line 754
-    b = colorGammaAdjust(b) // library marker kkossev.rgbLib, line 755
+    logTrace "> Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 721
 
-    // sRGB, Reference White D65 // library marker kkossev.rgbLib, line 757
-    // D65    0.31271    0.32902 // library marker kkossev.rgbLib, line 758
-    //  R  0.64000 0.33000 // library marker kkossev.rgbLib, line 759
-    //  G  0.30000 0.60000 // library marker kkossev.rgbLib, line 760
-    //  B  0.15000 0.06000 // library marker kkossev.rgbLib, line 761
-    def M = [ // library marker kkossev.rgbLib, line 762
-            [  0.4123866,  0.3575915,  0.1804505 ], // library marker kkossev.rgbLib, line 763
-            [  0.2126368,  0.7151830,  0.0721802 ], // library marker kkossev.rgbLib, line 764
-            [  0.0193306,  0.1191972,  0.9503726 ] // library marker kkossev.rgbLib, line 765
-    ] // library marker kkossev.rgbLib, line 766
+    [x: x, y: y] // library marker kkossev.rgbLib, line 723
+} // library marker kkossev.rgbLib, line 724
 
-    def X = r * M[0][0] + g * M[0][1] + b * M[0][2] // library marker kkossev.rgbLib, line 768
-    def Y = r * M[1][0] + g * M[1][1] + b * M[1][2] // library marker kkossev.rgbLib, line 769
-    def Z = r * M[2][0] + g * M[2][1] + b * M[2][2] // library marker kkossev.rgbLib, line 770
+def colorHsv2Rgb(h, s) { // library marker kkossev.rgbLib, line 726
+    logTrace "< Color HSV: ($h, $s, 1)" // library marker kkossev.rgbLib, line 727
 
-    logTrace "> Color XYZ: ($X, $Y, $Z)" // library marker kkossev.rgbLib, line 772
+    def r // library marker kkossev.rgbLib, line 729
+    def g // library marker kkossev.rgbLib, line 730
+    def b // library marker kkossev.rgbLib, line 731
 
-    def x = X / (X + Y + Z) // library marker kkossev.rgbLib, line 774
-    def y = Y / (X + Y + Z) // library marker kkossev.rgbLib, line 775
+    if (s == 0) { // library marker kkossev.rgbLib, line 733
+        r = 1 // library marker kkossev.rgbLib, line 734
+        g = 1 // library marker kkossev.rgbLib, line 735
+        b = 1 // library marker kkossev.rgbLib, line 736
+    } // library marker kkossev.rgbLib, line 737
+    else { // library marker kkossev.rgbLib, line 738
+        def region = (6 * h).intValue() // library marker kkossev.rgbLib, line 739
+        def remainder = 6 * h - region // library marker kkossev.rgbLib, line 740
 
-    logTrace "> Color xy: ($x, $y)" // library marker kkossev.rgbLib, line 777
+        def p = 1 - s // library marker kkossev.rgbLib, line 742
+        def q = 1 - s * remainder // library marker kkossev.rgbLib, line 743
+        def t = 1 - s * (1 - remainder) // library marker kkossev.rgbLib, line 744
 
-    [x: x, y: y] // library marker kkossev.rgbLib, line 779
-} // library marker kkossev.rgbLib, line 780
+        if(region == 0) { // library marker kkossev.rgbLib, line 746
+            r = 1 // library marker kkossev.rgbLib, line 747
+            g = t // library marker kkossev.rgbLib, line 748
+            b = p // library marker kkossev.rgbLib, line 749
+        } // library marker kkossev.rgbLib, line 750
+        else if(region == 1) { // library marker kkossev.rgbLib, line 751
+            r = q // library marker kkossev.rgbLib, line 752
+            g = 1 // library marker kkossev.rgbLib, line 753
+            b = p // library marker kkossev.rgbLib, line 754
+        } // library marker kkossev.rgbLib, line 755
+        else if(region == 2) { // library marker kkossev.rgbLib, line 756
+            r = p // library marker kkossev.rgbLib, line 757
+            g = 1 // library marker kkossev.rgbLib, line 758
+            b = t // library marker kkossev.rgbLib, line 759
+        } // library marker kkossev.rgbLib, line 760
+        else if(region == 3) { // library marker kkossev.rgbLib, line 761
+            r = p // library marker kkossev.rgbLib, line 762
+            g = q // library marker kkossev.rgbLib, line 763
+            b = 1 // library marker kkossev.rgbLib, line 764
+        } // library marker kkossev.rgbLib, line 765
+        else if(region == 4) { // library marker kkossev.rgbLib, line 766
+            r = t // library marker kkossev.rgbLib, line 767
+            g = p // library marker kkossev.rgbLib, line 768
+            b = 1 // library marker kkossev.rgbLib, line 769
+        } // library marker kkossev.rgbLib, line 770
+        else { // library marker kkossev.rgbLib, line 771
+            r = 1 // library marker kkossev.rgbLib, line 772
+            g = p // library marker kkossev.rgbLib, line 773
+            b = q // library marker kkossev.rgbLib, line 774
+        } // library marker kkossev.rgbLib, line 775
+    } // library marker kkossev.rgbLib, line 776
 
-def colorHsv2Rgb(h, s) { // library marker kkossev.rgbLib, line 782
-    logTrace "< Color HSV: ($h, $s, 1)" // library marker kkossev.rgbLib, line 783
+    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 778
 
-    def r // library marker kkossev.rgbLib, line 785
-    def g // library marker kkossev.rgbLib, line 786
-    def b // library marker kkossev.rgbLib, line 787
-
-    if (s == 0) { // library marker kkossev.rgbLib, line 789
-        r = 1 // library marker kkossev.rgbLib, line 790
-        g = 1 // library marker kkossev.rgbLib, line 791
-        b = 1 // library marker kkossev.rgbLib, line 792
-    } // library marker kkossev.rgbLib, line 793
-    else { // library marker kkossev.rgbLib, line 794
-        def region = (6 * h).intValue() // library marker kkossev.rgbLib, line 795
-        def remainder = 6 * h - region // library marker kkossev.rgbLib, line 796
-
-        def p = 1 - s // library marker kkossev.rgbLib, line 798
-        def q = 1 - s * remainder // library marker kkossev.rgbLib, line 799
-        def t = 1 - s * (1 - remainder) // library marker kkossev.rgbLib, line 800
-
-        if(region == 0) { // library marker kkossev.rgbLib, line 802
-            r = 1 // library marker kkossev.rgbLib, line 803
-            g = t // library marker kkossev.rgbLib, line 804
-            b = p // library marker kkossev.rgbLib, line 805
-        } // library marker kkossev.rgbLib, line 806
-        else if(region == 1) { // library marker kkossev.rgbLib, line 807
-            r = q // library marker kkossev.rgbLib, line 808
-            g = 1 // library marker kkossev.rgbLib, line 809
-            b = p // library marker kkossev.rgbLib, line 810
-        } // library marker kkossev.rgbLib, line 811
-        else if(region == 2) { // library marker kkossev.rgbLib, line 812
-            r = p // library marker kkossev.rgbLib, line 813
-            g = 1 // library marker kkossev.rgbLib, line 814
-            b = t // library marker kkossev.rgbLib, line 815
-        } // library marker kkossev.rgbLib, line 816
-        else if(region == 3) { // library marker kkossev.rgbLib, line 817
-            r = p // library marker kkossev.rgbLib, line 818
-            g = q // library marker kkossev.rgbLib, line 819
-            b = 1 // library marker kkossev.rgbLib, line 820
-        } // library marker kkossev.rgbLib, line 821
-        else if(region == 4) { // library marker kkossev.rgbLib, line 822
-            r = t // library marker kkossev.rgbLib, line 823
-            g = p // library marker kkossev.rgbLib, line 824
-            b = 1 // library marker kkossev.rgbLib, line 825
-        } // library marker kkossev.rgbLib, line 826
-        else { // library marker kkossev.rgbLib, line 827
-            r = 1 // library marker kkossev.rgbLib, line 828
-            g = p // library marker kkossev.rgbLib, line 829
-            b = q // library marker kkossev.rgbLib, line 830
-        } // library marker kkossev.rgbLib, line 831
-    } // library marker kkossev.rgbLib, line 832
-
-    logTrace "< Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 834
-
-    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 836
-} // library marker kkossev.rgbLib, line 837
+    [red: r, green: g, blue: b] // library marker kkossev.rgbLib, line 780
+} // library marker kkossev.rgbLib, line 781
 
 
-def colorRgb2Hsv(r, g, b) // library marker kkossev.rgbLib, line 840
-{ // library marker kkossev.rgbLib, line 841
-    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 842
+def colorRgb2Hsv(r, g, b) // library marker kkossev.rgbLib, line 784
+{ // library marker kkossev.rgbLib, line 785
+    logTrace "> Color RGB: ($r, $g, $b)" // library marker kkossev.rgbLib, line 786
 
-    def min = min(r, g, b) // library marker kkossev.rgbLib, line 844
-    def max = max(r, g, b) // library marker kkossev.rgbLib, line 845
-    def delta = max - min // library marker kkossev.rgbLib, line 846
+    def min = min(r, g, b) // library marker kkossev.rgbLib, line 788
+    def max = max(r, g, b) // library marker kkossev.rgbLib, line 789
+    def delta = max - min // library marker kkossev.rgbLib, line 790
 
-    def h // library marker kkossev.rgbLib, line 848
-    def s // library marker kkossev.rgbLib, line 849
-    def v = max // library marker kkossev.rgbLib, line 850
+    def h // library marker kkossev.rgbLib, line 792
+    def s // library marker kkossev.rgbLib, line 793
+    def v = max // library marker kkossev.rgbLib, line 794
 
-    if (delta == 0) { // library marker kkossev.rgbLib, line 852
-        h = 0 // library marker kkossev.rgbLib, line 853
-        s = 0 // library marker kkossev.rgbLib, line 854
-    } // library marker kkossev.rgbLib, line 855
-    else { // library marker kkossev.rgbLib, line 856
-        s = delta / max // library marker kkossev.rgbLib, line 857
-        if (r == max) h = ( g - b ) / delta            // between yellow & magenta // library marker kkossev.rgbLib, line 858
-        else if(g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow // library marker kkossev.rgbLib, line 859
-        else h = 4 + ( r - g ) / delta                // between magenta & cyan // library marker kkossev.rgbLib, line 860
-        h /= 6 // library marker kkossev.rgbLib, line 861
+    if (delta == 0) { // library marker kkossev.rgbLib, line 796
+        h = 0 // library marker kkossev.rgbLib, line 797
+        s = 0 // library marker kkossev.rgbLib, line 798
+    } // library marker kkossev.rgbLib, line 799
+    else { // library marker kkossev.rgbLib, line 800
+        s = delta / max // library marker kkossev.rgbLib, line 801
+        if (r == max) h = ( g - b ) / delta            // between yellow & magenta // library marker kkossev.rgbLib, line 802
+        else if(g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow // library marker kkossev.rgbLib, line 803
+        else h = 4 + ( r - g ) / delta                // between magenta & cyan // library marker kkossev.rgbLib, line 804
+        h /= 6 // library marker kkossev.rgbLib, line 805
 
-        if(h < 0) h += 1 // library marker kkossev.rgbLib, line 863
-    } // library marker kkossev.rgbLib, line 864
+        if(h < 0) h += 1 // library marker kkossev.rgbLib, line 807
+    } // library marker kkossev.rgbLib, line 808
 
-    logTrace "> Color HSV: ($h, $s, $v)" // library marker kkossev.rgbLib, line 866
+    logTrace "> Color HSV: ($h, $s, $v)" // library marker kkossev.rgbLib, line 810
 
-    return [ hue: h, saturation: s, level: v ] // library marker kkossev.rgbLib, line 868
-} // library marker kkossev.rgbLib, line 869
+    return [ hue: h, saturation: s, level: v ] // library marker kkossev.rgbLib, line 812
+} // library marker kkossev.rgbLib, line 813
 
-def iTo8bitHex(value) { // library marker kkossev.rgbLib, line 871
-    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.rgbLib, line 872
+def iTo8bitHex(value) { // library marker kkossev.rgbLib, line 815
+    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.rgbLib, line 816
+} // library marker kkossev.rgbLib, line 817
+
+def logTrace(msg) { // library marker kkossev.rgbLib, line 819
+    if(traceEnable) log.trace msg // library marker kkossev.rgbLib, line 820
+} // library marker kkossev.rgbLib, line 821
+
+
+// ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------ // library marker kkossev.rgbLib, line 824
+
+
+// // library marker kkossev.rgbLib, line 827
+// called from updated() in the main code ... // library marker kkossev.rgbLib, line 828
+void updatedBulb() { // library marker kkossev.rgbLib, line 829
+    logDebug "updatedBulb()..." // library marker kkossev.rgbLib, line 830
+} // library marker kkossev.rgbLib, line 831
+
+def colorControlRefresh() { // library marker kkossev.rgbLib, line 833
+    def commands = [] // library marker kkossev.rgbLib, line 834
+    commands += zigbee.readAttribute(0x0300, 0x03) // currentColorX // library marker kkossev.rgbLib, line 835
+    commands += zigbee.readAttribute(0x0300, 0x04) // currentColorY // library marker kkossev.rgbLib, line 836
+    commands // library marker kkossev.rgbLib, line 837
+} // library marker kkossev.rgbLib, line 838
+
+def colorControlConfig(min, max, step) { // library marker kkossev.rgbLib, line 840
+    def commands = [] // library marker kkossev.rgbLib, line 841
+    commands += zigbee.configureReporting(0x0300, 0x03, DataType.UINT16, min, max, step) // currentColorX // library marker kkossev.rgbLib, line 842
+    commands += zigbee.configureReporting(0x0300, 0x04, DataType.UINT16, min, max, step) // currentColorY // library marker kkossev.rgbLib, line 843
+    commands // library marker kkossev.rgbLib, line 844
+} // library marker kkossev.rgbLib, line 845
+
+def refreshBulb() { // library marker kkossev.rgbLib, line 847
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 848
+    state.colorChanged = false // library marker kkossev.rgbLib, line 849
+    state.colorXReported = false // library marker kkossev.rgbLib, line 850
+    state.colorYReported = false     // library marker kkossev.rgbLib, line 851
+    state.cmds = [] // library marker kkossev.rgbLib, line 852
+    cmds = zigbee.onOffRefresh() + zigbee.levelRefresh() + colorControlRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1) // library marker kkossev.rgbLib, line 853
+    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.rgbLib, line 854
+    logDebug "refreshBulb: ${cmds} " // library marker kkossev.rgbLib, line 855
+    return cmds // library marker kkossev.rgbLib, line 856
+} // library marker kkossev.rgbLib, line 857
+
+def configureBulb() { // library marker kkossev.rgbLib, line 859
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 860
+    logDebug "configureBulb() : ${cmds}" // library marker kkossev.rgbLib, line 861
+    cmds = refreshBulb() // library marker kkossev.rgbLib, line 862
+    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.rgbLib, line 863
+    return cmds     // library marker kkossev.rgbLib, line 864
+} // library marker kkossev.rgbLib, line 865
+
+def initializeBulb() // library marker kkossev.rgbLib, line 867
+{ // library marker kkossev.rgbLib, line 868
+    List<String> cmds = [] // library marker kkossev.rgbLib, line 869
+    logDebug "initializeBulb() : ${cmds}" // library marker kkossev.rgbLib, line 870
+    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.rgbLib, line 871
+    return cmds         // library marker kkossev.rgbLib, line 872
 } // library marker kkossev.rgbLib, line 873
 
-def logTrace(msg) { // library marker kkossev.rgbLib, line 875
-    if(traceEnable) log.trace msg // library marker kkossev.rgbLib, line 876
-} // library marker kkossev.rgbLib, line 877
+
+void initVarsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 876
+    state.colorChanged = false // library marker kkossev.rgbLib, line 877
+    state.colorXReported = false // library marker kkossev.rgbLib, line 878
+    state.colorYReported = false // library marker kkossev.rgbLib, line 879
+    state.cmds = [] // library marker kkossev.rgbLib, line 880
+    logDebug "initVarsBulb(${fullInit})" // library marker kkossev.rgbLib, line 881
+} // library marker kkossev.rgbLib, line 882
 
 
-// ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------ // library marker kkossev.rgbLib, line 880
-
-
-// // library marker kkossev.rgbLib, line 883
-// called from updated() in the main code ... // library marker kkossev.rgbLib, line 884
-void updatedBulb() { // library marker kkossev.rgbLib, line 885
-    logDebug "updatedBulb()..." // library marker kkossev.rgbLib, line 886
-} // library marker kkossev.rgbLib, line 887
-
-def colorControlRefresh() { // library marker kkossev.rgbLib, line 889
-    def commands = [] // library marker kkossev.rgbLib, line 890
-    commands += zigbee.readAttribute(0x0300, 0x03) // currentColorX // library marker kkossev.rgbLib, line 891
-    commands += zigbee.readAttribute(0x0300, 0x04) // currentColorY // library marker kkossev.rgbLib, line 892
-    commands // library marker kkossev.rgbLib, line 893
-} // library marker kkossev.rgbLib, line 894
-
-def colorControlConfig(min, max, step) { // library marker kkossev.rgbLib, line 896
-    def commands = [] // library marker kkossev.rgbLib, line 897
-    commands += zigbee.configureReporting(0x0300, 0x03, DataType.UINT16, min, max, step) // currentColorX // library marker kkossev.rgbLib, line 898
-    commands += zigbee.configureReporting(0x0300, 0x04, DataType.UINT16, min, max, step) // currentColorY // library marker kkossev.rgbLib, line 899
-    commands // library marker kkossev.rgbLib, line 900
-} // library marker kkossev.rgbLib, line 901
-
-def refreshBulb() { // library marker kkossev.rgbLib, line 903
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 904
-    state.colorChanged = false // library marker kkossev.rgbLib, line 905
-    state.colorXReported = false // library marker kkossev.rgbLib, line 906
-    state.colorYReported = false     // library marker kkossev.rgbLib, line 907
-    state.cmds = [] // library marker kkossev.rgbLib, line 908
-    cmds = zigbee.onOffRefresh() + zigbee.levelRefresh() + colorControlRefresh() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1) // library marker kkossev.rgbLib, line 909
-    if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.rgbLib, line 910
-    logDebug "refreshBulb: ${cmds} " // library marker kkossev.rgbLib, line 911
-    return cmds // library marker kkossev.rgbLib, line 912
-} // library marker kkossev.rgbLib, line 913
-
-def configureBulb() { // library marker kkossev.rgbLib, line 915
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 916
-    logDebug "configureBulb() : ${cmds}" // library marker kkossev.rgbLib, line 917
-    cmds = refreshBulb() // library marker kkossev.rgbLib, line 918
-    if (cmds == []) { cmds = ["delay 299"] }    // no ,  // library marker kkossev.rgbLib, line 919
-    return cmds     // library marker kkossev.rgbLib, line 920
-} // library marker kkossev.rgbLib, line 921
-
-def initializeBulb() // library marker kkossev.rgbLib, line 923
-{ // library marker kkossev.rgbLib, line 924
-    List<String> cmds = [] // library marker kkossev.rgbLib, line 925
-    logDebug "initializeBulb() : ${cmds}" // library marker kkossev.rgbLib, line 926
-    if (cmds == []) { cmds = ["delay 299",] } // library marker kkossev.rgbLib, line 927
-    return cmds         // library marker kkossev.rgbLib, line 928
-} // library marker kkossev.rgbLib, line 929
-
-
-void initVarsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 932
-    state.colorChanged = false // library marker kkossev.rgbLib, line 933
-    state.colorXReported = false // library marker kkossev.rgbLib, line 934
-    state.colorYReported = false // library marker kkossev.rgbLib, line 935
-    state.cmds = [] // library marker kkossev.rgbLib, line 936
-    logDebug "initVarsBulb(${fullInit})" // library marker kkossev.rgbLib, line 937
-} // library marker kkossev.rgbLib, line 938
-
-
-void initEventsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 941
-    logDebug "initEventsBulb(${fullInit})" // library marker kkossev.rgbLib, line 942
-    if((device.currentState("saturation")?.value == null)) { // library marker kkossev.rgbLib, line 943
-        sendEvent(name: "saturation", value: 0); // library marker kkossev.rgbLib, line 944
-    } // library marker kkossev.rgbLib, line 945
-    if((device.currentState("hue")?.value == null)) { // library marker kkossev.rgbLib, line 946
-        sendEvent(name: "hue", value: 0); // library marker kkossev.rgbLib, line 947
-    } // library marker kkossev.rgbLib, line 948
-    if ((device.currentState("level")?.value == null) || (device.currentState("level")?.value == 0)) { // library marker kkossev.rgbLib, line 949
-        sendEvent(name: "level", value: 100) // library marker kkossev.rgbLib, line 950
-    }     // library marker kkossev.rgbLib, line 951
-} // library marker kkossev.rgbLib, line 952
-/* // library marker kkossev.rgbLib, line 953
-================================================================================================ // library marker kkossev.rgbLib, line 954
-Node Descriptor // library marker kkossev.rgbLib, line 955
-================================================================================================ // library marker kkossev.rgbLib, line 956
-▸ Logical Type                              = Zigbee Router // library marker kkossev.rgbLib, line 957
-▸ Complex Descriptor Available              = No // library marker kkossev.rgbLib, line 958
-▸ User Descriptor Available                 = No // library marker kkossev.rgbLib, line 959
-▸ Frequency Band                            = 2400 - 2483.5 MHz // library marker kkossev.rgbLib, line 960
-▸ Alternate PAN Coordinator                 = No // library marker kkossev.rgbLib, line 961
-▸ Device Type                               = Full Function Device (FFD) // library marker kkossev.rgbLib, line 962
-▸ Mains Power Source                        = Yes // library marker kkossev.rgbLib, line 963
-▸ Receiver On When Idle                     = Yes (always on) // library marker kkossev.rgbLib, line 964
-▸ Security Capability                       = No // library marker kkossev.rgbLib, line 965
-▸ Allocate Address                          = Yes // library marker kkossev.rgbLib, line 966
-▸ Manufacturer Code                         = 0x115F = XIAOMI // library marker kkossev.rgbLib, line 967
-▸ Maximum Buffer Size                       = 82 bytes // library marker kkossev.rgbLib, line 968
-▸ Maximum Incoming Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 969
-▸ Primary Trust Center                      = No // library marker kkossev.rgbLib, line 970
-▸ Backup Trust Center                       = No // library marker kkossev.rgbLib, line 971
-▸ Primary Binding Table Cache               = Yes // library marker kkossev.rgbLib, line 972
-▸ Backup Binding Table Cache                = No // library marker kkossev.rgbLib, line 973
-▸ Primary Discovery Cache                   = Yes // library marker kkossev.rgbLib, line 974
-▸ Backup Discovery Cache                    = Yes // library marker kkossev.rgbLib, line 975
-▸ Network Manager                           = Yes // library marker kkossev.rgbLib, line 976
-▸ Maximum Outgoing Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 977
-▸ Extended Active Endpoint List Available   = No // library marker kkossev.rgbLib, line 978
-▸ Extended Simple Descriptor List Available = No // library marker kkossev.rgbLib, line 979
-================================================================================================ // library marker kkossev.rgbLib, line 980
-Power Descriptor // library marker kkossev.rgbLib, line 981
-================================================================================================ // library marker kkossev.rgbLib, line 982
-▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above // library marker kkossev.rgbLib, line 983
-▸ Available Power Sources    = [Constant (mains) power] // library marker kkossev.rgbLib, line 984
-▸ Current Power Sources      = [Constant (mains) power] // library marker kkossev.rgbLib, line 985
-▸ Current Power Source Level = 100% // library marker kkossev.rgbLib, line 986
-================================================================================================ // library marker kkossev.rgbLib, line 987
-Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster) // library marker kkossev.rgbLib, line 988
-================================================================================================ // library marker kkossev.rgbLib, line 989
-Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster) // library marker kkossev.rgbLib, line 990
-================================================================================================ // library marker kkossev.rgbLib, line 991
-▸ 0x0000 | ZCL Version          | req | r-- | uint8  | 03                | -- // library marker kkossev.rgbLib, line 992
-▸ 0x0001 | Application Version  | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 993
-▸ 0x0002 | Stack Version        | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 994
-▸ 0x0003 | HW Version           | opt | r-- | uint8  | 01                | -- // library marker kkossev.rgbLib, line 995
-▸ 0x0004 | Manufacturer Name    | opt | r-- | string | Aqara             | -- // library marker kkossev.rgbLib, line 996
-▸ 0x0005 | Model Identifier     | opt | r-- | string | lumi.light.acn132 | -- // library marker kkossev.rgbLib, line 997
-▸ 0x0006 | Date Code            | req | r-- | string | 20230606          | -- // library marker kkossev.rgbLib, line 998
-▸ 0x0007 | Power Source         | opt | r-- | enum8  | 04 = DC source    | -- // library marker kkossev.rgbLib, line 999
-▸ 0x000A | Product Code         | opt | r-- | octstr | --                | -- // library marker kkossev.rgbLib, line 1000
-▸ 0x000D | Serial Number        | opt | r-- | string | --                | -- // library marker kkossev.rgbLib, line 1001
-▸ 0x0010 | Location Description | opt | rw- | string | é»è®¤æ¿é´     | -- // library marker kkossev.rgbLib, line 1002
-▸ 0xF000 | --                   | --  | r-- | uint16 | 0000              | -- // library marker kkossev.rgbLib, line 1003
-▸ 0xFFFD | Cluster Revision     | req | r-- | uint16 | 0002              | -- // library marker kkossev.rgbLib, line 1004
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1005
-▸ No commands found // library marker kkossev.rgbLib, line 1006
-================================================================================================ // library marker kkossev.rgbLib, line 1007
-Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster) // library marker kkossev.rgbLib, line 1008
-================================================================================================ // library marker kkossev.rgbLib, line 1009
-▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | -- // library marker kkossev.rgbLib, line 1010
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0001             | -- // library marker kkossev.rgbLib, line 1011
+void initEventsBulb(boolean fullInit=false) { // library marker kkossev.rgbLib, line 885
+    logDebug "initEventsBulb(${fullInit})" // library marker kkossev.rgbLib, line 886
+    if((device.currentState("saturation")?.value == null)) { // library marker kkossev.rgbLib, line 887
+        sendEvent(name: "saturation", value: 0); // library marker kkossev.rgbLib, line 888
+    } // library marker kkossev.rgbLib, line 889
+    if((device.currentState("hue")?.value == null)) { // library marker kkossev.rgbLib, line 890
+        sendEvent(name: "hue", value: 0); // library marker kkossev.rgbLib, line 891
+    } // library marker kkossev.rgbLib, line 892
+    if ((device.currentState("level")?.value == null) || (device.currentState("level")?.value == 0)) { // library marker kkossev.rgbLib, line 893
+        sendEvent(name: "level", value: 100) // library marker kkossev.rgbLib, line 894
+    }     // library marker kkossev.rgbLib, line 895
+} // library marker kkossev.rgbLib, line 896
+/* // library marker kkossev.rgbLib, line 897
+================================================================================================ // library marker kkossev.rgbLib, line 898
+Node Descriptor // library marker kkossev.rgbLib, line 899
+================================================================================================ // library marker kkossev.rgbLib, line 900
+▸ Logical Type                              = Zigbee Router // library marker kkossev.rgbLib, line 901
+▸ Complex Descriptor Available              = No // library marker kkossev.rgbLib, line 902
+▸ User Descriptor Available                 = No // library marker kkossev.rgbLib, line 903
+▸ Frequency Band                            = 2400 - 2483.5 MHz // library marker kkossev.rgbLib, line 904
+▸ Alternate PAN Coordinator                 = No // library marker kkossev.rgbLib, line 905
+▸ Device Type                               = Full Function Device (FFD) // library marker kkossev.rgbLib, line 906
+▸ Mains Power Source                        = Yes // library marker kkossev.rgbLib, line 907
+▸ Receiver On When Idle                     = Yes (always on) // library marker kkossev.rgbLib, line 908
+▸ Security Capability                       = No // library marker kkossev.rgbLib, line 909
+▸ Allocate Address                          = Yes // library marker kkossev.rgbLib, line 910
+▸ Manufacturer Code                         = 0x115F = XIAOMI // library marker kkossev.rgbLib, line 911
+▸ Maximum Buffer Size                       = 82 bytes // library marker kkossev.rgbLib, line 912
+▸ Maximum Incoming Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 913
+▸ Primary Trust Center                      = No // library marker kkossev.rgbLib, line 914
+▸ Backup Trust Center                       = No // library marker kkossev.rgbLib, line 915
+▸ Primary Binding Table Cache               = Yes // library marker kkossev.rgbLib, line 916
+▸ Backup Binding Table Cache                = No // library marker kkossev.rgbLib, line 917
+▸ Primary Discovery Cache                   = Yes // library marker kkossev.rgbLib, line 918
+▸ Backup Discovery Cache                    = Yes // library marker kkossev.rgbLib, line 919
+▸ Network Manager                           = Yes // library marker kkossev.rgbLib, line 920
+▸ Maximum Outgoing Transfer Size            = 82 bytes // library marker kkossev.rgbLib, line 921
+▸ Extended Active Endpoint List Available   = No // library marker kkossev.rgbLib, line 922
+▸ Extended Simple Descriptor List Available = No // library marker kkossev.rgbLib, line 923
+================================================================================================ // library marker kkossev.rgbLib, line 924
+Power Descriptor // library marker kkossev.rgbLib, line 925
+================================================================================================ // library marker kkossev.rgbLib, line 926
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above // library marker kkossev.rgbLib, line 927
+▸ Available Power Sources    = [Constant (mains) power] // library marker kkossev.rgbLib, line 928
+▸ Current Power Sources      = [Constant (mains) power] // library marker kkossev.rgbLib, line 929
+▸ Current Power Source Level = 100% // library marker kkossev.rgbLib, line 930
+================================================================================================ // library marker kkossev.rgbLib, line 931
+Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster) // library marker kkossev.rgbLib, line 932
+================================================================================================ // library marker kkossev.rgbLib, line 933
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster) // library marker kkossev.rgbLib, line 934
+================================================================================================ // library marker kkossev.rgbLib, line 935
+▸ 0x0000 | ZCL Version          | req | r-- | uint8  | 03                | -- // library marker kkossev.rgbLib, line 936
+▸ 0x0001 | Application Version  | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 937
+▸ 0x0002 | Stack Version        | opt | r-- | uint8  | 1B                | -- // library marker kkossev.rgbLib, line 938
+▸ 0x0003 | HW Version           | opt | r-- | uint8  | 01                | -- // library marker kkossev.rgbLib, line 939
+▸ 0x0004 | Manufacturer Name    | opt | r-- | string | Aqara             | -- // library marker kkossev.rgbLib, line 940
+▸ 0x0005 | Model Identifier     | opt | r-- | string | lumi.light.acn132 | -- // library marker kkossev.rgbLib, line 941
+▸ 0x0006 | Date Code            | req | r-- | string | 20230606          | -- // library marker kkossev.rgbLib, line 942
+▸ 0x0007 | Power Source         | opt | r-- | enum8  | 04 = DC source    | -- // library marker kkossev.rgbLib, line 943
+▸ 0x000A | Product Code         | opt | r-- | octstr | --                | -- // library marker kkossev.rgbLib, line 944
+▸ 0x000D | Serial Number        | opt | r-- | string | --                | -- // library marker kkossev.rgbLib, line 945
+▸ 0x0010 | Location Description | opt | rw- | string | é»è®¤æ¿é´     | -- // library marker kkossev.rgbLib, line 946
+▸ 0xF000 | --                   | --  | r-- | uint16 | 0000              | -- // library marker kkossev.rgbLib, line 947
+▸ 0xFFFD | Cluster Revision     | req | r-- | uint16 | 0002              | -- // library marker kkossev.rgbLib, line 948
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 949
+▸ No commands found // library marker kkossev.rgbLib, line 950
+================================================================================================ // library marker kkossev.rgbLib, line 951
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster) // library marker kkossev.rgbLib, line 952
+================================================================================================ // library marker kkossev.rgbLib, line 953
+▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | -- // library marker kkossev.rgbLib, line 954
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0001             | -- // library marker kkossev.rgbLib, line 955
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 956
+▸ 0x00 | Identify       | req // library marker kkossev.rgbLib, line 957
+▸ 0x01 | Identify Query | req // library marker kkossev.rgbLib, line 958
+================================================================================================ // library marker kkossev.rgbLib, line 959
+Endpoint 0x01 | In Cluster: 0x0004 (Groups Cluster) // library marker kkossev.rgbLib, line 960
+================================================================================================ // library marker kkossev.rgbLib, line 961
+▸ 0x0000 | Name Support     | req | r-- | map8   | 00   | -- // library marker kkossev.rgbLib, line 962
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002 | -- // library marker kkossev.rgbLib, line 963
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 964
+▸ 0x00 | Add Group                | req // library marker kkossev.rgbLib, line 965
+▸ 0x01 | View Group               | req // library marker kkossev.rgbLib, line 966
+▸ 0x02 | Get Group Membership     | req // library marker kkossev.rgbLib, line 967
+▸ 0x03 | Remove Group             | req // library marker kkossev.rgbLib, line 968
+▸ 0x04 | Remove All Groups        | req // library marker kkossev.rgbLib, line 969
+▸ 0x05 | Add Group If Identifying | req // library marker kkossev.rgbLib, line 970
+================================================================================================ // library marker kkossev.rgbLib, line 971
+Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster) // library marker kkossev.rgbLib, line 972
+================================================================================================ // library marker kkossev.rgbLib, line 973
+▸ 0x0000 | Scene Count      | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 974
+▸ 0x0001 | Current Scene    | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 975
+▸ 0x0002 | Current Group    | req | r-- | uint16 | 0000       | -- // library marker kkossev.rgbLib, line 976
+▸ 0x0003 | Scene Valid      | req | r-- | bool   | 00 = False | -- // library marker kkossev.rgbLib, line 977
+▸ 0x0004 | Name Support     | req | r-- | map8   | 00         | -- // library marker kkossev.rgbLib, line 978
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002       | -- // library marker kkossev.rgbLib, line 979
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 980
+▸ 0x00 | Add Scene            | req // library marker kkossev.rgbLib, line 981
+▸ 0x01 | View Scene           | req // library marker kkossev.rgbLib, line 982
+▸ 0x02 | Remove Scene         | req // library marker kkossev.rgbLib, line 983
+▸ 0x03 | Remove All Scenes    | req // library marker kkossev.rgbLib, line 984
+▸ 0x04 | Store Scene          | req // library marker kkossev.rgbLib, line 985
+▸ 0x05 | Recall Scene         | req // library marker kkossev.rgbLib, line 986
+▸ 0x06 | Get Scene Membership | req // library marker kkossev.rgbLib, line 987
+================================================================================================ // library marker kkossev.rgbLib, line 988
+Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster) // library marker kkossev.rgbLib, line 989
+================================================================================================ // library marker kkossev.rgbLib, line 990
+▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On  | 0..300 // library marker kkossev.rgbLib, line 991
+▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --     // library marker kkossev.rgbLib, line 992
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 993
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 994
+▸ 0x00 | Off    | req // library marker kkossev.rgbLib, line 995
+▸ 0x01 | On     | req // library marker kkossev.rgbLib, line 996
+▸ 0x02 | Toggle | req // library marker kkossev.rgbLib, line 997
+================================================================================================ // library marker kkossev.rgbLib, line 998
+Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster) // library marker kkossev.rgbLib, line 999
+================================================================================================ // library marker kkossev.rgbLib, line 1000
+▸ 0x0000 | Current Level          | req | r-p | uint8  | 0C = 4%          | 1..3600 // library marker kkossev.rgbLib, line 1001
+▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --      // library marker kkossev.rgbLib, line 1002
+▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --      // library marker kkossev.rgbLib, line 1003
+▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --      // library marker kkossev.rgbLib, line 1004
+▸ 0x000F | --                     | --  | rw- | map8   | 00               | --      // library marker kkossev.rgbLib, line 1005
+▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1006
+▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --      // library marker kkossev.rgbLib, line 1007
+▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1008
+▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1009
+▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --      // library marker kkossev.rgbLib, line 1010
+▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --      // library marker kkossev.rgbLib, line 1011
 ------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1012
-▸ 0x00 | Identify       | req // library marker kkossev.rgbLib, line 1013
-▸ 0x01 | Identify Query | req // library marker kkossev.rgbLib, line 1014
-================================================================================================ // library marker kkossev.rgbLib, line 1015
-Endpoint 0x01 | In Cluster: 0x0004 (Groups Cluster) // library marker kkossev.rgbLib, line 1016
-================================================================================================ // library marker kkossev.rgbLib, line 1017
-▸ 0x0000 | Name Support     | req | r-- | map8   | 00   | -- // library marker kkossev.rgbLib, line 1018
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002 | -- // library marker kkossev.rgbLib, line 1019
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1020
-▸ 0x00 | Add Group                | req // library marker kkossev.rgbLib, line 1021
-▸ 0x01 | View Group               | req // library marker kkossev.rgbLib, line 1022
-▸ 0x02 | Get Group Membership     | req // library marker kkossev.rgbLib, line 1023
-▸ 0x03 | Remove Group             | req // library marker kkossev.rgbLib, line 1024
-▸ 0x04 | Remove All Groups        | req // library marker kkossev.rgbLib, line 1025
-▸ 0x05 | Add Group If Identifying | req // library marker kkossev.rgbLib, line 1026
-================================================================================================ // library marker kkossev.rgbLib, line 1027
-Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster) // library marker kkossev.rgbLib, line 1028
-================================================================================================ // library marker kkossev.rgbLib, line 1029
-▸ 0x0000 | Scene Count      | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 1030
-▸ 0x0001 | Current Scene    | req | r-- | uint8  | 00         | -- // library marker kkossev.rgbLib, line 1031
-▸ 0x0002 | Current Group    | req | r-- | uint16 | 0000       | -- // library marker kkossev.rgbLib, line 1032
-▸ 0x0003 | Scene Valid      | req | r-- | bool   | 00 = False | -- // library marker kkossev.rgbLib, line 1033
-▸ 0x0004 | Name Support     | req | r-- | map8   | 00         | -- // library marker kkossev.rgbLib, line 1034
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002       | -- // library marker kkossev.rgbLib, line 1035
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1036
-▸ 0x00 | Add Scene            | req // library marker kkossev.rgbLib, line 1037
-▸ 0x01 | View Scene           | req // library marker kkossev.rgbLib, line 1038
-▸ 0x02 | Remove Scene         | req // library marker kkossev.rgbLib, line 1039
-▸ 0x03 | Remove All Scenes    | req // library marker kkossev.rgbLib, line 1040
-▸ 0x04 | Store Scene          | req // library marker kkossev.rgbLib, line 1041
-▸ 0x05 | Recall Scene         | req // library marker kkossev.rgbLib, line 1042
-▸ 0x06 | Get Scene Membership | req // library marker kkossev.rgbLib, line 1043
-================================================================================================ // library marker kkossev.rgbLib, line 1044
-Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster) // library marker kkossev.rgbLib, line 1045
-================================================================================================ // library marker kkossev.rgbLib, line 1046
-▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On  | 0..300 // library marker kkossev.rgbLib, line 1047
-▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --     // library marker kkossev.rgbLib, line 1048
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1049
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1050
-▸ 0x00 | Off    | req // library marker kkossev.rgbLib, line 1051
-▸ 0x01 | On     | req // library marker kkossev.rgbLib, line 1052
-▸ 0x02 | Toggle | req // library marker kkossev.rgbLib, line 1053
-================================================================================================ // library marker kkossev.rgbLib, line 1054
-Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster) // library marker kkossev.rgbLib, line 1055
-================================================================================================ // library marker kkossev.rgbLib, line 1056
-▸ 0x0000 | Current Level          | req | r-p | uint8  | 0C = 4%          | 1..3600 // library marker kkossev.rgbLib, line 1057
-▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --      // library marker kkossev.rgbLib, line 1058
-▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --      // library marker kkossev.rgbLib, line 1059
-▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --      // library marker kkossev.rgbLib, line 1060
-▸ 0x000F | --                     | --  | rw- | map8   | 00               | --      // library marker kkossev.rgbLib, line 1061
-▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1062
-▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --      // library marker kkossev.rgbLib, line 1063
-▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1064
-▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --      // library marker kkossev.rgbLib, line 1065
-▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --      // library marker kkossev.rgbLib, line 1066
-▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --      // library marker kkossev.rgbLib, line 1067
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1068
-▸ 0x00 | Move To Level             | req // library marker kkossev.rgbLib, line 1069
-▸ 0x01 | Move                      | req // library marker kkossev.rgbLib, line 1070
-▸ 0x02 | Step                      | req // library marker kkossev.rgbLib, line 1071
-▸ 0x03 | Stop                      | req // library marker kkossev.rgbLib, line 1072
-▸ 0x04 | Move To Level With On/Off | req // library marker kkossev.rgbLib, line 1073
-▸ 0x05 | Move With On/Off          | req // library marker kkossev.rgbLib, line 1074
-▸ 0x06 | Step With On/Off          | req // library marker kkossev.rgbLib, line 1075
-▸ 0x07 | Stop                      | req // library marker kkossev.rgbLib, line 1076
-================================================================================================ // library marker kkossev.rgbLib, line 1077
-Endpoint 0x01 | In Cluster: 0x0300 (Color Control Cluster) // library marker kkossev.rgbLib, line 1078
-================================================================================================ // library marker kkossev.rgbLib, line 1079
-▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --     // library marker kkossev.rgbLib, line 1080
-▸ 0x0003 | CurrentX                         | req | r-p | uint16 | 4A3C     | 0..300 // library marker kkossev.rgbLib, line 1081
-▸ 0x0004 | CurrentY                         | req | r-p | uint16 | 8FEB     | 0..300 // library marker kkossev.rgbLib, line 1082
-▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1083
-▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1084
-▸ 0x000F | --                               | --  | rw- | map8   | 00       | --     // library marker kkossev.rgbLib, line 1085
-▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --     // library marker kkossev.rgbLib, line 1086
-▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --     // library marker kkossev.rgbLib, line 1087
-▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1088
-▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --     // library marker kkossev.rgbLib, line 1089
-▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1090
-▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --     // library marker kkossev.rgbLib, line 1091
-▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1092
-▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --     // library marker kkossev.rgbLib, line 1093
-▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1094
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1095
-▸ 0x07 | Move to Color             | req // library marker kkossev.rgbLib, line 1096
-▸ 0x08 | Move Color                | req // library marker kkossev.rgbLib, line 1097
-▸ 0x09 | Step Color                | req // library marker kkossev.rgbLib, line 1098
-▸ 0x0A | Move to Color Temperature | req // library marker kkossev.rgbLib, line 1099
-▸ 0x47 | Stop Move Step            | req // library marker kkossev.rgbLib, line 1100
-▸ 0x4B | Move Color Temperature    | req // library marker kkossev.rgbLib, line 1101
-▸ 0x4C | Step Color Temperature    | req // library marker kkossev.rgbLib, line 1102
-================================================================================================ // library marker kkossev.rgbLib, line 1103
-Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster) // library marker kkossev.rgbLib, line 1104
-================================================================================================ // library marker kkossev.rgbLib, line 1105
-▸ No attributes found // library marker kkossev.rgbLib, line 1106
------------------------------------------------------------------------------------------------- // library marker kkossev.rgbLib, line 1107
-▸ No commands found // library marker kkossev.rgbLib, line 1108
-================================================================================================ // library marker kkossev.rgbLib, line 1109
+▸ 0x00 | Move To Level             | req // library marker kkossev.rgbLib, line 1013
+▸ 0x01 | Move                      | req // library marker kkossev.rgbLib, line 1014
+▸ 0x02 | Step                      | req // library marker kkossev.rgbLib, line 1015
+▸ 0x03 | Stop                      | req // library marker kkossev.rgbLib, line 1016
+▸ 0x04 | Move To Level With On/Off | req // library marker kkossev.rgbLib, line 1017
+▸ 0x05 | Move With On/Off          | req // library marker kkossev.rgbLib, line 1018
+▸ 0x06 | Step With On/Off          | req // library marker kkossev.rgbLib, line 1019
+▸ 0x07 | Stop                      | req // library marker kkossev.rgbLib, line 1020
+================================================================================================ // library marker kkossev.rgbLib, line 1021
+Endpoint 0x01 | In Cluster: 0x0300 (Color Control Cluster) // library marker kkossev.rgbLib, line 1022
+================================================================================================ // library marker kkossev.rgbLib, line 1023
+▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --     // library marker kkossev.rgbLib, line 1024
+▸ 0x0003 | CurrentX                         | req | r-p | uint16 | 4A3C     | 0..300 // library marker kkossev.rgbLib, line 1025
+▸ 0x0004 | CurrentY                         | req | r-p | uint16 | 8FEB     | 0..300 // library marker kkossev.rgbLib, line 1026
+▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1027
+▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1028
+▸ 0x000F | --                               | --  | rw- | map8   | 00       | --     // library marker kkossev.rgbLib, line 1029
+▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --     // library marker kkossev.rgbLib, line 1030
+▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --     // library marker kkossev.rgbLib, line 1031
+▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --     // library marker kkossev.rgbLib, line 1032
+▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --     // library marker kkossev.rgbLib, line 1033
+▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1034
+▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --     // library marker kkossev.rgbLib, line 1035
+▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --     // library marker kkossev.rgbLib, line 1036
+▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --     // library marker kkossev.rgbLib, line 1037
+▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --     // library marker kkossev.rgbLib, line 1038
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1039
+▸ 0x07 | Move to Color             | req // library marker kkossev.rgbLib, line 1040
+▸ 0x08 | Move Color                | req // library marker kkossev.rgbLib, line 1041
+▸ 0x09 | Step Color                | req // library marker kkossev.rgbLib, line 1042
+▸ 0x0A | Move to Color Temperature | req // library marker kkossev.rgbLib, line 1043
+▸ 0x47 | Stop Move Step            | req // library marker kkossev.rgbLib, line 1044
+▸ 0x4B | Move Color Temperature    | req // library marker kkossev.rgbLib, line 1045
+▸ 0x4C | Step Color Temperature    | req // library marker kkossev.rgbLib, line 1046
+================================================================================================ // library marker kkossev.rgbLib, line 1047
+Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster) // library marker kkossev.rgbLib, line 1048
+================================================================================================ // library marker kkossev.rgbLib, line 1049
+▸ No attributes found // library marker kkossev.rgbLib, line 1050
+------------------------------------------------------------------------------------------------ // library marker kkossev.rgbLib, line 1051
+▸ No commands found // library marker kkossev.rgbLib, line 1052
+================================================================================================ // library marker kkossev.rgbLib, line 1053
 
-*/ // library marker kkossev.rgbLib, line 1111
+*/ // library marker kkossev.rgbLib, line 1055
 
-def testT(par) { // library marker kkossev.rgbLib, line 1113
-    logWarn "testT(${par})" // library marker kkossev.rgbLib, line 1114
-} // library marker kkossev.rgbLib, line 1115
+def testT(par) { // library marker kkossev.rgbLib, line 1057
+    logWarn "testT(${par})" // library marker kkossev.rgbLib, line 1058
+} // library marker kkossev.rgbLib, line 1059
 
 
 // ~~~~~ end include (143) kkossev.rgbLib ~~~~~
