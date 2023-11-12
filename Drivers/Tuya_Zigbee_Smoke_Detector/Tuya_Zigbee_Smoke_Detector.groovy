@@ -22,7 +22,7 @@
  *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
  *  ver. 1.1.3 2023-11-11 kkossev - (dev. branch)
  *
- *            TODO: fix RTT negative values bug
+ *            TODO: fix RTT negative values bug; check _TZE200_m9skfctm battery reporting
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
  *            TODO: send the check-in messages as an event / show as Info log
@@ -34,7 +34,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.1.3" }
-def timeStamp() {"2022/11/11 9:14 AM"}
+def timeStamp() {"2022/11/11 10:10 PM"}
 
 @Field static final Boolean _DEBUG = false
 
