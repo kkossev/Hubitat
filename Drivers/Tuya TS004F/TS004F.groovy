@@ -5,14 +5,14 @@
  *
  *  https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823
  *
- *	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- *	in compliance with the License. You may obtain a copy of the License at:
+ *    Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *    in compliance with the License. You may obtain a copy of the License at:
  *
- *		http://www.apache.org/licenses/LICENSE-2.0
+ *        http://www.apache.org/licenses/LICENSE-2.0
  *
- *	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- *	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- *	for the specific language governing permissions and limitations under the License.
+ *    Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *    on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *    for the specific language governing permissions and limitations under the License.
  * 
  *  The inital version was based on ST DH "Zemismart Button", namespace: SangBoy, author: YooSangBeom
  * 
@@ -46,6 +46,7 @@
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  *
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
+ * ver. 2.6.10 2023-11-12 kkossev    - (dev. branch) added _TZ3000_ur5fpg7p in the needsDebouncing list;
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *                                   - TODO: batteryReporting is not initialized!
@@ -62,13 +63,11 @@
  *                                   - TODO: calculate battery % from Voltage event for Konke button!
  *                                   - TODO: add 'auto revert to scene mode' option
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
- *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
- *                                   - TODO : add Ikea Styrbar Remote 2: https://github.com/TheJulianJES/zha-device-handlers/blob/05c59d01683e0e929f982bf90a338c7596b3e119/zhaquirks/ikea/fourbtnremote.py 
  *
  */
 
-def version() { "2.6.6" }
-def timeStamp() {"2023/05/30 1:51 PM"}
+def version() { "2.6.10" }
+def timeStamp() {"2023/11/12 10:34 PM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -85,13 +84,11 @@ metadata {
     capability "PushableButton"
     capability "DoubleTapableButton"
     capability "HoldableButton"
-   	capability "ReleasableButton"
+    capability "ReleasableButton"
     capability "Battery"
     capability "PowerSource"
     capability "Configuration"
     capability "Health Check"
-    //capability "SwitchLevel"
-    //capability "Switch"
 
     attribute "supportedButtonValues", "JSON_OBJECT"
     attribute "switchMode", "enum", ["dimmer", "scene"]
@@ -104,13 +101,13 @@ metadata {
         command "test", [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
     }
               
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_uri7ongn", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_ixla93vd", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_qja6nq5z", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_csflgqj2", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_xabckq1v", model: "TS004F", deviceJoinName: "Tuya Scene Switch TS004F"
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_pcqjmcud", model: "TS004F", deviceJoinName: "YSR-MINI-Z Remote TS004F"
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_4fjiwweb", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_uri7ongn", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_ixla93vd", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_qja6nq5z", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_csflgqj2", model: "TS004F", deviceJoinName: "Tuya Smart Knob TS004F"    // not tested
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_abrsvsou", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
 
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019,000A", manufacturer: "_TZ3400_keyjqthh", model: "TS0041", deviceJoinName: "Tuya YSB22 TS0041"
@@ -123,8 +120,8 @@ metadata {
     fingerprint inClusters: "0000,0001,0006", outClusters: "0019", manufacturer: "_TYZB02_key8kk7r", model: "TS0041", deviceJoinName: "Zigbee Tuya 1 Button"
     fingerprint profileId: "0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0041", manufacturer:"_TZ3000_fa9mlvja"    // https://www.aliexpress.com/item/1005005363529624.html         
         
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0006,0008,1000", manufacturer: "_TZ3000_ja5osu5g", model: "TS004F", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
- 	fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_rco1yzb1", model: "TS004F", deviceJoinName: "LIDL Smart Button SSBM A1"
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0006,0008,1000", manufacturer: "_TZ3000_ja5osu5g", model: "TS004F", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
+    fingerprint inClusters: "0000,0001,0003,0004,0006,1000,E001", outClusters: "0019,000A,0003,0004,0005,0006,0008,1000", manufacturer: "_TZ3000_rco1yzb1", model: "TS004F", deviceJoinName: "LIDL Smart Button SSBM A1"
         
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_tzvbimpq", deviceJoinName: "Tuya 2 button Scene Switch"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters:"0019,000A", model:"TS0042", manufacturer:"_TZ3000_t8hzpgnd", deviceJoinName: "Tuya 2 button Scene Switch"    // not tested
@@ -223,7 +220,7 @@ def isKonkeButton() {device.getDataValue("model") in ["3AFE280100510001", "3AFE1
 def isSonoff() {device.getDataValue("manufacturer") == "eWeLink"}
 def isIkea() {device.getDataValue("manufacturer") == "IKEA of Sweden"}
 def isOsram() {device.getDataValue("manufacturer") == "OSRAM"}
-def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d"])}
+def needsDebouncing() {device.getDataValue("model") == "TS004F" || (device.getDataValue("manufacturer") in ["_TZ3000_abci1hiu", "_TZ3000_vp6clf9d", "_TZ3000_ur5fpg7p"])}
 def needsMagic() {device.getDataValue("model") in ["TS004F", "TS0044", "TS0043", "TS0042", "TS0041", "TS0046"]}
 def isSOSbutton() {device.getDataValue("manufacturer") in ["_TZ3000_4fsgukof", "_TZ3000_wr2ucaj9", "_TZ3000_zsh6uat3", "_TZ3000_tj4pwzzm", "_TZ3000_2izubafb", "_TZ3000_pkfazisv" ]}
 
@@ -233,17 +230,17 @@ def parse(String description) {
     if (state.stats != null) {state.stats["rxCtr"] = (state.stats["rxCtr"] ?: 0) + 1}
     setHealthStatusOnline()
     if (logEnable) log.debug "${device.displayName} description is $description"
-	def event = null
+    def event = null
     try {
         event = zigbee.getEvent(description)
     }
     catch (e) {
         if (logEnable) {log.warn "${device.displayName} exception caught while procesing event $description"}
     }
-	def result = []
+    def result = []
     def buttonNumber = 0
     
-	if (event) {
+    if (event) {
         if (logEnable) log.debug "${device.displayName} Event enter: $event"
         switch (event.name) {
             case 'battery' :
@@ -276,22 +273,22 @@ def parse(String description) {
         // when TS004F initialized in Scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.command == "FD") {
             if (descMap.sourceEndpoint == "03") {
-     	        buttonNumber = reverseButton==true ? 3 : 1
+                 buttonNumber = reverseButton==true ? 3 : 1
             }
             else if (descMap.sourceEndpoint == "04") {
-      	        buttonNumber = reverseButton==true  ? 4 : 2
+                  buttonNumber = reverseButton==true  ? 4 : 2
             }
             else if (descMap.sourceEndpoint == "02") {
                 buttonNumber = reverseButton==true  ? 2 : 3
             }
             else if (descMap.sourceEndpoint == "01") {
-       	        buttonNumber = reverseButton==true  ? 1 : 4
+                   buttonNumber = reverseButton==true  ? 1 : 4
             }
-	        else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
-   	            buttonNumber = reverseButton==true  ? 5 : 5
+            else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
+                   buttonNumber = reverseButton==true  ? 5 : 5
             }
             else if (descMap.sourceEndpoint == "06") {
-       	        buttonNumber = reverseButton==true  ? 6 : 6
+                   buttonNumber = reverseButton==true  ? 6 : 6
             }            
             if (descMap.data[0] == "00")
                 buttonState = "pushed"
@@ -330,17 +327,17 @@ def parse(String description) {
         else if (descMap.clusterInt == 0x0501) { 
             // TODO: Make the button numbers compatible with Muxa's driver : 1 - Arm Away (left); 2 - Disarm (right); 3 - Arm Home (top); 4 - Panic (bottom) // https://community.hubitat.com/t/release-heiman-zigbee-key-fob-driver/27002 
             if (descMap.command == "02" && descMap.data.size() == 0)  {
-      	        buttonNumber = reverseButton == true  ? 1 : 3
+                  buttonNumber = reverseButton == true  ? 1 : 3
             } 
             else if (descMap.command == "00" && descMap.data.size() >= 1) {
                 if (descMap.data[0] == "03") {
-          	        buttonNumber = reverseButton == true  ? 2 : 4
+                      buttonNumber = reverseButton == true  ? 2 : 4
                 }
                 else if (descMap.data[0] == "01") {
-          	        buttonNumber = reverseButton == true  ? 3 : 1
+                      buttonNumber = reverseButton == true  ? 3 : 1
                 }
                 else if (descMap.data[0] == "00") {
-          	        buttonNumber = reverseButton == true  ? 4 : 2
+                      buttonNumber = reverseButton == true  ? 4 : 2
                 }
             } 
             if (buttonNumber != 0 ) {
@@ -431,18 +428,18 @@ def parse(String description) {
             if (logEnable) {log.warn "${device.displayName} UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.lastButtonNumber}"}
         }
         if (buttonState != "unknown" && buttonNumber != 0) {
-	        def descriptionText = "button $buttonNumber was $buttonState"
-	        event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+            def descriptionText = "button $buttonNumber was $buttonState"
+            event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
             if (txtEnable) {log.info "${device.displayName} $descriptionText"}
         }
         
         if (event) {
-		    result = createEvent(event)
+            result = createEvent(event)
             if (device.getDataValue("model") == "TS004F" || device.getDataValue("manufacturer") == "_TZ3000_abci1hiu") {
                 runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
             }
-	    } 
-	} // if catchall
+        } 
+    } // if catchall
     else {
         def descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) log.debug "${device.displayName} raw: descMap: $descMap"
@@ -467,7 +464,7 @@ def parse(String description) {
         else {
             if (logEnable) {log.debug "${device.displayName} did not parse descMap: $descMap"}
         }
-	}
+    }
     return result
 }
 
@@ -591,7 +588,7 @@ void initializeVars(boolean fullInit = false ) {
 }
 
 def configure() {
-	if (logEnable) log.debug "${device.displayName} Configuring device model ${device.getDataValue("model")} manufacturer ${device.getDataValue('manufacturer')} ..."
+    if (logEnable) log.debug "${device.displayName} Configuring device model ${device.getDataValue("model")} manufacturer ${device.getDataValue('manufacturer')} ..."
     initialize()
 }
 
@@ -599,20 +596,14 @@ def installed()
 {
     logInfo "installed()..."
     initializeVars( fullInit = true ) 
-  	initialize()
+      initialize()
 }
-
-@Field static final Integer[][] Lightify = [
-    [0x0a,0x20,0x01],
-    [0x0b,0x20,0x00]
-]
 
 def initialize() {
     if (/*true*/ isTuya()) {
         tuyaMagic()
     } 
     else if (isSonoff()) {
-        //def endpoint = 0x01
         sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} ${device.endpointId} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 50", ])
         sendZigbeeCommands(["he rattr 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0001 0x0021 {}", "delay 200", ])
     }    
@@ -630,43 +621,43 @@ def initialize() {
         //sendZigbeeCommands(["zdo bind ${device.deviceNetworkId} 0x04 0x01 0x0008 {${device.zigbeeId}} {}", "delay 50", ])
     }    
     else {
-    	if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
+        if (logEnable) log.debug "${device.displayName} skipped TuyaMagic() for non-Tuya device ${device.getDataValue("model")} ..."
     }
     
     // determine the number of the buttons and the supported button actions (values) depending on the model/manufactuer 
     def numberOfButtons = 4
     def supportedValues = ["pushed", "double", "held"]
     if (isSOSbutton()) {
-    	numberOfButtons = 1
+        numberOfButtons = 1
         supportedValues = ["pushed"]
     }
     else if ((device.getDataValue("model") in ["TS0041", "3AFE280100510001", "3AFE170100510001"]) || (device.getDataValue("manufacturer") in ["_TZ3000_ja5osu5g", "eWeLink"])) {
-    	numberOfButtons = 1
+        numberOfButtons = 1
     } 
     else if (device.getDataValue("model") == "TS0042") {
-    	numberOfButtons = 2
+        numberOfButtons = 2
     } 
     else if (device.getDataValue("model") == "TS0043") {
-    	numberOfButtons = 3
+        numberOfButtons = 3
     } 
     else if (device.getDataValue("model") == "TS004F" || device.getDataValue("model") == "TS0044") {
         if (isSmartKnob()) {    // Smart Knob 
             log.debug "${device.displayName} device ${device.data.manufacturer} identified as Smart Knob model ${device.data.model}"
-        	numberOfButtons = 3
+            numberOfButtons = 3
             supportedValues = ["pushed", "double", "held", "released"]
         } 
         else {
             log.debug "${device.displayName} device ${device.data.manufacturer} identified as 4 keys scene switch model ${device.data.model}"
-        	numberOfButtons = 4
+            numberOfButtons = 4
             supportedValues = ["pushed", "double", "held"]    // no released events are generated in scene switch mode
         }
     } 
     else if (device.getDataValue("model") == "TS0215") {
-    	numberOfButtons = 4
+        numberOfButtons = 4
         supportedValues = ["pushed"]
     } 
     else if (device.getDataValue("model") == "TS0045") {    // just in case a new Tuya devices manufacturer decides to invent a new  model! :) 
-    	numberOfButtons = 5
+        numberOfButtons = 5
     } 
     else if (device.getDataValue("model") in ["TS0601", "TS0046"]) {
         numberOfButtons = 6
@@ -684,7 +675,7 @@ def initialize() {
         supportedValues = ["pushed", "held", "released"]
     }
     else {
-    	numberOfButtons = 4	// unknown
+        numberOfButtons = 4    // unknown
         supportedValues = ["pushed", "double", "held", "released"]
         log.warn "${device.displayName} <b>unknown device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')}. Please report this log to the developer.</b>"
     }
@@ -752,11 +743,11 @@ def switchMode( mode ) {
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
-	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 Double safeToDouble(val, Double defaultVal=0.0) {
-	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 def tuyaMagic() {
