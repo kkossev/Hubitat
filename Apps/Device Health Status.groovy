@@ -24,15 +24,15 @@
  *  ver. 1.0.5 2023-02-08 kkossev - added toggle "Show only offline (INACTIVE / not present) devices"
  *  ver. 1.0.6 2023-02-15 kkossev - IntelliJ lint; merged Tonesto7 pull request; 
  *  ver. 1.0.7 2023-02-16 FriedCheese2006 - Added DataTables for enhance table sorting/searching
+ *  ver. 1.0.8 2023-11-12 kkossev - added "MAT" controllerType
  *
  *                                  TODO: 
  */
 
 import groovy.transform.Field
 
-def version() { "1.0.7" }
-
-def timeStamp() { "2023/02/16 3:30 PM" }
+def version() { "1.0.8" }
+def timeStamp() { "2023/11/12 10:45 AM" }
 
 @Field static final Boolean debug = false
 
@@ -151,12 +151,12 @@ def mainPage() {
 }
 
 String displayTable() {
-	String str = "<script src='https://code.iconify.design/iconify-icon/1.0.0/iconify-icon.min.js'></script>"
+    String str = "<script src='https://code.iconify.design/iconify-icon/1.0.0/iconify-icon.min.js'></script>"
     //Import DataTables library
-	str += "<link rel='stylesheet' type='text/css' href='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.css'/>"
-	str += "<script type='text/javascript' src='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.js'></script>"
-	str += "<style>.mdl-data-table tbody tr:hover{background-color:inherit} .tstat-col td,.tstat-col th { padding:8px 8px;text-align:center;font-size:12px} .tstat-col td {font-size:15px }" +
-		"</style><div style='overflow-x:auto'><table table id='main-table' class='mdl-data-table tstat-col' style=';border:2px solid black'>" +
+    str += "<link rel='stylesheet' type='text/css' href='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.css'/>"
+    str += "<script type='text/javascript' src='https://cdn.datatables.net/v/bs/dt-1.11.3/datatables.min.js'></script>"
+    str += "<style>.mdl-data-table tbody tr:hover{background-color:inherit} .tstat-col td,.tstat-col th { padding:8px 8px;text-align:center;font-size:12px} .tstat-col td {font-size:15px }" +
+        "</style><div style='overflow-x:auto'><table table id='main-table' class='mdl-data-table tstat-col' style=';border:2px solid black'>" +
 
             "<thead><tr style='border-bottom:2px solid black'><th style='border-right:2px solid black'><div>Device</div><div>Name</div></th>" +
             "<th><div>Health</div><div>Status</div></th>" +
@@ -190,7 +190,7 @@ String displayTable() {
             //logDebug "SKIPPING dev.id=${dev.id} w/o Battery "
         } else if (settings?.hideNoHealthStatusAttributeDevices == true && state.devices["$dev.id"].healthStatus == null) {
             //logDebug "SKIPPING dev.id=${dev.id} w/o healthStatus"
-        } else if (settings?.hideVirtualAndUnknownDevices == true && !(dev.controllerType in ["ZGB", "ZWV", "LNK"])) {
+        } else if (settings?.hideVirtualAndUnknownDevices == true && !(dev.controllerType in ["ZGB", "ZWV", "LNK", "MAT"])) {
             //logDebug "SKIPPING dev.id=${dev.id} VirtualAndUnknownDevices ${dev.controllerType}"
         } else { //
             String devLink = "<a href='/device/edit/$dev.id' target='_blank' title='Open Device Page for $dev'>$dev"
