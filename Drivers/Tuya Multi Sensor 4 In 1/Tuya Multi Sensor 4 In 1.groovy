@@ -63,8 +63,10 @@
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
- * ver. 1.6.7  2023-11-03 kkossev  - (dev. branch) divideBy10
+ * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
  *
+ *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
+ *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
  *                                   TODO: handle preferences of a type TEXT
  *                                   TODO: add Sensitivity Levels Presets
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
@@ -94,8 +96,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.7" }
-def timeStamp() {"2023/11/03 1:17 PM"}
+def version() { "1.6.8" }
+def timeStamp() {"2023/11/09 7:20 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -339,7 +341,7 @@ def isChattyRadarReport(descMap) {
     "TS0202_4IN1"  : [
             description   : "Tuya 4in1 (motion/temp/humi/lux) sensor",
             models        : ["TS0202"],         // model: 'ZB003-X'  vendor: 'Fantem'
-            device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
+            device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:false],    // check powerSource
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true, "keepTime":true, "sensitivity":true],
             commands      : ["reportingTime4in1":"reportingTime4in1", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
@@ -443,10 +445,8 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0202","RH3040"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],  // TODO - check sensitivity !
+            preferences   : ["motionReset":true, "keepTime":false, "sensitivity":false],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr        
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"],             // KK model: 'ZM-RT201'// 5 seconds (!) reset period for testing
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mmtwjmaq", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_otvn3lne", deviceJoinName: "Tuya TS0202 Motion Sensor"],
@@ -462,8 +462,6 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_hqbdru35", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_tiwq83wk", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_ykwcwxmz", deviceJoinName: "Tuya TS0202 Motion Sensor"],
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/tuya-motion-sensor-driver/72000/54?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_hgu1dlak", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_hktqahrq", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_jmrgyl7o", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // not tested! //https://zigbee.blakadder.com/Luminea_ZX-5311.html
@@ -486,7 +484,31 @@ def isChattyRadarReport(descMap) {
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             configuration : ["battery": false]
     ],
-    
+
+    "TS0202_MOTION_IAS_CONFIGURABLE"   : [
+            description   : "Tuya TS0202 Motion sensor (IAS) configurable",
+            models        : ["TS0202"],
+            device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
+            capabilities  : ["MotionSensor": true, "Battery": true],
+            preferences   : ["motionReset":true, "keepTime":"0x0500:0xF001", "sensitivity":"0x0500:0x0013"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds ['30', '60', '120']
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr ['30', '60', '120']       
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_fwxuzcf4", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/tuya-motion-sensor-driver/72000/54?u=kkossev
+
+                
+            ],
+            attributes:       [
+                [at:"0x0500:0x0013", name:"sensitivity", type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                [at:"0x0500:0xF001", name:"keepTime",    type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"0",  unit:"seconds",    map:[0:"30 seconds", 1:"60 seconds", 2:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
+            ],
+            deviceJoinName: "Tuya TS0202 Motion Sensor configurable",
+            configuration : ["battery": false]
+    ],
+        
     // isMotionSwitch()
     "TS0202_MOTION_SWITCH": [   
             description   : "Tuya Motion Sensor and Scene Switch",
@@ -576,9 +598,13 @@ def isChattyRadarReport(descMap) {
             models        : ["MOT003","XXX"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],
+            preferences   : ["motionReset":true, "keepTime":"0x0500:0xF001", "sensitivity":"0x0500:0x0013"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0400,0402,0500", outClusters:"0019", model:"MOT003", manufacturer:"HiveHome.com", deviceJoinName: "Hive Motion Sensor"]         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
+            ],
+            attributes:       [
+                [at:"0x0500:0x0013", name:"sensitivity", type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                [at:"0x0500:0xF001", name:"keepTime",    type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"0",  unit:"seconds",    map:[0:"30 seconds", 1:"60 seconds", 2:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
             ],
             deviceJoinName: "Other OEM Motion sensor (IAS)",
             configuration : ["battery": false]
@@ -897,8 +923,6 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : [:]
     ],    
 
-   
-    
     // the new 5.8GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar() 
     "TS0225_2AAELWXK_RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : "Tuya TS0225_2AAELWXK 5.8 GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
@@ -2489,7 +2513,7 @@ def updated() {
         }
     }
     else {
-        logDebug "forcedProfile is not set"
+        //logDebug "forcedProfile is not set"
     }
     
     //    LED enable - TODO !
@@ -2512,6 +2536,7 @@ def updated() {
     }
     //
    */
+    // sensitivity
     if (settings?.sensitivity != null) {
         if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
             def val = settings?.sensitivity as int    
@@ -2535,8 +2560,8 @@ def updated() {
     if (settings?.keepTime != null) {
         if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime != false))) {
             if (isIAS() && (settings?.keepTime != null)) {
-            cmds += sendKeepTimeIAS( settings?.keepTime )
-            logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+                cmds += sendKeepTimeIAS( settings?.keepTime )
+                logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
             }        
             else {  // TODO - move to dpMap !!
                 /*
@@ -2583,13 +2608,18 @@ def updated() {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
     //    
-    if (cmds != null && cmds.size() >= 7) {
+    // calculate the total size of the cmds array
+    int totalSize = 0
+    for (int i = 0; i < cmds.size(); i++) {
+        totalSize += cmds[i].size()
+    }
+    if (cmds != null && totalSize >= 7) {
         logDebug "sending the changed AdvancedOptions (size=${cmds.size()}) to the device..."
         sendZigbeeCommands( cmds )  
         logInfo "preferencies updates are sent to the device..."
     }
     else {
-        logDebug "no preferences are changed (size=${cmds.size()}) "
+        logDebug "no preferences are changed (size=${cmds.size()}) cmds=${cmds}"
     }
 }
 
@@ -3079,7 +3109,6 @@ void formatAttrib() {
     if (settings.allStatusTextEnable == false) {    // do not send empty html or text attributes
         return
     }
-    logDebug "formatAttrib - text"
     String attrStr = ""
     attrStr += addToAttr("status", "healthStatus")
     attrStr += addToAttr("motion", "motion")
@@ -3255,6 +3284,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
 }
 
 // called from updated() method
+// TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
 def updateAllPreferences() {
     logDebug "updateAllPreferences: preferences=${DEVICE.preferences}"
     ArrayList<String> cmds = []
@@ -3265,7 +3295,12 @@ def updateAllPreferences() {
     Integer dpInt = 0
     def scaledValue    // int or String for enums
     (DEVICE.preferences).each { name, dp -> 
-        dpInt = safeToInt(dp)
+        dpInt = safeToInt(dp, -1)
+        if (dpInt <= 0) {
+            // this is the IAS and other non-Tuya DPs preferences .... 
+            logWarn "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
+            return null
+        }
         def dpMaps   =  DEVICE.tuyaDPs 
         Map foundMap
         foundMap = getPreferencesMap(name)
@@ -3279,7 +3314,7 @@ def updateAllPreferences() {
                 }
                 String DPType = (foundMap.type in ["number", "decimal"]) ? DP_TYPE_VALUE : foundMap.type == "bool" ? DP_TYPE_BOOL : foundMap.type == "enum" ? DP_TYPE_ENUM : "unknown"
                 if (scaledValue != null) {
-                    cmds += setRadarParameter(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
+                    cmds += setRadarParameterTuya(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
                 }
                 else {
                     logWarn "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
@@ -3317,7 +3352,7 @@ def divideBy1( val ) { return (val as int) / 1 }    //tests
  * @return An ArrayList of commands sent to the device.
  */
  // TODO - replace this device-specific method !!!
-def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
+def setRadarParameterTuyaTuya( String parName, String DPcommand, String DPType, DPval) {
     ArrayList<String> cmds = []
     def value
     switch (DPType) {

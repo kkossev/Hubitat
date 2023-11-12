@@ -27,7 +27,8 @@
  * ver. 2.1.2  2023-07-23 kkossev  - VYNDSTIRKA library; Switch library; Fingerbot library; IR Blaster Library; fixed the exponential (3E+1) temperature representation bug;
  * ver. 2.1.3  2023-08-28 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version; Tuya mmWave Radar driver; processTuyaDpFingerbot; added Momentary capability for Fingerbot
  * ver. 2.1.4  2023-09-09 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766; added thermostatLib; added xiaomiLib
- * ver. 2.1.5  2023-11-03 kkossev  - (dev. branch) Aqara E1 thermostat; added deviceProfileLib; 
+ * ver. 2.1.5  2023-11-06 kkossev  - Aqara E1 thermostat; added deviceProfileLib; Aqara LED Strip T1 driver;
+ * ver. 2.1.6  2023-11-06 kkossev  - (dev. branch) Aqara E1 thermostat improvements; 
  *
  *                                   TODO: auto turn off Debug messages 15 seconds after installing the new device
  *                                   TODO: Aqara TVOC: implement battery level/percentage 
@@ -43,8 +44,8 @@
  *                                   TODO: Configure: add custom Notes
  */
 
-static String version() { "2.1.5" }
-static String timeStamp() {"2023/11/04 11:26 PM"}
+static String version() { "2.1.6" }
+static String timeStamp() {"2023/11/07 59:40 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -96,6 +97,8 @@ deviceType = "Thermostat"
 //@Field static final String DEVICE_TYPE = "LightSensor"
 //deviceType = "Bulb"
 //@Field static final String DEVICE_TYPE = "Bulb"
+//#include kkossev.xiaomiLib
+//#include kkossev.rgbLib
 //deviceType = "Relay"
 //@Field static final String DEVICE_TYPE = "Relay"
 //deviceType = "Plug"
@@ -128,7 +131,7 @@ metadata {
         //name: 'Tuya Zigbee Dimmer',
         //name: 'Zigbee Button Dimmer',
         //name: 'Tuya Zigbee Light Sensor',
-        //name: 'Tuya Zigbee Bulb',
+        //name: 'Aqara LED Strip T1',
         //name: 'Tuya Zigbee Relay',
         //name: 'Tuya Zigbee Plug V2',
         //name: 'Aqara Cube T1 Pro',
@@ -144,6 +147,7 @@ metadata {
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Dimmer/Tuya%20Zigbee%20Dimmer.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20Button%20Dimmer/Zigbee_Button_Dimmer_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
+        //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%LED%20Strip%20T1/Aqara%20LED%20Strip%20T1.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya_Zigbee_IR_Blaster/Tuya_Zigbee_IR_Blaster_lib_included.groovy',
         //importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_mmWave_Radar.groovy',
@@ -204,13 +208,13 @@ metadata {
         if (deviceType in  ["Plug", "Outlet"]) {
             capability "Outlet"
         }        
-        if (deviceType in  ["Device", "Switch", "Plug", "Outlet", "Dimmer", "Fingerbot"]) {
+        if (deviceType in  ["Device", "Switch", "Plug", "Outlet", "Dimmer", "Fingerbot", "Bulb"]) {
             capability "Switch"
             if (_THREE_STATE == true) {
                 attribute "switch", "enum", SwitchThreeStateOpts.options.values() as List<String>
             }
         }        
-        if (deviceType in ["Dimmer", "ButtonDimmer"]) {
+        if (deviceType in ["Dimmer", "ButtonDimmer", "Bulb"]) {
             capability "SwitchLevel"
         }
         /*
@@ -279,7 +283,8 @@ metadata {
             if ((deviceType in  ["Switch", "Plug", "Dimmer"]) && _THREE_STATE == true) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>What\'s wrong with the three-state concept?</i>', defaultValue: false
             }
-        }
+            input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
+    }
     }
 }
 
@@ -369,7 +374,7 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
-    if (!isChattyDeviceReport(description)) {logDebug "descMap = ${descMap}"}
+    if (!isChattyDeviceReport(description)) {logDebug "parse: descMap = ${descMap} description=${description}"}
     //
     final String clusterName = clusterLookup(descMap.clusterInt)
     final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
@@ -417,6 +422,10 @@ void parse(final String description) {
         case 0x0201 :                                       // Aqara E1 TRV 
             parseThermostatCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
+            break
+        case 0x0300 :                                       // Aqara LED Strip T1
+            parseColorControlCluster(descMap, description)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseColorControlCluster(descMap + map, description) }
             break
         case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
             parseIlluminanceCluster(descMap)
@@ -1593,6 +1602,9 @@ void parseLevelControlCluster(final Map descMap) {
     if (DEVICE_TYPE in ["ButtonDimmer"]) {
         parseLevelControlClusterButtonDimmer(descMap)
     }
+    else if (DEVICE_TYPE in ["Bulb"]) {
+        parseLevelControlClusterBulb(descMap)
+    }
     else if (descMap.attrId == "0000") {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
         final long rawValue = hexStrToUnsignedInt(descMap.value)
@@ -1756,10 +1768,31 @@ private List<String> setLevelPrivate(final Object value, final Integer rate = 0,
 void /*List<String>*/ setLevel(final Object value, final Object transitionTime = null) {
     logInfo "setLevel (${value}, ${transitionTime})"
     if (DEVICE_TYPE in  ["ButtonDimmer"]) { setLevelButtonDimmer(value, transitionTime); return }
+    if (DEVICE_TYPE in  ["Bulb"]) { setLevelBulb(value, transitionTime); return }
     else {
         final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
         scheduleCommandTimeoutCheck()
         /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate))
+    }
+}
+
+/*
+ * -----------------------------------------------------------------------------
+ * Color Control Cluster            0x0300
+ * -----------------------------------------------------------------------------
+*/
+void parseColorControlCluster(final Map descMap, description) {
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (DEVICE_TYPE in ["Bulb"]) {
+        parseColorControlClusterBulb(descMap, description)
+    }
+    else if (descMap.attrId == "0000") {
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
+        final long rawValue = hexStrToUnsignedInt(descMap.value)
+        sendLevelControlEvent(rawValue)
+    }
+    else {
+        logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
     }
 }
 
@@ -2308,8 +2341,8 @@ def configureDevice() {
     else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureDeviceIrBlaster() }
     else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() }
     else if (DEVICE_TYPE in  ["ButtonDimmer"]) { cmds += configureDeviceButtonDimmer() }
-        
-    if (cmds == []) {
+    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += configureBulb() }
+    if (cmds == []) { 
         cmds = ["delay 277",]
     }
     sendZigbeeCommands(cmds)  
@@ -2336,6 +2369,7 @@ def refresh() {
     else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() }
     else if (DEVICE_TYPE in  ["Radar"])      { cmds += refreshRadar() }
     else if (DEVICE_TYPE in  ["Thermostat"]) { cmds += refreshThermostat() }
+    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += refreshBulb() }
     else {
         // generic refresh handling, based on teh device capabilities 
         if (device.hasCapability("Battery")) {
@@ -2540,6 +2574,10 @@ void updated() {
         logDebug settings
         runIn(86400, logsOff)
     }
+    if (settings.traceEnable) {
+        logDebug settings
+        runIn(1800, traceOff)
+    }    
 
     final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
     if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
@@ -2571,6 +2609,10 @@ void updated() {
 void logsOff() {
     logInfo "debug logging disabled..."
     device.updateSetting('logEnable', [value: 'false', type: 'bool'])
+}
+void traceOff() {
+    logInfo "trace logging disabled..."
+    device.updateSetting('traceEnable', [value: 'false', type: 'bool'])
 }
 
 @Field static final Map ConfigureOpts = [
@@ -2807,8 +2849,9 @@ void initializeVars( boolean fullInit = false ) {
     if (state.health == null) { state.health = [:] }
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     
-    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
+    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
@@ -2832,6 +2875,7 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["Radar"])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none
     if (DEVICE_TYPE in ["ButtonDimmer"]) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) }
     if (DEVICE_TYPE in ["Thermostat"]) { initVarsThermostat(fullInit);     initEventsThermostat(fullInit) }
+    if (DEVICE_TYPE in ["Bulb"])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
@@ -2886,6 +2930,14 @@ def logWarn(msg) {
         log.warn "${device.displayName} " + msg
     }
 }
+
+def logTrace(msg) {
+    if (settings.traceEnable) {
+        log.trace "${device.displayName} " + msg
+    }
+}
+
+
 
 // _DEBUG mode only
 void getAllProperties() {
@@ -3035,7 +3087,7 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    handleTemperatureEvent(safeToDouble(par) as float)
+    parse(par)
     
    // sendZigbeeCommands(cmds)    
 }

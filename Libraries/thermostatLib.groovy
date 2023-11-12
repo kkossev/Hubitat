@@ -6,7 +6,7 @@ library (
     name: "thermostatLib",
     namespace: "kkossev",
     importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/thermostatLib.groovy",
-    version: "1.0.2",
+    version: "1.0.3",
     documentationLink: ""
 )
 /*
@@ -24,7 +24,10 @@ library (
  * ver. 1.0.0  2023-09-07 kkossev  - added thermostatLib
  * ver. 1.0.1  2023-09-09 kkossev  - added temperaturePollingInterval
  * ver. 1.0.2  2023-11-03 kkossev  - (dev. branch) - Aqara E1 thermostat support; 
+ * ver. 1.0.3  2023-11-07 kkossev  - (dev. branch) - 
  *
+ *                                   TODO: fix 'heat mode' in HE dashboard for Aqara E1
+ *                                   TODO: fix 'unknown fan mode' in HE dashboard for Aqara E1
  *                                   TODO: add Calibrate command for Aqara
  *                                   TODO: updated() for Aqara
  *                                   TODO: refresh() for Aqara
@@ -34,8 +37,8 @@ library (
  *                                   TODO: thermostat polling scheduled bug?
 */
 
-def thermostatLibVersion()   {"1.0.2"}
-def thermostatLibStamp() {"2023/11/04 10:59 AM"}
+def thermostatLibVersion()   {"1.0.3"}
+def thermostatLibStamp() {"2023/11/07 9:41 PM"}
 
 //import groovy.transform.Field
 
