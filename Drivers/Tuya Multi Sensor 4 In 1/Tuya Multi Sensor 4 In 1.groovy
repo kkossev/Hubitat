@@ -64,6 +64,7 @@
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
+ * ver. 1.6.8  2023-11-12 kkossev  - (dev. branch) 
  *
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
@@ -97,7 +98,7 @@
 */
 
 def version() { "1.6.8" }
-def timeStamp() {"2023/11/09 7:20 AM"}
+def timeStamp() {"2023/11/12 8:04 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1254,7 +1255,7 @@ def getPreferencesMap( String param, boolean debug=false ) {
 def resetPreferencesToDefaults(boolean debug=false ) {
     Map preferences = DEVICE?.preferences
     if (preferences == null) {
-        logWarn "Preferences not found!"
+        logDebug "Preferences not found!"
         return
     }
     Map parMap = [:]
@@ -1273,12 +1274,12 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
         if (parMap == null) {
-            logWarn "Preference ${parName} not found in tuyaDPs or attributes map!"
+            logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
             return // continue
         }   
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
-            logWarn "no default value for preference ${parName} !"
+            logDebug "no default value for preference ${parName} !"
             return // continue
         }
         if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -1373,7 +1374,7 @@ def parse(String description) {
             descMap = myParseDescriptionAsMap(description)
         }
         catch (e) {
-            logWarn "parse: exception '${e}' caught while processing description ${description}"
+            logDebug "parse: exception '${e}' caught while processing description ${description}"
             return
         }
         if ((isChattyRadarReport(descMap) || isSpammyDPsToIgnore(descMap)) && (_TRACE_ALL != true))  {
@@ -1392,7 +1393,7 @@ def parse(String description) {
                 sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16))
             }
             else {
-                logWarn "power cluster not parsed attrint $descMap.attrInt"
+                logDebug "power cluster not parsed attrint $descMap.attrInt"
             }
         }     
         else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
@@ -1500,7 +1501,7 @@ def parse(String description) {
                 device.updateSetting("keepTime", [value: value.toString(), type: 'enum'])                
             }
             else {
-                logWarn "Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}" 
+                logDebug "Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}" 
             }
         } // if IAS read attribute response
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
@@ -1513,7 +1514,7 @@ def parse(String description) {
                 occupancyEvent( Integer.parseInt(descMap?.value, 16) )
             }
             else {
-                logWarn "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
+                logDebug "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
             }
         }
         else if (descMap?.command == "04") {    // write attribute response (other)
@@ -1570,7 +1571,6 @@ Map myParseDescriptionAsMap( String description )
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
-        //logWarn "myParseDescriptionAsMap: parsed OK using zigbee.parseDescriptionAsMap descMap=${descMap}"
         return descMap    // all OK!
     }
     catch (e1) {
@@ -1692,7 +1692,7 @@ def processTuyaCluster( descMap ) {
             logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
         }
         if (status != "00" && !(isHL0SS9OAradar() || is2AAELWXKradar())) {
-            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+            logDebug "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
     else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"|| descMap?.command == "06"))
@@ -1731,7 +1731,7 @@ def processTuyaCluster( descMap ) {
         }
     }
     else {
-        logWarn "<b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+        logDebug "<b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
     }
 }
 
@@ -1862,7 +1862,7 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
             //logDebug "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
             break
         default :
-            logWarn "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
+            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
             return [true, "none"]   // fallback - assume equal
     }
     if (isEqual == false) {
@@ -1904,7 +1904,7 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false)
             (isEqual, hubitatEventValue) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(device.currentValue(foundItem.name)))            
             break
         default :
-            logWarn "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
+            logDebug "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
             return [true, "none"]   // fallback - assume equal
     }
     //if (!doNotTrace)  log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
@@ -2244,7 +2244,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 }
                 break
             default :
-                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
 }
@@ -2505,7 +2505,7 @@ def updated() {
     if (settings?.forcedProfile != null) {
         logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
         if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
-            logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
+            logInfo "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
             state.deviceProfile = getProfileKey(settings?.forcedProfile)
             initializeVars(fullInit = false) 
             resetPreferencesToDefaults(debug=true)
@@ -2523,19 +2523,6 @@ def updated() {
         logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
         cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
     }
-/*
-    // sensitivity - TODO! - REMOVE !!!!!
-    // settings?.sensitivity was changed in version 1.3.0
-    def sensitivityNew 
-    try {
-        sensitivityNew = settings?.sensitivity as Integer
-    }
-    catch (e) {
-        logWarn "sensitivity was reset to the default value!"
-        sensitivityNew = sensitivityOpts.defaultValue
-    }
-    //
-   */
     // sensitivity
     if (settings?.sensitivity != null) {
         if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
@@ -2563,11 +2550,7 @@ def updated() {
                 cmds += sendKeepTimeIAS( settings?.keepTime )
                 logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
             }        
-            else {  // TODO - move to dpMap !!
-                /*
-                def val = settings?.keepTime as int
-                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-                */
+            else {
                 if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${(settings?.keepTime as int )}" }           
                 setPar( "keepTime", settings?.keepTime as String)
         }
@@ -3174,7 +3157,7 @@ def logInfo(msg) {
 }
 
 def logWarn(msg) {
-    if (settings?.txtEnable) {
+    if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
 }
@@ -3248,7 +3231,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
     def value = settings."${preference}"
     def scaledValue
     if (value == null) {
-        logWarn "getScaledPreferenceValue: preference ${preference} not found!"
+        logDebug "getScaledPreferenceValue: preference ${preference} not found!"
         return null
     }
     switch(dpMap.type) {
@@ -3267,7 +3250,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
         case "enum" :
             //log.warn "getScaledPreferenceValue: <b>ENUM</b> preference ${preference} type:${dpMap.type} value = ${value} dpMap.scale=${dpMap.scale}"
             if (dpMap.map == null) {
-                logWarn "getScaledPreferenceValue: preference ${preference} has no map defined!"
+                logDebug "getScaledPreferenceValue: preference ${preference} has no map defined!"
                 return null
             }
             scaledValue = value 
@@ -3276,7 +3259,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
             }            
             break
         default :
-            logWarn "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
+            logDebug "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
             return null
     }
     logDebug "getScaledPreferenceValue: preference ${preference} value = ${value} scaledValue = ${scaledValue} (scale=${dpMap.scale})" 
@@ -3298,7 +3281,7 @@ def updateAllPreferences() {
         dpInt = safeToInt(dp, -1)
         if (dpInt <= 0) {
             // this is the IAS and other non-Tuya DPs preferences .... 
-            logWarn "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
+            logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
             return null
         }
         def dpMaps   =  DEVICE.tuyaDPs 
@@ -3317,11 +3300,11 @@ def updateAllPreferences() {
                     cmds += setRadarParameterTuya(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
                 }
                 else {
-                    logWarn "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
+                    logDebug "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
                 }
             }
             else {
-                logWarn "updateAllPreferences: preference ${foundMap.name} value not found!"
+                logDebug "updateAllPreferences: preference ${foundMap.name} value not found!"
                 return null
             }
         }
@@ -3379,6 +3362,7 @@ def moveSelfTest(val)      { return radarCommand("moveSelfTest", isHL0SS9OAradar
 def smallMoveSelfTest(val) { return radarCommand("smallMoveSelfTest", isHL0SS9OAradar() ? "6E" : "77", DP_TYPE_BOOL) }   // check!
 def breatheSelfTest(val)   { return radarCommand("breatheSelfTest", isHL0SS9OAradar() ? "6F" : "78", DP_TYPE_BOOL) }     // check!
 
+// TODO - refactor !!!
 def radarCommand( String command, String DPcommand, String DPType) {
     ArrayList<String> cmds = []
     if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {
@@ -3413,14 +3397,14 @@ def sendCommand( command=null, val=null )
     ArrayList<String> cmds = []
     def supportedCommandsMap = DEVICE.commands 
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
-        logWarn "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
+        logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
     def supportedCommandsList =  DEVICE.commands.keySet() as List 
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
-        logWarn "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
+        logInfo "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
         return
     }
     def func
@@ -3582,7 +3566,7 @@ def setPar( par=null, val=null )
             // try sending the parameter using the new universal method
             cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
             if (cmds == null || cmds == []) {
-                logWarn "setPar: sendTuyaParameter par ${par} tuyaValue ${tuyaValue} returned null or empty list"
+                logDebug "setPar: sendTuyaParameter par ${par} tuyaValue ${tuyaValue} returned null or empty list"
                 return
             }
             else {
@@ -3675,7 +3659,7 @@ void updateTuyaVersion() {
         }
     }
     else {
-        logWarn "application version is NULL"
+        logDebug "application version is NULL"
     }
 }
 
@@ -3701,7 +3685,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
         }
     }
     if (deviceProfile == UNKNOWN) {
-        logWarn "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
     }
     return [deviceName, deviceProfile]
 }
@@ -3710,7 +3694,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
 def setDeviceNameAndProfile( model=null, manufacturer=null) {
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
@@ -3723,7 +3707,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
         //logDebug "after : forcedProfile = ${settings.forcedProfile}"
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
-        logWarn "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
+        logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
     }    
 }
 
@@ -3838,7 +3822,7 @@ String unix2formattedDate( unixTime ) {
         def date = new Date(unixTime.toLong())
         return date.format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
     } catch (Exception e) {
-        logWarn "Error formatting date: ${e.message}. Returning current time instead."
+        logDebug "Error formatting date: ${e.message}. Returning current time instead."
         return new Date().format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
     }
 }
@@ -3849,7 +3833,7 @@ def formattedDate2unix( formattedDate ) {
         def date = Date.parse("yyyy-MM-dd HH:mm:ss.SSS", formattedDate)
         return date.getTime()
     } catch (Exception e) {
-        logWarn "Error parsing formatted date: ${formattedDate}. Returning current time instead."
+        logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
         return now()
     }
 }
@@ -3897,17 +3881,17 @@ def validateAndFixPreferences() {
         settingType = device.getSettingType(it.key)
         oldSettingValue = device.getSetting(it.key)
         if (settingType == null) {
-            logWarn "validateAndFixPreferences: settingType not found for preference ${it.key}"
+            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
             return null
         }
         //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
-            logWarn "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
+            logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
             validationFailures ++
             // remove the setting and create a new one using the foundMap.type
             try {
                 device.removeSetting(it.key)
-                logWarn "validateAndFixPreferences: removing setting ${it.key}"
+                logDebug "validateAndFixPreferences: removing setting ${it.key}"
             }
             catch (e) {
                 logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
@@ -3935,7 +3919,7 @@ def validateAndFixPreferences() {
                 }
                 //
                 device.updateSetting(it.key, [value:newValue, type:foundMap.type])
-                logWarn "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
+                logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 validationFixes ++
             }
             catch (e) {
@@ -3944,7 +3928,7 @@ def validateAndFixPreferences() {
                 try {
                     settingValue = foundMap.defaultValue
                     device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
-                    logWarn "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
+                    logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
                 }
                 catch (e2) {
