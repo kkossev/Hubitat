@@ -64,7 +64,7 @@
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
- * ver. 1.6.8  2023-11-12 kkossev  - (dev. branch) 
+ * ver. 1.6.8  2023-11-13 kkossev  - (dev. branch) SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences
  *
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
@@ -75,7 +75,6 @@
  *                                   TODO: when device rejoins the network, read the battry percentage again!
  *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
- *                                   TODO: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: quickRef
  *                                   TODO: command for black radar LED
@@ -98,7 +97,7 @@
 */
 
 def version() { "1.6.8" }
-def timeStamp() {"2023/11/12 8:04 PM"}
+def timeStamp() {"2023/11/13 11:50 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -131,7 +130,7 @@ metadata {
         //capability "DoubleTapableButton"
         //capability "HoldableButton"
 
-        attribute "occupancy", "enum", ["occupied", "unoccupied"]   // https://developer.smartthings.com/docs/devices/capabilities/capabilities-reference // https://developer.smartthings.com/capabilities/occupancySensor 
+        //attribute "occupancy", "enum", ["occupied", "unoccupied"]   // https://developer.smartthings.com/docs/devices/capabilities/capabilities-reference // https://developer.smartthings.com/capabilities/occupancySensor 
         attribute "all", "string"
         attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -1122,21 +1121,21 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     "SONOFF_SNZB-06P_RADAR" : [ 
             description   : "SONOFF SNZB-06P RADAR",
             models        : ["SONOFF"],
-            device        : [type: "radar", powerSource: "dc", isIAS:true, isSleepy:false],
+            device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
             capabilities  : ["MotionSensor": true],
-            preferences   : [:],                             
+            preferences   : ["fadingTime":"0x0406:0x0020", "radarSensitivity":"0x0406:0x0022"],                             
             commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406,0500,FC57,FC11", outClusters:"0003,0019", model:"SNZB-06P", manufacturer:"SONOFF", deviceJoinName: "SONOFF SNZB-06P RADAR"]      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
-            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
-            tuyaDPs       : [:],
-            attributes    : [:],
+            attributes:       [
+                [at:"0x0406:0x0022", name:"radarSensitivity", type:"enum",   rw: "rw", min:1, max:3,    defaultValue:"2",  unit:"",           map:[1:"low", 2:"medium", 3:"high"], title:"<b>Radar Sensitivity</b>",   description:"<i>Radar Sensitivity</i>"],
+                [at:"0x0406:0x0020", name:"fadingTime",       type:"enum",   rw: "rw", min:10, max:999, defaultValue:"60", unit:"seconds",    map:[10:"10 seconds", 30:"30 seconds", 60:"60 seconds", 120:"120 seconds", 300:"300 seconds"], title:"<b>Fading Time</b>",   description:"<i>Radar fading time in seconds</i>"],
+            ],
             deviceJoinName: "SONOFF SNZB-06P RADAR",
-            configuration : ["0x0406":"bind", "0x0FC57":"bind", "0xFC11":"bind"] 
+            configuration : ["0x0406":"bind", "0x0FC57":"bind"/*, "0xFC11":"bind"*/] 
     ],    
   
-    
      // isSiHAS()
     "SIHAS_USM-300Z_4_IN_1" : [ 
             description   : "SiHAS USM-300Z 4-in-1",
@@ -1421,9 +1420,24 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             humidityEvent( raw / getHumidityDiv())
         }
-        else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
-            def raw = Integer.parseInt(descMap.value,16)
-            handleMotion( raw & 0x01 )
+        else if (descMap.cluster == "0406")  {    // OWON and SONOFF
+            if (descMap.attrId == "0000") {
+                def raw = Integer.parseInt(descMap.value,16)
+                handleMotion( raw & 0x01 )
+            }
+            else if (descMap.attrId == "0020") {
+                def value = zigbee.convertHexToInt(descMap.value) 
+                sendEvent("name": "fadingTime", "value": value, "unit": "seconds", "type": "physical", "descriptionText": "fading time is ${value} seconds")
+                logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${value} (0x${descMap.value} seconds)"
+            }
+            else if (descMap.attrId == "0022") {
+                def value = zigbee.convertHexToInt(descMap.value) 
+                sendEvent("name": "radarSensitivity", "value": value, "unit": "", "type": "physical", "descriptionText": "radar sensitivity is ${value}")
+                logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${value} (0x${descMap.value})"
+            }
+            else {
+                logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
+            }
         }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
@@ -1511,7 +1525,7 @@ def parse(String description) {
             //  descMap = [raw:0DD001FC110801202001, dni:0DD0, endpoint:01, cluster:FC11, size:08, attrId:2001, encoding:20, command:0A, value:01, clusterInt:64529, attrInt:8193]
             if (descMap?.attrId == "2001") {
                 logDebug "FC11 attribute 2001 value is ${descMap?.value}"
-                occupancyEvent( Integer.parseInt(descMap?.value, 16) )
+                //occupancyEvent( Integer.parseInt(descMap?.value, 16) )
             }
             else {
                 logDebug "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
@@ -2523,7 +2537,7 @@ def updated() {
         logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
         cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
     }
-    // sensitivity
+    // sensitivity for PIR devices
     if (settings?.sensitivity != null) {
         if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
             def val = settings?.sensitivity as int    
@@ -2543,7 +2557,7 @@ def updated() {
         logDebug "sensitivity is not set"
     }
 
-    // keep time
+    // keep time for PIR devices
     if (settings?.keepTime != null) {
         if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime != false))) {
             if (isIAS() && (settings?.keepTime != null)) {
@@ -2561,12 +2575,18 @@ def updated() {
     }
     // new update method for all radars, WITHOUT Linptech - TODO !
     if (isLINPTECHradar()) {
-        
         setPar( "fadingTime", settings?.fadingTime ?: 10 )
         setPar( "motionDetectionDistance", settings?.motionDetectionDistance )
         setPar( "motionDetectionSensitivity", settings?.motionDetectionSensitivity)
         setPar( "staticDetectionSensitivity", settings?.staticDetectionSensitivity )
     }    
+    if (isSONOFF()) {
+        setPar( "fadingTime", settings?.fadingTime ?: 60 )
+        setPar( "radarSensitivity", settings?.radarSensitivity ?: 2)
+        // read backk the parameters from the device
+        cmds += zigbee.readAttribute(0x0406, 0x0020, [:], delay=201)
+        cmds += zigbee.readAttribute(0x0406, 0x0022, [:], delay=201)
+    }      
     else if (DEVICE.device?.type in ["radar", "PIR"]) {
         // Itterates through all settings
         cmds += updateAllPreferences()
@@ -2574,7 +2594,7 @@ def updated() {
     //
     if ("DistanceMeasurement" in DEVICE.capabilities) {
         if (settings?.ignoreDistance == true ) {
-                device.deleteCurrentState('distance')
+            device.deleteCurrentState('distance')
         }
     }
     //
@@ -2590,19 +2610,20 @@ def updated() {
     if (settings.allStatusTextEnable == true) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
-    //    
-    // calculate the total size of the cmds array
     int totalSize = 0
-    for (int i = 0; i < cmds.size(); i++) {
-        totalSize += cmds[i].size()
+    //log.warn "cmds=${cmds} length=${cmds?.size()}"
+    if (cmds != null && cmds != [null]) {
+        for (int i = 0; i < cmds?.size(); i++) {
+            if (cmds[i] != null) totalSize += cmds[i].size()
+        }
     }
-    if (cmds != null && totalSize >= 7) {
-        logDebug "sending the changed AdvancedOptions (size=${cmds.size()}) to the device..."
+    if (totalSize >= 7) {
+        logDebug "sending the changed AdvancedOptions (size=${cmds?.size()}, totalSize=${totalSize}) to the device..."
         sendZigbeeCommands( cmds )  
         logInfo "preferencies updates are sent to the device..."
     }
     else {
-        logDebug "no preferences are changed (size=${cmds.size()}) cmds=${cmds}"
+        logDebug "no preferences are changed (totalSize=${totalSize}) cmds=${cmds}"
     }
 }
 
@@ -3059,7 +3080,7 @@ def setPresent() {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent only once now - 2023-01-31        // TODO - check!
         runIn( 1, formatAttrib, [overwrite: true])    
-        logInfo "is present"
+        logInfo "is online"
     }    
     state.notPresentCounter = 0    
 }
@@ -3070,7 +3091,7 @@ def deviceHealthCheck() {
     if (state.notPresentCounter > presenceCountTreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
-            if (settings?.txtEnable) { log.warn "${device.displayName} is not present!" }
+            if (settings?.txtEnable) { log.warn "${device.displayName} is offline!" }
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
                 handleMotion(false, isDigital=true)
                 if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
@@ -3178,11 +3199,28 @@ def setReportingTime4in1( val ) {
 // Linptech radar exception code below
 // TODO - refactor it!
 
+def setRadarSensitivity( val ) {
+    if (isSONOFF()) {
+        def value = safeToInt(val)
+        logDebug "changing SONOFF radar sensitivity to ${val} "
+        return zigbee.writeAttribute(0x0406, 0x0022, 0x20, val as int, [:], delay=200)
+    }
+    else {
+        return null
+    }
+}
+
+
 def setFadingTime( val ) {
     if (isLINPTECHradar()) {
         def value = safeToInt(val)
         logDebug "changing LINPTECH radar fadingTime to ${value} seconds"
         return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))   // this is the only Linptech command that used Tuya DPs ...
+    }
+    else if (isSONOFF()) {
+        def value = safeToInt(val)
+        logDebug "changing SONOFF radar fadingTime to ${val} seconds"
+        return zigbee.writeAttribute(0x0406, 0x0020, 0x21, val as int, [:], delay=200)
     }
     else {
         return null

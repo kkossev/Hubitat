@@ -3,14 +3,14 @@
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
- * 	Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- * 	in compliance with the License. You may obtain a copy of the License at:
+ *     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ *     in compliance with the License. You may obtain a copy of the License at:
  *
- * 		http://www.apache.org/licenses/LICENSE-2.0
+ *         http://www.apache.org/licenses/LICENSE-2.0
  *
- * 	Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
- * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
- * 	for the specific language governing permissions and limitations under the License.
+ *     Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
+ *     for the specific language governing permissions and limitations under the License.
  *
  * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
  * For a big portions of code all credits go to Jonathan Bradshaw.
@@ -195,7 +195,7 @@ metadata {
             capability "PushableButton"
             capability "DoubleTapableButton"
             capability "HoldableButton"
-   	        capability "ReleasableButton"
+               capability "ReleasableButton"
         }
         if (deviceType in  ["Device", "Fingerbot"]) {
             capability "Momentary"
@@ -228,9 +228,9 @@ metadata {
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yi4jtqq1", deviceJoinName: "Tuya Illuminance Sensor TS0601"
         }
         if (deviceType in  ["ButtonDimmer"]) {
-         	fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000", outClusters:"0019,000A,0003,0004,0005,0006,0008,1000", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Scene Switch TS004F"
+             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000", outClusters:"0019,000A,0003,0004,0005,0006,0008,1000", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Scene Switch TS004F"
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0004,0006,1000,0000", outClusters:"0003,0004,0005,0006,0008,1000,0019,000A", model:"TS004F", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Tuya Smart Knob TS004F" //KK        
-  	        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000,E001", outClusters:"0019,000A,0003,0004,0006,0008,1000", model: "TS004F", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
+              fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0004,0006,1000,E001", outClusters:"0019,000A,0003,0004,0006,0008,1000", model: "TS004F", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "MOES Smart Button (ZT-SY-SR-MS)" // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0006", outClusters:"0019,000A", model:"TS0044", manufacturer:"_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart Wireless Scene Switch"          
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0006", outClusters: "0019", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Zemismart 4 Button Remote (ESW-0ZAA-EU)"                      // needs debouncing
             fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0006,E000,0000", outClusters: "0019,000A", model: "TS0044", manufacturer: "_TZ3000_xxxxxxxx", deviceJoinName: "Moes 4 button controller"    // https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver/92823/75?u=kkossev
@@ -338,7 +338,7 @@ void parse(final String description) {
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
     
-    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {	
+    if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {    
         logDebug "parse: zone status: $description"
         if (true /*isHL0SS9OAradar() && _IGNORE_ZCL_REPORTS == true*/) {    // TODO!
             logDebug "ignored IAS zone status"
@@ -1739,22 +1739,22 @@ void processTS004Fcommand(final Map descMap) {
     // when TS004F initialized in Scene switch mode!
     if (descMap.clusterInt == 0x0006 && descMap.command == "FD") {
         if (descMap.sourceEndpoint == "03") {
-     	    buttonNumber = reverseButton==true ? 3 : 1
+             buttonNumber = reverseButton==true ? 3 : 1
         }
         else if (descMap.sourceEndpoint == "04") {
-      	    buttonNumber = reverseButton==true  ? 4 : 2
+              buttonNumber = reverseButton==true  ? 4 : 2
         }
         else if (descMap.sourceEndpoint == "02") {
             buttonNumber = reverseButton==true  ? 2 : 3
         }
         else if (descMap.sourceEndpoint == "01") {
-       	    buttonNumber = reverseButton==true  ? 1 : 4
+               buttonNumber = reverseButton==true  ? 1 : 4
         }
-	    else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
-   	        buttonNumber = reverseButton==true  ? 5 : 5
+        else if (descMap.sourceEndpoint == "05") {    // LoraTap TS0046
+               buttonNumber = reverseButton==true  ? 5 : 5
         }
         else if (descMap.sourceEndpoint == "06") {
-       	    buttonNumber = reverseButton==true  ? 6 : 6
+               buttonNumber = reverseButton==true  ? 6 : 6
         }            
         if (descMap.data[0] == "00") {
             buttonState = "pushed"
@@ -1800,9 +1800,9 @@ void processTS004Fcommand(final Map descMap) {
     }
     if (buttonState != "unknown" && buttonNumber != 0) {
         def descriptionText = "button $buttonNumber was $buttonState"
-	    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
         logInfo "${descriptionText}"
-		sendEvent(event)
+        sendEvent(event)
         if (needsDebouncing()) {
             runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, buttonDebounce, [overwrite: true])
         }
@@ -2100,13 +2100,13 @@ void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) {
         return
     }
     if (timeElapsed >= minTime) {
-		logInfo "${eventMap.descriptionText}"
-		unschedule("sendDelayedIllumEvent")		//get rid of stale queued reports
+        logInfo "${eventMap.descriptionText}"
+        unschedule("sendDelayedIllumEvent")        //get rid of stale queued reports
         state.lastRx['illumTime'] = now()
         sendEvent(eventMap)
-	}		
+    }        
     else {         // queue the event
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
     }
@@ -2154,13 +2154,13 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
     if (timeElapsed >= minTime) {
-		logInfo "${eventMap.descriptionText}"
-		unschedule("sendDelayedTempEvent")		//get rid of stale queued reports
+        logInfo "${eventMap.descriptionText}"
+        unschedule("sendDelayedTempEvent")        //get rid of stale queued reports
         state.lastRx['tempTime'] = now()
         sendEvent(eventMap)
-	}		
+    }        
     else {         // queue the event
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap])
     }
@@ -2208,7 +2208,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
         sendEvent(eventMap)
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap])
     }
@@ -2217,7 +2217,7 @@ void handleHumidityEvent( Float humidity, Boolean isDigital=false ) {
 private void sendDelayedHumidityEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 /*
@@ -2266,7 +2266,7 @@ void parsePm25Cluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())
+    Float floatValue = Float.intBitsToFloat(value.intValue())
     //logDebug "pm25 float value = ${floatValue}"
     handlePm25Event(floatValue as Integer)
 }
@@ -2295,7 +2295,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
         sendEvent(eventMap)
     }
     else {
-    	eventMap.type = "delayed"
+        eventMap.type = "delayed"
         logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
         runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap])
     }
@@ -2304,7 +2304,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
 private void sendDelayedPm25Event(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 /*
@@ -2335,7 +2335,7 @@ void parseMultistateInputCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-	Float floatValue = Float.intBitsToFloat(value.intValue())
+    Float floatValue = Float.intBitsToFloat(value.intValue())
     if (DEVICE_TYPE in  ["AqaraCube"]) {
         parseMultistateInputClusterAqaraCube(descMap)
     }
@@ -2450,7 +2450,7 @@ def setHeatingSetpoint( temperature ) {
 
 private void sendHeatingSetpointEvent(Map eventMap) {
     if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
-	sendEvent(eventMap)
+    sendEvent(eventMap)
 }
 
 // -------------------------------------------------------------------------------------------------------------------------
@@ -2710,34 +2710,34 @@ def refresh() {
             cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage 
         }
         if (DEVICE_TYPE in  ["Plug", "Dimmer"]) {
-    	    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
+            cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
             cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
         }
         if (DEVICE_TYPE in  ["Dimmer"]) {
-    	    cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)        
         }
         if (DEVICE_TYPE in  ["THSensor", "AirQuality"]) {
-    	    cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)        
-    	    cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)        
+            cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)        
         }
         if (DEVICE_TYPE in  ["Thermostat"]) {
             // TODO - Aqara E1 specific refresh commands only 1
-    	    //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage (E1 does not send percentage)
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=100)         // local temperature
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0011, [:], delay=100)         // cooling setpoint
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0012, [:], delay=100)         // heating setpoint
-    	    cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001C], [:], delay=100)         // local temperature, cooling setpoint, heating setpoint, system mode (enum8 )
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0015, [:], delay=100)         // min heat setpoint limit - Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0016, [:], delay=100)         // max heat setpoint limit = Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0017, [:], delay=100)         // min cool setpoint limit - Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0018, [:], delay=100)         // max cool setpoint limit - Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0019, [:], delay=100)         // min setpoint dead band ?- Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x001C, [:], delay=100)         // system mode (enum8 )
-    	    //cmds += zigbee.readAttribute(0x0201, 0x001E, [:], delay=100)         // Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0020, [:], delay=100)         // Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0023, [:], delay=100)         // hold temperature (enum) on/off  - Unsupported Attribute
-    	    //cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay=100)         // thermostat running mode  - Unsupported Attribute
-    	    cmds += zigbee.readAttribute(0x0202, 0x0000, [:], delay=100) 
+            //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage (E1 does not send percentage)
+            //cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=100)         // local temperature
+            //cmds += zigbee.readAttribute(0x0201, 0x0011, [:], delay=100)         // cooling setpoint
+            //cmds += zigbee.readAttribute(0x0201, 0x0012, [:], delay=100)         // heating setpoint
+            cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001C], [:], delay=100)         // local temperature, cooling setpoint, heating setpoint, system mode (enum8 )
+            //cmds += zigbee.readAttribute(0x0201, 0x0015, [:], delay=100)         // min heat setpoint limit - Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0016, [:], delay=100)         // max heat setpoint limit = Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0017, [:], delay=100)         // min cool setpoint limit - Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0018, [:], delay=100)         // max cool setpoint limit - Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0019, [:], delay=100)         // min setpoint dead band ?- Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x001C, [:], delay=100)         // system mode (enum8 )
+            //cmds += zigbee.readAttribute(0x0201, 0x001E, [:], delay=100)         // Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0020, [:], delay=100)         // Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0023, [:], delay=100)         // hold temperature (enum) on/off  - Unsupported Attribute
+            //cmds += zigbee.readAttribute(0x0201, 0x0029, [:], delay=100)         // thermostat running mode  - Unsupported Attribute
+            cmds += zigbee.readAttribute(0x0202, 0x0000, [:], delay=100) 
         }
     }
 
@@ -2905,7 +2905,7 @@ void autoPoll() {
     //state.states["isRefresh"] = true
     
     if (DEVICE_TYPE in  ["AirQuality"]) {
-	    cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
     
     if (cmds != null && cmds != [] ) {
@@ -3058,11 +3058,11 @@ void initialize() {
 */
 
 static Integer safeToInt(val, Integer defaultVal=0) {
-	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 static Double safeToDouble(val, Double defaultVal=0.0) {
-	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 void sendZigbeeCommands(ArrayList<String> cmd) {
