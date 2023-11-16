@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 1.0.1  2023-11-04 kkossev  - (dev. branch)
+ * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch)
  *
  *                                   TODO: setPar refactoring
 */
 
-def deviceProfileLibVersion()   {"1.0.1"}
-def deviceProfileLibtamp() {"2023/11/05 9:45 AM"}
+def deviceProfileLibVersion()   {"3.0.0"}
+def deviceProfileLibtamp() {"2023/11/16 11:55 AM"}
 
 metadata {
     // no capabilities
