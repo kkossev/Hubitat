@@ -603,3 +603,311 @@ void initEventsDeviceProfile(boolean fullInit=false) {
     logDebug "initEventsDeviceProfile(${fullInit})"
 }
 
+///////////////////////////// Tuya DPs /////////////////////////////////
+
+
+//
+// called from parse()
+// returns: true  - do not process this message if the spammy DP is defined in the spammyDPsToIgnore element of the active Device Profule
+//          false - the processing can continue
+//
+boolean isSpammyDPsToIgnore(descMap) {
+    if (!(descMap?.clusterId == "EF00" && (descMap?.command in ["01", "02"]))) { return false }
+    if (descMap?.data?.size <= 2) { return false }
+    Integer dp =  zigbee.convertHexToInt(descMap.data[2])
+    def spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToIgnore
+    return (spammyList != null && (dp in spammyList) && ((settings?.ignoreDistance ?: false) == true))
+}
+
+//
+// called from processTuyaDP(), processTuyaDPfromDeviceProfile()
+// returns: true  - do not generate Debug log messages if the chatty DP is defined in the spammyDPsToNotTrace element of the active Device Profule
+//          false - debug logs can be generated
+//
+boolean isSpammyDPsToNotTrace(descMap) {
+    if (!(descMap?.clusterId == "EF00" && (descMap?.command in ["01", "02"]))) { return false }
+    if (descMap?.data?.size <= 2) { return false }
+    Integer dp = zigbee.convertHexToInt(descMap.data[2]) 
+    def spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToNotTrace
+    return (spammyList != null && (dp in spammyList))
+}
+
+def compareAndConvertStrings(foundItem, tuyaValue, hubitatValue) {
+    String convertedValue = tuyaValue
+    boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
+    return [isEqual, convertedValue]
+}
+
+def compareAndConvertNumbers(foundItem, tuyaValue, hubitatValue) {
+    Integer convertedValue
+    if (foundItem.scale == null || foundItem.scale == 0 || foundItem.scale == 1) {    // compare as integer
+        convertedValue = tuyaValue as int                
+    }
+    else {
+        convertedValue  = ((tuyaValue as double) / (foundItem.scale as double)) as int
+    }
+    boolean isEqual = ((convertedValue as int) == (hubitatValue as int))
+    return [isEqual, convertedValue]
+}
+
+def compareAndConvertDecimals(foundItem, tuyaValue, hubitatValue) {
+    Double convertedValue
+    if (foundItem.scale == null || foundItem.scale == 0 || foundItem.scale == 1) {
+        convertedValue = tuyaValue as double
+    }
+    else {
+        convertedValue = (tuyaValue as double) / (foundItem.scale as double) 
+    }
+    isEqual = Math.abs((convertedValue as double) - (hubitatValue as double)) < 0.001 
+    return [isEqual, convertedValue]
+}
+
+
+def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) {
+    if (foundItem == null || fncmd == null || preference == null) { return [true, "none"] }
+    if (foundItem.type == null) { return [true, "none"] }
+    boolean isEqual
+    def tuyaValueScaled     // could be integer or float
+    switch (foundItem.type) {
+        case "bool" :       // [0:"OFF", 1:"ON"] 
+        case "enum" :       // [0:"inactive", 1:"active"]
+            (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
+            //logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
+            break
+        case "value" :      // depends on foundItem.scale
+        case "number" :
+            (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
+            //log.warn "tuyaValue=${tuyaValue} tuyaValueScaled=${tuyaValueScaled} preferenceValue = ${preference} isEqual=${isEqual}"
+            break 
+       case "decimal" :
+            (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference)) 
+            //logDebug "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
+            break
+        default :
+            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
+            return [true, "none"]   // fallback - assume equal
+    }
+    if (isEqual == false) {
+        logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b> foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> tuyaValueScaled=${tuyaValueScaled} (scale=${foundItem.scale}) fncmd=${fncmd}"
+    }
+    //
+    return [isEqual, tuyaValueScaled]
+}
+
+//
+// called from processTuyaDPfromDeviceProfile()
+// compares the value of the DP foundItem against a Preference with the same name
+// returns: (two results!)
+//    isEqual : true  - if the Tuya DP value equals to the DP calculated value (no need to update the preference)
+//            : true  - if a preference with the same name does not exist (no preference value to update)
+//    isEqual : false - the reported DP value is different than the corresponding preference (the preference needs to be updated!)
+// 
+//    hubitatEventValue - the converted DP value, scaled (divided by the scale factor) to match the corresponding preference type value
+//
+//  TODO: refactor!
+//
+def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false) {
+    if (foundItem == null) { return [true, "none"] }
+    if (foundItem.type == null) { return [true, "none"] }
+    def hubitatEventValue   // could be integer or float or string
+    boolean isEqual
+    switch (foundItem.type) {
+        case "bool" :       // [0:"OFF", 1:"ON"] 
+        case "enum" :       // [0:"inactive", 1:"active"]
+            (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: "unknown", device.currentValue(foundItem.name) ?: "unknown")
+            break
+        case "value" :      // depends on foundItem.scale
+        case "number" :
+            (isEqual, hubitatEventValue) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(device.currentValue(foundItem.name)))
+            break        
+        case "decimal" :
+            (isEqual, hubitatEventValue) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(device.currentValue(foundItem.name)))            
+            break
+        default :
+            logDebug "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
+            return [true, "none"]   // fallback - assume equal
+    }
+    //if (!doNotTrace)  log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
+    return [isEqual, hubitatEventValue]
+}
+
+
+def preProc(foundItem, fncmd_orig) {
+    def fncmd = fncmd_orig
+    if (foundItem == null) { return fncmd }
+    if (foundItem.preProc == null) { return fncmd }
+    String preProcFunction = foundItem.preProc
+    //logDebug "preProc: foundItem.preProc = ${preProcFunction}"
+    // check if preProc method exists
+    if (!this.respondsTo(preProcFunction)) {
+        logDebug "preProc: function <b>${preProcFunction}</b> not found"
+        return fncmd_orig
+    }
+    // execute the preProc function
+    try {
+        fncmd = "$preProcFunction"(fncmd_orig)
+    }
+    catch (e) {
+        logWarn "preProc: Exception '${e}'caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd}))"
+        return fncmd_orig
+    }
+    //logDebug "setFunction result is ${fncmd}"
+    return fncmd
+}
+
+
+/**
+ * Processes a Tuya DP (Data Point) received from the device, based on the device profile and its defined Tuya DPs.
+ * If a preference exists for the DP, it updates the preference value and sends an event if the DP is declared as an attribute.
+ * If no preference exists for the DP, it logs the DP value as an info message.
+ * If the DP is spammy (not needed for anything), it does not perform any further processing.
+ * 
+ * @param descMap The description map of the received DP.
+ * @param dp The value of the received DP.
+ * @param dp_id The ID of the received DP.
+ * @param fncmd The command of the received DP.
+ * @param dp_len The length of the received DP.
+ * @return true if the DP was processed successfully, false otherwise.
+ */
+boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0) {
+    def fncmd = fncmd_orig
+    if (state.deviceProfile == null)  { return false }
+    //if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status) 
+
+    def tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs
+    if (tuyaDPsMap == null || tuyaDPsMap == []) { return false }    // no any Tuya DPs defined in the Device Profile
+    
+    def foundItem = null
+    tuyaDPsMap.each { item ->
+         if (item['dp'] == (dp as int)) {
+            foundItem = item
+            return
+        }
+    }
+    if (foundItem == null) { 
+        // DP was not found into the tuyaDPs list for this particular deviceProfile
+        //updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
+        // continue processing the DP report in the old code ...
+        return false 
+    }
+    // added 10/31/2023 - preProc the DP value if needed
+    if (foundItem.preProc != null) {
+        fncmd = preProc(foundItem, fncmd_orig)
+        logDebug "<b>preProc</b> changed ${foundItem.name} from ${fncmd_orig} to ${fncmd}"
+    }
+    else {
+        // logDebug "no preProc for ${foundItem.name} : ${foundItem}"
+    }
+
+    def name = foundItem.name                                    // preference name as in the tuyaDPs map
+    def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
+    def perfValue = null   // preference value
+    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this dp  
+    boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this dp
+    boolean isEqual = false
+    boolean wasChanged = false
+    boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy DP's TODO!
+    if (!doNotTrace) {
+        //logDebug "processTuyaDPfromDeviceProfile dp=${dp} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${fncmd} - ${foundItem.description}"
+    }
+    // check if the dp has the same value as the last one, or the value has changed
+    // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
+    String unitText     = foundItem.unit != null ? "$foundItem.unit" : ""
+    def valueScaled    // can be number or decimal or string
+    String descText = descText  = "${name} is ${fncmd} ${unitText}"    // the default description text for log events
+    
+    // TODO - check if DP is in the list of the received state.tuyaDPs - then we have something to compare !
+    if (!isAttribute && !preferenceExists) {                    // if the previous value of this dp is not stored anywhere - just seend an Info log if Debug is enabled
+        if (!doNotTrace) {                                      // only if the DP is not in the spammy list
+            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
+            descText  = "${name} is ${valueScaled} ${unitText}"        
+            if (settings.logEnable) { logInfo "${descText}"}
+        }
+        // no more processing is needed, as this DP is not a preference and not an attribute
+        return true
+    }
+    
+    // first, check if there is a preference defined to be updated
+    if (preferenceExists) {
+        // preference exists and its's value is extracted
+        def oldPerfValue = device.getSetting(name)
+        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, existingPrefValue)    
+        if (isEqual == true) {                                 // the DP value is the same as the preference value - no need to update the preference
+            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (dp raw value ${fncmd})"
+        }
+        else {
+            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (dp raw value ${fncmd})"
+            if (debug) log.info "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" 
+            try {
+                device.updateSetting("${name}",[value:perfValue, type:foundItem.type])
+                wasChanged = true
+            }
+            catch (e) {
+                logWarn "exception ${e} caught while updating preference ${name} to ${fncmd}, type ${foundItem.type}" 
+            }
+        }
+    }
+    else {    // no preference exists for this dp
+        // if not in the spammy list - log it!
+        unitText = foundItem.unit != null ? "$foundItem.unit" : ""
+        //logInfo "${name} is ${fncmd} ${unitText}"
+    }    
+    
+    // second, send an event if this is declared as an attribute!
+    if (isAttribute) {                                         // this DP has an attribute that must be sent in an Event
+        (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
+        descText  = "${name} is ${valueScaled} ${unitText}"
+        if (settings?.logEnable == true) { descText += " (raw:${fncmd})" }
+        
+        if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
+            if (!doNotTrace) {
+                if (settings.logEnable) { logInfo "${descText} (no change)"}
+            }
+            // patch for inverted motion sensor 2-in-1
+            if (name == "motion" && is2in1()) {
+                logDebug "patch for inverted motion sensor 2-in-1"
+                // continue ... 
+            }
+            else {
+                return true      // we are done (if there was potentially a preference, it should be already set to the same value)
+            }
+        }
+        
+        // DP value (fncmd) is not equal to the attribute last value or was changed- we must send an event!
+        def value = safeToInt(fncmd)
+        def divider = safeToInt(foundItem.scale ?: 1) ?: 1
+        def valueCorrected = value / divider
+        if (!doNotTrace) { logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
+        switch (name) {
+            case "motion" :
+                handleMotion(motionActive = fncmd)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                break
+            case "temperature" :
+                //temperatureEvent(fncmd / getTemperatureDiv())
+                handleTemperatureEvent(valueScaled as Float)
+                break
+            case "humidity" :
+                handleHumidityEvent(valueScaled)
+                break
+            case "illuminance" :
+            case "illuminance_lux" :
+                handleIlluminanceEvent(valueCorrected)       
+                break
+            case "pushed" :
+                logDebug "button event received fncmd=${fncmd} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+                buttonEvent(valueScaled)
+                break
+            default :
+                sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
+                if (!doNotTrace) {
+                    logDebug "event ${name} sent w/ value ${valueScaled}"
+                    logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
+                }
+                break
+        }
+        //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
+    }
+    // all processing was done here!
+    return true
+}
+

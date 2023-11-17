@@ -30,7 +30,7 @@ library (
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - (dev.branch) first version 3.x.x
   *
-  *                                   TODO: 
+  *                                   TODO: move zigbeeGroups : {} to dedicated lib
  *
 */
 
@@ -103,7 +103,7 @@ metadata {
             attribute "batteryVoltage", "number"
         }
         if (deviceType in  ["Thermostat"]) {
-            capability "ThermostatHeatingSetpoint"
+            capability "Thermostat"
         }
         if (deviceType in  ["Plug", "Outlet"]) {
             capability "Outlet"
@@ -141,11 +141,6 @@ metadata {
 
         // trap for Hubitat F2 bug
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
-        if (deviceType in  ["LightSensor"]) {
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0400,0001,0500", outClusters:"0019,000A", model:"TS0222", manufacturer:"_TYZB01_4mdqxxnn", deviceJoinName: "Tuya Illuminance Sensor TS0222"
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_khx7nnka", deviceJoinName: "Tuya Illuminance Sensor TS0601"
-            fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yi4jtqq1", deviceJoinName: "Tuya Illuminance Sensor TS0601"
-        }
  
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
@@ -2106,9 +2101,15 @@ void parseTuyaCluster(final Map descMap) {
     }
 }
 
-void processTuyaDP(descMap, dp, dp_id, fncmd) {
+void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len=0) {
     if (DEVICE_TYPE in ["Radar"])         { processTuyaDpRadar(descMap, dp, dp_id, fncmd); return }    
     if (DEVICE_TYPE in ["Fingerbot"])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }    
+    // check if the method  method exists
+    if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
+        if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {    // sucessfuly processed the new way - we are done.  version 3.0 
+            return
+        }    
+    }
     switch (dp) {
         case 0x01 : // on/off
             if (DEVICE_TYPE in  ["LightSensor"]) {
