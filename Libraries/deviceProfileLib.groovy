@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch)
+ * ver. 3.0.0  2023-11-18 kkossev  - (dev. branch)
  *
  *                                   TODO: setPar refactoring
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/16 11:55 AM"}
+def deviceProfileLibtamp() {"2023/11/18 10:07 AM"}
 
 metadata {
     // no capabilities
@@ -246,39 +246,17 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
  */
 def setPar( par=null, val=null )
 {
-    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
-        return null
-    }
-    // new method
-    logDebug "setPar new method: setting parameter ${par} to ${val}"
     ArrayList<String> cmds = []
     Boolean validated = false
-    if (par == null) {
-        log.warn "${device.displayName} setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"
-        return
-    }        
-    if (!(par in getValidParsPerModel())) {
-        log.warn "${device.displayName} setPar: parameter '${par}' must be one of these : ${getValidParsPerModel()}"
-        return
-    }
-    // find the tuayDPs map for the par
-    Map dpMap = getPreferencesMap(par, false)
-    if ( dpMap == null ) {
-        log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"
-        return
-    }
-    if (val == null) {
-        log.warn "${device.displayName} setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"
-        return
-    }
-    // convert the val to the correct type and scale it if needed
-    def scaledValue = validateAndScaleParameterValue(dpMap, val as String)
-    if (scaledValue == null) {
-        log.warn "${device.displayName} setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"
-        return
-    }
-    // update the device setting
-    // TODO: decide whether the setting must be updated here, or after it is echeod back from the device
+    logDebug "setPar(${par}, ${val})"
+    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return }
+    if (par == null || !(par in getValidParsPerModel())) { log.warn "${device.displayName} setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return }        
+    Map dpMap = getPreferencesMap(par, false)                                   // get the map for the parameter
+    if ( dpMap == null ) { log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return }
+    if (val == null) { log.warn "${device.displayName} setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return }
+    def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
+    if (scaledValue == null) { log.warn "${device.displayName} setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return }
+    // update the device setting // TODO: decide whether the setting must be updated here, or after it is echeod back from the device
     try {
         device.updateSetting("$par", [value:val, type:dpMap.type])
     }
@@ -312,7 +290,16 @@ def setPar( par=null, val=null )
         }
     }
     // check whether this is a tuya DP or a cluster:attribute parameter
-    if (dpMap.dp != null && dpMap.dp.isNumber()) {
+    boolean isTuyaDP
+    def preference = dpMap.dp
+    try {
+        isTuyaDP = true //preference.isNumber()
+    }
+    catch (e) {
+        if (debug) log.warn "setPar: exception ${e} caught while checking isNumber() preference ${preference}"
+        return null
+    }     
+    if (dpMap.dp != null && isTuyaDP) {
         // Tuya DP
         cmds = sendTuyaParameter(dpMap,  par, scaledValue) 
         if (cmds == null || cmds == []) {
@@ -354,8 +341,6 @@ def setPar( par=null, val=null )
         logWarn "setPar: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
         return
     }
-
-
     logInfo "setPar: successfluly executed setPar <b>$setFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
     return
@@ -375,7 +360,13 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
         log.warn "${device.displayName} sendTuyaParameter: invalid dp <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
         return null 
     }
-    String dpType = dpMap.type == "bool" ? DP_TYPE_BOOL : dpMap.type == "enum" ? DP_TYPE_ENUM : (dpMap.type in ["value", "number", "decimal"]) ? DP_TYPE_VALUE: null
+    String dpType
+    if (dpMap.dt == null) {
+        dpType = dpMap.type == "bool" ? DP_TYPE_BOOL : dpMap.type == "enum" ? DP_TYPE_ENUM : (dpMap.type in ["value", "number", "decimal"]) ? DP_TYPE_VALUE: null
+    }
+    else {
+        dpType = dpMap.dt // "01" - bool, "02" - enum, "03" - value
+    }
     //log.debug "dpType = ${dpType}"
     if (dpType == null) {
         log.warn "${device.displayName} sendTuyaParameter: invalid dpType <b>${dpMap.type}</b> for parameter <b>${par}</b>"
