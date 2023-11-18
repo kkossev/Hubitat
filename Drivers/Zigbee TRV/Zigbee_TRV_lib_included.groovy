@@ -15,7 +15,7 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *
- *                                   TODO: Auto
+ *                                   TODO: Auto 
  *                                   TODO: Cool
  *                                   TODO: Heat
  *                                   TODO: Emergency Heat
