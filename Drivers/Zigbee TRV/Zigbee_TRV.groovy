@@ -13,17 +13,15 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  *
- * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK
+ * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; 
  *
  *                                   TODO: Auto
  *                                   TODO: Cool
  *                                   TODO: Heat
  *                                   TODO: Emergency Heat
- *                                   TODO: Off
  *                                   TODO: setThermostatMode
  *                                   TODO: Fan Auto, Circlulate, On; setThermostatFanMode
  *                                   TODO: 
- *                                   TODO:  autoPollThermostat() to be excluded for BRT-100
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: add 'force manual mode' preference
  *                                   TODO: move debug and info logging preferences from the common library to the driver, so that they are the first preferences in the list
@@ -38,7 +36,7 @@
  */
 
 static String version() { "3.0.0" }
-static String timeStamp() {"2023/11/18 7:21 PM"}
+static String timeStamp() {"2023/11/18 11:27 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -96,7 +94,7 @@ metadata {
     attribute 'calibrationTemp', "number"
     attribute 'ecoMode', "enum", ["off", "on"]
     attribute 'ecoTemp', "number"
-    attribute 'minTemp', "number"
+    attribute 'minHeatingSetpoint', "number"
     attribute 'maxTemp', "number"
 
     // Aqaura E1 attributes
@@ -229,17 +227,17 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
             models        : ["TS0601"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minTemp":"109", "maxTemp":"108"/**/],
+            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxTemp":"108"/**/],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
             ],
             commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [
-                [dp:1,   name:'trvMode',            type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"1",  step:1,   scale:1,  map:[0: "auto", 1: "manual", 2: "TempHold", 3: "holidays"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'], 
+                [dp:1,   name:'trvMode',            type:"enum",            rw: "rw", min:0,     max:3,    defaultValue:"1",  step:1,   scale:1,  map:[0: "auto", 1: "manual", 2: "TempHold", 3: "holidays"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'], 
                 [dp:2,   name:'heatingSetpoint',    type:"decimal",         rw: "rw", min:5.0,   max:45.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
                 [dp:3,   name:'temperature',        type:"decimal",         rw: "ro", min:-10.0, max:50.0, defaultValue:20.0, step:0.5, scale:10, unit:"°C",  description:'<i>Temperature</i>'],
-                [dp:4,   name:'emergencyHeating',   type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Emergency Heating</b>",  description:'<i>Emergency heating</i>'], 
-                [dp:5,   name:'emergencyHeatingTime',   type:"number",      rw: "rw", min:0,  max:720 , defaultValue:0,    step:15,  scale:1,  unit:"minutes", title:"<b>Emergency Heating Timer</b>",  description:'<i>Emergency heating timer</i>'], 
+                [dp:4,   name:'emergencyHeating',   type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Emergency Heating</b>",  description:'<i>Emergency heating</i>'], 
+                [dp:5,   name:'emergencyHeatingTime',   type:"number",      rw: "rw", min:0,     max:720 , defaultValue:15,   step:15,  scale:1,  unit:"minutes", title:"<b>Emergency Heating Timer</b>",  description:'<i>Emergency heating timer</i>'], 
                 [dp:7,   name:'workingState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWorking State</b>",  description:'<i>working state</i>'], 
                 [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Window detection</i>'], 
                 [dp:9,   name:'windowsState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWindow State</b>",  description:'<i>Window state</i>'], 
@@ -252,7 +250,7 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
                 [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
                 [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
                 [dp:108, name:'maxTemp',            type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
-                [dp:109, name:'minTemp',            type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
+                [dp:109, name:'minHeatingSetpoint',            type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
 
             ],
             deviceJoinName: "MOES MRT-100 TRV",
@@ -497,11 +495,10 @@ void parseThermostatClusterThermostat(final Map descMap) {
     }
 }
 
-//  setHeatingSetpoint standard command
-//  sends TuyaCommand and checks after 4 seconds
+//  setHeatingSetpoint thermostat capability standard command
 //  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface)
 def setHeatingSetpoint( temperature ) {
-    log.warn "setHeatingSetpoint(${temperature}) called!"
+    logTrace "setHeatingSetpoint(${temperature}) called!"
     def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0
     double tempDouble
     //logDebug "setHeatingSetpoint temperature = ${temperature}  as int = ${temperature as int} (previousSetpointt = ${previousSetpoint})"
@@ -522,8 +519,8 @@ def setHeatingSetpoint( temperature ) {
         }
         tempDouble = temperature
     }
-    def maxTemp = settings?.maxThermostatTemp ?: 50
-    def minTemp = settings?.minThermostatTemp ?: 5
+    def maxTemp = settings?.maxHeatingSetpoint ?: 50
+    def minTemp = settings?.minHeatingSetpoint ?: 5
     if (tempDouble > maxTemp ) tempDouble = maxTemp
     if (tempDouble < minTemp) tempDouble = minTemp
     tempDouble = tempDouble.round(1)
@@ -536,7 +533,6 @@ def setHeatingSetpoint( temperature ) {
         sendAttribute("heatingSetpoint", tempDouble)    // TODO - check if this will create a preference !!
     }
 }
-
 
 private void sendHeatingSetpointEvent(temperature) {
     tempDouble = safeToDouble(temperature)
@@ -551,6 +547,20 @@ private void sendHeatingSetpointEvent(temperature) {
     updateDataValue("lastRunningMode", "heat")
 }
 
+// thermostat capability standard command
+// do nothing in TRV - just send an event
+def setCoolingSetpoint(temperature){
+    logTrace "setCoolingSetpoint(${temperature}) called!"
+    if (temperature != (temperature as int)) {
+        temperature = (temperature + 0.5 ) as int
+        logDebug "corrected temperature: ${temperature}"
+    }
+    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
+}
+
+
+
+/*
 // TODO - refactor!
 void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
 
@@ -563,10 +573,11 @@ void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
             break            
     }
 }
+*/
 
 // TODO - refactor!
 def preset( preset ) {
-    logDebug "preset(${preset}) called!"
+    logTrace "preset(${preset}) called!"
     if (preset == "auto") {
         setPresetMode("auto")               // hand symbol NOT shown
     }
@@ -612,16 +623,18 @@ def setPresetMode(mode) {
 
 def setThermostatMode( mode ) {
     List<String> cmds = []
-    logDebug "sending setThermostatMode(${mode})"
+    logDebug "setThermostatMode: sending setThermostatMode(${mode})"
+
     //state.mode = mode
     if (isAqaraTRV()) {
         // TODO - set Aqara E1 thermostat mode
         switch(mode) {
+            case "heat":
+            case "auto":
+                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
+                break
             case "off":
                 cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x00, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
-                break
-            case "heat":
-                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
                 break
             default:
                 logWarn "setThermostatMode: unknown AqaraTRV mode ${mode}"
@@ -630,39 +643,51 @@ def setThermostatMode( mode ) {
     }
     else {
         // TODO - set generic thermostat mode
-        log.warn "setThermostatMode NOT IMPLEMENTED"
-        return
+        switch(mode) {
+            case "heat":
+            case "auto":
+                if (device.currentValue('ecoMode') != 'off') {
+                    logInfo "setThermostatMode: switching the eco mode off"
+                    sendAttribute("ecoMode", 0)
+                }
+                if (device.currentValue('emergencyHeating') != 'off') {
+                    logInfo "setThermostatMode: switching the emergencyHeating mode off"
+                    sendAttribute("emergencyHeating", 0)
+                }
+                logInfo "setThermostatMode: setting manual mode on (${device.currentValue('heatingSetpoint')} &degC)"
+                sendAttribute("trvMode", 1)
+                break
+            case "off":
+            case "cool":
+                // BRT-100 does not have an explicit off command, so we use the  mode (16 degrees)      // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
+                logInfo "setThermostatMode: setting eco mode on (${settings.ecoTemp} &degC)"
+                sendAttribute("ecoMode", 1)
+                break
+            case "emergency heat":
+                logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
+                sendAttribute("emergencyHeating", 1)
+                break
+            default:
+                logWarn "setThermostatMode: unknown mode ${mode}"
+                break
+        }
     }
     if (cmds == []) { cmds = ["delay 299"] }
     sendZigbeeCommands(cmds)
 }
 
-def setCoolingSetpoint(temperature){
-    logDebug "setCoolingSetpoint(${temperature}) called!"
-    if (temperature != (temperature as int)) {
-        temperature = (temperature + 0.5 ) as int
-        logDebug "corrected temperature: ${temperature}"
-    }
-    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
-}
+def thermostatOff() { setThermostatMode("off") }    // invoked from the common library
+def thermostatOn()  { setThermostatMode("heat") }   // invoked from the common library
+
+def heat() { setThermostatMode("heat") }
+def auto() { setThermostatMode("auto") }
+def cool() { setThermostatMode("cool") }
+def emergencyHeat() { setThermostatMode("emergency heat") }
 
 
-def heat(){
-    setThermostatMode("heat")
-}
 
-def thermostatOff(){
-    setThermostatMode("off")
-}
-
-def thermostatOn() {
-    heat()
-}
 
 def setThermostatFanMode(fanMode) { sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) }
-def auto() { setThermostatMode("auto") }
-def emergencyHeat() { setThermostatMode("emergency heat") }
-def cool() { setThermostatMode("cool") }
 def fanAuto() { setThermostatFanMode("auto") }
 def fanCirculate() { setThermostatFanMode("circulate") }
 def fanOn() { setThermostatFanMode("on") }
@@ -674,7 +699,7 @@ def sendThermostatOperatingStateEvent( st ) {
 
 void sendSupportedThermostatModes() {
     def supportedThermostatModes = []
-    supportedThermostatModes = ["off", "heat", "auto"]
+    supportedThermostatModes = ["off", "heat", "auto", "emergency heat"]
     logInfo "supportedThermostatModes: ${supportedThermostatModes}"
     sendEvent(name: "supportedThermostatModes", value:  JsonOutput.toJson(supportedThermostatModes), isStateChange: true)
 }
@@ -703,9 +728,13 @@ void autoPollThermostat() {
     List<String> cmds = []
     if (state.states == null) state.states = [:]
     //state.states["isRefresh"] = true
-    
-    cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
-    
+    if (isAqaraTRV()) {
+        cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
+    }
+    else {
+        logDebug "autoPollThermostat: no polling for device profile ${state.deviceProfile}"
+    }
+   
     if (cmds != null && cmds != [] ) {
         sendZigbeeCommands(cmds)
     }    
@@ -834,7 +863,7 @@ void initVarsThermostat(boolean fullInit=false) {
 
 void initEventsThermostat(boolean fullInit=false) {
     sendSupportedThermostatModes()
-    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto"]), isStateChange: true)    
+    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["on", "auto"]), isStateChange: true)    
     sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "inital attribute setting")
     sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: "inital attribute setting")
     state.lastThermostatMode = "heat"
@@ -852,6 +881,38 @@ private getDescriptionText(msg) {
     def descriptionText = "${device.displayName} ${msg}"
     if (settings?.txtEnable) log.info "${descriptionText}"
     return descriptionText
+}
+
+// called from processTuyaDPfromDeviceProfile in deviceProfileLib 
+def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
+    logTrace "processTuyaDpThermostat(${name}, ${valueScaled}) called!"
+    Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: "physical", isStateChange: true]
+    switch (name) {
+        case "temperature" :
+            handleTemperatureEvent(valueScaled as Float)
+            break
+        case "humidity" :
+            handleHumidityEvent(valueScaled)
+            break
+        case "ecoMode" :    // BRT-100 - simulate OFF mode
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == "on") {  // ecoMode is on
+                sendEvent(name: "thermostatMode", value: "off", isStateChange: true, description: "BRT-100 ecoMode is on")
+                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 ecoMode is on")
+            }
+            else {
+                sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "BRT-100 ecoMode is off")
+            }
+            break
+        default :
+            sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
+            //if (!doNotTrace) {
+                logDebug "event ${name} sent w/ value ${valueScaled}"
+                logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
+            //}
+            break
+    }
 }
 
 def testT(par) {

@@ -28,7 +28,7 @@ library (
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/18 7:21 PM"}
+def deviceProfileLibtamp() {"2023/11/18 11:27 PM"}
 
 metadata {
     // no capabilities
@@ -530,7 +530,7 @@ def sendAttribute( par=null, val=null )
         }
         logDebug "setFunction result is ${cmds}"       
         if (cmds != null && cmds != []) {
-            logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+            logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
             return
         }            
@@ -557,7 +557,7 @@ def sendAttribute( par=null, val=null )
             return
         }
         else {
-            logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
+            logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands( cmds )
             return
         }
@@ -591,7 +591,7 @@ def sendAttribute( par=null, val=null )
         logWarn "sendAttribute: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
         return
     }
-    logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+    logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
     return
 }
@@ -1087,34 +1087,39 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0)
         def divider = safeToInt(foundItem.scale ?: 1) ?: 1
         def valueCorrected = value / divider
         if (!doNotTrace) { logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
-        switch (name) {
-            case "motion" :
-                handleMotion(motionActive = fncmd)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                break
-            case "temperature" :
-                //temperatureEvent(fncmd / getTemperatureDiv())
-                handleTemperatureEvent(valueScaled as Float)
-                break
-            case "humidity" :
-                handleHumidityEvent(valueScaled)
-                break
-            case "illuminance" :
-            case "illuminance_lux" :
-                handleIlluminanceEvent(valueCorrected)       
-                break
-            case "pushed" :
-                logDebug "button event received fncmd=${fncmd} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-                buttonEvent(valueScaled)
-                break
-            default :
-                sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
-                if (!doNotTrace) {
-                    logDebug "event ${name} sent w/ value ${valueScaled}"
-                    logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
-                }
-                break
+        // process the events in the device specific driver..
+        if (DEVICE_TYPE in ["Thermostat"])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
+        else {
+            switch (name) {
+                case "motion" :
+                    handleMotion(motionActive = fncmd)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    break
+                case "temperature" :
+                    //temperatureEvent(fncmd / getTemperatureDiv())
+                    handleTemperatureEvent(valueScaled as Float)
+                    break
+                case "humidity" :
+                    handleHumidityEvent(valueScaled)
+                    break
+                case "illuminance" :
+                case "illuminance_lux" :
+                    handleIlluminanceEvent(valueCorrected)       
+                    break
+                case "pushed" :
+                    logDebug "button event received fncmd=${fncmd} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+                    buttonEvent(valueScaled)
+                    break
+                default :
+                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
+                    if (!doNotTrace) {
+                        logDebug "event ${name} sent w/ value ${valueScaled}"
+                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
+                    }
+                    break
+            }
+            //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
+
         }
-        //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
     }
     // all processing was done here!
     return true
