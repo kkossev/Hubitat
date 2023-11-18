@@ -28,7 +28,7 @@ library (
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/18 11:27 PM"}
+def deviceProfileLibtamp() {"2023/11/18 11:55 PM"}
 
 metadata {
     // no capabilities
@@ -1086,7 +1086,7 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0)
         def value = safeToInt(fncmd)
         def divider = safeToInt(foundItem.scale ?: 1) ?: 1
         def valueCorrected = value / divider
-        if (!doNotTrace) { logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
+        if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
         // process the events in the device specific driver..
         if (DEVICE_TYPE in ["Thermostat"])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
         else {

@@ -13,7 +13,7 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  *
- * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; 
+ * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *
  *                                   TODO: Auto
  *                                   TODO: Cool
@@ -903,6 +903,37 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
             }
             else {
                 sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "BRT-100 ecoMode is off")
+            }
+            break
+        case "emergencyHeating" :   // BRT-100
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == "on") {  // the valve shoud be completely open, however the level and the working states are NOT updated! :( 
+                sendEvent(name: "thermostatMode", value: "emergency heat", isStateChange: true, description: "BRT-100 emergencyHeating is on")
+                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 emergencyHeating is on")
+            }
+            else {
+                sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "BRT-100 emergencyHeating is off")
+            }
+            break
+        case "level" :      // BRT-100
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == 0) {  // the valve is closed
+                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 valve is closed")
+            }
+            else {
+                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 valve is open %{valueScaled} %")
+            }
+            break
+        case "workingState" :      // BRT-100
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == "closed") {  // the valve is closed
+                sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 workingState is closed")
+            }
+            else {
+                sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
             }
             break
         default :
