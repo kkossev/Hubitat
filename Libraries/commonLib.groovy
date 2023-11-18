@@ -31,11 +31,12 @@ library (
   * ver. 3.0.0  2023-11-16 kkossev  - (dev.branch) first version 3.x.x
   *
   *                                   TODO: move zigbeeGroups : {} to dedicated lib
+  *                                   TODO: disableDefaultResponse for Tuya commands
  *
 */
 
 def commonLibVersion()   {"3.0.0"}
-def thermostatLibStamp() {"2023/11/16 11:55 PM"}
+def thermostatLibStamp() {"2023/11/18 11:22 AM"}
 
 //@Field static final Boolean _DEBUG = false
 
@@ -2479,11 +2480,11 @@ void updated() {
     unschedule()
 
     if (settings.logEnable) {
-        logDebug settings
+        logTrace settings
         runIn(86400, logsOff)
     }
     if (settings.traceEnable) {
-        logDebug settings
+        logTrace settings
         runIn(1800, traceOff)
     }    
 
@@ -2506,7 +2507,7 @@ void updated() {
     if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() }
     if (DEVICE_TYPE in ["Thermostat"])  { updatedThermostat() }
         
-    configureDevice()    // sends Zigbee commands
+    //configureDevice()    // sends Zigbee commands  // commented out 11/18/2023
     
     sendInfoEvent("updated")
 }

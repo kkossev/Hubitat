@@ -221,7 +221,7 @@ metadata {
             models        : ["TS0601"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minTemp":"109", "maxTemp":"108"],
+            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minTemp":"109", "maxTemp":"108"/**/],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
             ],
@@ -241,7 +241,7 @@ metadata {
                 [dp:103, name:'boostTime',          type:"number",          rw: "rw", min:100,   max:900 , defaultValue:100,  step:1,   scale:1,  unit:"seconds", title:"<b>Boost Timer</b>",  description:'<i>Boost timer</i>'], 
                 [dp:104, name:'level',              type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Valve level</i>'],
                 [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
-                [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode/b>",  description:'<i>Eco mode</i>'], 
+                [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
                 [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
                 [dp:108, name:'maxTemp',            type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
                 [dp:109, name:'minTemp',            type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
@@ -700,10 +700,11 @@ void autoPollThermostat() {
 //
 // called from updated() in the main code ...
 void updatedThermostat() {
-    logDebug "updatedThermostat()..."
+    ArrayList<String> cmds = []
+    logDebug "updatedThermostat: ..."
     //
     if (settings?.forcedProfile != null) {
-        logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
+        //logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
         if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
             logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
             state.deviceProfile = getProfileKey(settings?.forcedProfile)
@@ -716,15 +717,24 @@ void updatedThermostat() {
     else {
         logDebug "forcedProfile is not set"
     }    
-        final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
-        if (pollingInterval > 0) {
-            logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds"
-            scheduleThermostatPolling(pollingInterval)
-        }
-        else {
-            unScheduleThermostatPolling()
-            logInfo "updatedThermostat: thermostat polling is disabled!"
-        }
+    final int pollingInterval = (settings.temperaturePollingInterval as Integer) ?: 0
+    if (pollingInterval > 0) {
+        logInfo "updatedThermostat: scheduling temperature polling every ${pollingInterval} seconds"
+        scheduleThermostatPolling(pollingInterval)
+    }
+    else {
+        unScheduleThermostatPolling()
+        logInfo "updatedThermostat: thermostat polling is disabled!"
+    }
+    // Itterates through all settings
+    logDebug "updatedThermostat: updateAllPreferences()..."
+    /*cmds =*/ updateAllPreferences()     
+    //
+    /*
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }    
+    */
 }
 
 def refreshThermostat() {

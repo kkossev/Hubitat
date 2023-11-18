@@ -28,7 +28,7 @@ library (
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/18 10:07 AM"}
+def deviceProfileLibtamp() {"2023/11/18 10:36 AM"}
 
 metadata {
     // no capabilities
@@ -171,6 +171,93 @@ def getValidParsPerModel() {
 
 
 /**
+ * Returns the scaled value of a preference based on its type and scale.
+ * @param preference The name of the preference to retrieve.
+ * @param dpMap A map containing the type and scale of the preference.
+ * @return The scaled value of the preference, or null if the preference is not found or has an unsupported type.
+ */
+def getScaledPreferenceValue(String preference, Map dpMap) {
+    def value = settings."${preference}"
+    def scaledValue
+    if (value == null) {
+        logDebug "getScaledPreferenceValue: preference ${preference} not found!"
+        return null
+    }
+    switch(dpMap.type) {
+        case "number" :
+            scaledValue = safeToInt(value)
+            break
+        case "decimal" :
+            scaledValue = safeToDouble(value)
+            if (dpMap.scale != null && dpMap.scale != 1) {
+                scaledValue = Math.round(scaledValue * dpMap.scale)
+            }
+            break
+        case "bool" :
+            scaledValue = value == "true" ? 1 : 0
+            break
+        case "enum" :
+            //log.warn "getScaledPreferenceValue: <b>ENUM</b> preference ${preference} type:${dpMap.type} value = ${value} dpMap.scale=${dpMap.scale}"
+            if (dpMap.map == null) {
+                logDebug "getScaledPreferenceValue: preference ${preference} has no map defined!"
+                return null
+            }
+            scaledValue = value 
+            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
+                scaledValue = Math.round(safeToDouble(scaledValue ) * safeToInt(dpMap.scale))
+            }            
+            break
+        default :
+            logDebug "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
+            return null
+    }
+    //logDebug "getScaledPreferenceValue: preference ${preference} value = ${value} scaledValue = ${scaledValue} (scale=${dpMap.scale})" 
+    return scaledValue
+}
+
+// called from updated() method
+// TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
+void updateAllPreferences() {
+    logDebug "updateAllPreferences: preferences=${DEVICE.preferences}"
+    if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
+        logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceGroup()}"
+        return
+    }
+    Integer dpInt = 0
+    def scaledValue    // int or String for enums
+    (DEVICE.preferences).each { name, dp -> 
+        dpInt = safeToInt(dp, -1)
+        if (dpInt <= 0) {
+            // this is the IAS and other non-Tuya DPs preferences .... 
+            logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
+            return 
+        }
+        def dpMaps   =  DEVICE.tuyaDPs 
+        Map foundMap
+        foundMap = getPreferencesMap(name)
+        //logDebug "updateAllPreferences: foundMap = ${foundMap}"
+        if (foundMap != null) {
+            scaledValue = getScaledPreferenceValue(name, foundMap)
+            setPar(name, scaledValue)
+        }
+        else {
+            logDebug "warning: couldn't find tuyaDPs map for preference ${name} (dp = ${dp})"
+            return 
+        }
+    }    
+    return
+}
+
+def divideBy100( val ) { return (val as int) / 100 }
+def multiplyBy100( val ) { return (val as int) * 100 }
+def divideBy10( val ) { 
+    if (val > 10) { return (val as int) / 10 }
+    else { return (val as int) }
+}
+def multiplyBy10( val ) { return (val as int) * 10 }
+def divideBy1( val ) { return (val as int) / 1 }    //tests
+
+/**
  * Called from setPar() method only!
  * Validates the parameter value based on the given dpMap type and scales it if needed.
  * 
@@ -181,7 +268,7 @@ def getValidParsPerModel() {
 def validateAndScaleParameterValue(Map dpMap, String val) {
     def value = null    // validated value - integer, floar
     def scaledValue = null
-    logDebug "validateAndScaleParameterValue dpMap=${dpMap} val=${val}"
+    //logDebug "validateAndScaleParameterValue: dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case "number" :
             value = safeToInt(val, -1)
@@ -264,7 +351,7 @@ def setPar( par=null, val=null )
         logWarn "setPar: Exception '${e}'caught while updateSetting <b>$par</b>(<b>$val</b>) type=${dpMap.type}"
         return
     }
-    logDebug "parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
+    //logDebug "setPar: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
     String setFunction = "set${capitalizedFirstChar}"
