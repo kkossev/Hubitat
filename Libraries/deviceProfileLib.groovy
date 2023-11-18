@@ -28,12 +28,15 @@ library (
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/18 10:36 AM"}
+def deviceProfileLibtamp() {"2023/11/18 7:21 PM"}
 
 metadata {
     // no capabilities
     // no attributes
-    command "sendCommand", [[name: "sendCommand", type: "STRING", constraints: ["STRING"], description: "send device commands"]]
+    command "sendCommand", [
+        [name:"command", type: "STRING", description: "command name", constraints: ["STRING"]],
+        [name:"val",     type: "STRING", description: "command parameter value", constraints: ["STRING"]]
+    ]
     command "setPar", [
             [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]],
             [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
@@ -83,7 +86,7 @@ def getProfileKey(String valueStr) {
 def getPreferencesMap( String param, boolean debug=false ) {
     Map foundMap = [:]
     if (!(param in DEVICE.preferences)) {
-        if (debug) log.warn "getPreferencesMap: preference ${param} not defined for this device!"
+        if (debug) { logWarn "getPreferencesMap: preference ${param} not defined for this device!" }
         return null
     }
     def preference 
@@ -92,7 +95,7 @@ def getPreferencesMap( String param, boolean debug=false ) {
         if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference}"
         if (preference in [true, false]) {
             // find the preference in the tuyaDPs map
-            logDebug "getPreferencesMap: preference ${param} is boolean"
+            if (debug) { logDebug "getPreferencesMap: preference ${param} is boolean" }
             return null     // no maps for predefined preferences !
         }
         if (preference.isNumber()) {
@@ -111,9 +114,35 @@ def getPreferencesMap( String param, boolean debug=false ) {
         if (debug) log.warn "getPreferencesMap: exception ${e} caught when getting preference ${param} !"
         return null
     }
-    if (debug) log.debug "getPreferencesMap: foundMap = ${foundMap}"
+    if (debug) { logDebug "getPreferencesMap: foundMap = ${foundMap}" }
     return foundMap     
 }
+
+def getAttributesMap( String attribName, boolean debug=false ) {
+    Map foundMap = null
+    def searchMap
+    if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
+    if (DEVICE.tuyaDPs != null) {
+        searchMap =  DEVICE.tuyaDPs 
+        foundMap = searchMap.find { it.name == attribName }
+        if (foundMap != null) {
+            if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
+            return foundMap
+        }
+    }
+    logDebug "getAttributesMap: searching for attribute ${attribName} in attributes"
+    if (DEVICE.attributes != null) {
+        searchMap  =  DEVICE.attributes 
+        foundMap = searchMap.find { it.name == attribName }
+        if (foundMap != null) {
+            if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
+            return foundMap
+        }
+    }
+    if (debug) { logDebug "getAttributesMap: attribute ${attribName} not found in tuyaDPs or attributes map! foundMap=${foundMap}" }
+    return null
+}
+
 
 /**
  * Resets the device preferences to their default values.
@@ -122,7 +151,7 @@ def getPreferencesMap( String param, boolean debug=false ) {
 def resetPreferencesToDefaults(boolean debug=false ) {
     Map preferences = DEVICE?.preferences
     if (preferences == null) {
-        logWarn "Preferences not found!"
+        if (debug) { logWarn "Preferences not found!" }
         return
     }
     Map parMap = [:]
@@ -130,7 +159,7 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         if (debug) log.trace "$parName $mapValue"
         // TODO - could be also 'true' or 'false' ...
         if (mapValue in [true, false]) {
-            logDebug "Preference ${parName} is predefined -> (${mapValue})"
+            if (debug) { logDebug "Preference ${parName} is predefined -> (${mapValue})" }
             // TODO - set the predefined value
             /*
             if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -141,12 +170,12 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
         if (parMap == null) {
-            logWarn "Preference ${parName} not found in tuyaDPs or attributes map!"
+            if (debug) { logWarn "Preference ${parName} not found in tuyaDPs or attributes map!" }
             return // continue
         }   
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
-            logWarn "no default value for preference ${parName} !"
+            if (debug) { logWarn "no default value for preference ${parName} !" }
             return // continue
         }
         if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -154,6 +183,9 @@ def resetPreferencesToDefaults(boolean debug=false ) {
     }
     logInfo "Preferences reset to default values"
 }
+
+
+
 
 /**
  * Returns a list of valid parameters per model based on the device preferences.
@@ -330,6 +362,8 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
  * @param par The name of the parameter to set.
  * @param val The value to set the parameter to.
  * @return Nothing.
+ *
+ * TODO: refactor it !!!
  */
 def setPar( par=null, val=null )
 {
@@ -337,12 +371,13 @@ def setPar( par=null, val=null )
     Boolean validated = false
     logDebug "setPar(${par}, ${val})"
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return }
-    if (par == null || !(par in getValidParsPerModel())) { log.warn "${device.displayName} setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return }        
+    if (par == null /*|| !(par in getValidParsPerModel())*/) { log.warn "${device.displayName} setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return }        
     Map dpMap = getPreferencesMap(par, false)                                   // get the map for the parameter
     if ( dpMap == null ) { log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return }
     if (val == null) { log.warn "${device.displayName} setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return }
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
     if (scaledValue == null) { log.warn "${device.displayName} setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return }
+    /*
     // update the device setting // TODO: decide whether the setting must be updated here, or after it is echeod back from the device
     try {
         device.updateSetting("$par", [value:val, type:dpMap.type])
@@ -351,6 +386,7 @@ def setPar( par=null, val=null )
         logWarn "setPar: Exception '${e}'caught while updateSetting <b>$par</b>(<b>$val</b>) type=${dpMap.type}"
         return
     }
+    */
     //logDebug "setPar: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
@@ -465,6 +501,101 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     cmds = sendTuyaCommand( dp, dpType, dpValHex)
     return cmds
 }
+
+def sendAttribute( par=null, val=null )
+{
+    ArrayList<String> cmds = []
+    Boolean validated = false
+    logDebug "sendAttribute(${par}, ${val})"
+    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return }
+
+    Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
+    if ( dpMap == null ) { log.warn "${device.displayName} sendAttribute: map not found for parameter <b>${par}</b>"; return }
+    if (val == null) { log.warn "${device.displayName} sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return }
+    def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
+    if (scaledValue == null) { log.warn "${device.displayName} sendAttribute: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return }
+    logDebug "sendAttribute: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
+    // if there is a dedicated set function, use it
+    String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
+    String setFunction = "set${capitalizedFirstChar}"
+    if (this.respondsTo(setFunction) && (setFunction != "setHeatingSetpoint" && setFunction != "setCoolingSetpoint")) {
+        logDebug "sendAttribute: found setFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
+        // execute the setFunction
+        try {
+            cmds = "$setFunction"(scaledValue)
+        }
+        catch (e) {
+            logWarn "sendAttribute: Exception '${e}'caught while processing <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+            return
+        }
+        logDebug "setFunction result is ${cmds}"       
+        if (cmds != null && cmds != []) {
+            logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+            sendZigbeeCommands( cmds )
+            return
+        }            
+        else {
+            logWarn "sendAttribute: setFunction <b>$setFunction</b>(<b>$scaledValue</b>) returned null or empty list"
+            // continue with the default processing
+        }
+    }
+    // check whether this is a tuya DP or a cluster:attribute parameter
+    boolean isTuyaDP
+    def preference = dpMap.dp
+    try {
+        isTuyaDP = true //preference.isNumber()
+    }
+    catch (e) {
+        if (debug) log.warn "sendAttribute: exception ${e} caught while checking isNumber() preference ${preference}"
+        return null
+    }     
+    if (dpMap.dp != null && isTuyaDP) {
+        // Tuya DP
+        cmds = sendTuyaParameter(dpMap,  par, scaledValue) 
+        if (cmds == null || cmds == []) {
+            logWarn "sendAttribute: sendTuyaParameter par ${par} scaledValue ${scaledValue} returned null or empty list"
+            return
+        }
+        else {
+            logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
+            sendZigbeeCommands( cmds )
+            return
+        }
+    }
+    else if (dpMap.at != null) {
+        // cluster:attribute
+        int cluster
+        int attribute
+        int dt
+        int mfgCode
+        try {
+            cluster = hubitat.helper.HexUtils.hexStringToInt(dpMap.at.split(":")[0])
+            attribute = hubitat.helper.HexUtils.hexStringToInt(dpMap.at.split(":")[1])
+            dt = hubitat.helper.HexUtils.hexStringToInt(dpMap.dt)
+            mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
+        }
+        catch (e) {
+            logWarn "sendAttribute: Exception '${e}'caught while splitting cluser and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+            return
+        }
+        Map mapMfCode = ["mfgCode":mfgCode]
+        logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        if (mfgCode != null) {
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay=200)
+        }
+        else {
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay=200)
+        }
+    }
+    else {
+        logWarn "sendAttribute: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
+        return
+    }
+    logInfo "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+    sendZigbeeCommands( cmds )
+    return
+}
+
 
 /**
  * Sends a command to the device.

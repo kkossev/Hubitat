@@ -230,7 +230,7 @@ metadata {
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
 def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
-def isAqaraTRV()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
+def isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
 def isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
@@ -2188,7 +2188,7 @@ def tuyaBlackMagic() {
 
 void aqaraBlackMagic() {
     List<String> cmds = []
-    if (isAqaraTVOC() || isAqaraTRV()) {
+    if (isAqaraTVOC() || isAqaraTRV_OLD()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
@@ -2574,7 +2574,7 @@ def configure() {
     logInfo 'configure...'
     logDebug settings
     cmds += tuyaBlackMagic()
-    if (isAqaraTVOC() || isAqaraTRV()) {
+    if (isAqaraTVOC() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()
     }
     cmds += initializeDevice()
