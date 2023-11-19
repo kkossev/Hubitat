@@ -20,9 +20,8 @@
  *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
  *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
- *  ver. 1.1.3 2023-11-11 kkossev - (dev. branch)
+ *  ver. 1.1.3 2023-11-19 kkossev - (dev. branch) fixed _TZE200_m9skfctm battery reporting; fix RTT negative values bug
  *
- *            TODO: fix RTT negative values bug; check _TZE200_m9skfctm battery reporting
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
  *            TODO: send the check-in messages as an event / show as Info log
@@ -34,7 +33,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 def version() { "1.1.3" }
-def timeStamp() {"2022/11/11 10:10 PM"}
+def timeStamp() {"2023/11/19 11:29 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -165,7 +164,7 @@ def parse(String description) {
                         if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
                         def now = new Date().getTime()
                         def timeRunning = now.toInteger() - (state.pingTime ?: '0').toInteger()
-                        if (timeRunning < MAX_PING_MILISECONDS) {
+                        if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
                             sendRttEvent()
                         }
                     }
@@ -285,51 +284,51 @@ def parseZHAcommand( Map descMap) {
                         def map = [:]
                         switch (cmd) {
                             case "01" : // smoke alarm for all models
-                                if (txtEnable==true) log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} smoke alarm (dp=${cmd}) is: ${value}"
                                 sendSmokeAlarmEvent( value)
                                 break
                             case "02" : // raw data from _TZE200_m9skfctm '_TZE200_e2bedvo9', '_TZE200_dnz6yvl2'
-                                if (txtEnable==true) log.info "${device.displayName} smoke concentration  (dp=${cmd}) is: ${value/10}ppm (${value})"
+                                if (txtEnable == true) log.info "${device.displayName} smoke concentration  (dp=${cmd}) is: ${value/10}ppm (${value})"
                                 break
                             case "04" : // "TamperAlert" for all models
-                                if (txtEnable==true) log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} tamper alert (dp=${cmd}) is: ${value}"
                                 sendTamperAlertEvent( value )
                                 break
                             case "0B" : // (11) "Fault Alarm" for _TZE200_yh7aoahi _TZE200_m9skfctm
-                                if (txtEnable==true) log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} Fault Alarm (dp=${cmd}) is: ${value}"
                                 break
                             case "0E" : // (14) "battery level state" ['low', 'middle', 'high'] dp14 0=25% 1=50% 2=90% also for _TZE200_yh7aoahi 
-                                if (txtEnable==true) log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} Battery level state (dp=${cmd}) is: ${value}"
                                 sendBatteryStateEvent( value )
                                 break
                             case "0F" : // (15) "battery level % for _TZE200_yh7aoahi 
-                                if (txtEnable==true) log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%"
-                                // TODO - send batteryLevel event!
+                                if (txtEnable == true) log.info "${device.displayName} Battery level % (dp=${cmd}) is: ${value}%"
+                                sendBatteryPercentEvent( value )
                                 break
                             case "10" : // (16) "silence" for _TZE200_yh7aoahi _TZE200_ytibqbra
-                                if (txtEnable==true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} 'silence' state (dp=${cmd}) is: ${value}"
                                 break
                             case "11" : // (17) "alarm" for  _TZE200_ytibqbra
-                                if (txtEnable==true) log.info "${device.displayName} 'alarm' state (dp=${cmd}) is: ${value}"
+                                if (txtEnable == true) log.info "${device.displayName} 'alarm' state (dp=${cmd}) is: ${value}"
                                 break
                             case "65" : // (101) test for _TZE200_m9skfctm; alarm for _TZE200_dq1mfjug
                                 if (device.getDataValue('manufacturer') in ['_TZE200_m9skfctm']) {
-                                    if (txtEnable==true) log.info "${device.displayName} test (dp=${cmd}) is: ${value}"
+                                    if (txtEnable == true) log.info "${device.displayName} test (dp=${cmd}) is: ${value}"
                                     sendSmokeAlarmEvent(2)
                                 }
                                 else {
-                                    if (txtEnable==true) log.info "${device.displayName} smoke alarm  (dp=${cmd}) is: ${value}"
+                                    if (txtEnable == true) log.info "${device.displayName} smoke alarm  (dp=${cmd}) is: ${value}"
                                     sendSmokeAlarmEvent(value)
                                 }
                                 break
                             default :
-                                if (logEnable==true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
-                                if (logEnable==true) log.warn "map= ${descMap}"
+                                if (logEnable == true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
+                                if (logEnable == true) log.warn "map= ${descMap}"
                                 break
                         }
                         break
                     default :
-                        if (logEnable==true) log.warn "${device.displayName} Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+                        if (logEnable == true) log.warn "${device.displayName} Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
                         break
                 } // switch (descMap.clusterId)
             }  //command is read attribute response 01 or 02 (Tuya)
@@ -424,8 +423,13 @@ def sendTamperAlertEvent( value, isDigital=false ) {    // attributes: tamper - 
 }
 
 def sendBatteryStateEvent( value, isDigital=false ) {    // ea.STATE, ['low', 'middle', 'high']).withDescription('Battery level state'),    dp14 0=25% 1=50% 2=90% [dp=14] battery low   value 2 (FULL)
+    def percent = value == 0 ? 25 : value == 1 ? 50 : value == 2 ? 100 : value
+    sendBatteryPercentEvent( percent, isDigital )
+}
+
+def sendBatteryPercentEvent( value, isDigital=false ) { 
     def map = [:]
-    map.value = value==0 ? 25 : value==1 ? "50" : value==2 ? "100" : null
+    map.value = value > 100 ? 100 : value
     map.name = "battery"
     map.unit = "%"
     map.type = isDigital == true ? "digital" : "physical"
