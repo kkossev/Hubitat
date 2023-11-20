@@ -64,7 +64,7 @@
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
- * ver. 1.6.8  2023-11-13 kkossev  - (dev. branch) SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences
+ * ver. 1.6.8  2023-11-20 kkossev  - (dev. branch) SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  *
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
@@ -97,7 +97,7 @@
 */
 
 def version() { "1.6.8" }
-def timeStamp() {"2023/11/13 11:50 PM"}
+def timeStamp() {"2023/11/20 1:13 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -3335,7 +3335,7 @@ def updateAllPreferences() {
                 }
                 String DPType = (foundMap.type in ["number", "decimal"]) ? DP_TYPE_VALUE : foundMap.type == "bool" ? DP_TYPE_BOOL : foundMap.type == "enum" ? DP_TYPE_ENUM : "unknown"
                 if (scaledValue != null) {
-                    cmds += setRadarParameterTuya(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
+                    cmds += setRadarParameterTuya(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int )
                 }
                 else {
                     logDebug "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
@@ -3373,7 +3373,7 @@ def divideBy1( val ) { return (val as int) / 1 }    //tests
  * @return An ArrayList of commands sent to the device.
  */
  // TODO - replace this device-specific method !!!
-def setRadarParameterTuyaTuya( String parName, String DPcommand, String DPType, DPval) {
+def setRadarParameterTuya( String parName, String DPcommand, String DPType, Integer DPval) {
     ArrayList<String> cmds = []
     def value
     switch (DPType) {
