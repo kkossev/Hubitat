@@ -14,13 +14,15 @@
  *
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
+ *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
  *
- *                                   TODO: Auto
- *                                   TODO: Cool
- *                                   TODO: Heat
- *                                   TODO: Emergency Heat
- *                                   TODO: setThermostatMode
- *                                   TODO: Fan Auto, Circlulate, On; setThermostatFanMode
+ *
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: 
+ *                                   TODO: 
  *                                   TODO: 
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: add 'force manual mode' preference
@@ -36,7 +38,7 @@
  */
 
 static String version() { "3.0.0" }
-static String timeStamp() {"2023/11/18 11:27 PM"}
+static String timeStamp() {"2023/11/18 11:55 PM"}
 
 @Field static final Boolean _DEBUG = true
 
