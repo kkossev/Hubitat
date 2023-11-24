@@ -29,6 +29,12 @@
       "id": 144,
       "codeType": "library",
       "version": 32
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
+      "id": 144,
+      "codeType": "library",
+      "version": 43
     }
   ]
 }

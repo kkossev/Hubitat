@@ -28,17 +28,18 @@ library (
   * ver. 1.0.0  2022-06-18 kkossev  - first beta version
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
-  * ver. 3.0.0  2023-11-16 kkossev  - (dev.branch) first version 3.x.x
+  * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
+  * ver. 3.0.1  2023-11-24 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings
   *
+  *                                   TODO: add GetInof (endpoints list) command
+  *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
   *                                   TODO: move zigbeeGroups : {} to dedicated lib
   *                                   TODO: disableDefaultResponse for Tuya commands
  *
 */
 
-def commonLibVersion()   {"3.0.0"}
-def thermostatLibStamp() {"2023/11/18 11:22 AM"}
-
-//@Field static final Boolean _DEBUG = false
+def commonLibVersion()   {"3.0.1"}
+def thermostatLibStamp() {"2023/11/24 12:33 PM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -72,7 +73,7 @@ metadata {
         // common attributes for all device types
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute "rtt", "number" 
-        attribute "Info", "string"
+        attribute "Status", "string"
   
         // common commands for all device types
         // removed from version 2.0.6    //command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
@@ -144,8 +145,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
  
     preferences {
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        // txtEnable and logEnable moved to the custom driver settings
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("TemperatureMeasurement") || device.hasCapability("RelativeHumidityMeasurement") || device.hasCapability("IlluminanceMeasurement")) {
                 input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
@@ -169,7 +169,7 @@ metadata {
                 
             }
             if ((deviceType in  ["Switch", "Plug", "Dimmer"]) && _THREE_STATE == true) {
-                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>What\'s wrong with the three-state concept?</i>', defaultValue: false
+                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
             }
             input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
         }
@@ -912,7 +912,7 @@ void parseGroupsCluster(final Map descMap) {
                 logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}"
             }
             else {
-                logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
             }
             break
         case 0x02: // Get group membership
@@ -927,7 +927,7 @@ void parseGroupsCluster(final Map descMap) {
             }
             state.zigbeeGroups['groups'] = groups
             state.zigbeeGroups['capacity'] = capacity
-            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
             break
         case 0x03: // Remove group
             logInfo "received  Remove group GROUPS cluster command: ${descMap.command} (${descMap})"
@@ -950,12 +950,12 @@ void parseGroupsCluster(final Map descMap) {
             }
             break
         case 0x04: //Remove all groups
-            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
             logWarn "not implemented!"
             break
         case 0x05: // Add group if identifying
             //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5). 
-            logInfo "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
             logWarn "not implemented!"
             break
         default:
@@ -1156,7 +1156,8 @@ def off() {
             runIn(1, 'refresh',  [overwrite: true])
         }
         def value = SwitchThreeStateOpts.options[2]    // 'switching_on'
-        def descriptionText = "${value} (2)"
+        def descriptionText = "${value}"
+        if (logEnable) { descriptionText += " (2)" }
         sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true)
         logInfo "${descriptionText}"
     }
@@ -1200,14 +1201,14 @@ def on() {
             runIn(1, 'refresh',  [overwrite: true])
         }
         def value = SwitchThreeStateOpts.options[3]    // 'switching_on'
-        def descriptionText = "${value} (3)"
+        def descriptionText = "${value}"
+        if (logEnable) { descriptionText += " (2)" }
         sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true)
         logInfo "${descriptionText}"
     }
     else {
         logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
     }
-    
     
     runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
@@ -1219,13 +1220,13 @@ def sendSwitchEvent( switchValue ) {
     boolean bWasChange = false
     boolean debounce   = state.states["debounce"] ?: false
     def lastSwitch = state.states["lastSwitch"] ?: "unknown"
-    if (debounce == true && value == lastSwitch) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
+    if (value == lastSwitch && (debounce == true || (settings.ignoreDuplicated ?: false) == true)) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         logDebug "Ignored duplicated switch event ${value}"
         runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return null
     }
     else {
-        //log.trace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
+        logTrace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
     }
     def isDigital = state.states["isDigital"]
     map.type = isDigital == true ? "digital" : "physical"
@@ -2264,7 +2265,7 @@ def configureDevice() {
 */
 
 def refresh() {
-    logInfo "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
+    logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
     checkDriverVersion()
     List<String> cmds = []
     if (state.states == null) state.states = [:]
@@ -2315,12 +2316,12 @@ void clearInfoEvent() {
 
 void sendInfoEvent(String info=null) {
     if (info == null || info == "clear") {
-        logDebug "clearing the Info event"
-        sendEvent(name: "Info", value: " ", isDigital: true)
+        logDebug "clearing the Status event"
+        sendEvent(name: "Status", value: "clear", isDigital: true)
     }
     else {
         logInfo "${info}"
-        sendEvent(name: "Info", value: info, isDigital: true)
+        sendEvent(name: "Status", value: info, isDigital: true)
         runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute
     }
 }
@@ -2561,7 +2562,7 @@ def loadAllDefaults() {
     initialize()
     configure()
     updated() // calls  also   configureDevice()
-    sendInfoEvent("All Defaults Loaded!")
+    sendInfoEvent("All Defaults Loaded! F5 to refresh")
 }
 
 /**
@@ -2748,11 +2749,11 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
     if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false)
+    if (fullInit || settings?.alwaysOn == null) device.updateSetting("alwaysOn", false)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])
     if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
     if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
     if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
-    if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false)
     if (device.hasCapability("IlluminanceMeasurement")) {
         if (fullInit || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value:DEFAULT_MIN_REPORTING_TIME, type:"number"])
@@ -2766,7 +2767,7 @@ void initializeVars( boolean fullInit = false ) {
     if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) }
     if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit);    initEventsSwitch(fullInit) }         // none
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit);    initEventsSwitch(fullInit) }         // threeStateEnable, ignoreDuplicated
     if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
     if (DEVICE_TYPE in ["Radar"])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none
     if (DEVICE_TYPE in ["ButtonDimmer"]) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) }
