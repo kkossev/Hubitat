@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-24 kkossev  - (dev. branch)
+ * ver. 3.0.0  2023-11-25 kkossev  - (dev. branch) fixes for use with commonLib
  *
  *                                   TODO: setPar refactoring
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/24 4:48 PM"}
+def deviceProfileLibtamp() {"2023/11/25 11:28 AM"}
 
 metadata {
     // no capabilities
@@ -43,11 +43,13 @@ metadata {
     ]    
     //
     // itterate over DEVICE.preferences map and inputIt all!
-    (DEVICE.preferences).each { key, value ->
-        if (inputIt(key) != null) {
-            input inputIt(key)
-        }
-    }    
+    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
+        (DEVICE.preferences).each { key, value ->
+            if (inputIt(key) != null) {
+                input inputIt(key)
+            }
+        }    
+    }
     preferences {
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfilesMap())
@@ -149,12 +151,17 @@ def getAttributesMap( String attribName, boolean debug=false ) {
  * @param debug A boolean indicating whether to output debug information.
  */
 def resetPreferencesToDefaults(boolean debug=false ) {
-    Map preferences = DEVICE?.preferences
+    logDebug "resetPreferencesToDefaults..."
+    if (DEVICE == null) {
+        if (debug) { logWarn "DEVICE not found!" }
+        return
+    }
+    def preferences = DEVICE?.preferences
     if (preferences == null) {
         if (debug) { logWarn "Preferences not found!" }
         return
     }
-    Map parMap = [:]
+    def parMap = [:]
     preferences.each{ parName, mapValue -> 
         if (debug) log.trace "$parName $mapValue"
         // TODO - could be also 'true' or 'false' ...

@@ -15,7 +15,7 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
- * ver. 3.0.1  2023-11-24 kkossev  - (dev. branch)
+ * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch)
  *
  *
  *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ???
@@ -39,7 +39,7 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/24 6:13 PM"}
+static String timeStamp() {"2023/11/25 11:32 AM"}
 
 @Field static final Boolean _DEBUG = false
 
