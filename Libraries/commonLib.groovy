@@ -468,10 +468,8 @@ void parseWriteAttributeResponse(final Map descMap) {
 }
 
 /**
- * Zigbee Configure Reporting Response Parsing
- * @param descMap Zigbee message in parsed map format
+ * Zigbee Configure Reporting Response Parsing  - command 0x07
  */
-
 void parseConfigureResponse(final Map descMap) {
     // TODO - parse the details of the configuration respose - cluster, min, max, delta ...
     final String status = ((List)descMap.data).first()
@@ -484,6 +482,32 @@ void parseConfigureResponse(final Map descMap) {
         log.warn "zigbee configure reporting error: ${statusName} ${descMap.data}"
     } else {
         logDebug "zigbee configure reporting response: ${statusName} ${descMap.data}"
+    }
+}
+
+/**
+ * Parses the response of reading reporting configuration - command 0x09
+ */
+void parseReadReportingConfigResponse(final Map descMap) {
+    // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0006 , data=[00, 00, 00, 00, 10, 00, 00, 58, 02] (Status: Success) min=0 max=600
+    // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0702 , data=[00, 00, 00, 00, 25, 3C, 00, 10, 0E, 00, 00, 00, 00, 00, 00] (Status: Success) min=60 max=3600
+    def status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
+    def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
+    if (status == 0) {
+        def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
+        def min = zigbee.convertHexToInt(descMap.data[6])*256 + zigbee.convertHexToInt(descMap.data[5])
+        def max = zigbee.convertHexToInt(descMap.data[8]+descMap.data[7])
+        def delta = 0
+        if (descMap.data.size()>=10) { 
+            delta = zigbee.convertHexToInt(descMap.data[10]+descMap.data[9])
+        }
+        else {
+            logDebug "descMap.data.size = ${descMap.data.size()}"
+        }
+        logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribute:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
+    }
+    else {
+        logWarn "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribute:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=="00" ? 'Success' : '<b>Failure</b>'})"
     }
 }
 

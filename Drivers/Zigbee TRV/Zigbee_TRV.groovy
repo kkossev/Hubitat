@@ -18,10 +18,10 @@
  * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch)
  *
  *
+ *                                   TODO: handle UNKNOWN TRV
  *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ???
  *                                   TODO: Aqara TRV - poll (or simulate) refresing the temperature and the heatingSetpoint
  *                                   TODO: initializeThermostat() 
- *                                   TODO: 
  *                                   TODO: 
  *                                   TODO: 
  *                                   TODO: 
@@ -39,7 +39,7 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/25 11:32 AM"}
+static String timeStamp() {"2023/11/25 12:54 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -71,14 +71,12 @@ metadata {
     capability "Sensor"
     capability "Temperature Measurement"
     capability "Thermostat"                 // needed for HomeKit
-    
-    /*
-        capability "ThermostatHeatingSetpoint"
-        capability "ThermostatCoolingSetpoint"
-        capability "ThermostatOperatingState"
-        capability "ThermostatSetpoint"
-        capability "ThermostatMode"    
-    */
+    capability "ThermostatHeatingSetpoint"
+    capability "ThermostatCoolingSetpoint"
+    capability "ThermostatOperatingState"
+    capability "ThermostatSetpoint"
+    capability "ThermostatMode"    
+    capability "ThermostatFanMode"
 
     // Aqara E1 thermostat attributes
     // TODO - add all other models attributes possible values
@@ -268,20 +266,19 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
             models        : ["*"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-
             preferences   : [],
             fingerprints  : [],
             commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
             attributes    : [
-                [at:"0x0201:0x0000",  name:'temperature',                   type:"decimal", dt: "UINT16", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
-                [at:"0x0201:0x0011",  name:'coolingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
-                [at:"0x0201:0x0012",  name:'heatingSetpoint',               type:"decimal", dt: "UINT16", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                [at:"0x0201:0x001C",  name:'mode',                          type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
-                [at:"0x0201:0x001E",  name:'thermostatRunMode',             type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
-                [at:"0x0201:0x0020",  name:'battery2',                     type:"number",  dt: "UINT16", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
-                [at:"0x0201:0x0023",  name:'thermostatHoldMode',           type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
-                [at:"0x0201:0x0029",  name:'thermostatOperatingState',      type:"enum",    dt: "UINT8",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
+                [at:"0x0201:0x0000",  name:'temperature',              type:"decimal", dt: "0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',          type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',          type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
+                [at:"0x0201:0x001C",  name:'mode',                     type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',        type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
+                [at:"0x0201:0x0020",  name:'battery2',                 type:"number",  dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                [at:"0x0201:0x0023",  name:'thermostatHoldMode',       type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
             ],
             deviceJoinName: "UNKWNOWN TRV",
             configuration : [:]
