@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-18 kkossev  - (dev. branch)
+ * ver. 3.0.0  2023-11-24 kkossev  - (dev. branch)
  *
  *                                   TODO: setPar refactoring
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/18 11:55 PM"}
+def deviceProfileLibtamp() {"2023/11/24 4:48 PM"}
 
 metadata {
     // no capabilities
@@ -609,14 +609,14 @@ def sendCommand( command=null, val=null )
     ArrayList<String> cmds = []
     def supportedCommandsMap = DEVICE.commands 
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
-        logWarn "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
+        logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
     def supportedCommandsList =  DEVICE.commands.keySet() as List 
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
-        logWarn "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE.description}' must be one of these : ${supportedCommandsList}"
+        logInfo "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE.description}' must be one of these : ${supportedCommandsList}"
         return
     }
     def func

@@ -31,6 +31,7 @@ library (
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-11-24 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings
   *
+  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: add GetInof (endpoints list) command
   *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
   *                                   TODO: move zigbeeGroups : {} to dedicated lib
@@ -39,7 +40,7 @@ library (
 */
 
 def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/11/24 12:33 PM"}
+def thermostatLibStamp() {"2023/11/24 3:10 PM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -145,7 +146,10 @@ metadata {
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
  
     preferences {
-        // txtEnable and logEnable moved to the custom driver settings
+        // txtEnable and logEnable moved to the custom driver settings - coopy& paste there ...
+        //input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+
         if (advancedOptions == true || advancedOptions == false) { // groovy ...
             if (device.hasCapability("TemperatureMeasurement") || device.hasCapability("RelativeHumidityMeasurement") || device.hasCapability("IlluminanceMeasurement")) {
                 input name: "minReportingTime", type: "number", title: "<b>Minimum time between reports</b>", description: "<i>Minimum reporting interval, seconds (1..300)</i>", range: "1..300", defaultValue: DEFAULT_MIN_REPORTING_TIME
@@ -179,7 +183,7 @@ metadata {
 
 
 @Field static final Integer DIGITAL_TIMER = 1000             // command was sent by this driver
-@Field static final Integer REFRESH_TIMER = 5000             // refresh time in miliseconds
+@Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
 @Field static final Integer DEBOUNCING_TIMER = 300           // ignore switch events 
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
@@ -1780,8 +1784,11 @@ void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
     def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float
     eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float
     eventMap.type = isDigital == true ? "digital" : "physical"
-    //eventMap.isStateChange = true
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
+    if (state.states["isRefresh"] == true) {
+        eventMap.descriptionText += " [refresh]"
+        eventMap.isStateChange = true
+    }   
     Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000)
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
@@ -2268,8 +2275,7 @@ def refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
     checkDriverVersion()
     List<String> cmds = []
-    if (state.states == null) state.states = [:]
-    state.states["isRefresh"] = true
+    setRefreshRequest()    // 3 seconds
     
     // device type specific refresh handlers
     if (DEVICE_TYPE in  ["AqaraCube"])       { cmds += refreshAqaraCube() }
@@ -2299,7 +2305,6 @@ def refresh() {
         }
     }
 
-    runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true])                 // 3 seconds
     if (cmds != null && cmds != [] ) {
         sendZigbeeCommands(cmds)
     }
@@ -2308,6 +2313,7 @@ def refresh() {
     }
 }
 
+def setRefreshRequest()   { if (state.states == null) {state.states = [:]};   state.states["isRefresh"] = true; runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
 def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false }
 
 void clearInfoEvent() {

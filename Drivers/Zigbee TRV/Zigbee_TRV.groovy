@@ -15,11 +15,12 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
+ * ver. 3.0.1  2023-11-24 kkossev  - (dev. branch)
  *
  *
- *                                   TODO: 
- *                                   TODO: 
- *                                   TODO: 
+ *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ???
+ *                                   TODO: Aqara TRV - poll (or simulate) refresing the temperature and the heatingSetpoint
+ *                                   TODO: initializeThermostat() 
  *                                   TODO: 
  *                                   TODO: 
  *                                   TODO: 
@@ -37,10 +38,10 @@
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
  */
 
-static String version() { "3.0.0" }
-static String timeStamp() {"2023/11/18 11:55 PM"}
+static String version() { "3.0.1" }
+static String timeStamp() {"2023/11/24 6:13 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -124,6 +125,8 @@ metadata {
     }
     
     preferences {
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true) {
             input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TemperaturePollingIntervalOpts.options, defaultValue: TemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
         }
@@ -188,35 +191,35 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"] 
             ],
-            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
             attributes    : [
-                [at:"0xFCC0:0x040A",  name:'battery',                       type:"number",  dt: "0x21",   rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
-                [at:"0xFCC0:0x0271",  name:'systemMode',                   type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>System Mode</i>'],
-                [at:"0xFCC0:0x0272",  name:'preset',                        type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "manual", 1: "auto", 2: "away"], unit:"",         title: "<b>Preset</b>",                        description:'<i>Preset</i>'],
-                [at:"0xFCC0:0x0273",  name:'windowOpenDetection',           type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Window Detection</b>",              description:'<i>Window detection</i>'],
-                [at:"0xFCC0:0x0274",  name:'valveDetection',                type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Valve Detection</b>",               description:'<i>Valve detection</i>'],
-                [at:"0xFCC0:0x0275",  name:'valveAlarm',                    type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Valve Alarm</b>",                   description:'<i>Valve alarm</i>'],
-                [at:"0xFCC0:0x0277",  name:'childLock',                     type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "unlock", 1: "lock"], unit:"",         title: "<b>Child Lock</b>",                    description:'<i>Child lock</i>'],
-                [at:"0xFCC0:0x0279",  name:'awayPresetTemperature',       type:"decimal", dt: "0x23",   mfgCode:"0x115f",  rw: "rw", min:5.0,  max:35.0, defaultValue:5.0,    step:0.5, scale:100,  unit:"°C", title: "<b>Away Preset Temperature</b>",       description:'<i>Away preset temperature</i>'],
-                [at:"0xFCC0:0x027A",  name:'windowsState',                  type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "open", 1: "closed"], unit:"",         title: "<b>Window Open</b>",                   description:'<i>Window open</i>'],
-                [at:"0xFCC0:0x027B",  name:'calibrated',                    type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Calibrated</b>",                    description:'<i>Calibrated</i>'],
-                [at:"0xFCC0:0x027E",  name:'sensor',                        type:"enum",    dt: "0x20",   mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "internal", 1: "external"], unit:"",         title: "<b>Sensor</b>",                        description:'<i>Sensor</i>'],
+                [at:"0xFCC0:0x040A",  name:'battery',               type:"number",  dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                [at:"0xFCC0:0x0271",  name:'systemMode',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>System Mode</i>'],
+                [at:"0xFCC0:0x0272",  name:'preset',                type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "manual", 1: "auto", 2: "away"], unit:"",         title: "<b>Preset</b>",                        description:'<i>Preset</i>'],
+                [at:"0xFCC0:0x0273",  name:'windowOpenDetection',   type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Window Detection</b>",              description:'<i>Window detection</i>'],
+                [at:"0xFCC0:0x0274",  name:'valveDetection',        type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Valve Detection</b>",               description:'<i>Valve detection</i>'],
+                [at:"0xFCC0:0x0275",  name:'valveAlarm',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Valve Alarm</b>",                   description:'<i>Valve alarm</i>'],
+                [at:"0xFCC0:0x0277",  name:'childLock',             type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "unlock", 1: "lock"], unit:"",         title: "<b>Child Lock</b>",                    description:'<i>Child lock</i>'],
+                [at:"0xFCC0:0x0279",  name:'awayPresetTemperature', type:"decimal", dt: "0x23", mfgCode:"0x115f",  rw: "rw", min:5.0,  max:35.0, defaultValue:5.0,    step:0.5, scale:100,  unit:"°C", title: "<b>Away Preset Temperature</b>",       description:'<i>Away preset temperature</i>'],
+                [at:"0xFCC0:0x027A",  name:'windowsState',          type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "open", 1: "closed"], unit:"",         title: "<b>Window Open</b>",                   description:'<i>Window open</i>'],
+                [at:"0xFCC0:0x027B",  name:'calibrated',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Calibrated</b>",                    description:'<i>Calibrated</i>'],
+                [at:"0xFCC0:0x027E",  name:'sensor',                type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "internal", 1: "external"], unit:"",         title: "<b>Sensor</b>",                        description:'<i>Sensor</i>'],
                 //
-                [at:"0x0201:0x0000",  name:'temperature',                   type:"decimal", dt: "0x21",   rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
-                [at:"0x0201:0x0011",  name:'coolingSetpoint',               type:"decimal", dt: "0x21",   rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
-                [at:"0x0201:0x0012",  name:'heatingSetpoint',               type:"decimal", dt: "0x21",   rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                [at:"0x0201:0x001C",  name:'mode',                          type:"enum",    dt: "0x20",   rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
+                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt: "0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',       type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
+                [at:"0x0201:0x001C",  name:'mode',                  type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
                 //                      ^^^^ TODO - check if this is the same as system_mode    
-                [at:"0x0201:0x001E",  name:'thermostatRunMode',             type:"enum",    dt: "0x20",   rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
                 //                          ^^ TODO  
-                [at:"0x0201:0x0020",  name:'battery2',                      type:"number",  dt: "0x20",   rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                [at:"0x0201:0x0020",  name:'battery2',              type:"number",  dt: "0x20", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
                 //                          ^^ TODO  
-                [at:"0x0201:0x0023",  name:'thermostatHoldMode',            type:"enum",    dt: "0x20",   rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
+                [at:"0x0201:0x0023",  name:'thermostatHoldMode',    type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
                 //                          ^^ TODO  
-                [at:"0x0201:0x0029",  name:'thermostatOperatingState',      type:"enum",    dt: "0x20",   rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum", dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
                 //                          ^^ TODO  
-                [at:"0x0201:0xFFF2",  name:'unknown',                       type:"number",  dt: "0x21",   rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                [at:"0x0201:0xFFF2",  name:'unknown',                type:"number", dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
             ],
             deviceJoinName: "Aqara E1 Thermostat",
             configuration : [:]
@@ -289,8 +292,15 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
 
 
 void thermostatEvent(eventName, value, raw) {
-    sendEvent(name: eventName, value: value, type: "physical")
-    logInfo "${eventName} is ${value} (raw ${raw})"
+    def descriptionText = "${eventName} is ${value}"
+    Map eventMap = [name: eventName, value: value, descriptionText: descriptionText, type: "physical"]
+    if (state.states["isRefresh"] == true) {
+        eventMap.descriptionText += " [refresh]"
+        eventMap.isStateChange = true   // force event to be sent
+    }
+    if (logEnable) { eventMap.descriptionText += " (raw ${raw})" }
+    sendEvent(eventMap)
+    logInfo "${eventMap.descriptionText}"
 }
 
 // called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 )
@@ -470,8 +480,11 @@ void parseThermostatClusterThermostat(final Map descMap) {
             logInfo "cooling setpoint = ${value/100.0} (raw ${value})"
             break
         case 0x0012:                      // heating setpoint
-            logInfo "heating setpoint = ${value/100.0} (raw ${value})"
+            logDebug "heating setpoint = ${value/100.0} (raw ${value})"
             sendHeatingSetpointEvent(value/100.0)
+            break
+        case 0x001b:                      // mode
+            logInfo "controlledSequenceOfOperation = ${value} (raw ${value})"
             break
         case 0x001c:                      // mode
             logInfo "mode = ${value} (raw ${value})"
@@ -536,10 +549,14 @@ def setHeatingSetpoint( temperature ) {
     }
 }
 
-private void sendHeatingSetpointEvent(temperature) {
+void sendHeatingSetpointEvent(temperature) {
     tempDouble = safeToDouble(temperature)
     Map eventMap = [name: "heatingSetpoint",  value: tempDouble, unit: "\u00B0"+"C"]
     eventMap.descriptionText = "heatingSetpoint is ${tempDouble}"
+    if (state.states["isRefresh"] == true) {
+        eventMap.descriptionText += " [refresh]"
+        eventMap.isStateChange = true   // force event to be sent
+    }
     sendEvent(eventMap)
     if (eventMap.descriptionText != null) { logInfo "${eventMap.descriptionText}" }
 
@@ -728,13 +745,13 @@ void autoPollThermostat() {
     logDebug "autoPollThermostat()..."
     checkDriverVersion()
     List<String> cmds = []
-    if (state.states == null) state.states = [:]
-    //state.states["isRefresh"] = true
+    setRefreshRequest()
     if (isAqaraTRV()) {
-        cmds += zigbee.readAttribute(0x0201, 0x0000, [:], delay=3500)      // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
+        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
     else {
         logDebug "autoPollThermostat: no polling for device profile ${state.deviceProfile}"
+        clearRefreshRequest()
     }
    
     if (cmds != null && cmds != [] ) {
@@ -783,6 +800,7 @@ void updatedThermostat() {
 }
 
 def refreshThermostat() {
+    // state.states["isRefresh"] = true is set in the commonLib
     List<String> cmds = []
     if (isAqaraTRV()) {
         //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage)
