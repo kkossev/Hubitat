@@ -29,7 +29,7 @@ library (
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-11-24 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings
+  * ver. 3.0.1  2023-11-27 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: add GetInof (endpoints list) command
@@ -40,7 +40,7 @@ library (
 */
 
 def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/11/24 3:10 PM"}
+def thermostatLibStamp() {"2023/11/27 10:47 PM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -372,7 +372,7 @@ void parse(final String description) {
             break
         default:
             if (settings.logEnable) {
-                logWarn "zigbee received <b>unknown cluster:${descMap.clusterId}</b> message (${descMap})"
+                logWarn "zigbee received <b>unknown cluster:${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
             }
             break
     }

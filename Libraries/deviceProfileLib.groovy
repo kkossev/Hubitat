@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-25 kkossev  - (dev. branch) fixes for use with commonLib
+ * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method
  *
- *                                   TODO: setPar refactoring
+ *                                   TODO: 
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/25 11:28 AM"}
+def deviceProfileLibtamp() {"2023/11/27 10:46 PM"}
 
 metadata {
     // no capabilities
@@ -574,20 +574,28 @@ def sendAttribute( par=null, val=null )
         int cluster
         int attribute
         int dt
-        int mfgCode
-        try {
-            cluster = hubitat.helper.HexUtils.hexStringToInt(dpMap.at.split(":")[0])
-            attribute = hubitat.helper.HexUtils.hexStringToInt(dpMap.at.split(":")[1])
-            dt = hubitat.helper.HexUtils.hexStringToInt(dpMap.dt)
-            mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
-        }
-        catch (e) {
-            logWarn "sendAttribute: Exception '${e}'caught while splitting cluser and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+       // int mfgCode
+        log.trace "dpMap.at = ${dpMap.at}"
+   //     try {
+            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[0])
+            log.trace "cluster = ${cluster}"
+            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[1])
+            log.trace "attribute = ${attribute}"
+            dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
+            log.trace "dt = ${dt}"
+            log.trace "mfgCode = ${dpMap.mfgCode}"
+          //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
+          //  log.trace "mfgCode = ${mfgCode}"
+  //      }
+  /*      catch (e) {
+            logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return
-        }
-        Map mapMfCode = ["mfgCode":mfgCode]
+        }*/
+       
         logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        if (mfgCode != null) {
+        if (dpMap.mfgCode != null) {
+            Map mapMfCode = ["mfgCode":dpMap.mfgCode]
+            log.trace "mapMfCode = ${mapMfCode}"
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay=200)
         }
         else {
@@ -1126,6 +1134,155 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0)
             }
             //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
 
+        }
+    }
+    // all processing was done here!
+    return true
+}
+
+
+boolean processClusterAttributeFromDeviceProfile(descMap) {
+    logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
+    if (state.deviceProfile == null)  { return false }
+
+    def attribMap = deviceProfilesV2[state.deviceProfile].attributes
+    if (attribMap == null || attribMap == []) { return false }    // no any attributes are defined in the Device Profile
+    
+    def foundItem = null
+    def clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
+    def value = hexStrToUnsignedInt(descMap.value)
+    logTrace "clusterAttribute = ${clusterAttribute}"
+    attribMap.each { item ->
+         if (item['at'] == clusterAttribute) {
+            foundItem = item
+            return
+        }
+    }
+    if (foundItem == null) { 
+        // clusterAttribute was not found into the attributes list for this particular deviceProfile
+        // updateStateUnknownclusterAttribute(descMap)
+        // continue processing the descMap report in the old code ...
+        return false 
+    }
+    // added 10/31/2023 - preProc the attribute value if needed
+    if (foundItem.preProc != null) {
+        value = preProc(foundItem, value)
+        logDebug "<b>preProc</b> changed ${foundItem.name} value to ${value}"
+    }
+    else {
+        logTrace "no preProc for ${foundItem.name} : ${foundItem}"
+    }
+
+    def name = foundItem.name                                    // preference name as in the attributes map
+    def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
+    def perfValue = null   // preference value
+    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this clusterAttribute  
+    boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
+    boolean isEqual = false
+    boolean wasChanged = false
+    boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy clusterAttribute's TODO!
+    if (!doNotTrace) {
+        logTrace "processClusterAttributeFromDeviceProfile clusterAttribute=${clusterAttribute} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${value} - ${foundItem.description}"
+    }
+    // check if the clusterAttribute has the same value as the last one, or the value has changed
+    // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
+    String unitText     = foundItem.unit != null ? "$foundItem.unit" : ""
+    def valueScaled    // can be number or decimal or string
+    String descText = descText  = "${name} is ${value} ${unitText}"    // the default description text for log events
+    
+    // TODO - check if clusterAttribute is in the list of the received state.attributes - then we have something to compare !
+    if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
+        if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
+            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
+            descText  = "${name} is ${valueScaled} ${unitText}"        
+            if (settings.logEnable) { logInfo "${descText}"}
+        }
+        // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
+        return true
+    }
+    
+    // first, check if there is a preference defined to be updated
+    if (preferenceExists) {
+        // preference exists and its's value is extracted
+        def oldPerfValue = device.getSetting(name)
+        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)    
+        if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
+            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (clusterAttribute raw value ${value})"
+        }
+        else {
+            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (clusterAttribute raw value ${value})"
+            if (debug) log.info "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" 
+            try {
+                device.updateSetting("${name}",[value:perfValue, type:foundItem.type])
+                wasChanged = true
+            }
+            catch (e) {
+                logWarn "exception ${e} caught while updating preference ${name} to ${value}, type ${foundItem.type}" 
+            }
+        }
+    }
+    else {    // no preference exists for this clusterAttribute
+        // if not in the spammy list - log it!
+        unitText = foundItem.unit != null ? "$foundItem.unit" : ""
+        //logInfo "${name} is ${value} ${unitText}"
+    }    
+    
+    // second, send an event if this is declared as an attribute!
+    if (isAttribute) {                                         // this clusterAttribute has an attribute that must be sent in an Event
+        (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
+        descText  = "${name} is ${valueScaled} ${unitText}"
+        if (settings?.logEnable == true) { descText += " (raw:${value})" }
+        
+        if (isEqual && !wasChanged) {                        // this clusterAttribute report has the same value as the last one - just send a debug log and move along!
+            if (!doNotTrace) {
+                if (settings.logEnable) { logInfo "${descText} (no change)"}
+            }
+            // patch for inverted motion sensor 2-in-1
+            if (name == "motion" && is2in1()) {
+                logDebug "patch for inverted motion sensor 2-in-1"
+                // continue ... 
+            }
+            else {
+                return true      // we are done (if there was potentially a preference, it should be already set to the same value)
+            }
+        }
+        
+        // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an event!
+
+        def divider = safeToInt(foundItem.scale ?: 1) ?: 1
+        def valueCorrected = value / divider
+        if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
+        // process the events in the device specific driver..
+        if (DEVICE_TYPE in ["Thermostat"])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
+        else {
+            switch (name) {
+                case "motion" :
+                    handleMotion(motionActive = value)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                    break
+                case "temperature" :
+                    //temperatureEvent(value / getTemperatureDiv())
+                    handleTemperatureEvent(valueScaled as Float)
+                    break
+                case "humidity" :
+                    handleHumidityEvent(valueScaled)
+                    break
+                case "illuminance" :
+                case "illuminance_lux" :
+                    handleIlluminanceEvent(valueCorrected)       
+                    break
+                case "pushed" :
+                    logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
+                    buttonEvent(valueScaled)
+                    break
+                default :
+                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
+                    if (!doNotTrace) {
+                        logDebug "event ${name} sent w/ value ${valueScaled}"
+                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy clusterAttribute ?                               
+                    }
+                    break
+            }
+            //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
         }
     }
     // all processing was done here!

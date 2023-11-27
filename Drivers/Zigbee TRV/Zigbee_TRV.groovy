@@ -15,15 +15,15 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
- * ver. 3.0.1  2023-11-26 kkossev  - (dev. branch)
+ * ver. 3.0.1  2023-11-27 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support
  *
  *
- *                                   TODO: add Namron thermostat fingerprint
+ *                                   TODO: Refresh & Poll for Sonoff !
+ *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
+ *                                   TODO: Sonoff TRVZB sendAttribute: Exception 'org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead'caught while splitting cluser and attribute setHeatingSetpoint(2700) (val=27.0))
+ *                                   TODO: Sonoff TRVZB zigbee received unknown cluster:null message ([raw:3A8701FC110A0960298C0A, dni:3A87, endpoint:01, cluster:FC11, size:0A, attrId:6009, encoding:29, command:0A, value:0A8C, clusterInt:64529, attrInt:24585])
  *                                   TODO: 
- *                                   TODO: 
- *                                   TODO: 
- *                                   TODO: 
- *                                   TODO: 
+ *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
  *                                   TODO: handle UNKNOWN TRV
  *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ???
@@ -46,9 +46,9 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/26 10:18 AM"}
+static String timeStamp() {"2023/11/27 10:48 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -141,6 +141,11 @@ metadata {
 
 def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E1_TRV") }
 def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BRT-100") }
+def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_TRV") }
+
+
+
+// TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17 
 
 @Field static final Map TemperaturePollingIntervalOpts = [
     defaultValue: 600,
@@ -267,13 +272,97 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
             configuration : [:]
     ],
 
+    // Sonoff TRVZB : https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/devices/sonoff.ts#L454
+    //                https://github.com/photomoose/zigbee-herdsman-converters/blob/59f927ef0f152268125426854bd65ae6b963c99a/src/devices/sonoff.ts
+    // 
+    // fromZigbee:  https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/fromZigbee.ts#L44
+    // toZigbee:    https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/toZigbee.ts#L1516
+    // isSonoffTRV()
+    "SONOFF_TRV"   : [
+            description   : "Sonoff TRVZB",
+            models        : ["SONOFF"],
+            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
+
+            preferences   : ["window_detection":"0xFCC0:0x0273", "valveDetection":"0xFCC0:0x0274",, "childLock":"0xFCC0:0x0277", "awayPresetTemperature":"0xFCC0:0x0279"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
+            ],
+            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            tuyaDPs       : [:],
+            attributes    : [
+                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt: "0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
+                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x21", rw: "rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt: "0x29", rw: "rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
+                [at:"0x0201:0x001B",  name:'termostatRunningState', type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
+                [at:"0x0201:0x001C",  name:'systemMode',            type:"enum",    dt: "0x20", rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "off", 1: "auto", 2: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>Mode of the thermostat</i>'],
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
+
+                // https://github.com/photomoose/zigbee-herdsman-converters/blob/227b28b23455f1a767c94889f57293c26e4a1e75/src/devices/sonoff.ts 
+                [at:"0x0006:0x0000",  name:'lightIndicatorLevel',    type:"number",  dt: "0x21", rw: "rw", min:0,    max:255,  step:1,  scale:1,   unit:"%",   title: "<b>Light Indicator Level</b>",   description:'<i>Light Indicator Level</i>'],
+
+
+
+
+
+/*
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
+================================================================================================
+▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --
+▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
+▸ 0x0011 | -- | -- | r-- | string | --         | --
+▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --
+▸ 0x6001 | -- | -- | rw- | int16  | 05DC       | --
+▸ 0x6002 | -- | -- | rw- | int16  | 02EE       | --
+▸ 0x6003 | -- | -- | r-- | uint16 | 0155       | --
+▸ 0x6004 | -- | -- | r-- | uint16 | 00D7       | --
+▸ 0x6005 | -- | -- | r-- | uint16 | 04BA       | --
+▸ 0x6006 | -- | -- | r-- | uint16 | 092D       | --
+▸ 0x6007 | -- | -- | r-- | uint16 | 053B       | --
+▸ 0x6008 | -- | -- | rw- | uint8  | 7F         | --
+▸ 0x6009 | -- | -- | rw- | int16  | 0834       | --
+▸ 0x600A | -- | -- | rw- | int16  | 076C       | --
+*/
+
+
+
+                //
+                // TODO :  e.battery(),
+                    // e.battery_low(),
+                    // e.child_lock().setAccess('state', ea.ALL),
+                    // e.open_window()                 .withLabel('Open window detection')   .withDescription('Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.')                 .withAccess(ea.ALL),
+                    // e.numeric('frost_protection_temperature', ea.ALL)                 .withValueMin(4.0)                 .withValueMax(35.0)                 .withValueStep(0.5)                 .withUnit('°C')  
+                    //               .withDescription(                    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'),
+
+                // TODO :         toZigbee: [   tz.thermostat_local_temperature, tz.thermostat_local_temperature_calibration, tz.thermostat_occupied_heating_setpoint,             tz.thermostat_system_mode, tz.thermostat_running_state, tzLocal.child_lock, tzLocal.open_window, tzLocal.frost_protection_temperature],
+
+                // TODO :         configure: async (device, coordinatorEndpoint, logger) => { 
+                    // const endpoint = device.getEndpoint(1);
+                    // await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);
+                    // await reporting.thermostatTemperature(endpoint);
+                    // await reporting.thermostatOccupiedHeatingSetpoint(endpoint);
+                    // await reporting.thermostatSystemMode(endpoint);
+                    // await endpoint.read('hvacThermostat', ['localTemperatureCalibration']);
+                    // await endpoint.read(0xFC11, [0x0000, 0x6000, 0x6002]);
+                //                          ^^ TODO  
+            ],
+            deviceJoinName: "Sonoff TRVZB",
+            configuration : [:]
+    ],
+
+
     "NAMRON"   : [
             description   : "NAMRON Thermostat",
             models        : ["*"],
             device        : [type: "TRV", powerSource: "mains", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : [],
-            fingerprints  : [],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,0408,0702,0B04,0B05,1000,FCCC", outClusters:"0019,1000", model:"4512749-N", manufacturer:"NAMRON AS", deviceJoinName: "NAMRON"] 
+                // EP02: 0000,0004,0005,0201 
+                // EPF2: 0021
+            ],
             commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences",
                               "factoryResetThermostat":"factoryResetThermostat"
             ],
@@ -349,7 +438,16 @@ def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BR
                 // Attribute: 0x0802 (int16U, reportable, read-only)     ACCurrentOverload Alarms when the current is over a certain value, 0, 10-16, unit is A, for the unit please refer to RMSCurrent, ACCurrentMultiplier, ACCurrent Divisor
                 // Attribute: 0x0605 (Int8u,reportable, mfgCode: 0x1224) OverCurrent Over current value set by the user, range is 0, 10-16, ACCurrentOverload will change spontaneously if this value is modified.
 
+                // Alarm-0x0009(Server)                                  Please set a valid value for ACAlarmsMask of Electrical Measurement. The Alarm Server cluster can generate the following commands : 
+                // [Command!!!!] 0x00                                    Alarm: The alarm code of Electrical Measurement is 0
+                // [Command!!!!] 0x00 , mfgCode: 0x1224                  Room air temperature over heat, not alarm code
 
+                // OccupancySensing-0x0406(client)                       The attributes that can be received:
+                // Attribute: 0x0000 (bitmap8)                           Occupancy Bit 0 specifies the sensed occupancy as follows:1=occupied,0=unoccupied. This flag bit will affect the Occupancy attribute of HVAC cluster, and the operation mode 
+
+                // Thermostat User Interface Configuration- 0x0204(Server)
+                // Attribute: 0x0000 (Enum8, reportable)                 TemperatureDisplayMode 0x00 Temperature in, only support 
+                // Attribute: 0x0000 (Enum8, reportable)                 KeypadLockout 0x00 No Lockout, 0x01 - 0x05 lockout
 
 
             ],
@@ -564,6 +662,11 @@ void parseThermostatClusterThermostat(final Map descMap) {
         log.trace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     }
 
+    processClusterAttributeFromDeviceProfile(descMap)
+
+    return
+    
+    /*
     switch (descMap.attrInt as Integer) {
         case 0x000:                      // temperature
             logDebug "temperature = ${value/100.0} (raw ${value})"
@@ -601,6 +704,7 @@ void parseThermostatClusterThermostat(final Map descMap) {
             log.warn "zigbee received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
+    */
 }
 
 //  setHeatingSetpoint thermostat capability standard command
@@ -670,22 +774,6 @@ def setCoolingSetpoint(temperature){
     sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
 }
 
-
-
-/*
-// TODO - refactor!
-void processTuyaDpThermostat(descMap, dp, dp_id, fncmd) {
-
-    switch (dp) {
-        case 0x01 : // on/off
-            sendSwitchEvent(fncmd)
-            break
-        default :
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
-            break            
-    }
-}
-*/
 
 // TODO - refactor!
 def preset( preset ) {
@@ -839,12 +927,15 @@ void autoPollThermostat() {
     checkDriverVersion()
     List<String> cmds = []
     setRefreshRequest()
-    if (isAqaraTRV()) {
+    if (isBRT100TRV()) {
+        logDebug "autoPollThermostat: no polling for device profile ${getDeviceGroup()}"
+        clearRefreshRequest()
+    }
+    else if (isAqaraTRV()) {
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
     else {
-        logDebug "autoPollThermostat: no polling for device profile ${state.deviceProfile}"
-        clearRefreshRequest()
+        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C, 0x0029], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
    
     if (cmds != null && cmds != [] ) {
@@ -904,17 +995,21 @@ def refreshThermostat() {
         // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
         // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
     }
+    else if (isSonoffTRV()) {
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
+        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x0029], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint,        
+    }
     else if (isBRT100TRV()) {
         //logDebug "no refresh commands for MOES_BRT-100"
         // TODO - research how to get the temperature updates from the BRT-100 !!
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
 
     }
-    else if (DEVICE_PROFILE == "UNKNOWN") {
-        logDebug "no refresh commands for UNKNOWN"
+    else if (getDeviceGroup() == "UNKNOWN") {
+        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
     else {
-        logWarn "refreshThermostat: unknown device profile ${DEVICE}"
+        logWarn "refreshThermostat: unknown device profile ${getDeviceGroup()}"
     }
     
     if (cmds == []) { cmds = ["delay 299"] }
@@ -996,9 +1091,11 @@ private getDescriptionText(msg) {
     return descriptionText
 }
 
-// called from processTuyaDPfromDeviceProfile in deviceProfileLib 
+// called from processTuyaDPfromDeviceProfile in deviceProfileLib  
+// (works for BRT-100, Sonoff TRVZV) 
+//
 def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
-    logTrace "processTuyaDpThermostat(${name}, ${valueScaled}) called!"
+    logTrace "processDeviceEventThermostat(${name}, ${valueScaled}) called!"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: "physical", isStateChange: true]
     switch (name) {
         case "temperature" :
@@ -1079,7 +1176,170 @@ def factoryResetThermostat() {
     return cmds
 }
 
+
+/*
+SONOFF TRVZB
+
+================================================================================================
+Node Descriptor
+================================================================================================
+▸ Logical Type                              = Zigbee End Device (ZED)
+▸ Complex Descriptor Available              = No
+▸ User Descriptor Available                 = No
+▸ Frequency Band                            = 2400 - 2483.5 MHz
+▸ Alternate PAN Coordinator                 = No
+▸ Device Type                               = Reduced Function Device (RFD)
+▸ Mains Power Source                        = No
+▸ Receiver On When Idle                     = No (conserve power during idle periods)
+▸ Security Capability                       = No
+▸ Allocate Address                          = Yes
+▸ Manufacturer Code                         = 0x1286 = SHENZHEN_COOLKIT
+▸ Maximum Buffer Size                       = 82 bytes
+▸ Maximum Incoming Transfer Size            = 255 bytes
+▸ Primary Trust Center                      = No
+▸ Backup Trust Center                       = No
+▸ Primary Binding Table Cache               = Yes
+▸ Backup Binding Table Cache                = No
+▸ Primary Discovery Cache                   = Yes
+▸ Backup Discovery Cache                    = Yes
+▸ Network Manager                           = Yes
+▸ Maximum Outgoing Transfer Size            = 255 bytes
+▸ Extended Active Endpoint List Available   = No
+▸ Extended Simple Descriptor List Available = No
+================================================================================================
+Power Descriptor
+================================================================================================
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
+▸ Available Power Sources    = [Constant (mains) power]
+▸ Current Power Sources      = [Constant (mains) power]
+▸ Current Power Source Level = 100%
+================================================================================================
+Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster)
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
+================================================================================================
+▸ 0x0000 | ZCL Version         | req | r-- | uint8  | 08           | --
+▸ 0x0001 | Application Version | opt | r-- | uint8  | 00           | --
+▸ 0x0004 | Manufacturer Name   | opt | r-- | string | SONOFF       | --
+▸ 0x0005 | Model Identifier    | opt | r-- | string | TRVZB        | --
+▸ 0x0006 | Date Code           | req | r-- | string | 20230811     | --
+▸ 0x0007 | Power Source        | opt | r-- | enum8  | 03 = Battery | --
+▸ 0x4000 | SW Build ID         | opt | r-- | string | 1.1.1        | --
+▸ 0xFFFD | Cluster Revision    | req | r-- | uint16 | 0003         | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Reset to Factory Defaults | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0001 (Power Configuration Cluster)
+================================================================================================
+▸ 0x0021 | Battery Percentage Remaining | opt | r-p | uint8  | C8 = 100% remaining | 300..43200
+▸ 0xFFFD | Cluster Revision             | req | r-- | uint16 | 0002                | --        
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster)
+================================================================================================
+▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002             | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Identify       | req
+▸ 0x01 | Identify Query | req
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster)
+================================================================================================
+▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On | 1..65534
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002    | --      
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Off    | req
+▸ 0x01 | On     | req
+▸ 0x02 | Toggle | req
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0020 (Poll Cluster)
+================================================================================================
+▸ 0x0000 | Check-in Interval     | req | rw- | uint32 | 00003840 = 3600 seconds | --
+▸ 0x0001 | Long Poll Interval    | req | r-- | uint32 | 00000008 = 2 seconds    | --
+▸ 0x0002 | Short Poll Interval   | req | r-- | uint16 | 0002 = 0 seconds        | --
+▸ 0x0003 | Fast Poll Timeout     | req | rw- | uint16 | 0028 = 10 seconds       | --
+▸ 0x0004 | Check-in Interval Min | opt | r-- | uint32 | 00001950 = 1620 seconds | --
+▸ 0xFFFD | Cluster Revision      | req | r-- | uint16 | 0003                    | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Check-in                 | req
+▸ 0x01 | Stop                     | req
+▸ 0x02 | Set Long Poll Attribute  | opt
+▸ 0x03 | Set Short Poll Attribute | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster)
+================================================================================================
+▸ 0x0000 | Local Temperature                     | req | r-p | int16  | 0870 (2160) | 300..3600
+▸ 0x0002 | Occupancy                             | opt | r-- | map8   | 01          | --       
+▸ 0x0003 | Abs Min Heat Setpoint Limit           | opt | r-- | int16  | 0190 (400)  | --       
+▸ 0x0004 | Abs Max Heat Setpoint Limit           | opt | r-- | int16  | 0DAC (3500) | --       
+▸ 0x0010 | Local Temperature Calibration         | opt | rw- | int8   | F8   (-8)   | --       TemperatureCalibration(-7.0, 7.0, 0.2)       / 10    
+▸ 0x0012 | Occupied Heating Setpoint             | req | rws | int16  | 0834 (2100) | --       'occupied_heating_setpoint', 4, 35, 0.5)
+▸ 0x0015 | Min Heat Setpoint Limit               | opt | rw- | int16  | 0190 (400)  | --       
+▸ 0x0016 | Max Heat Setpoint Limit               | opt | rw- | int16  | 0DAC (3500) | --       
+▸ 0x001A | Remote Sensing                        | opt | rw- | map8   | 00          | --       
+▸ 0x001B | Control Sequence Of Operation         | req | rw- | enum8  | 02          | --       
+▸ 0x001C | System Mode                           | req | rws | enum8  | 04          | --       SystemMode(['off', 'auto', 'heat'], ea.ALL, 'Mode of the thermostat')
+▸ 0x001E | Thermostat Running Mode               | opt | r-- | enum8  | 00          | --       RunningState(['idle', 'heat']
+▸ 0x0020 | Start Of Week                         | opt | r-- | enum8  | 01          | --       
+▸ 0x0021 | Number Of Weekly Transitions          | opt | r-- | uint8  | 01          | --       
+▸ 0x0022 | Number Of Daily Transitions           | opt | r-- | uint8  | 06          | --       
+▸ 0x0025 | Thermostat Programmin gOperation Mode | opt | rw- | map8   | 00          | --       
+▸ 0x0029 | Thermostat Running State              | opt | r-- | map16  | 0000        | --       
+▸ 0xFFFD | Cluster Revision                      | req | r-- | uint16 | 0003        | --       
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Setpoint Raise/Lower  | req
+▸ 0x01 | Set Weekly Schedule   | opt
+▸ 0x03 | Clear Weekly Schedule | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
+================================================================================================
+▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --     child_lock  [off, on]  unlocked/locked      - Read on Configure
+▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
+▸ 0x0011 | -- | -- | r-- | string | --         | --
+▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --     open_window   [off, on]                      - Read on Configure    'Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.'
+▸ 0x6001 | -- | -- | rw- | int16  | 05DC (1500)| --
+▸ 0x6002 | -- | -- | rw- | int16  | 02EE (750) | --     frost_protection_temperature  / 100   (4.0, 35.0, 0.5)       - Read on Configure    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'
+▸ 0x6003 | -- | -- | r-- | uint16 | 0155 (341) | --     idle_steps          'Number of steps used for calibration (no-load steps)'
+▸ 0x6004 | -- | -- | r-- | uint16 | 00D7 (215) | --     closing_steps       'Number of steps it takes to close the valve'
+▸ 0x6005 | -- | -- | r-- | uint16 | 04BA (1210)| --     valve_opening_limit_voltage / 100           'Valve opening limit voltage'   'mV'
+▸ 0x6006 | -- | -- | r-- | uint16 | 092D (2349)| --     valve_closing_limit_voltage / 100           'Valve closing limit voltage'   'mV'
+▸ 0x6007 | -- | -- | r-- | uint16 | 053B (1339)| --     valve_motor_running_voltage / 100           'Valve motor running voltage'   'mV'
+▸ 0x6008 | -- | -- | rw- | uint8  | 7F   (127) | --
+▸ 0x6009 | -- | -- | rw- | int16  | 0834 (2100)| --     heating_setpoint / 100
+▸ 0x600A | -- | -- | rw- | int16  | 076C (1900)| --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFC57 (Unknown Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Neighbors Table
+================================================================================================
+▸ Addr:E9F1 | Type:Zigbee Router | RxOnWhenIdle:Yes | Rel:Parent | Depth:15 | LQI:217
+================================================================================================
+Routing Table
+================================================================================================
+▸ Could not retrieve data
+================================================================================================
+Bindings Table
+================================================================================================
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0201 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0202 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0001 | Dest:000D6F0016C1E513 | Endpoint:0x01
+driverVersion : 3.0.1 2023/11/27 10:18 AM (TRVZB SONOFF) (C-7 2.3.7.124)
+zigbeeGroups : {}
+*/
+
 def testT(par) {
-    logWarn "testT(${par})"
+    def descMap = [raw:"3A870102010A120029C409", dni:"3A87", endpoint:"01", cluster:"0201", size:"0A", attrId:"0012", encoding:"29", command:"0A", value:"09C5", clusterInt:513, attrInt:18]
+    log.trace "testT(${descMap})"
+    def result = processClusterAttributeFromDeviceProfile(descMap)
+    log.trace "result=${result}"
+
 }
+
 

@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 81
+      "version": 98
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 52
+      "version": 56
     }
   ]
 }
