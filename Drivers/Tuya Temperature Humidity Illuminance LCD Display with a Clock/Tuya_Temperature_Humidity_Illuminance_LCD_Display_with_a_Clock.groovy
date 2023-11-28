@@ -38,7 +38,7 @@
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
- * ver. 1.3.10 2023-10-23 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv 
+ * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 grup;
  * 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: healthStatus periodic job is not started.
@@ -49,7 +49,7 @@
 */
 
 def version() { "1.3.10" }
-def timeStamp() {"2023/10/23 5:57 PM"}
+def timeStamp() {"2023/11/28 7:19 AM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -176,7 +176,7 @@ metadata {
                    limit:['ALL']]],
 
         2: [input: [name: "temperatureSensitivity", type: "decimal", title: "Temperature Sensitivity", description: "Temperature change for reporting, "+"\u00B0"+"C", defaultValue: 0.5, range: "0.1..50.0",
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya", "TS0601_Tuya_2"]]],
 
         3: [input: [name: "humiditySensitivity", type: "number", title: "Humidity Sensitivity", description: "Humidity change for reporting, %", defaultValue: 5, range: "1..50",
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', "Zigbee NON-Tuya"]]],
@@ -666,7 +666,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
             case 0x09: // temp. scale  1=Fahrenheit 0=Celsius (TS0601 Tuya and Haoze) TS0601_Tuya does not change the symbol on the LCD !    // including 'TS0601_Tuya_2'
                 if (settings?.logEnable) log.info "${device.displayName} Temperature scale reported by device is: ${fncmd == 1 ? 'Fahrenheit' :'Celsius' }"        // {'celsius': new Enum(0), 'fahrenheit': new Enum(1)}
                 break
-            case 0x0A: // (10) Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee)
+            case 0x0A: // (10) Max. Temp Alarm, Value / 10  (both TS0601_Tuya and TS0601_Haozee) // including 'TS0601_Tuya_2'
                 if (((safeToDouble(settings?.maxTempAlarmPar)*10.0 as int) == (fncmd as int)) || (getModelGroup() in ['TS0601_Haozee']))  {
                     if (settings?.logEnable) log.info "${device.displayName} reported temperature alarm upper limit ${fncmd/10.0 as double} C"
                 }
@@ -674,7 +674,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
                     if (settings?.logEnable) log.warn "${device.displayName} warning: temperature alarm upper limit reported by the device (${fncmd/10.0 as double} C) differs from the preference setting (${settings?.maxTempAlarmPar} C)"
                 }
                 break
-            case 0x0B: // (11) Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee)
+            case 0x0B: // (11) Min. Temp Alarm, Value / 10 (both TS0601_Tuya and TS0601_Haozee) // including 'TS0601_Tuya_2'
                 if (((safeToDouble(settings?.minTempAlarmPar)*10.0 as int) == (fncmd as int)) || (getModelGroup() in ['TS0601_Haozee'])) {
                     if (settings?.logEnable) log.info "${device.displayName} reported temperature alarm lower limit ${fncmd/10.0 as double} C"
                 }
@@ -748,12 +748,13 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
                     if (settings?.logEnable) log.warn "${device.displayName} warning: humidity max reporting interval reported by the device (${((fncmd*60/2.5) as int)}s) differs from the preference setting (${settings?.maxReportingTimeHumidity}s)"
                 }
                 break
-            case 0x13 : // (19) temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only?) 
-                if ((safeToDouble(settings?.temperatureSensitivity)*20.0 as int) == (fncmd as int)) {
-                    if (settings?.logEnable) log.info "${device.displayName} reported temperature sensitivity ${fncmd/20.0} C"
+            case 0x13 : // (19) temperature sensitivity(value/2/10) default 0.3C ( divide / 2 for Haozee only) // including 'TS0601_Tuya_2'
+                def divider = getModelGroup() in ['TS0601_Haozee'] ? 20.0 : 10.0
+                if ((safeToDouble(settings?.temperatureSensitivity) * divider as int) == (fncmd as int)) {
+                    if (settings?.logEnable) log.info "${device.displayName} reported temperature sensitivity ${(fncmd / divider)} C"
                 }
                 else {
-                    if (settings?.logEnable) log.warn "${device.displayName} warning: temperature sensitivity reported by the device (${fncmd/20.0}) differs from the preference setting (${settings?.temperatureSensitivity})"
+                    if (settings?.logEnable) log.warn "${device.displayName} warning: temperature sensitivity reported by the device (${fncmd/divider}) differs from the preference setting (${settings?.temperatureSensitivity})"
                 }
                 break
             case 0x14 : // (20) humidity sensitivity default 3%  (Haozee only)
@@ -945,13 +946,14 @@ def updated() {
         unschedule("logsOff")
     }
     Integer fncmd
-    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee']) {
-        Integer intValue = ((safeToDouble(settings?.temperatureSensitivity )) * 20.0) as int
-        if (settings?.logEnable) log.trace "${device.displayName} setting temperatureSensitivity to ${(intValue as Double)/20.0} C"
+    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee', 'TS0601_Tuya_2']) {
+        def divider = getModelGroup() in ['TS0601_Haozee'] ? 20.0 : 10.0
+        Integer intValue = ((safeToDouble(settings?.temperatureSensitivity )) * divider) as int
+        if (settings?.logEnable) log.trace "${device.displayName} setting temperatureSensitivity to ${(intValue as Double) / divider} C"
         cmds += sendTuyaCommand("13", DP_TYPE_VALUE, zigbee.convertToHexString(intValue as int, 8))
     }
     
-    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee','TS0201_LCZ030']) {
+    if (getModelGroup() in ['TS0601_Tuya','TS0601_Haozee','TS0201_LCZ030', 'TS0601_Tuya_2']) {
         if (location.temperatureScale == "C") {    // Celsius
             cmds += sendTuyaCommand("09", DP_TYPE_ENUM, "00")
             if (settings?.logEnable) log.trace "${device.displayName} setting temperature scale to Celsius: ${cmds}"
