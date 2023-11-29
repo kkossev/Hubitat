@@ -15,22 +15,25 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
- * ver. 3.0.1  2023-11-27 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support
+ * ver. 3.0.1  2023-11-28 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ;
+ *                                    childLock OK; windowOpenDetection OK; 
  *
  *
- *                                   TODO: Refresh & Poll for Sonoff !
+ *                                   TODO: Aqara TRV - parameters are not set !!
+ *                                   TODO: parameters default values in the device profiles !!!!!!!!!!!!!!
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
  *                                   TODO: Sonoff TRVZB sendAttribute: Exception 'org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead'caught while splitting cluser and attribute setHeatingSetpoint(2700) (val=27.0))
- *                                   TODO: Sonoff TRVZB zigbee received unknown cluster:null message ([raw:3A8701FC110A0960298C0A, dni:3A87, endpoint:01, cluster:FC11, size:0A, attrId:6009, encoding:29, command:0A, value:0A8C, clusterInt:64529, attrInt:24585])
- *                                   TODO: 
+ *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
  *                                   TODO: handle UNKNOWN TRV
- *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ???
+ *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ??? !!!!!!!!!!!!!!!
+ *                                   TODO: Aqara TRV - heatingSetpoint refresh/poll is not working!
  *                                   TODO: Aqara TRV - poll (or simulate) refresing the temperature and the heatingSetpoint
  *                                   TODO: initializeThermostat() 
- *                                   TODO: 
- *                                   TODO: 
+ *                                   TODO: add option 'Cool similation'
+ *                                   TODO: add option 'Simple TRV' (no additinal attributes)
+ *                                   TODO: add state.trv for stroring attributes
  *                                   TODO: Aqara OFF mode is not reflected on the Dashboard
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: add 'force manual mode' preference
@@ -46,7 +49,7 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/27 10:48 PM"}
+static String timeStamp() {"2023/11/29 10:12 PM"}
 
 @Field static final Boolean _DEBUG = true
 
@@ -80,7 +83,7 @@ metadata {
     capability "Thermostat"                 // needed for HomeKit
     capability "ThermostatHeatingSetpoint"
     capability "ThermostatCoolingSetpoint"
-    capability "ThermostatOperatingState"
+    capability "ThermostatOperatingState"   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
     capability "ThermostatSetpoint"
     capability "ThermostatMode"    
     capability "ThermostatFanMode"
@@ -103,7 +106,9 @@ metadata {
     attribute 'ecoMode', "enum", ["off", "on"]
     attribute 'ecoTemp', "number"
     attribute 'minHeatingSetpoint', "number"
+    attribute 'maxHeatingSetpoint', "number"
     attribute 'maxTemp', "number"
+    attribute 'frostProtectionTemperature', "number"
 
     // Aqaura E1 attributes
     attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','heat'
@@ -284,48 +289,43 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
-            preferences   : ["window_detection":"0xFCC0:0x0273", "valveDetection":"0xFCC0:0x0274",, "childLock":"0xFCC0:0x0277", "awayPresetTemperature":"0xFCC0:0x0279"],
+            preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
             ],
             commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
-            attributes    : [
-                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt: "0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
-                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x21", rw: "rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
-                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt: "0x29", rw: "rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
-                [at:"0x0201:0x001B",  name:'termostatRunningState', type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
-                [at:"0x0201:0x001C",  name:'systemMode',            type:"enum",    dt: "0x20", rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "off", 1: "auto", 2: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>Mode of the thermostat</i>'],
-                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
-
+            attributes    : [   // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
+                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt:"0x29", rw:"ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Local temperature</i>'],
+                [at:"0x0201:0x0002",  name:'occupancy',             type:"enum",    dt:"0x18", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "unoccupied", 1: "occupied"], unit:"",  description:'<i>Occupancy</i>'],
+                [at:"0x0201:0x0003",  name:'absMinHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Min Heat Setpoint Limit</i>'],
+                [at:"0x0201:0x0004",  name:'absMaxHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Max Heat Setpoint Limit</i>'],
+                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x28", rw:"rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
+                [at:"0x0201:0x0015",  name:'minHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Min Heating Setpoint</b>", description:'<i>Min Heating Setpoint Limit</i>'],
+                [at:"0x0201:0x0016",  name:'maxHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Max Heating Setpoint</b>", description:'<i>Max Heating Setpoint Limit</i>'],
+                [at:"0x0201:0x001A",  name:'remoteSensing',         type:"enum",    dt:"0x18", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",  title: "<b>Remote Sensing<</b>", description:'<i>Remote Sensing</i>'],
+                [at:"0x0201:0x001B",  name:'termostatRunningState', type:"enum",    dt:"0x20", rw:"rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "off", 1: "heat", 2: "unknown"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
+                [at:"0x0201:0x001C",  name:'systemMode',            type:"enum",    dt:"0x30", rw:"rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "off", 1: "auto", 2: "heat"], unit:"", title: "<b>System Mode</b>",  description:'<i>Mode of the thermostat</i>'],
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt:"0x30", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heat"], unit:"", title: "<b>Thermostat Run Mode</b>",   description:'<i>Thermostat run mode</i>'],
+                [at:"0x0201:0x0020",  name:'startOfWeek',           type:"enum",    dt:"0x30", rw:"ro", min:0,    max:6,    step:1,  scale:1,    map:[0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat"], unit:"",  description:'<i>Start of week</i>'],
+                [at:"0x0201:0x0021",  name:'numWeeklyTransitions',  type:"number",  dt:"0x20", rw:"ro", min:0,    max:255,  step:1,  scale:1,    unit:"",  description:'<i>Number Of Weekly Transitions</i>'],
+                [at:"0x0201:0x0022",  name:'numDailyTransitions',   type:"number",  dt:"0x20", rw:"ro", min:0,    max:255,  step:1,  scale:1,    unit:"",  description:'<i>Number Of Daily Transitions</i>'],
+                [at:"0x0201:0x0025",  name:'thermostatProgrammingOperationMode', type:"enum",  dt:"0x18", rw:"rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "mode1", 1: "mode2"], unit:"",  title: "<b>Thermostat Programming Operation Mode/b>", description:'<i>Thermostat programming operation mode</i>'],
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum", dt:"0x19", rw:"rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heating"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
                 // https://github.com/photomoose/zigbee-herdsman-converters/blob/227b28b23455f1a767c94889f57293c26e4a1e75/src/devices/sonoff.ts 
-                [at:"0x0006:0x0000",  name:'lightIndicatorLevel',    type:"number",  dt: "0x21", rw: "rw", min:0,    max:255,  step:1,  scale:1,   unit:"%",   title: "<b>Light Indicator Level</b>",   description:'<i>Light Indicator Level</i>'],
-
-
-
-
-
-/*
-================================================================================================
-Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
-================================================================================================
-▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --
-▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
-▸ 0x0011 | -- | -- | r-- | string | --         | --
-▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --
-▸ 0x6001 | -- | -- | rw- | int16  | 05DC       | --
-▸ 0x6002 | -- | -- | rw- | int16  | 02EE       | --
-▸ 0x6003 | -- | -- | r-- | uint16 | 0155       | --
-▸ 0x6004 | -- | -- | r-- | uint16 | 00D7       | --
-▸ 0x6005 | -- | -- | r-- | uint16 | 04BA       | --
-▸ 0x6006 | -- | -- | r-- | uint16 | 092D       | --
-▸ 0x6007 | -- | -- | r-- | uint16 | 053B       | --
-▸ 0x6008 | -- | -- | rw- | uint8  | 7F         | --
-▸ 0x6009 | -- | -- | rw- | int16  | 0834       | --
-▸ 0x600A | -- | -- | rw- | int16  | 076C       | --
-*/
-
-
+                [at:"0x0006:0x0000",  name:'lightIndicatorLevel',   type:"number",  dt: "0x21", rw: "rw", min:0,    max:255,  step:1,  scale:1,   unit:"%",   title: "<b>Light Indicator Level</b>",   description:'<i>Light Indicator Level</i>'],
+                [at:"0xFC11:0x0000",  name:'childLock',             type:"enum",    dt: "0x10", rw: "rw", min:0,    max:255,  step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Child Lock</b>",   description:'<i>Child lock<br>unlocked/locked</i>'],
+                [at:"0xFC11:0x6000",  name:'windowOpenDetection',   type:"enum",    dt: "0x10", rw: "rw", min:0,    max:255,  step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Open Window Detection</b>",   description:'<i>Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.</i>'],
+                [at:"0xFC11:0x6002",  name:'frostProtectionTemperature', type:"decimal",  dt: "0x29", rw: "rw", min:4.0,    max:35.0,  step:0.5,  scale:100,   unit:"°C",   title: "<b>Frost Protection emperature</b>",   description:'<i>Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.</i>'],
+                [at:"0xFC11:0x6003",  name:'idleSteps ',            type:"number",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>Number of steps used for calibration (no-load steps)</i>'],
+                [at:"0xFC11:0x6004",  name:'closingSteps',          type:"number",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>Number of steps it takes to close the valve</i>'],
+                [at:"0xFC11:0x6005",  name:'valve_opening_limit_voltage',  type:"decimal",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1000,   unit:"V", description:'<i>Valve opening limit voltage</i>'],
+                [at:"0xFC11:0x6006",  name:'valve_closing_limit_voltage',  type:"decimal",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1000,   unit:"V", description:'<i>Valve closing limit voltage</i>'],
+                [at:"0xFC11:0x6007",  name:'valve_motor_running_voltage',  type:"decimal",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1000,   unit:"V", description:'<i>Valve motor running voltage</i>'],
+                [at:"0xFC11:0x6008",  name:'unknown1',              type:"number",  dt: "0x20", rw: "rw", min:0,    max:255, step:1,  scale:1,   unit:"", description:'<i>unknown1 (0xFC11:0x6008)/i>'],
+                [at:"0xFC11:0x6009",  name:'heatingSetpoint_FC11',  type:"decimal",  dt: "0x29", rw: "rw", min:4.0,,    max:35.0, step:1,  scale:100,   unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
+                [at:"0xFC11:0x600A",  name:'unknown2',              type:"number",  dt: "0x29", rw: "rw", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>unknown2 (0xFC11:0x600A)/i>'],
 
                 //
                 // TODO :  e.battery(),
@@ -658,11 +658,11 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
 
 void parseThermostatClusterThermostat(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    if (settings.logEnable) {
-        log.trace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    //logTrace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    Boolean result = processClusterAttributeFromDeviceProfile(descMap)
+    if ( result == false ) {
+        logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-
-    processClusterAttributeFromDeviceProfile(descMap)
 
     return
     
@@ -705,6 +705,15 @@ void parseThermostatClusterThermostat(final Map descMap) {
             break
     }
     */
+}
+
+def parseFC11ClusterThermostat(descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    Boolean result = processClusterAttributeFromDeviceProfile(descMap)    
+    if ( result == false ) {
+        logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
 }
 
 //  setHeatingSetpoint thermostat capability standard command
@@ -892,10 +901,6 @@ def fanAuto() { setThermostatFanMode("auto") }
 def fanCirculate() { setThermostatFanMode("circulate") }
 def fanOn() { setThermostatFanMode("on") }
 
-def sendThermostatOperatingStateEvent( st ) {
-    sendEvent(name: "thermostatOperatingState", value: st)
-    state.lastThermostatOperatingState = st
-}
 
 void sendSupportedThermostatModes() {
     def supportedThermostatModes = []
@@ -1070,17 +1075,18 @@ void initVarsThermostat(boolean fullInit=false) {
 
 
 void initEventsThermostat(boolean fullInit=false) {
+    String descText = "inital attribute setting"
     sendSupportedThermostatModes()
     sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["on", "auto"]), isStateChange: true)    
-    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "inital attribute setting")
-    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: "inital attribute setting")
+    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: descText)
     state.lastThermostatMode = "heat"
-    sendThermostatOperatingStateEvent( "idle" )
-    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "inital attribute setting")
-    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")        // Google Home compatibility
-    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
-    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")
-    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: "inital attribute setting")    
+    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: descText)
+    state.lastThermostatOperatingState = "idle"
+    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: descText)
+    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)        // Google Home compatibility
+    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)
+    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: descText)
+    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: descText)    
     updateDataValue("lastRunningMode", "heat")    
     
 }
@@ -1267,7 +1273,7 @@ Endpoint 0x01 | In Cluster: 0x0020 (Poll Cluster)
 ▸ 0x02 | Set Long Poll Attribute  | opt
 ▸ 0x03 | Set Short Poll Attribute | opt
 ================================================================================================
-Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster)
+Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster) int16=0x29 map8=0x18 int8=0x28 enum8=0x30  uint8=x020 uint16=0x21   map16=0x19
 ================================================================================================
 ▸ 0x0000 | Local Temperature                     | req | r-p | int16  | 0870 (2160) | 300..3600
 ▸ 0x0002 | Occupancy                             | opt | r-- | map8   | 01          | --       
@@ -1294,13 +1300,13 @@ Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster)
 ================================================================================================
 Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
 ================================================================================================
-▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --     child_lock  [off, on]  unlocked/locked      - Read on Configure
+▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --     child_lock  [off, on]  unlocked/locked      - Read on Configure     bool = 0x10 
 ▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
 ▸ 0x0011 | -- | -- | r-- | string | --         | --
 ▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --     open_window   [off, on]                      - Read on Configure    'Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.'
 ▸ 0x6001 | -- | -- | rw- | int16  | 05DC (1500)| --
-▸ 0x6002 | -- | -- | rw- | int16  | 02EE (750) | --     frost_protection_temperature  / 100   (4.0, 35.0, 0.5)       - Read on Configure    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'
-▸ 0x6003 | -- | -- | r-- | uint16 | 0155 (341) | --     idle_steps          'Number of steps used for calibration (no-load steps)'
+▸ 0x6002 | -- | -- | rw- | int16  | 02EE (750) | --     frost_protection_temperature  / 100   (4.0, 35.0, 0.5)   (int16=0x29)    - Read on Configure    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'
+▸ 0x6003 | -- | -- | r-- | uint16 | 0155 (341) | --     idle_steps          'Number of steps used for calibration (no-load steps)'  (uint16=0x21)
 ▸ 0x6004 | -- | -- | r-- | uint16 | 00D7 (215) | --     closing_steps       'Number of steps it takes to close the valve'
 ▸ 0x6005 | -- | -- | r-- | uint16 | 04BA (1210)| --     valve_opening_limit_voltage / 100           'Valve opening limit voltage'   'mV'
 ▸ 0x6006 | -- | -- | r-- | uint16 | 092D (2349)| --     valve_closing_limit_voltage / 100           'Valve closing limit voltage'   'mV'
@@ -1308,6 +1314,7 @@ Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
 ▸ 0x6008 | -- | -- | rw- | uint8  | 7F   (127) | --
 ▸ 0x6009 | -- | -- | rw- | int16  | 0834 (2100)| --     heating_setpoint / 100
 ▸ 0x600A | -- | -- | rw- | int16  | 076C (1900)| --
+------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 ▸ No commands found
 ================================================================================================

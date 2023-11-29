@@ -29,7 +29,7 @@ library (
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-11-27 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings
+  * ver. 3.0.1  2023-11-27 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; 
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: add GetInof (endpoints list) command
@@ -362,6 +362,10 @@ void parse(final String description) {
         case 0xEF00 :                                       // Tuya famous cluster
             parseTuyaCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseTuyaCluster(descMap + map) }
+            break
+        case 0xFC11 :                                    // Sonoff 
+            parseFC11Cluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseFC11Cluster(descMap + map) }
             break
         case 0xfc7e :                                       // tVOC 'Sensirion VOC index' https://sensirion.com/media/documents/02232963/6294E043/Info_Note_VOC_Index.pdf
             parseAirQualityIndexCluster(descMap)
@@ -2049,7 +2053,14 @@ void parseThermostatCluster(final Map descMap) {
     }
 }
 
+// -------------------------------------------------------------------------------------------------------------------------
 
+def parseFC11Cluster( descMap ) {
+    if (DEVICE_TYPE in ["Thermostat"])     { parseFC11ClusterThermostat(descMap) }    
+    else {
+        logWarn "Unprocessed cluster 0xFC11 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
+    }
+}
 
 // -------------------------------------------------------------------------------------------------------------------------
 

@@ -39,9 +39,10 @@
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
  * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 grup;
+ * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added; 
  * 
+ *                                  TODO: 
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
- *                                  TODO: healthStatus periodic job is not started.
  *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure? 
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
@@ -49,7 +50,7 @@
 */
 
 def version() { "1.3.10" }
-def timeStamp() {"2023/11/28 7:19 AM"}
+def timeStamp() {"2023/11/28 7:41 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -325,6 +326,7 @@ private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 // Parse incoming device messages to generate events
 def parse(String description) {
     checkDriverVersion()
+    setPresent()
     Map statsMap = stringToJsonMap(state.stats); try {statsMap['rxCtr']++ } catch (e) {statsMap['rxCtr']=1}; state.stats = mapToJsonString(statsMap)
     if (settings?.logEnable) log.debug "${device.displayName} parse() descMap = ${zigbee.parseDescriptionAsMap(description)}"
     if (description?.startsWith('catchall:') || description?.startsWith('read attr -')) {
@@ -732,6 +734,9 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
                     }
                 }
                 break
+            case 0x10: // (16) Current Luminance _TZ3000_qaaysllp
+                illuminanceEvent(fncmd) 
+                break    
             case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
                 if (settings?.maxReportingTimeTemp == ((fncmd*60/2.5) as int)) {
                     if (settings?.logEnable) log.info "${device.displayName} reported temperature max reporting interval ${((fncmd*60/2.5) as int)} seconds"
@@ -764,6 +769,9 @@ def processTuyaDP( descMap, dp, dp_id, fncmd) {
                 else {
                     if (settings?.logEnable) log.warn "${device.displayName} warning: humidity sensitivity reported by the device (${fncmd}%) differs from the preference setting (${settings?.humiditySensitivity}%)"
                 }
+                break
+            case 0x15: // (21) buzer switch
+                if (settings?.logEnable) log.info "${device.displayName} _TZ3000_qaaysllp buzer switch is ${fncmd} "
                 break
             case 0x65 : // (101)
                 illuminanceEventLux( safeToInt( fncmd ) )  // _TZE200_pay2byax
@@ -1205,6 +1213,7 @@ def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logInfo "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        scheduleDeviceHealthCheck()     // version 1.4.0
         initializeVars( fullInit = false )
         //
         if (state.rxCounter != null) state.remove("rxCounter")
@@ -1218,6 +1227,12 @@ def checkDriverVersion() {
         //
         state.driverVersion = driverVersionAndTimeStamp()
     }
+}
+
+void scheduleDeviceHealthCheck() {
+    Random rnd = new Random()
+    //schedule("1 * * * * ? *", 'deviceHealthCheck') // for quick test
+    schedule("${rnd.nextInt(59)} ${rnd.nextInt(59)} 1/3 * * ? *", 'deviceHealthCheck')
 }
 
 def resetStats() {
@@ -1333,6 +1348,7 @@ def configure() {
     cmds += tuyaBlackMagic()
     cmds += initializeDevice()
     sendZigbeeCommands(cmds)
+    scheduleDeviceHealthCheck()
     runIn(1, updated) // send the default or previously configured preference parameters during the Zigbee pairing process..
 }
 
@@ -1427,15 +1443,7 @@ private Map getBatteryVoltageResult(rawValue) {
 def setPresent() {
     if ((device.currentValue("healthStatus") ?: "unknown") != "online") {
         sendHealthStatusEvent("online")
-        powerSourceEvent() // sent ony once now - 2023-01-31
-        if (settings?.txtEnable) log.info "${device.displayName} is present"
-        if (!isRadar()) {
-            if (device.currentValue('battery', true) == 0 ) {
-                if (state.lastBattery != null &&  safeToInt(state.lastBattery) != 0) {
-                    sendBatteryEvent(safeToInt(state.lastBattery), isDigital=true)
-                }
-            }
-        }
+        logInfo "is present"
     }    
     state.notPresentCounter = 0    
 }
@@ -1445,16 +1453,7 @@ def deviceHealthCheck() {
     if (state.notPresentCounter > presenceCountTreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
-            if (settings?.txtEnable) log.warn "${device.displayName} is not present!"
-             powerSourceEvent("unknown")
-            if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
-                handleMotion(false, isDigital=true)
-                if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
-            }
-            if (safeToInt(device.currentValue('battery', true)) != 0) {
-                if (settings?.txtEnable) log.warn "${device.displayName} forced battery to '<b>0 %</b>"
-                sendBatteryEvent( 0, isDigital=true )
-            }
+            if (settings?.txtEnable) { log.warn "${device.displayName} is not present!" }
         }
     }
     else {
