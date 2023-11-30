@@ -2817,7 +2817,7 @@ void initializeVars( boolean fullInit = false ) {
 
     def mm = device.getDataValue("model")
     if ( mm != null) {
-        logDebug " model = ${mm}"
+        logTrace " model = ${mm}"
     }
     else {
         logWarn " Model not found, please re-pair the device!"
@@ -2825,7 +2825,7 @@ void initializeVars( boolean fullInit = false ) {
     def ep = device.getEndpointId()
     if ( ep  != null) {
         //state.destinationEP = ep
-        logDebug " destinationEP = ${ep}"
+        logTrace " destinationEP = ${ep}"
     }
     else {
         logWarn " Destination End Point not found, please re-pair the device!"
@@ -2973,7 +2973,7 @@ boolean isTuya() {
 
 void updateTuyaVersion() {
     if (!isTuya()) {
-        logDebug "not Tuya"
+        logTrace "not Tuya"
         return
     }
     def application = device.getDataValue("application") 
@@ -3005,7 +3005,7 @@ boolean isAqara() {
 
 def updateAqaraVersion() {
     if (!isAqara()) {
-        logDebug "not Aqara"
+        logTrace "not Aqara"
         return
     }    
     def application = device.getDataValue("application") 

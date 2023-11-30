@@ -15,12 +15,12 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
- * ver. 3.0.1  2023-11-28 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ;
- *                                    childLock OK; windowOpenDetection OK; 
+ * ver. 3.0.1  2023-11-28 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
+ *                                    minHeatingSetpoint & maxHeatingSetpoint OK;
  *
  *
- *                                   TODO: Aqara TRV - parameters are not set !!
- *                                   TODO: parameters default values in the device profiles !!!!!!!!!!!!!!
+ *                                   TODO: 
+ *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
  *                                   TODO: Sonoff TRVZB sendAttribute: Exception 'org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead'caught while splitting cluser and attribute setHeatingSetpoint(2700) (val=27.0))
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
@@ -49,9 +49,9 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/29 10:12 PM"}
+static String timeStamp() {"2023/11/30 11:13 AM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -289,7 +289,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
-            preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002"],
+            preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002", "minHeatingSetpoint":"0x0201:0x0015", "maxHeatingSetpoint":"0x0201:0x0016"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
             ],
@@ -315,9 +315,9 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum", dt:"0x19", rw:"rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heating"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
                 // https://github.com/photomoose/zigbee-herdsman-converters/blob/227b28b23455f1a767c94889f57293c26e4a1e75/src/devices/sonoff.ts 
                 [at:"0x0006:0x0000",  name:'lightIndicatorLevel',   type:"number",  dt: "0x21", rw: "rw", min:0,    max:255,  step:1,  scale:1,   unit:"%",   title: "<b>Light Indicator Level</b>",   description:'<i>Light Indicator Level</i>'],
-                [at:"0xFC11:0x0000",  name:'childLock',             type:"enum",    dt: "0x10", rw: "rw", min:0,    max:255,  step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Child Lock</b>",   description:'<i>Child lock<br>unlocked/locked</i>'],
-                [at:"0xFC11:0x6000",  name:'windowOpenDetection',   type:"enum",    dt: "0x10", rw: "rw", min:0,    max:255,  step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Open Window Detection</b>",   description:'<i>Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.</i>'],
-                [at:"0xFC11:0x6002",  name:'frostProtectionTemperature', type:"decimal",  dt: "0x29", rw: "rw", min:4.0,    max:35.0,  step:0.5,  scale:100,   unit:"°C",   title: "<b>Frost Protection emperature</b>",   description:'<i>Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.</i>'],
+                [at:"0xFC11:0x0000",  name:'childLock',             type:"enum",    dt: "0x10", rw: "rw", min:0,    max:1,  defaultValue:"0", step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Child Lock</b>",   description:'<i>Child lock<br>unlocked/locked</i>'],
+                [at:"0xFC11:0x6000",  name:'windowOpenDetection',   type:"enum",    dt: "0x10", rw: "rw", min:0,    max:1,  defaultValue:"0", step:1,  scale:1,   map:[0: "off", 1: "on"], unit:"",   title: "<b>Open Window Detection</b>",   description:'<i>Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.</i>'],
+                [at:"0xFC11:0x6002",  name:'frostProtectionTemperature', type:"decimal",  dt: "0x29", rw: "rw", min:4.0,    max:35.0,  defaultValue:7.0, step:0.5,  scale:100,   unit:"°C",   title: "<b>Frost Protection emperature</b>",   description:'<i>Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.</i>'],
                 [at:"0xFC11:0x6003",  name:'idleSteps ',            type:"number",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>Number of steps used for calibration (no-load steps)</i>'],
                 [at:"0xFC11:0x6004",  name:'closingSteps',          type:"number",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>Number of steps it takes to close the valve</i>'],
                 [at:"0xFC11:0x6005",  name:'valve_opening_limit_voltage',  type:"decimal",  dt: "0x21", rw: "ro", min:0,    max:9999, step:1,  scale:1000,   unit:"V", description:'<i>Valve opening limit voltage</i>'],
@@ -1342,10 +1342,27 @@ zigbeeGroups : {}
 */
 
 def testT(par) {
+    /*
     def descMap = [raw:"3A870102010A120029C409", dni:"3A87", endpoint:"01", cluster:"0201", size:"0A", attrId:"0012", encoding:"29", command:"0A", value:"09C5", clusterInt:513, attrInt:18]
     log.trace "testT(${descMap})"
     def result = processClusterAttributeFromDeviceProfile(descMap)
     log.trace "result=${result}"
+    */
+    /*
+    List<String> cmds = []
+    cmds = zigbee.readAttribute(0xFC11, [0x6003, 0x6004, 0x6005, 0x6006, 0x6007], [:], delay=300) 
+    sendZigbeeCommands(cmds)
+    */
+
+    log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
+    def result
+    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
+        (DEVICE.preferences).each { key, value ->
+            log.trace "testT: ${key} = ${value}"
+            result = inputIt(key, debug=true)
+            logDebug "inputIt: ${result}"
+        }    
+    }
 
 }
 

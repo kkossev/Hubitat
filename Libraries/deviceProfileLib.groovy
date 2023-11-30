@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method
+ * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method; inputIt bug fix
  *
  *                                   TODO: 
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/29 10:11 PM"}
+def deviceProfileLibtamp() {"2023/11/30 7:28 AM"}
 
 metadata {
     // no capabilities
@@ -100,7 +100,7 @@ def getPreferencesMapByName( String param, boolean debug=false ) {
             if (debug) { logDebug "getPreferencesMapByName: preference ${param} is boolean" }
             return null     // no maps for predefined preferences !
         }
-        if (preference.isNumber()) {
+        if (preference instanceof Number) {
             // find the preference in the tuyaDPs map
             int dp = safeToInt(preference)
             def dpMaps   =  DEVICE.tuyaDPs 
@@ -150,13 +150,14 @@ def getAttributesMap( String attribName, boolean debug=false ) {
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
  */
-def resetPreferencesToDefaults(boolean debug=false ) {
-    logDebug "resetPreferencesToDefaults..."
+def resetPreferencesToDefaults(/*boolean*/ debug=false ) {
+    logDebug "resetPreferencesToDefaults...(debug=${debug})"
     if (DEVICE == null) {
         if (debug) { logWarn "DEVICE not found!" }
         return
     }
     def preferences = DEVICE?.preferences
+    log.trace "preferences = ${preferences}"    
     if (preferences == null) {
         if (debug) { logWarn "Preferences not found!" }
         return
@@ -186,6 +187,7 @@ def resetPreferencesToDefaults(boolean debug=false ) {
             return // continue
         }
         if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
+        if (debug) log.trace "parMap.name ${parMap.name} parMap.defaultValue = ${parMap.defaultValue} type=${parMap.type}"
         device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
     }
     logInfo "Preferences reset to default values"
@@ -569,7 +571,7 @@ def sendAttribute( par=null, val=null )
     boolean isTuyaDP
     def preference = dpMap.dp
     try {
-        isTuyaDP = true //preference.isNumber()
+        isTuyaDP = dpMap.dp instanceof Number       // check if dpMap.dp is a number
     }
     catch (e) {
         if (debug) log.warn "sendAttribute: exception ${e} caught while checking isNumber() preference ${preference}"
@@ -594,15 +596,15 @@ def sendAttribute( par=null, val=null )
         int attribute
         int dt
        // int mfgCode
-        log.trace "dpMap.at = ${dpMap.at}"
+        //log.trace "dpMap.at = ${dpMap.at}"
    //     try {
             cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[0])
-            log.trace "cluster = ${cluster}"
+            //log.trace "cluster = ${cluster}"
             attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[1])
-            log.trace "attribute = ${attribute}"
+            //log.trace "attribute = ${attribute}"
             dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
-            log.trace "dt = ${dt}"
-            log.trace "mfgCode = ${dpMap.mfgCode}"
+            //log.trace "dt = ${dt}"
+            //log.trace "mfgCode = ${dpMap.mfgCode}"
           //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
           //  log.trace "mfgCode = ${mfgCode}"
   //      }
@@ -614,7 +616,7 @@ def sendAttribute( par=null, val=null )
         logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (dpMap.mfgCode != null) {
             Map mapMfCode = ["mfgCode":dpMap.mfgCode]
-            log.trace "mapMfCode = ${mapMfCode}"
+            //log.trace "mapMfCode = ${mapMfCode}"
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay=200)
         }
         else {
@@ -715,7 +717,7 @@ def inputIt( String param, boolean debug=false ) {
     } 
 
     try {
-        isTuyaDP = preference.isNumber()
+        isTuyaDP = preference instanceof Number
     }
     catch (e) {
         if (debug) log.warn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}"
@@ -1112,7 +1114,12 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0)
                 // continue ... 
             }
             else {
-                return true      // we are done (if there was potentially a preference, it should be already set to the same value)
+                if (state.states != null && state.states["isRefresh"] == true) {
+                    logTrace "isRefresh = true - continue and send an event, although there was no change..."
+                }
+                else {
+                    return true       // we are done (if there was potentially a preference, it should be already set to the same value)
+                }
             }
         }
         
@@ -1170,7 +1177,7 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
     def foundItem = null
     def clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
     def value = hexStrToUnsignedInt(descMap.value)
-    logTrace "clusterAttribute = ${clusterAttribute}"
+    //logTrace "clusterAttribute = ${clusterAttribute}"
     attribMap.each { item ->
          if (item['at'] == clusterAttribute) {
             foundItem = item
@@ -1252,7 +1259,7 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${value})" }
         
-        if (isEqual && !wasChanged) {                        // this clusterAttribute report has the same value as the last one - just send a debug log and move along!
+        if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
             if (!doNotTrace) {
                 if (settings.logEnable) { logInfo "${descText} (no change)"}
             }
@@ -1262,7 +1269,12 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
                 // continue ... 
             }
             else {
-                return true      // we are done (if there was potentially a preference, it should be already set to the same value)
+                if (state.states != null && state.states["isRefresh"] == true) {
+                    logTrace "isRefresh = true - continue and send an event, although there was no change..."
+                }
+                else {
+                    return true       // we are done (if there was potentially a preference, it should be already set to the same value)
+                }
             }
         }
         
@@ -1307,4 +1319,88 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
     // all processing was done here!
     return true
 }
+
+
+def validateAndFixPreferences(debug=false) {
+    if (debug) logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}"
+    if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
+        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}"
+        return null
+    }
+    def validationFailures = 0
+    def validationFixes = 0
+    def total = 0
+    def oldSettingValue 
+    def newValue
+    String settingType 
+    DEVICE.preferences.each {
+        Map foundMap = getPreferencesMapByName(it.key)
+        if (foundMap == null) {
+            logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
+            return null
+        }
+        settingType = device.getSettingType(it.key)
+        oldSettingValue = device.getSetting(it.key)
+        if (settingType == null) {
+            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
+            return null
+        }
+        if (debug) logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
+        if (foundMap.type != settingType) {
+            logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
+            validationFailures ++
+            // remove the setting and create a new one using the foundMap.type
+            try {
+                device.removeSetting(it.key)
+                logDebug "validateAndFixPreferences: removing setting ${it.key}"
+            }
+            catch (e) {
+                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
+                return null
+            }
+            // first, try to use the old setting value
+            try {
+                // correct the oldSettingValue type
+                if (foundMap.type == "decimal")     { newValue = oldSettingValue.toDouble() }
+                else if (foundMap.type == "number") { newValue = oldSettingValue.toInteger() }
+                else if (foundMap.type == "bool")   { newValue = oldSettingValue == "true" ? 1 : 0 }
+                else if (foundMap.type == "enum") {
+                    // check if the old settingValue was 'true' or 'false' and convert it to 1 or 0
+                    if (oldSettingValue == "true" || oldSettingValue == "false" || oldSettingValue == true || oldSettingValue == false) {
+                        newValue = (oldSettingValue == "true" || oldSettingValue == true) ? "1" : "0"
+                    }
+                    // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals
+                    else if (foundMap.map.keySet().toString().any { it.contains(".") }) {
+                        newValue = String.format("%.2f", oldSettingValue)
+                    }
+                    else {
+                        // format the settingValue as a string of the integer value
+                        newValue = String.format("%d", oldSettingValue)
+                    }
+                }
+                //
+                device.updateSetting(it.key, [value:newValue, type:foundMap.type])
+                logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
+                validationFixes ++
+            }
+            catch (e) {
+                logWarn "validateAndFixPreferences: exception '${e}' caught while creating setting ${it.key} with type ${foundMap.type} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
+                // change the settingValue to the foundMap default value
+                try {
+                    settingValue = foundMap.defaultValue
+                    device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
+                    logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
+                    validationFixes ++
+                }
+                catch (e2) {
+                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>"
+                    return null
+                }            
+            }
+        }
+        total ++
+    }
+    logDebug "validateAndFixPreferences: total = ${total} validationFailures = ${validationFailures} validationFixes = ${validationFixes}"
+}
+
 
