@@ -91,24 +91,23 @@ metadata {
     // Aqara E1 thermostat attributes
     // TODO - add all other models attributes possible values
     // BRT-100 attributes
-    attribute 'trvMode', "enum",  ["auto", "manual", "TempHold", "holidays"]
-    attribute 'emergencyHeating', "enum", ["off", "on"]
-    attribute 'emergencyHeatingTime', "number"
-    attribute 'workingState', "enum", ["open", "closed"]
-    attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100 and Aqara E1
-    attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100 and Aqara E1
-    attribute 'childLock', "enum", ["off", "on"]                // BRT-100 and Aqara E1
-    attribute 'battery', "number"
-    attribute 'weeklyProgram', "number"
-    attribute 'boostTime', "number"
-    attribute 'level', "number"
-    attribute 'calibrationTemp', "number"
-    attribute 'ecoMode', "enum", ["off", "on"]
-    attribute 'ecoTemp', "number"
-    attribute 'minHeatingSetpoint', "number"
-    attribute 'maxHeatingSetpoint', "number"
-    attribute 'maxTemp', "number"
-    attribute 'frostProtectionTemperature', "number"
+    attribute 'battery', "number"                               // Aqara, BRT-100
+    attribute 'boostTime', "number"                             // BRT-100
+    attribute 'calibrationTemp', "number"                       // BRT-100, Sonoff
+    attribute 'childLock', "enum", ["off", "on"]                // BRT-100, Aqara E1, Sonoff
+    attribute 'ecoMode', "enum", ["off", "on"]                  // BRT-100
+    attribute 'ecoTemp', "number"                               // BRT-100
+    attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
+    attribute 'emergencyHeatingTime', "number"                  // BRT-100
+    attribute 'frostProtectionTemperature', "number"            // Sonoff
+    attribute 'level', "number"                                 // BRT-100          
+    attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
+    attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
+    attribute 'trvMode', "enum",  ["auto", "manual", "TempHold", "holidays"]        // BRT-100
+    attribute 'weeklyProgram', "number"                         // BRT-100
+    attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
+    attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
+    attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
 
     // Aqaura E1 attributes
     attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','heat'
@@ -118,7 +117,6 @@ metadata {
     attribute "awayPresetTemperature", 'number'
     attribute "calibrated", 'enum', CalibratedOpts.options.values() as List<String>
     attribute "sensor", 'enum', SensorOpts.options.values() as List<String>
-    attribute "battery", 'number'
 
     //command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]]
 
@@ -247,7 +245,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
             models        : ["TS0601"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxTemp":"108"/**/],
+            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
             ],
@@ -269,8 +267,8 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
                 [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
                 [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
-                [dp:108, name:'maxTemp',            type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
-                [dp:109, name:'minHeatingSetpoint',            type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
+                [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
+                [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
 
             ],
             deviceJoinName: "MOES MRT-100 TRV",
@@ -289,7 +287,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
-            preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002", "minHeatingSetpoint":"0x0201:0x0015", "maxHeatingSetpoint":"0x0201:0x0016"],
+            preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002", "minHeatingSetpoint":"0x0201:0x0015", "maxHeatingSetpoint":"0x0201:0x0016", "calibrationTemp":"0x0201:0x0010" ],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
             ],
@@ -300,7 +298,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 [at:"0x0201:0x0002",  name:'occupancy',             type:"enum",    dt:"0x18", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "unoccupied", 1: "occupied"], unit:"",  description:'<i>Occupancy</i>'],
                 [at:"0x0201:0x0003",  name:'absMinHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Min Heat Setpoint Limit</i>'],
                 [at:"0x0201:0x0004",  name:'absMaxHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Max Heat Setpoint Limit</i>'],
-                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x28", rw:"rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
+                [at:"0x0201:0x0010",  name:'calibrationTemp',       type:"decimal", dt:"0x28", rw:"rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
                 [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
                 [at:"0x0201:0x0015",  name:'minHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Min Heating Setpoint</b>", description:'<i>Min Heating Setpoint Limit</i>'],
                 [at:"0x0201:0x0016",  name:'maxHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Max Heating Setpoint</b>", description:'<i>Max Heating Setpoint Limit</i>'],

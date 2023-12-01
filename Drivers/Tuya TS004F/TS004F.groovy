@@ -46,7 +46,7 @@
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  *
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
- * ver. 2.6.10 2023-11-12 kkossev    - (dev. branch) added _TZ3000_ur5fpg7p in the needsDebouncing list;
+ * ver. 2.6.10 2023-12-01 kkossev    - (dev. branch) added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use); 
  *                                   - TODO: batteryReporting is not initialized!
@@ -67,7 +67,7 @@
  */
 
 def version() { "2.6.10" }
-def timeStamp() {"2023/11/12 10:34 PM"}
+def timeStamp() {"2023/12/01 9:58 AM"}
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -167,6 +167,8 @@ metadata {
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0006,FCC0", outClusters: "0003,FCC0", model: "3AFE280100510001", manufacturer: "Konke", deviceJoinName: "Konke button"         // sends Voltage (only!) every 2 hours
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0004,0005,0006", outClusters: "0003", model: "3AFE170100510001", manufacturer: "Konke", deviceJoinName: "Konke button" 
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0001", outClusters: "0006,0003", model: "WB01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0003,0001", outClusters: "0006,0003", model: "WB-01", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
+    fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0020,0001,0003,FC57", outClusters: "0003,0006,0019", model: "SNZB-01P", manufacturer: "eWeLink", deviceJoinName: "Sonoff SNZB-01 button"
     fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0009,0020,1000", outClusters:"0003,0004,0006,0008,0019,0102,1000", model:"TRADFRI SHORTCUT Button", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Shortcut Button E1812"
     // OSRAM Lightify - use HE inbuilt driver to pair first !   
     //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0020,1000,FD00", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"Lightify Switch Mini", manufacturer:"OSRAM", deviceJoinName: "Lightify Switch Mini"        
