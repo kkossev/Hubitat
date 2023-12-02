@@ -130,7 +130,7 @@ def getAttributesMap( String attribName, boolean debug=false ) {
             return foundMap
         }
     }
-    logDebug "getAttributesMap: searching for attribute ${attribName} in attributes"
+    if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in attributes" }
     if (DEVICE.attributes != null) {
         searchMap  =  DEVICE.attributes 
         foundMap = searchMap.find { it.name == attribName }
@@ -359,8 +359,8 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             break
         case "enum" :
             // val could be both integer or float value ... check if the scaling is different than 1 in dpMap 
-
-            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
+            logTrace "validateAndScaleParameterValue: enum parameter <b>${val}</b>. dpMap=${dpMap}"
+            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {   // TODO - check this !!!
                 // we have a float parameter input - convert it to int
                 value = safeToDouble(val, -1.0)
                 scaledValue = (value * safeToInt(dpMap.scale)) as Integer
@@ -371,8 +371,16 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             if (scaledValue == null || scaledValue < 0) {
                 // get the keys of dpMap.map as a List
                 List<String> keys = dpMap.map.keySet().toList()
-                log.warn "${device.displayName} validateAndScaleParameterValue: enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
-                return null
+                //logDebug "${device.displayName} validateAndScaleParameterValue: enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
+                // find the key for the value
+                String key = dpMap.map.find { it.value == val }?.key
+                logTrace "validateAndScaleParameterValue: enum parameter <b>${val}</b>. key=${key}"
+                if (key == null) {
+                    log.warn "${device.displayName} validateAndScaleParameterValue: invalid enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
+                    return null
+                }
+                value = scaledValue = key as Integer
+                //return null
             }
             break
         default :
@@ -546,18 +554,18 @@ def sendAttribute( par=null, val=null )
     ArrayList<String> cmds = []
     Boolean validated = false
     logDebug "sendAttribute(${par}, ${val})"
-    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return }
+    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false}
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
-    if ( dpMap == null ) { log.warn "${device.displayName} sendAttribute: map not found for parameter <b>${par}</b>"; return }
-    if (val == null) { log.warn "${device.displayName} sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return }
+    if ( dpMap == null ) { log.warn "${device.displayName} sendAttribute: map not found for parameter <b>${par}</b>"; return false }
+    if (val == null) { log.warn "${device.displayName} sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
-    if (scaledValue == null) { log.warn "${device.displayName} sendAttribute: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return }
+    if (scaledValue == null) { log.warn "${device.displayName} sendAttribute: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
     logDebug "sendAttribute: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
     String setFunction = "set${capitalizedFirstChar}"
-    if (this.respondsTo(setFunction) && (setFunction != "setHeatingSetpoint" && setFunction != "setCoolingSetpoint")) {
+    if (this.respondsTo(setFunction) && !(setFunction in ["setHeatingSetpoint", "setCoolingSetpoint", "setThermostatMode"])) {
         logDebug "sendAttribute: found setFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
         // execute the setFunction
         try {
@@ -565,16 +573,16 @@ def sendAttribute( par=null, val=null )
         }
         catch (e) {
             logWarn "sendAttribute: Exception '${e}'caught while processing <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
-            return
+            return false
         }
         logDebug "setFunction result is ${cmds}"       
         if (cmds != null && cmds != []) {
             logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
-            return
+            return true
         }            
         else {
-            logWarn "sendAttribute: setFunction <b>$setFunction</b>(<b>$scaledValue</b>) returned null or empty list"
+            logWarn "sendAttribute: setFunction <b>$setFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
             // continue with the default processing
         }
     }
@@ -586,19 +594,19 @@ def sendAttribute( par=null, val=null )
     }
     catch (e) {
         if (debug) log.warn "sendAttribute: exception ${e} caught while checking isNumber() preference ${preference}"
-        return null
+        return false
     }     
     if (dpMap.dp != null && isTuyaDP) {
         // Tuya DP
         cmds = sendTuyaParameter(dpMap,  par, scaledValue) 
         if (cmds == null || cmds == []) {
             logWarn "sendAttribute: sendTuyaParameter par ${par} scaledValue ${scaledValue} returned null or empty list"
-            return
+            return false
         }
         else {
             logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands( cmds )
-            return
+            return true
         }
     }
     else if (dpMap.at != null) {
@@ -621,7 +629,7 @@ def sendAttribute( par=null, val=null )
   //      }
   /*      catch (e) {
             logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
-            return
+            return false
         }*/
        
         logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
@@ -636,11 +644,11 @@ def sendAttribute( par=null, val=null )
     }
     else {
         logWarn "sendAttribute: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
-        return
+        return false
     }
     logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
-    return
+    return true
 }
 
 
