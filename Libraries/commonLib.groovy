@@ -29,7 +29,7 @@ library (
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-11-27 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; 
+  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: add GetInof (endpoints list) command
@@ -40,7 +40,7 @@ library (
 */
 
 def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/11/27 10:47 PM"}
+def thermostatLibStamp() {"2023/12/02 10:43 AM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -2788,7 +2788,7 @@ void initializeVars( boolean fullInit = false ) {
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
+    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", false)
     if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false)
     if (fullInit || settings?.alwaysOn == null) device.updateSetting("alwaysOn", false)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])

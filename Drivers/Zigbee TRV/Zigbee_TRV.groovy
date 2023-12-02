@@ -16,13 +16,10 @@
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
- *                                    minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; auto OK; heat OK;
+ *                                    minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; auto OK; heat OK; cool and emergency heat OK (unsupported); Sonoff off mode OK;
  *
- *                                   TODO: Sonoff cool mode
- *                                   TODO: Sonoff off mode
- *                                   TODO: Sonoff emergency heat mode
- *                                   TODO: Sonoff thermostatMode - auto, heat, cool, off ?
- *                                   TODO: Sonoff: Auto, Emergency Heat, Heat, Off, Refresh, SendCommand, setHeatingSetpoint, setPar, setThermostatMode
+ *                                   TODO: cleanup trace and debug logs
+ *                                   TODO: prepare for publishing the first version of this driver w/ Sonoff support
  *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
@@ -53,7 +50,7 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/12/02 9:53 AM"}
+static String timeStamp() {"2023/12/02 11:04 AM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -282,7 +279,8 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
 
     // Sonoff TRVZB : https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/devices/sonoff.ts#L454
     //                https://github.com/photomoose/zigbee-herdsman-converters/blob/59f927ef0f152268125426854bd65ae6b963c99a/src/devices/sonoff.ts
-    // 
+    //                https://github.com/Koenkk/zigbee2mqtt/issues/19269
+    //                https://github.com/Koenkk/zigbee-herdsman-converters/pull/6469 
     // fromZigbee:  https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/fromZigbee.ts#L44
     // toZigbee:    https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/toZigbee.ts#L1516
     // isSonoffTRV()
@@ -842,7 +840,20 @@ def setThermostatMode( mode ) {
     result = sendAttribute("thermostatMode", mode)
     logTrace "setThermostatMode: sendAttribute returned ${result}"
     if (result == true) { return }
-    
+
+    switch(mode) {
+        case 'cool':
+        case "heat":
+        case "auto":
+        case "off":
+        default:
+            logWarn "setThermostatMode: unsupported thermostat mode '${mode}'"
+            break
+    }
+    return
+
+
+/*    
     // TODO - remove the code below
     //state.mode = mode
     if (isAqaraTRV()) {
@@ -893,6 +904,7 @@ def setThermostatMode( mode ) {
     }
     if (cmds == []) { cmds = ["delay 299"] }
     sendZigbeeCommands(cmds)
+    */
 }
 
 def thermostatOff() { setThermostatMode("off") }    // invoked from the common library
