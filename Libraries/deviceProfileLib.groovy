@@ -22,13 +22,13 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method; inputIt bug fix
+ * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method; 
  *
- *                                   TODO: 
+ *                                   TODO: refactor sendAttribute !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 */
 
 def deviceProfileLibVersion()   {"3.0.0"}
-def deviceProfileLibtamp() {"2023/11/30 7:28 AM"}
+def deviceProfileLibtamp() {"2023/12/01 5:12 PM"}
 
 metadata {
     // no capabilities
@@ -94,20 +94,18 @@ def getPreferencesMapByName( String param, boolean debug=false ) {
     def preference 
     try {
         preference = DEVICE.preferences["$param"]
-        if (debug) log.debug "getPreferencesMapByName: preference ${param} found. value is ${preference}"
-        if (preference in [true, false]) {
-            // find the preference in the tuyaDPs map
+        if (debug) log.debug "getPreferencesMapByName: param ${param} found. preference is ${preference}"
+        if (preference in [true, false]) {      // find the preference in the tuyaDPs map
             if (debug) { logDebug "getPreferencesMapByName: preference ${param} is boolean" }
             return null     // no maps for predefined preferences !
         }
-        if (preference instanceof Number) {
-            // find the preference in the tuyaDPs map
+        if (safeToInt(preference, -1) >0) {             //if (preference instanceof Number) {
             int dp = safeToInt(preference)
-            def dpMaps   =  DEVICE.tuyaDPs 
-            foundMap = dpMaps.find { it.dp == dp }
+            //if (debug) log.trace "getPreferencesMapByName: param ${param} preference ${preference} is number (${dp})"
+            foundMap = DEVICE.tuyaDPs.find { it.dp == dp }
         }
         else { // cluster:attribute
-            if (debug) log.trace "${DEVICE.attributes}"
+            //if (debug) log.trace "getPreferencesMapByName:  ${DEVICE.attributes}"
             def dpMaps   =  DEVICE.tuyaDPs 
             foundMap = DEVICE.attributes.find { it.at == preference }
         }
@@ -116,7 +114,7 @@ def getPreferencesMapByName( String param, boolean debug=false ) {
         if (debug) log.warn "getPreferencesMapByName: exception ${e} caught when getting preference ${param} !"
         return null
     }
-    if (debug) { logDebug "getPreferencesMapByName: foundMap = ${foundMap}" }
+    if (debug) { logDebug "getPreferencesMapByName: param=${param} foundMap = ${foundMap}" }
     return foundMap     
 }
 
@@ -278,18 +276,18 @@ void updateAllPreferences() {
         def dpMaps   =  DEVICE.tuyaDPs 
         */
         Map foundMap
-        foundMap = getPreferencesMapByName(name)
-        //logDebug "updateAllPreferences: foundMap = ${foundMap}"
+        foundMap = getPreferencesMapByName(name, false)
+        logDebug "updateAllPreferences: foundMap = ${foundMap}"
 
         if (foundMap != null) {
             // scaledValue = getScaledPreferenceValue(name, foundMap)
             scaledValue = settings."${name}"
-            log.warn "scaledValue = ${scaledValue}"                                          // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+            logTrace"scaledValue = ${scaledValue}"                                          // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
             if (scaledValue != null) {
                 setPar(name, scaledValue)
             }
             else {
-                logDebug "updateAllPreferences: preference ${name} is not set"
+                logDebug "updateAllPreferences: preference ${name} is not set (scaledValue was null)"
                 return 
             }
         }
@@ -309,6 +307,11 @@ def divideBy10( val ) {
 }
 def multiplyBy10( val ) { return (val as int) * 10 }
 def divideBy1( val ) { return (val as int) / 1 }    //tests
+def signedInt( val ) {
+    if (val > 127) { return (val as int) - 256 }
+    else { return (val as int) }
+
+}
 
 /**
  * Called from setPar() method only!
@@ -325,19 +328,27 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
     switch (dpMap.type) {
         case "number" :
             value = safeToInt(val, -1)
-            scaledValue = value
+            //scaledValue = value
             // scale the value - added 10/26/2023 also for integer values !
             if (dpMap.scale != null) {
                 scaledValue = (value * dpMap.scale) as Integer
-            }            
+            }
+            else {
+                scaledValue = value
+            }
             break
+            
         case "decimal" :
-             value = safeToDouble(val, -1.0)
+            value = safeToDouble(val, -1.0)
             // scale the value
             if (dpMap.scale != null) {
                 scaledValue = (value * dpMap.scale) as Integer
             }
+            else {
+                scaledValue = value
+            }
             break
+
         case "bool" :
             if (val == '0' || val == 'false')     { value = scaledValue = 0 }
             else if (val == '1' || val == 'true') { value = scaledValue = 1 }
@@ -435,8 +446,8 @@ def setPar( par=null, val=null )
     }
     // check whether this is a tuya DP or a cluster:attribute parameter
     boolean isTuyaDP
-    def preference = dpMap.dp
-    log.warn "preference = ${preference}"
+    /*def preference = dpMap.dp
+    log.warn "preference = ${preference}"*/ // TOBEDEL
     try {
         // check if dpMap.dp is a number
         isTuyaDP = dpMap.dp instanceof Number
@@ -1007,11 +1018,6 @@ def preProc(foundItem, fncmd_orig) {
  * If no preference exists for the DP, it logs the DP value as an info message.
  * If the DP is spammy (not needed for anything), it does not perform any further processing.
  * 
- * @param descMap The description map of the received DP.
- * @param dp The value of the received DP.
- * @param dp_id The ID of the received DP.
- * @param fncmd The command of the received DP.
- * @param dp_len The length of the received DP.
  * @return true if the DP was processed successfully, false otherwise.
  */
 boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0) {
@@ -1035,135 +1041,8 @@ boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0)
         // continue processing the DP report in the old code ...
         return false 
     }
-    // added 10/31/2023 - preProc the DP value if needed
-    if (foundItem.preProc != null) {
-        fncmd = preProc(foundItem, fncmd_orig)
-        logDebug "<b>preProc</b> changed ${foundItem.name} from ${fncmd_orig} to ${fncmd}"
-    }
-    else {
-        // logDebug "no preProc for ${foundItem.name} : ${foundItem}"
-    }
 
-    def name = foundItem.name                                    // preference name as in the tuyaDPs map
-    def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
-    def perfValue = null   // preference value
-    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this dp  
-    boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this dp
-    boolean isEqual = false
-    boolean wasChanged = false
-    boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy DP's TODO!
-    if (!doNotTrace) {
-        //logDebug "processTuyaDPfromDeviceProfile dp=${dp} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${fncmd} - ${foundItem.description}"
-    }
-    // check if the dp has the same value as the last one, or the value has changed
-    // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
-    String unitText     = foundItem.unit != null ? "$foundItem.unit" : ""
-    def valueScaled    // can be number or decimal or string
-    String descText = descText  = "${name} is ${fncmd} ${unitText}"    // the default description text for log events
-    
-    // TODO - check if DP is in the list of the received state.tuyaDPs - then we have something to compare !
-    if (!isAttribute && !preferenceExists) {                    // if the previous value of this dp is not stored anywhere - just seend an Info log if Debug is enabled
-        if (!doNotTrace) {                                      // only if the DP is not in the spammy list
-            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
-            descText  = "${name} is ${valueScaled} ${unitText}"        
-            if (settings.logEnable) { logInfo "${descText}"}
-        }
-        // no more processing is needed, as this DP is not a preference and not an attribute
-        return true
-    }
-    
-    // first, check if there is a preference defined to be updated
-    if (preferenceExists) {
-        // preference exists and its's value is extracted
-        def oldPerfValue = device.getSetting(name)
-        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, existingPrefValue)    
-        if (isEqual == true) {                                 // the DP value is the same as the preference value - no need to update the preference
-            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (dp raw value ${fncmd})"
-        }
-        else {
-            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (dp raw value ${fncmd})"
-            if (debug) log.info "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" 
-            try {
-                device.updateSetting("${name}",[value:perfValue, type:foundItem.type])
-                wasChanged = true
-            }
-            catch (e) {
-                logWarn "exception ${e} caught while updating preference ${name} to ${fncmd}, type ${foundItem.type}" 
-            }
-        }
-    }
-    else {    // no preference exists for this dp
-        // if not in the spammy list - log it!
-        unitText = foundItem.unit != null ? "$foundItem.unit" : ""
-        //logInfo "${name} is ${fncmd} ${unitText}"
-    }    
-    
-    // second, send an event if this is declared as an attribute!
-    if (isAttribute) {                                         // this DP has an attribute that must be sent in an Event
-        (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace)
-        descText  = "${name} is ${valueScaled} ${unitText}"
-        if (settings?.logEnable == true) { descText += " (raw:${fncmd})" }
-        
-        if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
-            if (!doNotTrace) {
-                if (settings.logEnable) { logInfo "${descText} (no change)"}
-            }
-            // patch for inverted motion sensor 2-in-1
-            if (name == "motion" && is2in1()) {
-                logDebug "patch for inverted motion sensor 2-in-1"
-                // continue ... 
-            }
-            else {
-                if (state.states != null && state.states["isRefresh"] == true) {
-                    logTrace "isRefresh = true - continue and send an event, although there was no change..."
-                }
-                else {
-                    return true       // we are done (if there was potentially a preference, it should be already set to the same value)
-                }
-            }
-        }
-        
-        // DP value (fncmd) is not equal to the attribute last value or was changed- we must send an event!
-        def value = safeToInt(fncmd)
-        def divider = safeToInt(foundItem.scale ?: 1) ?: 1
-        def valueCorrected = value / divider
-        if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
-        // process the events in the device specific driver..
-        if (DEVICE_TYPE in ["Thermostat"])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
-        else {
-            switch (name) {
-                case "motion" :
-                    handleMotion(motionActive = fncmd)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                    break
-                case "temperature" :
-                    //temperatureEvent(fncmd / getTemperatureDiv())
-                    handleTemperatureEvent(valueScaled as Float)
-                    break
-                case "humidity" :
-                    handleHumidityEvent(valueScaled)
-                    break
-                case "illuminance" :
-                case "illuminance_lux" :
-                    handleIlluminanceEvent(valueCorrected)       
-                    break
-                case "pushed" :
-                    logDebug "button event received fncmd=${fncmd} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
-                    buttonEvent(valueScaled)
-                    break
-                default :
-                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
-                    if (!doNotTrace) {
-                        logDebug "event ${name} sent w/ value ${valueScaled}"
-                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy DPs ?                               
-                    }
-                    break
-            }
-            //log.trace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
-
-        }
-    }
-    // all processing was done here!
-    return true
+    return processFoundItem(foundItem, fncmd_orig)     
 }
 
 
@@ -1190,6 +1069,14 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
         // continue processing the descMap report in the old code ...
         return false 
     }
+
+    return processFoundItem(foundItem, value) 
+}
+
+
+
+def processFoundItem (foundItem, value) {
+    if (foundItem == null) { return false }
     // added 10/31/2023 - preProc the attribute value if needed
     if (foundItem.preProc != null) {
         value = preProc(foundItem, value)
@@ -1317,8 +1204,10 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
         }
     }
     // all processing was done here!
-    return true
+    return true    
 }
+
+
 
 
 def validateAndFixPreferences(debug=false) {

@@ -15,14 +15,13 @@
  *
  * ver. 3.0.0  2023-11-16 kkossev  - (dev. branch) Refactored version 2.x.x drivers and libraries; adding MOES BRT-100 support - setHeatingSettpoint OK; off OK; level OK; workingState OK
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
- * ver. 3.0.1  2023-11-28 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
- *                                    minHeatingSetpoint & maxHeatingSetpoint OK;
- *
+ * ver. 3.0.1  2023-12-01 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
+ *                                    minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; 
  *
  *                                   TODO: 
+ *                                   TODO: Sonoff: Auto, Emergency Heat, Heat, Off, Refresh, SendCommand, setHeatingSetpoint, setPar, setThermostatMode
  *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: Sonoff TRVZB sendAttribute: Exception 'org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead'caught while splitting cluser and attribute setHeatingSetpoint(2700) (val=27.0))
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
@@ -49,7 +48,7 @@
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/30 11:13 AM"}
+static String timeStamp() {"2023/12/01 1:56 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -298,7 +297,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 [at:"0x0201:0x0002",  name:'occupancy',             type:"enum",    dt:"0x18", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "unoccupied", 1: "occupied"], unit:"",  description:'<i>Occupancy</i>'],
                 [at:"0x0201:0x0003",  name:'absMinHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Min Heat Setpoint Limit</i>'],
                 [at:"0x0201:0x0004",  name:'absMaxHeatingSetpointLimit',  type:"decimal", dt:"0x29", rw:"ro", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Abs Max Heat Setpoint Limit</i>'],
-                [at:"0x0201:0x0010",  name:'calibrationTemp',       type:"decimal", dt:"0x28", rw:"rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
+                [at:"0x0201:0x0010",  name:'calibrationTemp',  preProc:"signedInt",     type:"decimal", dt:"0x28", rw:"rw", min:-7.0,  max:7.0, defaultValue:0.0, step:0.2, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
                 [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
                 [at:"0x0201:0x0015",  name:'minHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Min Heating Setpoint</b>", description:'<i>Min Heating Setpoint Limit</i>'],
                 [at:"0x0201:0x0016",  name:'maxHeatingSetpoint',    type:"decimal", dt:"0x29", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Max Heating Setpoint</b>", description:'<i>Max Heating Setpoint Limit</i>'],
