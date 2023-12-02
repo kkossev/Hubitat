@@ -1,0 +1,242 @@
+
+
+/*
+===================================================================== SONOFF TRVZB ===========================================================================
+
+================================================================================================
+Node Descriptor
+================================================================================================
+▸ Logical Type                              = Zigbee End Device (ZED)
+▸ Complex Descriptor Available              = No
+▸ User Descriptor Available                 = No
+▸ Frequency Band                            = 2400 - 2483.5 MHz
+▸ Alternate PAN Coordinator                 = No
+▸ Device Type                               = Reduced Function Device (RFD)
+▸ Mains Power Source                        = No
+▸ Receiver On When Idle                     = No (conserve power during idle periods)
+▸ Security Capability                       = No
+▸ Allocate Address                          = Yes
+▸ Manufacturer Code                         = 0x1286 = SHENZHEN_COOLKIT
+▸ Maximum Buffer Size                       = 82 bytes
+▸ Maximum Incoming Transfer Size            = 255 bytes
+▸ Primary Trust Center                      = No
+▸ Backup Trust Center                       = No
+▸ Primary Binding Table Cache               = Yes
+▸ Backup Binding Table Cache                = No
+▸ Primary Discovery Cache                   = Yes
+▸ Backup Discovery Cache                    = Yes
+▸ Network Manager                           = Yes
+▸ Maximum Outgoing Transfer Size            = 255 bytes
+▸ Extended Active Endpoint List Available   = No
+▸ Extended Simple Descriptor List Available = No
+================================================================================================
+Power Descriptor
+================================================================================================
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
+▸ Available Power Sources    = [Constant (mains) power]
+▸ Current Power Sources      = [Constant (mains) power]
+▸ Current Power Source Level = 100%
+================================================================================================
+Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster)
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
+================================================================================================
+▸ 0x0000 | ZCL Version         | req | r-- | uint8  | 08           | --
+▸ 0x0001 | Application Version | opt | r-- | uint8  | 00           | --
+▸ 0x0004 | Manufacturer Name   | opt | r-- | string | SONOFF       | --
+▸ 0x0005 | Model Identifier    | opt | r-- | string | TRVZB        | --
+▸ 0x0006 | Date Code           | req | r-- | string | 20230811     | --
+▸ 0x0007 | Power Source        | opt | r-- | enum8  | 03 = Battery | --
+▸ 0x4000 | SW Build ID         | opt | r-- | string | 1.1.1        | --
+▸ 0xFFFD | Cluster Revision    | req | r-- | uint16 | 0003         | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Reset to Factory Defaults | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0001 (Power Configuration Cluster)
+================================================================================================
+▸ 0x0021 | Battery Percentage Remaining | opt | r-p | uint8  | C8 = 100% remaining | 300..43200
+▸ 0xFFFD | Cluster Revision             | req | r-- | uint16 | 0002                | --        
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster)
+================================================================================================
+▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002             | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Identify       | req
+▸ 0x01 | Identify Query | req
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster)
+================================================================================================
+▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On | 1..65534
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002    | --      
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Off    | req
+▸ 0x01 | On     | req
+▸ 0x02 | Toggle | req
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0020 (Poll Cluster)
+================================================================================================
+▸ 0x0000 | Check-in Interval     | req | rw- | uint32 | 00003840 = 3600 seconds | --
+▸ 0x0001 | Long Poll Interval    | req | r-- | uint32 | 00000008 = 2 seconds    | --
+▸ 0x0002 | Short Poll Interval   | req | r-- | uint16 | 0002 = 0 seconds        | --
+▸ 0x0003 | Fast Poll Timeout     | req | rw- | uint16 | 0028 = 10 seconds       | --
+▸ 0x0004 | Check-in Interval Min | opt | r-- | uint32 | 00001950 = 1620 seconds | --
+▸ 0xFFFD | Cluster Revision      | req | r-- | uint16 | 0003                    | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Check-in                 | req
+▸ 0x01 | Stop                     | req
+▸ 0x02 | Set Long Poll Attribute  | opt
+▸ 0x03 | Set Short Poll Attribute | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster) int16=0x29 map8=0x18 int8=0x28 enum8=0x30  uint8=x020 uint16=0x21   map16=0x19
+================================================================================================
+▸ 0x0000 | Local Temperature                     | req | r-p | int16  | 0870 (2160) | 300..3600
+▸ 0x0002 | Occupancy                             | opt | r-- | map8   | 01          | --       
+▸ 0x0003 | Abs Min Heat Setpoint Limit           | opt | r-- | int16  | 0190 (400)  | --       
+▸ 0x0004 | Abs Max Heat Setpoint Limit           | opt | r-- | int16  | 0DAC (3500) | --       
+▸ 0x0010 | Local Temperature Calibration         | opt | rw- | int8   | F8   (-8)   | --       TemperatureCalibration(-7.0, 7.0, 0.2)       / 10    
+▸ 0x0012 | Occupied Heating Setpoint             | req | rws | int16  | 0834 (2100) | --       'occupied_heating_setpoint', 4, 35, 0.5)
+▸ 0x0015 | Min Heat Setpoint Limit               | opt | rw- | int16  | 0190 (400)  | --       
+▸ 0x0016 | Max Heat Setpoint Limit               | opt | rw- | int16  | 0DAC (3500) | --       
+▸ 0x001A | Remote Sensing                        | opt | rw- | map8   | 00          | --       
+▸ 0x001B | Control Sequence Of Operation         | req | rw- | enum8  | 02          | --       
+▸ 0x001C | System Mode                           | req | rws | enum8  | 04          | --       SystemMode(['off', 'auto', 'heat'], ea.ALL, 'Mode of the thermostat')
+▸ 0x001E | Thermostat Running Mode               | opt | r-- | enum8  | 00          | --       RunningState(['idle', 'heat']
+▸ 0x0020 | Start Of Week                         | opt | r-- | enum8  | 01          | --       
+▸ 0x0021 | Number Of Weekly Transitions          | opt | r-- | uint8  | 01          | --       
+▸ 0x0022 | Number Of Daily Transitions           | opt | r-- | uint8  | 06          | --       
+▸ 0x0025 | Thermostat Programmin gOperation Mode | opt | rw- | map8   | 00          | --       
+▸ 0x0029 | Thermostat Running State              | opt | r-- | map16  | 0000        | --       
+▸ 0xFFFD | Cluster Revision                      | req | r-- | uint16 | 0003        | --       
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Setpoint Raise/Lower  | req
+▸ 0x01 | Set Weekly Schedule   | opt
+▸ 0x03 | Clear Weekly Schedule | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
+================================================================================================
+▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --     child_lock  [off, on]  unlocked/locked      - Read on Configure     bool = 0x10 
+▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
+▸ 0x0011 | -- | -- | r-- | string | --         | --
+▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --     open_window   [off, on]                      - Read on Configure    'Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.'
+▸ 0x6001 | -- | -- | rw- | int16  | 05DC (1500)| --
+▸ 0x6002 | -- | -- | rw- | int16  | 02EE (750) | --     frost_protection_temperature  / 100   (4.0, 35.0, 0.5)   (int16=0x29)    - Read on Configure    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'
+▸ 0x6003 | -- | -- | r-- | uint16 | 0155 (341) | --     idle_steps          'Number of steps used for calibration (no-load steps)'  (uint16=0x21)
+▸ 0x6004 | -- | -- | r-- | uint16 | 00D7 (215) | --     closing_steps       'Number of steps it takes to close the valve'
+▸ 0x6005 | -- | -- | r-- | uint16 | 04BA (1210)| --     valve_opening_limit_voltage / 100           'Valve opening limit voltage'   'mV'
+▸ 0x6006 | -- | -- | r-- | uint16 | 092D (2349)| --     valve_closing_limit_voltage / 100           'Valve closing limit voltage'   'mV'
+▸ 0x6007 | -- | -- | r-- | uint16 | 053B (1339)| --     valve_motor_running_voltage / 100           'Valve motor running voltage'   'mV'
+▸ 0x6008 | -- | -- | rw- | uint8  | 7F   (127) | --
+▸ 0x6009 | -- | -- | rw- | int16  | 0834 (2100)| --     heating_setpoint / 100
+▸ 0x600A | -- | -- | rw- | int16  | 076C (1900)| --
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFC57 (Unknown Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Neighbors Table
+================================================================================================
+▸ Addr:E9F1 | Type:Zigbee Router | RxOnWhenIdle:Yes | Rel:Parent | Depth:15 | LQI:217
+================================================================================================
+Routing Table
+================================================================================================
+▸ Could not retrieve data
+================================================================================================
+Bindings Table
+================================================================================================
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0201 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0202 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0001 | Dest:000D6F0016C1E513 | Endpoint:0x01
+driverVersion : 3.0.1 2023/11/27 10:18 AM (TRVZB SONOFF) (C-7 2.3.7.124)
+zigbeeGroups : {}
+*/
+
+
+
+
+================================================== Moes BRT-100 Thermostat TS0601 _TZE200_b6wax7g0 ================================================
+
+
+================================================================================================
+Node Descriptor
+================================================================================================
+▸ Logical Type                              = Zigbee End Device (ZED)
+▸ Complex Descriptor Available              = No
+▸ User Descriptor Available                 = No
+▸ Frequency Band                            = 2400 - 2483.5 MHz
+▸ Alternate PAN Coordinator                 = No
+▸ Device Type                               = Reduced Function Device (RFD)
+▸ Mains Power Source                        = No
+▸ Receiver On When Idle                     = No (conserve power during idle periods)
+▸ Security Capability                       = No
+▸ Allocate Address                          = Yes
+▸ Manufacturer Code                         = 0x1002 = EMBER
+▸ Maximum Buffer Size                       = 82 bytes
+▸ Maximum Incoming Transfer Size            = 82 bytes
+▸ Primary Trust Center                      = No
+▸ Backup Trust Center                       = No
+▸ Primary Binding Table Cache               = Yes
+▸ Backup Binding Table Cache                = No
+▸ Primary Discovery Cache                   = Yes
+▸ Backup Discovery Cache                    = Yes
+▸ Network Manager                           = Yes
+▸ Maximum Outgoing Transfer Size            = 82 bytes
+▸ Extended Active Endpoint List Available   = No
+▸ Extended Simple Descriptor List Available = No
+================================================================================================
+Power Descriptor
+================================================================================================
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
+▸ Available Power Sources    = [Constant (mains) power]
+▸ Current Power Sources      = [Constant (mains) power]
+▸ Current Power Source Level = 100%
+================================================================================================
+Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster)
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
+================================================================================================
+▸ 0x0000 | ZCL Version         | req | r-- | uint8  | 03                                                                                 | --
+▸ 0x0001 | Application Version | opt | r-- | uint8  | 40                                                                                 | --
+▸ 0x0002 | Stack Version       | opt | r-- | uint8  | 00                                                                                 | --
+▸ 0x0003 | HW Version          | opt | r-- | uint8  | 01                                                                                 | --
+▸ 0x0004 | Manufacturer Name   | opt | r-- | string | _TZE200_b6wax7g0                                                                   | --
+▸ 0x0005 | Model Identifier    | opt | r-- | string | TS0601                                                                             | --
+▸ 0x0006 | Date Code           | req | r-- | string | --                                                                                 | --
+▸ 0x0007 | Power Source        | opt | r-- | enum8  | 03 = Battery                                                                       | --
+▸ 0xFFDE | --                  | --  | rw- | uint8  | 0B                                                                                 | --
+▸ 0xFFE0 | --                  | --  | r-- | array  | 28DBFBA631D18C30A454269A22FD42863FE8CE4F26E16D967F47F91D2F3917380D4A14D4F28BFCBD74 | --
+▸ 0xFFE1 | --                  | --  | r-- | array  | 28FEE02A6044FEADF15846AF11654F314491844FD2589BC144B4F6ED4861EBBF3CB577D509AE597647 | --
+▸ 0xFFE2 | --                  | --  | r-- | uint8  | 1F                                                                                 | --
+▸ 0xFFE3 | --                  | --  | r-- | array  | 00                                                                                 | --
+▸ 0xFFFD | Cluster Revision    | req | r-- | uint16 | 0002                                                                               | --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0004 (Groups Cluster)
+================================================================================================
+▸ 0x0000 | Name Support     | req | r-- | map8   | 00   | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002 | --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster)
+================================================================================================
+▸ 0x0000 | Scene Count      | req | r-- | uint8  | 00         | --
+▸ 0x0001 | Current Scene    | req | r-- | uint8  | 00         | --
+▸ 0x0002 | Current Group    | req | r-- | uint16 | 0000       | --
+▸ 0x0003 | Scene Valid      | req | r-- | bool   | 00 = False | --
+▸ 0x0004 | Name Support     | req | r-- | map8   | 00         | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002       | --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xEF00 (Unknown Cluster)
+================================================================================================
+▸ 0x0000 | -- | -- | r-- | uint8 | 00 | --

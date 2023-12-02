@@ -651,25 +651,25 @@ def sendAttribute( par=null, val=null )
 
 /**
  * Sends a command to the device.
- * @param command The command to send. Must be one of the commands defined in the DEVICE.commands map.
- * @param val The value to send with the command.
- * @return void
+ * @param command - The command to send. Must be one of the commands defined in the DEVICE.commands map.
+ * @param val     - The value to send with the command, can be null.
+ * @return true on success, false otherwise.
  */
-def sendCommand( command=null, val=null )
+def sendCommand( command=null, val=null)
 {
     //logDebug "sending command ${command}(${val}))"
     ArrayList<String> cmds = []
     def supportedCommandsMap = DEVICE.commands 
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
         logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
-        return
+        return false
     }
     // TODO: compare ignoring the upper/lower case of the command.
     def supportedCommandsList =  DEVICE.commands.keySet() as List 
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
         logInfo "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE.description}' must be one of these : ${supportedCommandsList}"
-        return
+        return false
     }
     def func
     try {
@@ -685,11 +685,12 @@ def sendCommand( command=null, val=null )
     }
     catch (e) {
         logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
-        return
+        return false
     }
     if (cmds != null && cmds != []) {
         sendZigbeeCommands( cmds )
     }
+    return true
 }
 
 /**

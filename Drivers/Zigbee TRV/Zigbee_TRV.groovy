@@ -17,8 +17,17 @@
  *                                    Emergency Heat OK;   setThermostatMode OK; Heat OK, Auto OK, Cool OK; setThermostatFanMode OK
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) added NAMRON thermostat profile; added Sonoff TRVZB 0x0201 (Thermostat Cluster) support; thermostatOperatingState ; childLock OK; windowOpenDetection OK; setPar OK for BRT-100 and Aqara;
  *                                    minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; auto OK; heat OK; cool and emergency heat OK (unsupported); Sonoff off mode OK;
+ * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
+ *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  *
- *                                   TODO: cleanup trace and debug logs
+ *                                   TODO: BRT-100 refactoring ; 
+ *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
+ *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.989debugBRT-100 TRV DEV compareAndConvertTuyaToHubitatPreferenceValue: preference = [1] type=enum foundItem=ecoMode isEqual=false tuyaValueScaled=1 (scale=1) fncmd=1
+ *                                   TODO: BRT-100 - after emergency heat, the mode was set to 'auto' (not 'heat') !
+ *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. 
+ *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
+ *                                   TODO: cleanup trace and debug logs  invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]
+ *                                   TODO: hide the maxTimeBetweenReport preferences (not used here)
  *                                   TODO: prepare for publishing the first version of this driver w/ Sonoff support
  *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
@@ -27,10 +36,10 @@
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: handle UNKNOWN TRV
- *                                   TODO: Aqara TRV - buggy heatingSetPoint 12.3 ??? !!!!!!!!!!!!!!!
+ *                                   TODO: remove isAqaraTRV() 
  *                                   TODO: Aqara TRV - heatingSetpoint refresh/poll is not working!
  *                                   TODO: Aqara TRV - poll (or simulate) refresing the temperature and the heatingSetpoint
+ *                                   TODO: handle UNKNOWN TRV
  *                                   TODO: initializeThermostat() 
  *                                   TODO: add option 'Cool similation'
  *                                   TODO: add option 'Simple TRV' (no additinal attributes)
@@ -47,10 +56,12 @@
  *                                   TODO: Versions of the main module + included libraries 
  *                                   TODO: HomeKit - min and max temperature limits?
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
+ *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
+ *                                   TODO: add VIRTUAL thermostat
  */
 
 static String version() { "3.0.1" }
-static String timeStamp() {"2023/12/02 11:04 AM"}
+static String timeStamp() {"2023/12/02 8:40 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -73,7 +84,7 @@ deviceType = "Thermostat"
 metadata {
     definition (
         name: 'Zigbee TRVs and Thermostats',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee_TRV/Zigbee_TRV_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Zigbee_TRV_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true 
     ) {    
         
@@ -104,7 +115,7 @@ metadata {
     attribute 'level', "number"                                 // BRT-100          
     attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
     attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
-    attribute 'trvMode', "enum",  ["auto", "manual", "TempHold", "holidays"]        // BRT-100
+    //attribute 'trvMode', "enum",  ["auto", "manual", "TempHold", "holidays"]        // BRT-100
     attribute 'weeklyProgram', "number"                         // BRT-100
     attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
     attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
@@ -120,6 +131,8 @@ metadata {
     attribute "sensor", 'enum', SensorOpts.options.values() as List<String>
 
     //command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]]
+
+    command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllThermostatModesOpts.options.values() as List<String>]]
 
     if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
 
@@ -144,8 +157,8 @@ metadata {
 }
 
 def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E1_TRV") }
-def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BRT-100") }
-def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_TRV") }
+//def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BRT-100") }
+//def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_TRV") }
 
 
 
@@ -156,39 +169,43 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
     options     : [0: 'Disabled', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
 ]
 
+@Field static final Map AllThermostatModesOpts = [
+    defaultValue: 1,
+    options     : [0: 'off', 1: 'heat', 2: 'cool', 3: 'auto', 4: 'emergency heat', 5: 'eco']
+]
 @Field static final Map SystemModeOpts = [        //system_mode     TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'off', 1: 'heat']
 ]
-@Field static final Map PresetOpts = [            // preset
+@Field static final Map PresetOpts = [            // preset      TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'manual', 1: 'auto', 2: 'away']
 ]
-@Field static final Map WindowDetectionOpts = [   // window_detection
+@Field static final Map WindowDetectionOpts = [   // window_detection   TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'off', 1: 'on']
 ]
-@Field static final Map ValveDetectionOpts = [    // valve_detection
+@Field static final Map ValveDetectionOpts = [    // valve_detection    TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'off', 1: 'on']
 ]
-@Field static final Map ValveAlarmOpts = [    // valve_alarm
+@Field static final Map ValveAlarmOpts = [    // valve_alarm     TODO - remove it !!
     defaultValue: 1,
     options     : [0: false, 1: true]
 ]
-@Field static final Map ChildLockOpts = [    // child_lock
+@Field static final Map ChildLockOpts = [    // child_lock    TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'unlock', 1: 'lock']
 ]
-@Field static final Map WindowOpenOpts = [    // window_open
+@Field static final Map WindowOpenOpts = [    // window_open     TODO - remove it !!
     defaultValue: 1,
     options     : [0: false, 1: true]
 ]
-@Field static final Map CalibratedOpts = [    // calibrated
+@Field static final Map CalibratedOpts = [    // calibrated    TODO - remove it !!
     defaultValue: 1,
     options     : [0: false, 1: true]
 ]
-@Field static final Map SensorOpts = [
+@Field static final Map SensorOpts = [  // sensor    TODO - remove it !!
     defaultValue: 1,
     options     : [0: 'internal', 1: 'external']
 ]
@@ -236,44 +253,8 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 //                          ^^ TODO  
                 [at:"0x0201:0xFFF2",  name:'unknown',                type:"number", dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
             ],
+            refresh: ["pollThermostatCluster"],
             deviceJoinName: "Aqara E1 Thermostat",
-            configuration : [:]
-    ],
-
-// BRT-100-B0
-// fingerprint 
-    "MOES_BRT-100"   : [
-            description   : "MOES BRT-100 TRV",
-            models        : ["TS0601"],
-            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
-            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
-            fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
-            ],
-            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
-            tuyaDPs       : [
-                [dp:1,   name:'trvMode',            type:"enum",            rw: "rw", min:0,     max:3,    defaultValue:"1",  step:1,   scale:1,  map:[0: "auto", 1: "manual", 2: "TempHold", 3: "holidays"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'], 
-                [dp:2,   name:'heatingSetpoint',    type:"decimal",         rw: "rw", min:5.0,   max:45.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                [dp:3,   name:'temperature',        type:"decimal",         rw: "ro", min:-10.0, max:50.0, defaultValue:20.0, step:0.5, scale:10, unit:"°C",  description:'<i>Temperature</i>'],
-                [dp:4,   name:'emergencyHeating',   type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Emergency Heating</b>",  description:'<i>Emergency heating</i>'], 
-                [dp:5,   name:'emergencyHeatingTime',   type:"number",      rw: "rw", min:0,     max:720 , defaultValue:15,   step:15,  scale:1,  unit:"minutes", title:"<b>Emergency Heating Timer</b>",  description:'<i>Emergency heating timer</i>'], 
-                [dp:7,   name:'workingState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWorking State</b>",  description:'<i>working state</i>'], 
-                [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Window detection</i>'], 
-                [dp:9,   name:'windowsState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWindow State</b>",  description:'<i>Window state</i>'], 
-                [dp:13,  name:'childLock',          type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Child Lock</b>",  description:'<i>Child lock</i>'], 
-                [dp:14,  name:'battery',            type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Battery level</i>'],
-                [dp:101, name:'weeklyProgram',      type:"number",          rw: "ro", min:0,     max:9999, defaultValue:0,    step:1,   scale:1,  unit:"",          description:'<i>Weekly program</i>'],
-                [dp:103, name:'boostTime',          type:"number",          rw: "rw", min:100,   max:900 , defaultValue:100,  step:1,   scale:1,  unit:"seconds", title:"<b>Boost Timer</b>",  description:'<i>Boost timer</i>'], 
-                [dp:104, name:'level',              type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Valve level</i>'],
-                [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
-                [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
-                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
-                [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
-                [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
-
-            ],
-            deviceJoinName: "MOES MRT-100 TRV",
             configuration : [:]
     ],
 
@@ -283,7 +264,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
     //                https://github.com/Koenkk/zigbee-herdsman-converters/pull/6469 
     // fromZigbee:  https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/fromZigbee.ts#L44
     // toZigbee:    https://github.com/Koenkk/zigbee-herdsman-converters/blob/b89af815cf41bd309d63f3f01d352dbabcf4ebb2/src/converters/toZigbee.ts#L1516
-    // isSonoffTRV()
+    //
     "SONOFF_TRV"   : [
             description   : "Sonoff TRVZB",
             models        : ["SONOFF"],
@@ -348,7 +329,48 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                     // await endpoint.read(0xFC11, [0x0000, 0x6000, 0x6002]);
                 //                          ^^ TODO  
             ],
+            refresh: ["pollBatteryPercentage","pollThermostatCluster"],
             deviceJoinName: "Sonoff TRVZB",
+            configuration : [:]
+    ],
+
+
+// BRT-100-B0
+//              https://github.com/Koenkk/zigbee-herdsman-converters/blob/47f56c19a3fdec5f23e74f805ff640a931721099/src/devices/moes.ts#L282
+    "MOES_BRT-100"   : [
+            description   : "MOES BRT-100 TRV",
+            models        : ["TS0601"],
+            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
+            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
+            ],
+            commands      : ["autoPollThermostat":"autoPollThermostat", "sendSupportedThermostatModes":"sendSupportedThermostatModes", "setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            tuyaDPs       : [
+                [dp:1,   name:'thermostatMode',     type:"enum",            rw: "rw", min:0,     max:3,    defaultValue:"1",  step:1,   scale:1,  map:[0: "auto", 1: "heat", 2: "TempHold", 3: "holidays"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'], 
+                [dp:2,   name:'heatingSetpoint',    type:"decimal",         rw: "rw", min:5.0,   max:45.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
+                [dp:3,   name:'temperature',        type:"decimal",         rw: "ro", min:-10.0, max:50.0, defaultValue:20.0, step:0.5, scale:10, unit:"°C",  description:'<i>Temperature</i>'],
+                [dp:4,   name:'emergencyHeating',   type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Emergency Heating</b>",  description:'<i>Emergency heating</i>'], 
+                [dp:5,   name:'emergencyHeatingTime',   type:"number",      rw: "rw", min:0,     max:720 , defaultValue:15,   step:15,  scale:1,  unit:"minutes", title:"<b>Emergency Heating Timer</b>",  description:'<i>Emergency heating timer</i>'], 
+                [dp:7,   name:'workingState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWorking State</b>",  description:'<i>working state</i>'], 
+                [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Window detection</i>'], 
+                [dp:9,   name:'windowsState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWindow State</b>",  description:'<i>Window state</i>'], 
+                [dp:13,  name:'childLock',          type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Child Lock</b>",  description:'<i>Child lock</i>'], 
+                [dp:14,  name:'battery',            type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Battery level</i>'],
+                [dp:101, name:'weeklyProgram',      type:"number",          rw: "ro", min:0,     max:9999, defaultValue:0,    step:1,   scale:1,  unit:"",          description:'<i>Weekly program</i>'],
+                [dp:103, name:'boostTime',          type:"number",          rw: "rw", min:100,   max:900 , defaultValue:100,  step:1,   scale:1,  unit:"seconds", title:"<b>Boost Timer</b>",  description:'<i>Boost timer</i>'], 
+                [dp:104, name:'level',              type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Valve level</i>'],
+                [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
+                [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
+                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
+                [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
+                [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
+
+            ],
+            supportedThermostatModes: ["auto", "heat", "emergency heat", "eco"],
+            refresh: ["tuyaBlackMagic"],
+            deviceJoinName: "MOES BRT-100 TRV",
             configuration : [:]
     ],
 
@@ -452,6 +474,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
 
 
             ],
+            refresh: ["pollThermostatCluster"],
             deviceJoinName: "NAMRON Thermostat",
             configuration : [:]
     ],
@@ -475,6 +498,7 @@ def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_
                 [at:"0x0201:0x0023",  name:'thermostatHoldMode',       type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
                 [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
             ],
+            refresh: ["pollThermostatCluster"],
             deviceJoinName: "UNKWNOWN TRV",
             configuration : [:]
     ]
@@ -751,7 +775,7 @@ def setHeatingSetpoint( temperature ) {
         zigbee.writeAttribute(0x0201, 0x12, 0x29, (tempDouble * 100) as int)        // raw:F6690102010A1200299808, dni:F669, endpoint:01, cluster:0201, size:0A, attrId:0012, encoding:29, command:0A, value:0898, clusterInt:513, attrInt:18
     }
     else {
-        log.warn "calling sendAttribute heatingSetpoint ${tempDouble}"
+        logDebug "calling sendAttribute heatingSetpoint ${tempDouble}"
         sendAttribute("heatingSetpoint", tempDouble)    // TODO - check if this will create a preference !!
     }
 }
@@ -823,7 +847,7 @@ def setPresetMode(mode) {
     }
     else {
         // TODO - set generic thermostat mode
-        log.warn "setPresetMode NOT IMPLEMENTED"
+        logWarn "setPresetMode NOT IMPLEMENTED"
         return
     }
     if (cmds == []) { cmds = ["delay 299"] }
@@ -836,18 +860,70 @@ def setThermostatMode( mode ) {
     Boolean result = false
     logDebug "setThermostatMode: sending setThermostatMode(${mode})"
 
-    // try using the standard thermostat capability
+    // some TRVs require some checks and additional commands to be sent before setting the mode
+    def currentMode = device.currentValue('thermostatMode')
+    logDebug "setThermostatMode: currentMode = ${currentMode}"
+    switch(mode) {
+        case "heat":
+        case "auto":
+            if (device.currentValue('ecoMode') == 'on') {
+                logInfo "setThermostatMode: pre-processing: switching first the eco mode off"
+                sendAttribute("ecoMode", 0)
+            }
+            if (device.currentValue('emergencyHeating') == 'on') {
+                logInfo "setThermostatMode: pre-processing: switching first the emergencyHeating mode off"
+                sendAttribute("emergencyHeating", 0)
+            }
+            break
+        //case "off":         // TODO |||
+        case "cool":        // TODO !!!!!!!!!!
+            // BRT-100 does not have an explicit off command, so we use the  mode (16 degrees)      // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
+            logInfo "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
+            sendAttribute("ecoMode", 1)
+            break
+        case "emergency heat":  // TODO !!!!!!!!!!!!
+            logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
+            sendAttribute("emergencyHeating", 1)
+            return
+        case 'eco':
+            logDebug "setThermostatMode: pre-processing: switching the eco mode on"
+            sendAttribute("ecoMode", 1)
+            return
+        case 'off':     // TODO 
+            logDebug "setThermostatMode: pre-processing: no pre-processing gor mode  ${mode}"
+            break
+        default:
+            logWarn "setThermostatMode: pre-processing: unknown mode ${mode}"
+            break
+    }
+ 
+
+    // try using the standard thermostat capability to switch to the selected new mode
     result = sendAttribute("thermostatMode", mode)
     logTrace "setThermostatMode: sendAttribute returned ${result}"
     if (result == true) { return }
 
+    // post-process mode switching for some TRVs
     switch(mode) {
         case 'cool':
-        case "heat":
-        case "auto":
-        case "off":
+        case 'heat':
+        case 'auto':
+        case 'off':
+        case 'emergency heat':
+            logTrace "setThermostatMode: post-processing: no post-processing required for mode ${mode}"        
+            break
+        case 'emergency heat':
+            logInfo "setThermostatMode: post-processing: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
+            sendAttribute("emergencyHeating", 1)
+            break
+            /*
+        case 'eco':
+            logDebug "setThermostatMode: post-processing: switching the eco mode on"
+            sendAttribute("ecoMode", 1)
+            break
+            */
         default:
-            logWarn "setThermostatMode: unsupported thermostat mode '${mode}'"
+            logWarn "setThermostatMode: post-processing: unsupported thermostat mode '${mode}'"
             break
     }
     return
@@ -927,6 +1003,12 @@ def fanOn() { setThermostatFanMode("on") }
 void sendSupportedThermostatModes() {
     def supportedThermostatModes = []
     supportedThermostatModes = ["off", "heat", "auto", "emergency heat"]
+    if (DEVICE.supportedThermostatModes != null) {
+        supportedThermostatModes = DEVICE.supportedThermostatModes
+    }
+    else {
+        logWarn "sendSupportedThermostatModes: DEVICE.supportedThermostatModes is not set!"
+    }
     logInfo "supportedThermostatModes: ${supportedThermostatModes}"
     sendEvent(name: "supportedThermostatModes", value:  JsonOutput.toJson(supportedThermostatModes), isStateChange: true)
 }
@@ -946,6 +1028,18 @@ private void unScheduleThermostatPolling() {
     unschedule('autoPollThermostat')
 }
 
+
+def pollThermostatCluster()
+{
+    return  zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C, 0x0029], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )   
+}
+
+def pollBatteryPercentage()
+{
+    return zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
+}
+
+
 /**
  * Scheduled job for polling device specific attribute(s)
  */
@@ -954,6 +1048,23 @@ void autoPollThermostat() {
     checkDriverVersion()
     List<String> cmds = []
     setRefreshRequest()
+
+    if (DEVICE.refresh != null && DEVICE.refresh != []) {
+        logDebug "autoPollThermostat: calling DEVICE.refresh() ${DEVICE.refresh}"
+        DEVICE.refresh.each { 
+            logTrace "autoPollThermostat: calling ${it}()"
+            cmds += "${it}"()
+        }
+        if (cmds != null && cmds != [] ) {
+            sendZigbeeCommands(cmds)
+        } 
+        else {
+            clearRefreshRequest()     // nothing to poll
+        }   
+        return
+    }
+
+/*
     if (isBRT100TRV()) {
         logDebug "autoPollThermostat: no polling for device profile ${getDeviceGroup()}"
         clearRefreshRequest()
@@ -968,6 +1079,8 @@ void autoPollThermostat() {
     if (cmds != null && cmds != [] ) {
         sendZigbeeCommands(cmds)
     }    
+*/
+
 }
 
 //
@@ -1010,10 +1123,23 @@ void updatedThermostat() {
     */
 }
 
+
+//
 def refreshThermostat() {
     // state.states["isRefresh"] = true is set in the commonLib
     List<String> cmds = []
-    if (isAqaraTRV()) {
+    setRefreshRequest()    
+    if (DEVICE.refresh != null && DEVICE.refresh != []) {
+        logDebug "refreshThermostat: calling DEVICE.refresh() ${DEVICE.refresh}"
+        DEVICE.refresh.each { 
+            logTrace "refreshThermostat: calling ${it}()"
+            cmds += "${it}"()
+        }
+        return cmds
+    }
+
+    // TODO - remove the speicfics !!
+    else if (isAqaraTRV()) {
         //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage)
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
         cmds += zigbee.readAttribute(0xFCC0, [0x0271, 0x0272, 0x0273, 0x0274, 0x0275, 0x0277, 0x0279, 0x027A, 0x027B, 0x027E], [mfgCode: 0x115F], delay=3500)       
@@ -1022,19 +1148,24 @@ def refreshThermostat() {
         // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
         // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
     }
+        /*
     else if (isSonoffTRV()) {
         cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x0029], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint,        
     }
+
     else if (isBRT100TRV()) {
         //logDebug "no refresh commands for MOES_BRT-100"
         // TODO - research how to get the temperature updates from the BRT-100 !!
         cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
 
     }
+    */
+    /*
     else if (getDeviceGroup() == "UNKNOWN") {
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
+    */
     else {
         logWarn "refreshThermostat: unknown device profile ${getDeviceGroup()}"
     }
@@ -1095,22 +1226,26 @@ void initVarsThermostat(boolean fullInit=false) {
     
 }
 
-
+// called from initializeVars() in the main code ...
 void initEventsThermostat(boolean fullInit=false) {
-    String descText = "inital attribute setting"
-    sendSupportedThermostatModes()
-    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["on", "auto"]), isStateChange: true)    
-    sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: descText)
-    state.lastThermostatMode = "heat"
-    sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: descText)
-    state.lastThermostatOperatingState = "idle"
-    sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: descText)
-    sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)        // Google Home compatibility
-    sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)
-    sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: descText)
-    sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: descText)    
-    updateDataValue("lastRunningMode", "heat")    
-    
+    if (fullInit==true) {
+        String descText = "inital attribute setting"
+        sendSupportedThermostatModes()
+        sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["on", "auto"]), isStateChange: true)    
+        sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: descText)
+        state.lastThermostatMode = "heat"
+        sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: descText)
+        state.lastThermostatOperatingState = "idle"
+        sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: descText)
+        sendEvent(name: "thermostatSetpoint", value:  12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)        // Google Home compatibility
+        sendEvent(name: "heatingSetpoint", value: 12.3, unit: "\u00B0"+"C", isStateChange: true, description: descText)
+        sendEvent(name: "coolingSetpoint", value: 34.5, unit: "\u00B0"+"C", isStateChange: true, description: descText)
+        sendEvent(name: "temperature", value: 23.4, unit: "\u00B0"+"C", isStateChange: true, description: descText)    
+        updateDataValue("lastRunningMode", "heat")    
+    }
+    else {
+        logDebug "initEventsThermostat: fullInit = false"
+    }
 }
 
 private getDescriptionText(msg) {
@@ -1119,7 +1254,8 @@ private getDescriptionText(msg) {
     return descriptionText
 }
 
-// called from processTuyaDPfromDeviceProfile in deviceProfileLib  
+// called from processFoundItem  (processTuyaDPfromDeviceProfile and ) processClusterAttributeFromDeviceProfile in deviceProfileLib when a Zigbee message was found defined in the device profile map
+//
 // (works for BRT-100, Sonoff TRVZV) 
 //
 def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
@@ -1132,17 +1268,20 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
         case "humidity" :
             handleHumidityEvent(valueScaled)
             break
-        case "ecoMode" :    // BRT-100 - simulate OFF mode
+       
+        case "ecoMode" :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
             sendEvent(eventMap)
             logInfo "${descText}"
             if (valueScaled == "on") {  // ecoMode is on
-                sendEvent(name: "thermostatMode", value: "off", isStateChange: true, description: "BRT-100 ecoMode is on")
+                //sendEvent(name: "thermostatMode", value: "off", isStateChange: true, description: "BRT-100 ecoMode is on")
+                sendEvent(name: "thermostatMode", value: "eco", isStateChange: true, description: "BRT-100 ecoMode is on")
                 sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 ecoMode is on")
             }
             else {
                 sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "BRT-100 ecoMode is off")
             }
             break
+            
         case "emergencyHeating" :   // BRT-100
             sendEvent(eventMap)
             logInfo "${descText}"
@@ -1194,174 +1333,16 @@ def factoryResetThermostat() {
     List<String> cmds = []
     if (isAqaraTRV()) {
         // TODO - factory reset Aqara E1 thermostat
-        log.warn "factoryResetThermostat: NOT IMPLEMENTED"
+        logWarn "factoryResetThermostat: NOT IMPLEMENTED"
     }
     else {
         // TODO - factory reset generic thermostat
-        log.warn "factoryResetThermostat: NOT IMPLEMENTED"
+        logWarn "factoryResetThermostat: NOT IMPLEMENTED"
     }
     if (cmds == []) { cmds = ["delay 299"] }
     return cmds
 }
 
-
-/*
-SONOFF TRVZB
-
-================================================================================================
-Node Descriptor
-================================================================================================
-▸ Logical Type                              = Zigbee End Device (ZED)
-▸ Complex Descriptor Available              = No
-▸ User Descriptor Available                 = No
-▸ Frequency Band                            = 2400 - 2483.5 MHz
-▸ Alternate PAN Coordinator                 = No
-▸ Device Type                               = Reduced Function Device (RFD)
-▸ Mains Power Source                        = No
-▸ Receiver On When Idle                     = No (conserve power during idle periods)
-▸ Security Capability                       = No
-▸ Allocate Address                          = Yes
-▸ Manufacturer Code                         = 0x1286 = SHENZHEN_COOLKIT
-▸ Maximum Buffer Size                       = 82 bytes
-▸ Maximum Incoming Transfer Size            = 255 bytes
-▸ Primary Trust Center                      = No
-▸ Backup Trust Center                       = No
-▸ Primary Binding Table Cache               = Yes
-▸ Backup Binding Table Cache                = No
-▸ Primary Discovery Cache                   = Yes
-▸ Backup Discovery Cache                    = Yes
-▸ Network Manager                           = Yes
-▸ Maximum Outgoing Transfer Size            = 255 bytes
-▸ Extended Active Endpoint List Available   = No
-▸ Extended Simple Descriptor List Available = No
-================================================================================================
-Power Descriptor
-================================================================================================
-▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
-▸ Available Power Sources    = [Constant (mains) power]
-▸ Current Power Sources      = [Constant (mains) power]
-▸ Current Power Source Level = 100%
-================================================================================================
-Endpoint 0x01 | Out Clusters: 0x000A (Time Cluster), 0x0019 (OTA Upgrade Cluster)
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
-================================================================================================
-▸ 0x0000 | ZCL Version         | req | r-- | uint8  | 08           | --
-▸ 0x0001 | Application Version | opt | r-- | uint8  | 00           | --
-▸ 0x0004 | Manufacturer Name   | opt | r-- | string | SONOFF       | --
-▸ 0x0005 | Model Identifier    | opt | r-- | string | TRVZB        | --
-▸ 0x0006 | Date Code           | req | r-- | string | 20230811     | --
-▸ 0x0007 | Power Source        | opt | r-- | enum8  | 03 = Battery | --
-▸ 0x4000 | SW Build ID         | opt | r-- | string | 1.1.1        | --
-▸ 0xFFFD | Cluster Revision    | req | r-- | uint16 | 0003         | --
-------------------------------------------------------------------------------------------------
-▸ 0x00 | Reset to Factory Defaults | opt
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0001 (Power Configuration Cluster)
-================================================================================================
-▸ 0x0021 | Battery Percentage Remaining | opt | r-p | uint8  | C8 = 100% remaining | 300..43200
-▸ 0xFFFD | Cluster Revision             | req | r-- | uint16 | 0002                | --        
-------------------------------------------------------------------------------------------------
-▸ No commands found
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster)
-================================================================================================
-▸ 0x0000 | Identify Time    | req | rw- | uint16 | 0000 = 0 seconds | --
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002             | --
-------------------------------------------------------------------------------------------------
-▸ 0x00 | Identify       | req
-▸ 0x01 | Identify Query | req
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster)
-================================================================================================
-▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On | 1..65534
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002    | --      
-------------------------------------------------------------------------------------------------
-▸ 0x00 | Off    | req
-▸ 0x01 | On     | req
-▸ 0x02 | Toggle | req
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0020 (Poll Cluster)
-================================================================================================
-▸ 0x0000 | Check-in Interval     | req | rw- | uint32 | 00003840 = 3600 seconds | --
-▸ 0x0001 | Long Poll Interval    | req | r-- | uint32 | 00000008 = 2 seconds    | --
-▸ 0x0002 | Short Poll Interval   | req | r-- | uint16 | 0002 = 0 seconds        | --
-▸ 0x0003 | Fast Poll Timeout     | req | rw- | uint16 | 0028 = 10 seconds       | --
-▸ 0x0004 | Check-in Interval Min | opt | r-- | uint32 | 00001950 = 1620 seconds | --
-▸ 0xFFFD | Cluster Revision      | req | r-- | uint16 | 0003                    | --
-------------------------------------------------------------------------------------------------
-▸ 0x00 | Check-in                 | req
-▸ 0x01 | Stop                     | req
-▸ 0x02 | Set Long Poll Attribute  | opt
-▸ 0x03 | Set Short Poll Attribute | opt
-================================================================================================
-Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster) int16=0x29 map8=0x18 int8=0x28 enum8=0x30  uint8=x020 uint16=0x21   map16=0x19
-================================================================================================
-▸ 0x0000 | Local Temperature                     | req | r-p | int16  | 0870 (2160) | 300..3600
-▸ 0x0002 | Occupancy                             | opt | r-- | map8   | 01          | --       
-▸ 0x0003 | Abs Min Heat Setpoint Limit           | opt | r-- | int16  | 0190 (400)  | --       
-▸ 0x0004 | Abs Max Heat Setpoint Limit           | opt | r-- | int16  | 0DAC (3500) | --       
-▸ 0x0010 | Local Temperature Calibration         | opt | rw- | int8   | F8   (-8)   | --       TemperatureCalibration(-7.0, 7.0, 0.2)       / 10    
-▸ 0x0012 | Occupied Heating Setpoint             | req | rws | int16  | 0834 (2100) | --       'occupied_heating_setpoint', 4, 35, 0.5)
-▸ 0x0015 | Min Heat Setpoint Limit               | opt | rw- | int16  | 0190 (400)  | --       
-▸ 0x0016 | Max Heat Setpoint Limit               | opt | rw- | int16  | 0DAC (3500) | --       
-▸ 0x001A | Remote Sensing                        | opt | rw- | map8   | 00          | --       
-▸ 0x001B | Control Sequence Of Operation         | req | rw- | enum8  | 02          | --       
-▸ 0x001C | System Mode                           | req | rws | enum8  | 04          | --       SystemMode(['off', 'auto', 'heat'], ea.ALL, 'Mode of the thermostat')
-▸ 0x001E | Thermostat Running Mode               | opt | r-- | enum8  | 00          | --       RunningState(['idle', 'heat']
-▸ 0x0020 | Start Of Week                         | opt | r-- | enum8  | 01          | --       
-▸ 0x0021 | Number Of Weekly Transitions          | opt | r-- | uint8  | 01          | --       
-▸ 0x0022 | Number Of Daily Transitions           | opt | r-- | uint8  | 06          | --       
-▸ 0x0025 | Thermostat Programmin gOperation Mode | opt | rw- | map8   | 00          | --       
-▸ 0x0029 | Thermostat Running State              | opt | r-- | map16  | 0000        | --       
-▸ 0xFFFD | Cluster Revision                      | req | r-- | uint16 | 0003        | --       
-------------------------------------------------------------------------------------------------
-▸ 0x00 | Setpoint Raise/Lower  | req
-▸ 0x01 | Set Weekly Schedule   | opt
-▸ 0x03 | Clear Weekly Schedule | opt
-================================================================================================
-Endpoint 0x01 | In Cluster: 0xFC11 (Unknown Cluster)
-================================================================================================
-▸ 0x0000 | -- | -- | rw- | bool   | 00 = False | --     child_lock  [off, on]  unlocked/locked      - Read on Configure     bool = 0x10 
-▸ 0x0010 | -- | -- | r-- | uint32 | 00000201   | --
-▸ 0x0011 | -- | -- | r-- | string | --         | --
-▸ 0x6000 | -- | -- | rw- | bool   | 00 = False | --     open_window   [off, on]                      - Read on Configure    'Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.'
-▸ 0x6001 | -- | -- | rw- | int16  | 05DC (1500)| --
-▸ 0x6002 | -- | -- | rw- | int16  | 02EE (750) | --     frost_protection_temperature  / 100   (4.0, 35.0, 0.5)   (int16=0x29)    - Read on Configure    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'
-▸ 0x6003 | -- | -- | r-- | uint16 | 0155 (341) | --     idle_steps          'Number of steps used for calibration (no-load steps)'  (uint16=0x21)
-▸ 0x6004 | -- | -- | r-- | uint16 | 00D7 (215) | --     closing_steps       'Number of steps it takes to close the valve'
-▸ 0x6005 | -- | -- | r-- | uint16 | 04BA (1210)| --     valve_opening_limit_voltage / 100           'Valve opening limit voltage'   'mV'
-▸ 0x6006 | -- | -- | r-- | uint16 | 092D (2349)| --     valve_closing_limit_voltage / 100           'Valve closing limit voltage'   'mV'
-▸ 0x6007 | -- | -- | r-- | uint16 | 053B (1339)| --     valve_motor_running_voltage / 100           'Valve motor running voltage'   'mV'
-▸ 0x6008 | -- | -- | rw- | uint8  | 7F   (127) | --
-▸ 0x6009 | -- | -- | rw- | int16  | 0834 (2100)| --     heating_setpoint / 100
-▸ 0x600A | -- | -- | rw- | int16  | 076C (1900)| --
-------------------------------------------------------------------------------------------------
-------------------------------------------------------------------------------------------------
-▸ No commands found
-================================================================================================
-Endpoint 0x01 | In Cluster: 0xFC57 (Unknown Cluster)
-================================================================================================
-▸ No attributes found
-------------------------------------------------------------------------------------------------
-▸ No commands found
-================================================================================================
-Neighbors Table
-================================================================================================
-▸ Addr:E9F1 | Type:Zigbee Router | RxOnWhenIdle:Yes | Rel:Parent | Depth:15 | LQI:217
-================================================================================================
-Routing Table
-================================================================================================
-▸ Could not retrieve data
-================================================================================================
-Bindings Table
-================================================================================================
-▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0201 | Dest:000D6F0016C1E513 | Endpoint:0x01
-▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0202 | Dest:000D6F0016C1E513 | Endpoint:0x01
-▸ Src:94DEB8FFFE2B41B3 | Endpoint:0x01 | Cluster:0x0001 | Dest:000D6F0016C1E513 | Endpoint:0x01
-driverVersion : 3.0.1 2023/11/27 10:18 AM (TRVZB SONOFF) (C-7 2.3.7.124)
-zigbeeGroups : {}
-*/
 
 def testT(par) {
     /*
