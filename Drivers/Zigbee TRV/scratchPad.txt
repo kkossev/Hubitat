@@ -240,3 +240,95 @@ Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster)
 Endpoint 0x01 | In Cluster: 0xEF00 (Unknown Cluster)
 ================================================================================================
 ▸ 0x0000 | -- | -- | r-- | uint8 | 00 | --
+
+
+
+
+============================================================ Aqara E1 Thermostat  =================================================================
+
+
+================================================================================================
+Node Descriptor
+================================================================================================
+▸ Logical Type                              = Zigbee End Device (ZED)
+▸ Complex Descriptor Available              = No
+▸ User Descriptor Available                 = No
+▸ Frequency Band                            = 2400 - 2483.5 MHz
+▸ Alternate PAN Coordinator                 = No
+▸ Device Type                               = Reduced Function Device (RFD)
+▸ Mains Power Source                        = No
+▸ Receiver On When Idle                     = No (conserve power during idle periods)
+▸ Security Capability                       = No
+▸ Allocate Address                          = Yes
+▸ Manufacturer Code                         = 0x115F = XIAOMI
+▸ Maximum Buffer Size                       = 127 bytes
+▸ Maximum Incoming Transfer Size            = 100 bytes
+▸ Primary Trust Center                      = No
+▸ Backup Trust Center                       = No
+▸ Primary Binding Table Cache               = Yes
+▸ Backup Binding Table Cache                = No
+▸ Primary Discovery Cache                   = Yes
+▸ Backup Discovery Cache                    = Yes
+▸ Network Manager                           = Yes
+▸ Maximum Outgoing Transfer Size            = 100 bytes
+▸ Extended Active Endpoint List Available   = No
+▸ Extended Simple Descriptor List Available = No
+================================================================================================
+Power Descriptor
+================================================================================================
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
+▸ Available Power Sources    = [Disposable battery]
+▸ Current Power Sources      = [Disposable battery]
+▸ Current Power Source Level = 100%
+================================================================================================
+Endpoint 0x01 | Out Clusters: 0x0003 (Identify Cluster), 0x0201 (Thermostat Cluster), 0xFCC0 (Unknown Cluster)
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0001 (Power Configuration Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x000A (Time Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0201 (Thermostat Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Neighbors Table
+================================================================================================
+▸ Addr:B7CB | Type:Zigbee Router | RxOnWhenIdle:Yes | Rel:Parent | Depth:1 | LQI:36
+================================================================================================
+Routing Table
+================================================================================================
+▸ Could not retrieve data
+================================================================================================
+Bindings Table
+================================================================================================
+▸ Src:54EF44100073C002 | Endpoint:0x01 | Cluster:0xFCC0 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:54EF44100073C002 | Endpoint:0x01 | Cluster:0x0406 | Dest:000D6F0016C1E513 | Endpoint:0x01
+
