@@ -19,8 +19,11 @@
  *                                    minHeatingSetpoint & maxHeatingSetpoint OK; calibrationTemp negative values OK!; auto OK; heat OK; cool and emergency heat OK (unsupported); Sonoff off mode OK;
  * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
+ * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
  *
- *                                   TODO: BRT-100 refactoring ; 
+ *                                   TODO: Aqara TRV refactoring : done ? publish the driver.
+ *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
+ *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.989debugBRT-100 TRV DEV compareAndConvertTuyaToHubitatPreferenceValue: preference = [1] type=enum foundItem=ecoMode isEqual=false tuyaValueScaled=1 (scale=1) fncmd=1
  *                                   TODO: BRT-100 - after emergency heat, the mode was set to 'auto' (not 'heat') !
@@ -36,16 +39,12 @@
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: remove isAqaraTRV() 
- *                                   TODO: Aqara TRV - heatingSetpoint refresh/poll is not working!
- *                                   TODO: Aqara TRV - poll (or simulate) refresing the temperature and the heatingSetpoint
  *                                   TODO: handle UNKNOWN TRV
  *                                   TODO: initializeThermostat() 
+ *                                   TODO: Healthcheck to be every hour (not 4 hours)
  *                                   TODO: add option 'Cool similation'
  *                                   TODO: add option 'Simple TRV' (no additinal attributes)
  *                                   TODO: add state.trv for stroring attributes
- *                                   TODO: Aqara OFF mode is not reflected on the Dashboard
- *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: add 'force manual mode' preference
  *                                   TODO: move debug and info logging preferences from the common library to the driver, so that they are the first preferences in the list
  *                                   TODO: add Info dummy preference to the driver with a hyperlink 
@@ -58,10 +57,15 @@
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
  *                                   TODO: add VIRTUAL thermostat
+ *                                   TODO: Aqara TRV refactoring : 'cool' and 'emergency heat' and 'eco' modes to return meaningfull error message (check in the device profile if this mode is supported)
+ *                                   TODO: Aqara TRV refactoring : simulate the 'emergency heat' mode by setting maxTemp and when off - restore the previous temperature 
+ *                                   TODO: Aqara TRV refactoring : calibration as a command ! 
+ *                                   TODO: Aqara TRV refactoring : physical vs digital events ?
+ *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { "3.0.1" }
-static String timeStamp() {"2023/12/02 8:40 PM"}
+static String version() { "3.0.3" }
+static String timeStamp() {"2023/12/03 7:42 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -122,7 +126,7 @@ metadata {
     attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
 
     // Aqaura E1 attributes
-    attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','heat'
+    attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'
     attribute "preset", 'enum', PresetOpts.options.values() as List<String>                     // 'manual','auto','away'
     attribute "valveDetection", 'enum', ValveDetectionOpts.options.values() as List<String>     // 'off','on'
     attribute "valveAlarm", 'enum', ValveAlarmOpts.options.values() as List<String>             // 'false','true'
@@ -156,7 +160,7 @@ metadata {
     
 }
 
-def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E1_TRV") }
+//def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E1_TRV") }
 //def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BRT-100") }
 //def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_TRV") }
 
@@ -175,7 +179,7 @@ def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E
 ]
 @Field static final Map SystemModeOpts = [        //system_mode     TODO - remove it !!
     defaultValue: 1,
-    options     : [0: 'off', 1: 'heat']
+    options     : [0: 'off', 1: 'on']
 ]
 @Field static final Map PresetOpts = [            // preset      TODO - remove it !!
     defaultValue: 1,
@@ -211,49 +215,58 @@ def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E
 ]
 
 @Field static final Map deviceProfilesV2 = [
-    // isAqaraTRV()
     "AQARA_E1_TRV"   : [
             description   : "Aqara E1 Thermostat model SRTS-A01",
             models        : ["LUMI"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
-            preferences   : ["window_detection":"0xFCC0:0x0273", "valveDetection":"0xFCC0:0x0274",, "childLock":"0xFCC0:0x0277", "awayPresetTemperature":"0xFCC0:0x0279"],
+            preferences   : ["windowOpenDetection":"0xFCC0:0x0273", "valveDetection":"0xFCC0:0x0274",, "childLock":"0xFCC0:0x0277", "awayPresetTemperature":"0xFCC0:0x0279"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"] 
             ],
-            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : ["sendSupportedThermostatModes":"sendSupportedThermostatModes", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
             attributes    : [
-                [at:"0xFCC0:0x040A",  name:'battery',               type:"number",  dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
-                [at:"0xFCC0:0x0271",  name:'systemMode',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>System Mode</b>",                   description:'<i>System Mode</i>'],
-                // TODO - replace it with thermostatMode !!!!!!!!!!
-                [at:"0xFCC0:0x0272",  name:'preset',                type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "manual", 1: "auto", 2: "away"], unit:"",         title: "<b>Preset</b>",                        description:'<i>Preset</i>'],
-                [at:"0xFCC0:0x0273",  name:'windowOpenDetection',   type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Window Detection</b>",              description:'<i>Window detection</i>'],
-                [at:"0xFCC0:0x0274",  name:'valveDetection',        type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Valve Detection</b>",               description:'<i>Valve detection</i>'],
-                [at:"0xFCC0:0x0275",  name:'valveAlarm',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Valve Alarm</b>",                   description:'<i>Valve alarm</i>'],
-                [at:"0xFCC0:0x0277",  name:'childLock',             type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "unlock", 1: "lock"], unit:"",         title: "<b>Child Lock</b>",                    description:'<i>Child lock</i>'],
-                [at:"0xFCC0:0x0279",  name:'awayPresetTemperature', type:"decimal", dt: "0x23", mfgCode:"0x115f",  rw: "rw", min:5.0,  max:35.0, defaultValue:5.0,    step:0.5, scale:100,  unit:"°C", title: "<b>Away Preset Temperature</b>",       description:'<i>Away preset temperature</i>'],
-                [at:"0xFCC0:0x027A",  name:'windowsState',          type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "open", 1: "closed"], unit:"",         title: "<b>Window Open</b>",                   description:'<i>Window open</i>'],
-                [at:"0xFCC0:0x027B",  name:'calibrated',            type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Calibrated</b>",                    description:'<i>Calibrated</i>'],
-                [at:"0xFCC0:0x027E",  name:'sensor',                type:"enum",    dt: "0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "internal", 1: "external"], unit:"",         title: "<b>Sensor</b>",                        description:'<i>Sensor</i>'],
-                //
-                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt: "0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
-                [at:"0x0201:0x0011",  name:'coolingSetpoint',       type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
-                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt: "0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                [at:"0x0201:0x001C",  name:'mode',                  type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
+                [at:"0xFCC0:0x040A",  name:'battery',               type:"number",  dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                [at:"0xFCC0:0x0270",  name:'unknown1',              type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",   title: "<b>Unknown 0x0270</b>",   description:'<i>Unknown 0x0270</i>'],
+                [at:"0xFCC0:0x0271",  name:'systemMode',            type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",     title: "<b>System Mode</b>",      description:'<i>Switch the TRV OFF or in operation (on)</i>'],
+                [at:"0xFCC0:0x0272",  name:'thermostatMode',        type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:2,    step:1,  scale:1,    map:[0: "heat", 1: "auto", 2: "away"], unit:"",                   title: "<b>Preset</b>",           description:'<i>Preset</i>'],
+                [at:"0xFCC0:0x0273",  name:'windowOpenDetection',   type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",             title: "<b>Window Detection</b>", description:'<i>Window detection</i>'],
+                [at:"0xFCC0:0x0274",  name:'valveDetection',        type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",             title: "<b>Valve Detection</b>",  description:'<i>Valve detection</i>'],
+                [at:"0xFCC0:0x0275",  name:'valveAlarm',            type:"enum",    dt:"0x23", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Valve Alarm</b>",      description:'<i>Valve alarm</i>'],  // read only
+                [at:"0xFCC0:0x0276",  name:'unknown2',              type:"enum",    dt:"0x41", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Unknown 0x0270</b>",                        description:'<i>Unknown 0x0270</i>'],
+                [at:"0xFCC0:0x0277",  name:'childLock',             type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "rw", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "unlock", 1: "lock"], unit:"",        title: "<b>Child Lock</b>",       description:'<i>Child lock</i>'],
+                [at:"0xFCC0:0x0278",  name:'unknown3',              type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ow", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Unknown 3</b>",        description:'<i>Unknown 3</i>'],   // WRITE ONLY !
+                [at:"0xFCC0:0x0279",  name:'awayPresetTemperature', type:"decimal", dt:"0x23", mfgCode:"0x115f",  rw: "rw", min:5.0,  max:35.0, defaultValue:5.0,    step:0.5, scale:100,  unit:"°C", title: "<b>Away Preset Temperature</b>",       description:'<i>Away preset temperature</i>'],
+                [at:"0xFCC0:0x027A",  name:'windowsState',          type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "open", 1: "closed"], unit:"",        title: "<b>Window Open</b>",      description:'<i>Window open</i>'],
+                [at:"0xFCC0:0x027B",  name:'calibrated',            type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Calibrated</b>",       description:'<i>Calibrated</i>'],
+                [at:"0xFCC0:0x027C",  name:'unknown4',              type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "false", 1: "true"], unit:"",         title: "<b>Unknown 4</b>",        description:'<i>Unknown 4</i>'],
+                [at:"0xFCC0:0x027D",  name:'schedule',              type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",             title: "<b>Schedule</b>",        description:'<i>Schedule</i>'],
+                [at:"0xFCC0:0x027E",  name:'sensor',                type:"enum",    dt:"0x20", mfgCode:"0x115f",  rw: "ro", min:0,    max:1,    defaultValue:"0",    step:1,  scale:1,    map:[0: "internal", 1: "external"], unit:"",  title: "<b>Sensor</b>",           description:'<i>Sensor</i>'],
+                //   0xFCC0:0x027F ... 0xFCC0:0x0284 - unknown
+                [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt:"0x29", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Temperature</b>",                   description:'<i>Measured temperature</i>'],
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',       type:"decimal", dt:"0x29", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>cooling setpoint</i>'],
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',       type:"decimal", dt:"0x29", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'], 
+                [at:"0x0201:0x001B",  name:'thermostatOperatingState', type:"enum",    dt:"0x30", rw:"rw",  min:0,    max:4,    step:1,  scale:1,    map:[0: "off", 1: "heating", 2: "unknown", 3: "unknown3", 4: "idle"], unit:"",  description:'<i>thermostatOperatingState (relay on/off status)</i>'],      //  nothing happens when WRITING ????
+                //                      ^^^^                                reporting only ?
+                [at:"0x0201:0x001C",  name:'mode',                  type:"enum",    dt:"0x30", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
                 //                      ^^^^ TODO - check if this is the same as system_mode    
-                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
-                //                          ^^ TODO  
-                [at:"0x0201:0x0020",  name:'battery2',              type:"number",  dt: "0x20", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
-                //                          ^^ TODO  
-                [at:"0x0201:0x0023",  name:'thermostatHoldMode',    type:"enum",    dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
-                //                          ^^ TODO  
-                [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum", dt: "0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
-                //                          ^^ TODO  
-                [at:"0x0201:0xFFF2",  name:'unknown',                type:"number", dt: "0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                
+                [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
+                //                          ^^ unsupported attribute?  or reporting only ?
+                [at:"0x0201:0x0020",  name:'battery2',              type:"number",  dt:"0x20", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                //                          ^^ unsupported attribute?  or reporting only ?
+                [at:"0x0201:0x0023",  name:'thermostatHoldMode',    type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatHoldMode</b>",                   description:'<i>thermostatHoldMode</i>'],
+                //                          ^^ unsupported attribute?  or reporting only ? 
+                [at:"0x0201:0x0029",  name:'thermostatOperatingState', type:"enum", dt:"0x20", rw: "ow", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heating"], unit:"",         title: "<b>thermostatOperatingState</b>",                   description:'<i>thermostatOperatingState</i>'],
+                //                          ^^ unsupported attribute?  or reporting only ?   encoding - 0x29 ?? ^^
+                [at:"0x0201:0xFFF2",  name:'unknown',                type:"number", dt:"0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
+                //                          ^^ unsupported attribute?  or reporting only ?  
+                            
             ],
-            refresh: ["pollThermostatCluster"],
+            supportedThermostatModes: ["off","auto", "heat", "away"/*, "emergency heat"*/],
+            refresh: ["pollAqara"],
             deviceJoinName: "Aqara E1 Thermostat",
             configuration : [:]
     ],
@@ -523,8 +536,29 @@ void thermostatEvent(eventName, value, raw) {
 //
 void parseXiaomiClusterThermostatLib(final Map descMap) {
     //logWarn "parseXiaomiClusterThermostatLib: received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "zigbee received Thermostat 0xFCC0 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    Boolean result 
+
+    if ((descMap.attrInt as Integer) == 0x00F7 ) {      // XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
+        final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
+        parseXiaomiClusterThermostatTags(tags)
+        return
+    }
+
+    result = processClusterAttributeFromDeviceProfile(descMap)    
+
+    if ( result == false ) {
+        logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+
+    return
+
+
+/*
     final Integer raw
-    final String  value
+    //final String  value
     switch (descMap.attrInt as Integer) {
         case 0x040a:    // E1 battery - read only
             raw = hexStrToUnsignedInt(descMap.value)
@@ -605,9 +639,12 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
             logWarn "parseXiaomiClusterThermostatLib: received unknown xiaomi cluster 0xFCC0 attribute 0x${descMap.attrId} (value ${descMap.value})"
             break
     }
+    */
 }
 
+// XIAOMI_SPECIAL_REPORT_ID:  0x00F7 sent every 55 minutes
 // called from parseXiaomiClusterThermostatLib 
+//
 void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
@@ -680,7 +717,6 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
  * called from parseThermostatCluster() in the main code ...
  * -----------------------------------------------------------------------------
 */
-
 void parseThermostatClusterThermostat(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     //logTrace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
@@ -735,7 +771,7 @@ void parseThermostatClusterThermostat(final Map descMap) {
 def parseFC11ClusterThermostat(descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    Boolean result = processClusterAttributeFromDeviceProfile(descMap)    
+    Boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib 
     if ( result == false ) {
         logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
@@ -743,6 +779,7 @@ def parseFC11ClusterThermostat(descMap) {
 
 //  setHeatingSetpoint thermostat capability standard command
 //  1°C steps. (0.5°C setting on the TRV itself, rounded for zigbee interface)
+//
 def setHeatingSetpoint( temperature ) {
     logTrace "setHeatingSetpoint(${temperature}) called!"
     def previousSetpoint = device.currentState('heatingSetpoint')?.value ?: 0
@@ -770,14 +807,9 @@ def setHeatingSetpoint( temperature ) {
     if (tempDouble > maxTemp ) tempDouble = maxTemp
     if (tempDouble < minTemp) tempDouble = minTemp
     tempDouble = tempDouble.round(1)
-    // 
-    if (isAqaraTRV()) {
-        zigbee.writeAttribute(0x0201, 0x12, 0x29, (tempDouble * 100) as int)        // raw:F6690102010A1200299808, dni:F669, endpoint:01, cluster:0201, size:0A, attrId:0012, encoding:29, command:0A, value:0898, clusterInt:513, attrInt:18
-    }
-    else {
-        logDebug "calling sendAttribute heatingSetpoint ${tempDouble}"
-        sendAttribute("heatingSetpoint", tempDouble)    // TODO - check if this will create a preference !!
-    }
+
+    logDebug "calling sendAttribute heatingSetpoint ${tempDouble}"
+    sendAttribute("heatingSetpoint", tempDouble)
 }
 
 void sendHeatingSetpointEvent(temperature) {
@@ -808,8 +840,8 @@ def setCoolingSetpoint(temperature){
     sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
 }
 
-
-// TODO - refactor!
+/*
+// TODO - remove !
 def preset( preset ) {
     logTrace "preset(${preset}) called!"
     if (preset == "auto") {
@@ -825,8 +857,9 @@ def preset( preset ) {
         logWarn "preset: unknown preset ${preset}"
     }
 }
-
-// TODO - refactor!
+*/
+/*
+// TODO - remove !
 def setPresetMode(mode) {
     List<String> cmds = []
     logDebug "sending setPresetMode(${mode})"    
@@ -852,8 +885,8 @@ def setPresetMode(mode) {
     }
     if (cmds == []) { cmds = ["delay 299"] }
     sendZigbeeCommands(cmds)
-
 }
+*/
 
 def setThermostatMode( mode ) {
     List<String> cmds = []
@@ -862,7 +895,7 @@ def setThermostatMode( mode ) {
 
     // some TRVs require some checks and additional commands to be sent before setting the mode
     def currentMode = device.currentValue('thermostatMode')
-    logDebug "setThermostatMode: currentMode = ${currentMode}"
+    logDebug "setThermostatMode: currentMode = ${currentMode}, switching to ${mode} ..."
     switch(mode) {
         case "heat":
         case "auto":
@@ -875,7 +908,6 @@ def setThermostatMode( mode ) {
                 sendAttribute("emergencyHeating", 0)
             }
             break
-        //case "off":         // TODO |||
         case "cool":        // TODO !!!!!!!!!!
             // BRT-100 does not have an explicit off command, so we use the  mode (16 degrees)      // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
             logInfo "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
@@ -890,7 +922,21 @@ def setThermostatMode( mode ) {
             sendAttribute("ecoMode", 1)
             return
         case 'off':     // TODO 
-            logDebug "setThermostatMode: pre-processing: no pre-processing gor mode  ${mode}"
+            // if systemMode attribute exists, set it to 'off'  (Aqara E1)
+            def sysMode = device.currentValue('systemMode')     // off or on
+            if (sysMode != null) {  // !!!!!!!!!!! Patch for Aqara E1 !
+                if ( true /*sysMode != 'off'*/) {
+                    logInfo "setThermostatMode: pre-processing: setting systemMode to 'off'"
+                    // get the key of the 'off' value
+                    def key = SystemModeOpts.options.find { key, value -> value == 'off' }.key
+                    sendAttribute("systemMode", key)
+                }
+                else {
+                    logInfo "setThermostatMode: pre-processing: systemMode is already 'off'"
+                }
+                return
+            }
+            logDebug "setThermostatMode: pre-processing: no pre-processing for mode ${mode}"
             break
         default:
             logWarn "setThermostatMode: pre-processing: unknown mode ${mode}"
@@ -991,9 +1037,6 @@ def auto() { setThermostatMode("auto") }
 def cool() { setThermostatMode("cool") }
 def emergencyHeat() { setThermostatMode("emergency heat") }
 
-
-
-
 def setThermostatFanMode(fanMode) { sendEvent(name: "thermostatFanMode", value: "${fanMode}", descriptionText: getDescriptionText("thermostatFanMode is ${fanMode}")) }
 def fanAuto() { setThermostatFanMode("auto") }
 def fanCirculate() { setThermostatFanMode("circulate") }
@@ -1028,12 +1071,19 @@ private void unScheduleThermostatPolling() {
     unschedule('autoPollThermostat')
 }
 
-
+// TODO - configure in the deviceProfile 
 def pollThermostatCluster()
 {
     return  zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C, 0x0029], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )   
 }
 
+// TODO - configure in the deviceProfile 
+def pollAqara()
+{
+    return  zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )   
+}
+
+// TODO - configure in the deviceProfile 
 def pollBatteryPercentage()
 {
     return zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
@@ -1123,20 +1173,39 @@ void updatedThermostat() {
     */
 }
 
+def refreshAqaraE1() {
+    List<String> cmds = []
+    //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage)
+    cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
+    cmds += zigbee.readAttribute(0xFCC0, [0x0271, 0x0272, 0x0273, 0x0274, 0x0275, 0x0277, 0x0279, 0x027A, 0x027B, 0x027E], [mfgCode: 0x115F], delay=3500)       
+    cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay=500)       
+    // stock Generic Zigbee Thermostat Refresh answer:
+    // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
+    // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
+    return cmds
+}
 
-//
+// TODO - not actually used! pollAqara is called instead! TODO !
 def refreshThermostat() {
     // state.states["isRefresh"] = true is set in the commonLib
     List<String> cmds = []
     setRefreshRequest()    
     if (DEVICE.refresh != null && DEVICE.refresh != []) {
-        logDebug "refreshThermostat: calling DEVICE.refresh() ${DEVICE.refresh}"
+        logDebug "refreshThermostat: calling DEVICE.refresh methods: ${DEVICE.refresh}"
         DEVICE.refresh.each { 
             logTrace "refreshThermostat: calling ${it}()"
             cmds += "${it}"()
         }
         return cmds
     }
+    else {
+        logDebug "refreshThermostat: no refresh methods defined for device profile ${getDeviceGroup()}"
+    }
+    if (cmds == []) { cmds = ["delay 299"] }
+    logDebug "refreshThermostat: ${cmds} "
+    return cmds
+
+        /*
 
     // TODO - remove the speicfics !!
     else if (isAqaraTRV()) {
@@ -1148,7 +1217,7 @@ def refreshThermostat() {
         // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
         // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
     }
-        /*
+
     else if (isSonoffTRV()) {
         cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x0029], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint,        
@@ -1165,7 +1234,7 @@ def refreshThermostat() {
     else if (getDeviceGroup() == "UNKNOWN") {
         cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
     }
-    */
+ 
     else {
         logWarn "refreshThermostat: unknown device profile ${getDeviceGroup()}"
     }
@@ -1173,6 +1242,7 @@ def refreshThermostat() {
     if (cmds == []) { cmds = ["delay 299"] }
     logDebug "refreshThermostat: ${cmds} "
     return cmds
+       */
 }
 
 def configureThermostat() {
@@ -1183,6 +1253,8 @@ def configureThermostat() {
     return cmds    
 }
 
+// TODO - check ! - called even for Tuya devices ?
+// TODO - remove specifics !!
 def initializeThermostat()
 {
     List<String> cmds = []
@@ -1259,7 +1331,7 @@ private getDescriptionText(msg) {
 // (works for BRT-100, Sonoff TRVZV) 
 //
 def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
-    logTrace "processDeviceEventThermostat(${name}, ${valueScaled}) called!"
+    logTrace "processDeviceEventThermostat(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: "physical", isStateChange: true]
     switch (name) {
         case "temperature" :
@@ -1268,7 +1340,16 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
         case "humidity" :
             handleHumidityEvent(valueScaled)
             break
-       
+        case "systemMode" : // Aqara E1 
+            sendEvent(eventMap)
+            logInfo "${descText}"
+            if (valueScaled == "on") {  // should be initialized with 'unknown' value
+                sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: "TRV systemMode is on")  // TODO - send the last mode instead of 'heat' ?
+            }
+            else {
+                sendEvent(name: "thermostatMode", value: "off", isStateChange: true, description: "TRV systemMode is off")
+            }
+            break
         case "ecoMode" :    // BRT-100 - simulate OFF mode ?? or keep the ecoMode on ?
             sendEvent(eventMap)
             logInfo "${descText}"
@@ -1331,14 +1412,8 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
 def factoryResetThermostat() {
     logDebug "factoryResetThermostat() called!"
     List<String> cmds = []
-    if (isAqaraTRV()) {
-        // TODO - factory reset Aqara E1 thermostat
-        logWarn "factoryResetThermostat: NOT IMPLEMENTED"
-    }
-    else {
-        // TODO - factory reset generic thermostat
-        logWarn "factoryResetThermostat: NOT IMPLEMENTED"
-    }
+    // TODO
+    logWarn "factoryResetThermostat: NOT IMPLEMENTED"
     if (cmds == []) { cmds = ["delay 299"] }
     return cmds
 }
