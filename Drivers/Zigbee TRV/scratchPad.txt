@@ -332,3 +332,41 @@ Bindings Table
 ▸ Src:54EF44100073C002 | Endpoint:0x01 | Cluster:0xFCC0 | Dest:000D6F0016C1E513 | Endpoint:0x01
 ▸ Src:54EF44100073C002 | Endpoint:0x01 | Cluster:0x0406 | Dest:000D6F0016C1E513 | Endpoint:0x01
 
+
+============================================================= NAMRON =========================================================================================
+
+                // Simple Meter-0x0702 (Server) 
+                // Attribute: 0x0000 (unsigned48, readonly, reportable)  CurrentSummationDelivered Indicates the current amount of electrical energy delivered to the load.
+                // Attribute: 0x0200 (bitmap8, read-only)                Status Flags indicating current device status, always is 0x00
+                // Attribute: 0x0300 (bitmap8, read-only)                UnitOfMeasure The unit of metering data, this is always kWh(0x00).
+                // Attribute: 0x0303 (bitmap8, read-only)                SummationFormatting The decimal point on the left and right sides of the data, this is always 0x00
+                // Attribute: 0x0306 (bitmap8, read-only)                MeteringDeviceType Metering data type, this is always Electric Metering (0x00)
+
+                // Electrical Measurement-0x0b04(Server)
+                // Attribute: 0x0000 (bitmap32, read-only)               MeasurementType Indicates the physical entities that this devices is able to measure. Supports only bit0: Active measurement (AC)
+                // Attribute: 0x0505 (int16U, read-only, reportable)     RMSVoltage Single phase valid voltage, unit is V
+                // Attribute: 0x0508 (int16U, read-only, reportable)     RMSCurrent Single phase valid current, unit is A
+                // Attribute: 0x050B (int16U, read-only, reportable)     ActivePower Single phase valid power, unit is W
+                // Attribute: 0x0600 (int16U, read-only)                 ACVoltageMultiplier
+                // Attribute: 0x0601 (int16U, read-only, reportable)     ACVoltageDivisor Used together with above attributes, the real displayed voltage = RMSVoltage* ACVoltageMultiplier / ACVoltageDivisor
+                // Attribute: 0x0602 (int16U, read-only)                 ACCurrentMultiplier
+                // Attribute: 0x0603 (int16U, read-only, reportable)     ACCurrentDivisor Used together with above attributes, the real displayed current = RMSCurrent * ACCurrentMultiplier / ACCurrentDivisor
+                // Attribute: 0x0604 (int16U, read-only)                 ACPowerMultiplier 0x01
+                // Attribute: 0x0605 (int16U, read-only, reportable)     ACPowerDivisor 0x01 Used together with above attributes, the real displayed power = Active Power * ACPowerMultiplie / ACPowerDivisor
+                // Attribute: 0x0800 (int16U)                            ACAlarmsMask Specifies which configurable alarms may be generated, only Bit1: Current Overload is set, if set=0, then ACCurrentOverload=0, over current will not be detected
+                // Attribute: 0x0802 (int16U, reportable, read-only)     ACCurrentOverload Alarms when the current is over a certain value, 0, 10-16, unit is A, for the unit please refer to RMSCurrent, ACCurrentMultiplier, ACCurrent Divisor
+                // Attribute: 0x0605 (Int8u,reportable, mfgCode: 0x1224) OverCurrent Over current value set by the user, range is 0, 10-16, ACCurrentOverload will change spontaneously if this value is modified.
+
+                // Alarm-0x0009(Server)                                  Please set a valid value for ACAlarmsMask of Electrical Measurement. The Alarm Server cluster can generate the following commands : 
+                // [Command!!!!] 0x00                                    Alarm: The alarm code of Electrical Measurement is 0
+                // [Command!!!!] 0x00 , mfgCode: 0x1224                  Room air temperature over heat, not alarm code
+
+                // OccupancySensing-0x0406(client)                       The attributes that can be received:
+                // Attribute: 0x0000 (bitmap8)                           Occupancy Bit 0 specifies the sensed occupancy as follows:1=occupied,0=unoccupied. This flag bit will affect the Occupancy attribute of HVAC cluster, and the operation mode 
+
+                // Thermostat User Interface Configuration- 0x0204(Server)
+                // Attribute: 0x0000 (Enum8, reportable)                 TemperatureDisplayMode 0x00 Temperature in, only support 
+                // Attribute: 0x0000 (Enum8, reportable)                 KeypadLockout 0x00 No Lockout, 0x01 - 0x05 lockout
+
+
+

@@ -29,7 +29,7 @@ library (
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default
+  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: add GetInof (endpoints list) command
@@ -40,7 +40,7 @@ library (
 */
 
 def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/12/02 10:43 AM"}
+def thermostatLibStamp() {"2023/12/03 11:33 PM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -630,43 +630,6 @@ void parseXiaomiCluster(final Map descMap) {
 }
 
 
-/*
-@Field static final int XIAOMI_CLUSTER_ID = 0xFCC0
-
-// Zigbee Attributes
-@Field static final int DIRECTION_MODE_ATTR_ID = 0x0144
-@Field static final int MODEL_ATTR_ID = 0x05
-@Field static final int PRESENCE_ACTIONS_ATTR_ID = 0x0143
-@Field static final int PRESENCE_ATTR_ID = 0x0142
-@Field static final int REGION_EVENT_ATTR_ID = 0x0151
-@Field static final int RESET_PRESENCE_ATTR_ID = 0x0157
-@Field static final int SENSITIVITY_LEVEL_ATTR_ID = 0x010C
-@Field static final int SET_EDGE_REGION_ATTR_ID = 0x0156
-@Field static final int SET_EXIT_REGION_ATTR_ID = 0x0153
-@Field static final int SET_INTERFERENCE_ATTR_ID = 0x0154
-@Field static final int SET_REGION_ATTR_ID = 0x0150
-@Field static final int TRIGGER_DISTANCE_ATTR_ID = 0x0146
-@Field static final int XIAOMI_RAW_ATTR_ID = 0xFFF2
-@Field static final int XIAOMI_SPECIAL_REPORT_ID = 0x00F7
-@Field static final Map MFG_CODE = [ mfgCode: 0x115F ]
-
-// Xiaomi Tags
-@Field static final int DIRECTION_MODE_TAG_ID = 0x67
-@Field static final int SENSITIVITY_LEVEL_TAG_ID = 0x66
-@Field static final int SWBUILD_TAG_ID = 0x08
-@Field static final int TRIGGER_DISTANCE_TAG_ID = 0x69
-@Field static final int PRESENCE_ACTIONS_TAG_ID = 0x66
-@Field static final int PRESENCE_TAG_ID = 0x65
-*/
-
-
-// TODO - move to xiaomiLib
-// TODO - move to thermostatLib
-// TODO - move to aqaraQubeLib
-
-
-
-
 @Field static final int ROLLING_AVERAGE_N = 10
 double approxRollingAverage (double avg, double new_sample) {
     if (avg == null || avg == 0) { avg = new_sample}
@@ -868,13 +831,11 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     sendEvent(map)
 }
 
-
 /*
  * -----------------------------------------------------------------------------
  * Zigbee Identity Cluster 0x0003
  * -----------------------------------------------------------------------------
 */
-
 void parseIdentityCluster(final Map descMap) {
     logDebug "unprocessed parseIdentityCluster"
 }
@@ -886,7 +847,6 @@ void parseIdentityCluster(final Map descMap) {
  * Zigbee Scenes Cluster 0x005
  * -----------------------------------------------------------------------------
 */
-
 void parseScenesCluster(final Map descMap) {
     if (DEVICE_TYPE in ["ButtonDimmer"]) {
         parseScenesClusterButtonDimmer(descMap)
@@ -902,7 +862,6 @@ void parseScenesCluster(final Map descMap) {
  * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts
  * -----------------------------------------------------------------------------
 */
-
 void parseGroupsCluster(final Map descMap) {
     // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]]
     logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}"
@@ -1064,12 +1023,6 @@ List<String> notImplementedGroups(groupNr) {
     "Remove all groups"        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'],
     "Add group if identifying" : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
 ]
-/*
-@Field static final Map ZigbeeGroupsOpts = [
-    defaultValue: 0,
-    options     : [99: '--- select ---', 0: 'Add group', 1: 'View group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups', 5: 'Add group if identifying']
-]
-*/
 
 def zigbeeGroups( command=null, par=null )
 {
@@ -2466,6 +2419,7 @@ void setHealthStatusOnline() {
 
 
 def deviceHealthCheck() {
+    checkDriverVersion()
     if (state.health == null) { state.health = [:] }
     def ctr = state.health['checkCtr3'] ?: 0
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
@@ -2518,6 +2472,7 @@ void autoPoll() {
  */
 void updated() {
     logInfo 'updated...'
+    checkDriverVersion()
     logInfo"driver version ${driverVersionAndTimeStamp()}"
     unschedule()
 
@@ -3029,7 +2984,3 @@ def test(par) {
     
    // sendZigbeeCommands(cmds)    
 }
-
-// /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-
-
