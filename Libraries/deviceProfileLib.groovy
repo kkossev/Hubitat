@@ -24,12 +24,13 @@ library (
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
  * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method; 
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
+ * ver. 3.0.2  2023-12-05 kkossev  - (dev. branch) inputIt moved to the preferences section;
  *
  *                                   TODO: refactor sendAttribute !
 */
 
-def deviceProfileLibVersion()   {"3.0.1"}
-def deviceProfileLibtamp() {"2023/12/02 10:48 AM"}
+def deviceProfileLibVersion()   {"3.0.2"}
+def deviceProfileLibtamp() {"2023/12/05 8:39 PM"}
 
 metadata {
     // no capabilities
@@ -42,16 +43,15 @@ metadata {
             [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]],
             [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
     ]    
-    //
-    // itterate over DEVICE.preferences map and inputIt all!
-    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
-        (DEVICE.preferences).each { key, value ->
-            if (inputIt(key) != null) {
-                input inputIt(key)
-            }
-        }    
-    }
     preferences {
+        // itterate over DEVICE.preferences map and inputIt all
+        if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
+            (DEVICE.preferences).each { key, value ->
+                if (inputIt(key) != null) {
+                    input inputIt(key)
+                }
+            }    
+        }
         if (advancedOptions == true) {
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfilesMap())
         }
@@ -1211,9 +1211,6 @@ def processFoundItem (foundItem, value) {
     return true    
 }
 
-
-
-
 def validateAndFixPreferences(debug=false) {
     if (debug) logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}"
     if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
@@ -1296,4 +1293,12 @@ def validateAndFixPreferences(debug=false) {
     logDebug "validateAndFixPreferences: total = ${total} validationFailures = ${validationFailures} validationFixes = ${validationFixes}"
 }
 
-
+void printFingerprints() {
+    deviceProfilesV2.each { profileName, profileMap ->
+        if (profileMap.fingerprints != null) {
+            profileMap.fingerprints.each { 
+                logInfo it
+            }
+        }
+    }   
+}

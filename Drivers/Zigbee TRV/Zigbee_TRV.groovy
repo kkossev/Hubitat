@@ -20,9 +20,10 @@
  * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
- * ver. 3.0.4  2023-12-03 kkossev  - (dev. branch) code cleanup
+ * ver. 3.0.4  2023-12-04 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default;
  *
- *                                   TODO: code cleanup
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
+ *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
@@ -32,11 +33,9 @@
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
  *                                   TODO: cleanup trace and debug logs  invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]
  *                                   TODO: hide the maxTimeBetweenReport preferences (not used here)
- *                                   TODO: prepare for publishing the first version of this driver w/ Sonoff support
  *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
@@ -66,7 +65,7 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/03 11:40 PM"}
+static String timeStamp() {"2023/12/04 9:40 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -90,65 +89,67 @@ metadata {
     definition (
         name: 'Zigbee TRVs and Thermostats',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Zigbee_TRV_lib_included.groovy',
-        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true 
-    ) {    
-        
-    capability "Actuator"
-    capability "Refresh"
-    capability "Sensor"
-    capability "Temperature Measurement"
-    capability "Thermostat"                 // needed for HomeKit
-    capability "ThermostatHeatingSetpoint"
-    capability "ThermostatCoolingSetpoint"
-    capability "ThermostatOperatingState"   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
-    capability "ThermostatSetpoint"
-    capability "ThermostatMode"    
-    capability "ThermostatFanMode"
+        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true ) 
+    {    
+        capability "Actuator"
+        capability "Refresh"
+        capability "Sensor"
+        capability "Temperature Measurement"
+        capability "Thermostat"                 // needed for HomeKit
+        capability "ThermostatHeatingSetpoint"
+        capability "ThermostatCoolingSetpoint"
+        capability "ThermostatOperatingState"   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
+        capability "ThermostatSetpoint"
+        capability "ThermostatMode"    
+        capability "ThermostatFanMode"
 
-    // TODO - add all other models attributes possible values
-    attribute 'battery', "number"                               // Aqara, BRT-100
-    attribute 'boostTime', "number"                             // BRT-100
-    attribute "calibrated", 'enum', ['false', 'true']           // Aqara E1
-    attribute 'calibrationTemp', "number"                       // BRT-100, Sonoff
-    attribute 'childLock', "enum", ["off", "on"]                // BRT-100, Aqara E1, Sonoff
-    attribute 'ecoMode', "enum", ["off", "on"]                  // BRT-100
-    attribute 'ecoTemp', "number"                               // BRT-100
-    attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
-    attribute 'emergencyHeatingTime', "number"                  // BRT-100
-    attribute 'frostProtectionTemperature', "number"            // Sonoff
-    attribute 'level', "number"                                 // BRT-100          
-    attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
-    attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
-    attribute "sensor", 'enum', ['internal','external']         // Aqara E1
-    attribute "valveAlarm", 'enum',  ['false', 'true']          // Aqara E1
-    attribute "valveDetection", 'enum', ['off', 'on']           // Aqara E1
-    attribute 'weeklyProgram', "number"                         // BRT-100
-    attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
-    attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
-    attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
+        // TODO - add all other models attributes possible values
+        attribute 'battery', "number"                               // Aqara, BRT-100
+        attribute 'boostTime', "number"                             // BRT-100
+        attribute "calibrated", 'enum', ['false', 'true']           // Aqara E1
+        attribute 'calibrationTemp', "number"                       // BRT-100, Sonoff
+        attribute 'childLock', "enum", ["off", "on"]                // BRT-100, Aqara E1, Sonoff
+        attribute 'ecoMode', "enum", ["off", "on"]                  // BRT-100
+        attribute 'ecoTemp', "number"                               // BRT-100
+        attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
+        attribute 'emergencyHeatingTime', "number"                  // BRT-100
+        attribute 'frostProtectionTemperature', "number"            // Sonoff
+        attribute 'level', "number"                                 // BRT-100          
+        attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
+        attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
+        attribute "sensor", 'enum', ['internal','external']         // Aqara E1
+        attribute "valveAlarm", 'enum',  ['false', 'true']          // Aqara E1
+        attribute "valveDetection", 'enum', ['off', 'on']           // Aqara E1
+        attribute 'weeklyProgram', "number"                         // BRT-100
+        attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
+        attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
+        attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
 
-    // Aqaura E1 attributes     TODO - consolidate a common set of attributes
-    attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'    - used!
-    attribute "preset", 'enum', PresetOpts.options.values() as List<String>                     // 'manual','auto','away'
-    attribute "awayPresetTemperature", 'number'
+        // Aqaura E1 attributes     TODO - consolidate a common set of attributes
+        attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'    - used!
+        attribute "preset", 'enum', PresetOpts.options.values() as List<String>                     // 'manual','auto','away'
+        attribute "awayPresetTemperature", 'number'
 
-    command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllPossibleThermostatModesOpts.options.values() as List<String>]]
+        command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllPossibleThermostatModesOpts.options.values() as List<String>]]
+        if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
 
-    if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
-
-    // fingerprints are inputed from the deviceProfile maps in the deviceProfileLib
-
-    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
-    // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
-    // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
+        // itterate through all the figerprints and add them on the fly
+        deviceProfilesV2.each { profileName, profileMap ->
+            if (profileMap.fingerprints != null) {
+                profileMap.fingerprints.each { 
+                    fingerprint it
+                }
+            }
+        }      
     }
-    
+
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true) {
             input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
         }
+        // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
     }
     
 }
@@ -173,6 +174,9 @@ metadata {
 
 
 @Field static final Map deviceProfilesV2 = [
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
+    // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
+    // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
     "AQARA_E1_TRV"   : [
             description   : "Aqara E1 Thermostat model SRTS-A01",
             models        : ["LUMI"],
@@ -244,7 +248,7 @@ metadata {
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
             ],
-            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : ["printFingerprints":"printFingerprints", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
             attributes    : [   // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
                 [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt:"0x29", rw:"ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Local temperature</i>'],
@@ -969,9 +973,9 @@ def configureThermostat() {
     return cmds    
 }
 
-// TODO - check ! - called even for Tuya devices ?
-// TODO - remove specifics !!
-def initializeThermostat()
+
+// called from initializeDevice in the commonLib code
+def initializeDeviceThermostat()
 {
     List<String> cmds = []
     int intMinTime = 300

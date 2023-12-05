@@ -24,7 +24,7 @@ library (
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
  *
- *                                   TODO: 
+ *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
 
 

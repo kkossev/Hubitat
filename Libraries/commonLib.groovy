@@ -232,8 +232,8 @@ metadata {
 
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
-def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
-def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+//def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
+def isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 def isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
@@ -1890,7 +1890,9 @@ void parsePm25Cluster(final Map descMap) {
     //logDebug "pm25 float value = ${floatValue}"
     handlePm25Event(floatValue as Integer)
 }
+// TODO - check if handlePm25Event handler exists !!
 
+/*
 void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
     def eventMap = [:]
     if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:]
@@ -1926,6 +1928,7 @@ private void sendDelayedPm25Event(Map eventMap) {
     state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
     sendEvent(eventMap)
 }
+*/
 
 /*
  * -----------------------------------------------------------------------------
@@ -2184,12 +2187,12 @@ def tuyaBlackMagic() {
 
 void aqaraBlackMagic() {
     List<String> cmds = []
-    if (isAqaraTVOC() || isAqaraTRV_OLD()) {
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}"
         cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}"
         cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage
-        if (isAqaraTVOC()) {
+        if (isAqaraTVOC_OLD()) {
             cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // TVOC only
         }
         sendZigbeeCommands( cmds )
@@ -2215,6 +2218,7 @@ def initializeDevice() {
     else if (DEVICE_TYPE in  ["IRBlaster"])      { return initializeDeviceIrBlaster() }
     else if (DEVICE_TYPE in  ["Radar"])          { return initializeDeviceRadar() }
     else if (DEVICE_TYPE in  ["ButtonDimmer"])   { return initializeDeviceButtonDimmer() }
+    else if (DEVICE_TYPE in  ["Thermostat"])     { return initializeDeviceThermostat() }
   
  
     // not specific device type - do some generic initializations
@@ -2321,7 +2325,7 @@ void sendInfoEvent(String info=null) {
 }
 
 def ping() {
-    if (!(isAqaraTVOC())) {
+    if (!(isAqaraTVOC_OLD())) {
         if (state.lastTx == nill ) state.lastTx = [:] 
         state.lastTx["pingTime"] = new Date().getTime()
         if (state.states == nill ) state.states = [:] 
@@ -2548,6 +2552,7 @@ def configureHelp( val ) {
     if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" }
 }
 
+
 def loadAllDefaults() {
     logWarn "loadAllDefaults() !!!"
     deleteAllSettings()
@@ -2571,7 +2576,7 @@ def configure() {
     logInfo 'configure...'
     logDebug settings
     cmds += tuyaBlackMagic()
-    if (isAqaraTVOC() || isAqaraTRV_OLD()) {
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()
     }
     cmds += initializeDevice()
@@ -2743,7 +2748,7 @@ void initializeVars( boolean fullInit = false ) {
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     
     if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", false)
+    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true)
     if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false)
     if (fullInit || settings?.alwaysOn == null) device.updateSetting("alwaysOn", false)
     if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"])

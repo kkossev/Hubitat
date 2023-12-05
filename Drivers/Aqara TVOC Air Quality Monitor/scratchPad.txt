@@ -1,0 +1,409 @@
+================================================================================================
+Node Descriptor
+================================================================================================
+▸ Logical Type                              = Zigbee End Device (ZED)
+▸ Complex Descriptor Available              = No
+▸ User Descriptor Available                 = No
+▸ Frequency Band                            = 2400 - 2483.5 MHz
+▸ Alternate PAN Coordinator                 = No
+▸ Device Type                               = Reduced Function Device (RFD)
+▸ Mains Power Source                        = No
+▸ Receiver On When Idle                     = No (conserve power during idle periods)
+▸ Security Capability                       = No
+▸ Allocate Address                          = Yes
+▸ Manufacturer Code                         = 0x115F = XIAOMI
+▸ Maximum Buffer Size                       = 127 bytes
+▸ Maximum Incoming Transfer Size            = 100 bytes
+▸ Primary Trust Center                      = No
+▸ Backup Trust Center                       = No
+▸ Primary Binding Table Cache               = Yes
+▸ Backup Binding Table Cache                = No
+▸ Primary Discovery Cache                   = Yes
+▸ Backup Discovery Cache                    = Yes
+▸ Network Manager                           = Yes
+▸ Maximum Outgoing Transfer Size            = 100 bytes
+▸ Extended Active Endpoint List Available   = No
+▸ Extended Simple Descriptor List Available = No
+================================================================================================
+Power Descriptor
+================================================================================================
+▸ Current Power Mode         = Same as "Receiver On When Idle" from "Node Descriptor" section above
+▸ Available Power Sources    = [Disposable battery]
+▸ Current Power Sources      = [Disposable battery]
+▸ Current Power Source Level = 100%
+================================================================================================
+Endpoint 0x01 | Out Clusters: 0x0019 (OTA Upgrade Cluster)
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0000 (Basic Cluster)
+================================================================================================
+▸ 0x0000 | ZCL Version          | req | r-- | uint8  | 03                                                  | --
+▸ 0x0001 | Application Version  | opt | r-- | uint8  | 1D                                                  | --
+▸ 0x0002 | Stack Version        | opt | r-- | uint8  | 02                                                  | --
+▸ 0x0003 | HW Version           | opt | r-- | uint8  | 01                                                  | --
+▸ 0x0004 | Manufacturer Name    | opt | r-- | string | LUMI                                                | --
+▸ 0x0005 | Model Identifier     | opt | r-- | string | lumi.airmonitor.acn01                               | --
+▸ 0x0006 | Date Code            | req | r-- | string | 20220222                                            | --
+▸ 0x0007 | Power Source         | opt | r-- | enum8  | 03 = Battery                                        | --
+▸ 0x0008 | Generic Device Class | opt | r-- | enum8  | FF                                                  | --
+▸ 0x0009 | Generic Device Type  | opt | r-- | enum8  | FF = Unspecified                                    | --
+▸ 0x000A | Product Code         | opt | r-- | octstr | --                                                  | --
+▸ 0x000B | Product URL          | opt | r-- | string | --                                                  | --
+▸ 0x000D | Serial Number        | opt | r-- | string | --                                                  | --
+▸ 0x4000 | SW Build ID          | opt | r-- | string | 2020www.                                           | --
+▸ 0_FF08 | --                   | --  | rw- | uint16 | 0001                                                | --
+▸ 0_FF51 | --                   | --  | r-- | octstr | 00000000000000000000000000000000 =  | --
+▸ 0_FF52 | --                   | --  | rw- | string |                     | --
+▸ 0_FF53 | --                   | --  | r-- | octstr | 00000000000000000000000000000000 =  | --
+▸ 0_FF54 | --                   | --  | r-- | octstr | --                                                  | --
+▸ 0_FFF0 | --                   | --  | rw- | octstr | --                                                  | --
+▸ 0xFFFD | Cluster Revision     | req | r-- | uint16 | 0001                                                | --
+------------------------------------------------------------------------------------------------
+▸ 0x00 | Reset to Factory Defaults | opt
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0001 (Power Configuration Cluster)
+================================================================================================
+▸ 0x0020 | Battery Voltage               | opt | r-- | uint8  | 1B = 2700mV                            | --
+▸ 0x0031 | Battery Size                  | opt | rw- | enum8  | 07 = CR2 (IEC: CR17355 / ANSI: 5046LC) | --
+▸ 0x0033 | Battery Quantity              | opt | rw- | uint8  | 01                                     | --
+▸ 0x0034 | Battery Rated Voltage         | opt | rw- | uint8  | 1E                                     | --
+▸ 0x0035 | Battery Alarm Mask            | opt | rw- | map8   | 01                                     | --
+▸ 0x0036 | Battery Voltage Min Threshold | opt | rw- | uint8  | 1B                                     | --
+▸ 0x003E | Battery Alarm State           | opt | r-- | map32  | 00000000                               | --
+▸ 0xFFFD | Cluster Revision              | req | r-- | uint16 | 0001                                   | --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0003 (Identify Cluster)
+================================================================================================
+▸ 0x0000 | Identify Time    | req | rw- | uint16 | -- | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | -- | --
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Endpoint 0x01 | In Cluster: 0x0500 (IAS Zone Cluster)
+================================================================================================
+▸ No attributes found
+------------------------------------------------------------------------------------------------
+▸ No commands found
+================================================================================================
+Neighbors Table
+================================================================================================
+▸ Addr:0000 | Type:Zigbee Coordinator | RxOnWhenIdle:Yes | Rel:Parent | Depth:0 | LQI:108
+================================================================================================
+Routing Table
+================================================================================================
+▸ Could not retrieve data
+================================================================================================
+Bindings Table
+================================================================================================
+▸ Src:54EF4410005E151D | Endpoint:0x01 | Cluster:0x0405 | Dest:000D6F0016C1E513 | Endpoint:0x01
+▸ Src:54EF4410005E151D | Endpoint:0x01 | Cluster:0xFCC0 | Dest:000D6F0016C1E513 | Endpoint:0x01
+
+===================
+
+
+https://github.com/SwoopX/deconz-rest-plugin/blob/4194873b3a65c805c792fb9fb653d42016a7bc12/devices/xiaomi/xiaomi_airmonitor_acn01.json
+
+
+{
+  "schema": "devcap1.schema.json",
+  "manufacturername": "$MF_LUMI",
+  "modelid": "lumi.airmonitor.acn01",
+  "vendor": "Xiaomi",
+  "product": "Aqara TVOC Air Quality Monitor VOCKQJK11LM",
+  "sleeper": true,
+  "status": "Gold",
+  "subdevices": [
+    {
+      "type": "$TYPE_AIR_QUALITY_SENSOR",
+      "restapi": "/sensors",
+      "uuid": [
+        "$address.ext",
+        "0x01",
+        "0x000c"
+      ],
+      "fingerprint": {
+        "profile": "0x0104",
+        "device": "0x0302",
+        "endpoint": "0x01",
+        "in": [
+          "0x0000",
+          "0x0001",
+          "0x000C"
+        ]
+      },
+      "items": [
+        {
+          "name": "attr/id"
+        },
+        {
+          "name": "attr/lastannounced"
+        },
+        {
+          "name": "attr/lastseen"
+        },
+        {
+          "name": "attr/manufacturername"
+        },
+        {
+          "name": "attr/modelid",
+          "awake": true
+        },
+        {
+          "name": "attr/name"
+        },
+        {
+          "name": "attr/swversion",
+          "awake": true,
+          "parse": {
+            "at": "0x00f7",
+            "ep": 1,
+            "fn": "xiaomi:special",
+            "idx": "0x08",
+            "script": "xiaomi_swversion.js"
+          },
+          "read": {
+            "fn": "none"
+          }
+        },
+        {
+          "name": "attr/type"
+        },
+        {
+          "name": "attr/uniqueid"
+        },
+        {
+          "name": "config/battery",
+          "parse": {"fn": "xiaomi:special", "ep": 1, "at": "0x00f7", "idx": "0x01", "script": "xiaomi_battery.js"}
+        },
+        {
+          "name": "config/on"
+        },
+        {
+          "name": "config/reachable"
+        },
+        {
+          "name": "config/temperature"
+        },
+        {
+          "name": "state/airqualityppb",
+          "awake": true,
+          "parse": {
+            "at": "0x0055",
+            "cl": "0x000c",
+            "ep": 1,
+            "eval": "Item.val = Attr.val",
+            "fn": "zcl"
+          },
+          "default": 0
+        },
+        {
+          "name": "state/airquality",
+          "parse": {
+            "at": "0x0129",
+            "cl": "0xfcc0",
+            "ep": 1,
+            "eval": "Item.val = ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][Attr.val]",
+            "fn": "zcl",
+            "mfc": "0x115f"
+          },
+          "default": "excellent",
+          "values": [
+            [1, "excellent"],
+            [2, "good"],
+            [3, "moderate"],
+            [4, "poor"],
+            [5, "unhealthy"]
+          ]
+        },
+        {
+          "name": "state/lastupdated"
+        }
+      ]
+    },
+    {
+      "type": "$TYPE_HUMIDITY_SENSOR",
+      "restapi": "/sensors",
+      "uuid": [
+        "$address.ext",
+        "0x01",
+        "0x0405"
+      ],
+      "fingerprint": {
+        "profile": "0x0104",
+        "device": "0x0302",
+        "endpoint": "0x01",
+        "in": [
+          "0x0000",
+          "0x0001",
+          "0x0405",
+          "0xFCC0"
+        ]
+      },
+      "items": [
+        {
+          "name": "attr/id"
+        },
+        {
+          "name": "attr/lastannounced"
+        },
+        {
+          "name": "attr/lastseen"
+        },
+        {
+          "name": "attr/manufacturername"
+        },
+        {
+          "name": "attr/modelid",
+          "awake": true
+        },
+        {
+          "name": "attr/name"
+        },
+        {
+          "name": "attr/swversion",
+          "awake": true,
+          "parse": {
+            "at": "0x00f7",
+            "ep": 1,
+            "fn": "xiaomi:special",
+            "idx": "0x08",
+            "script": "xiaomi_swversion.js"
+          },
+          "read": {
+            "fn": "none"
+          }
+        },
+        {
+          "name": "attr/type"
+        },
+        {
+          "name": "attr/uniqueid"
+        },
+        {
+          "name": "config/battery",
+          "parse": {"fn": "xiaomi:special", "ep": 1, "at": "0x00f7", "idx": "0x01", "script": "xiaomi_battery.js"}
+        },
+        {
+          "name": "config/offset",
+          "default": 0
+        },
+        {
+          "name": "config/on"
+        },
+        {
+          "name": "config/reachable"
+        },
+        {
+          "name": "config/temperature"
+        },
+        {
+          "name": "state/humidity",
+          "default": 0
+        },
+        {
+          "name": "state/lastupdated"
+        }
+      ]
+    },
+    {
+      "type": "$TYPE_TEMPERATURE_SENSOR",
+      "restapi": "/sensors",
+      "uuid": [
+        "$address.ext",
+        "0x01",
+        "0x0402"
+      ],
+      "fingerprint": {
+        "profile": "0x0104",
+        "device": "0x0302",
+        "endpoint": "0x01",
+        "in": [
+          "0x0000",
+          "0x0001",
+          "0x0402",
+          "0xFCC0"
+        ]
+      },
+      "items": [
+        {
+          "name": "attr/id"
+        },
+        {
+          "name": "attr/lastannounced"
+        },
+        {
+          "name": "attr/lastseen"
+        },
+        {
+          "name": "attr/manufacturername"
+        },
+        {
+          "name": "attr/modelid",
+          "awake": true
+        },
+        {
+          "name": "attr/name"
+        },
+        {
+          "name": "attr/swversion",
+          "awake": true,
+          "parse": {
+            "at": "0x00f7",
+            "ep": 1,
+            "fn": "xiaomi:special",
+            "idx": "0x08",
+            "script": "xiaomi_swversion.js"
+          },
+          "read": {
+            "fn": "none"
+          }
+        },
+        {
+          "name": "attr/type"
+        },
+        {
+          "name": "attr/uniqueid"
+        },
+        {
+          "name": "config/battery",
+          "parse": {"fn": "xiaomi:special", "ep": 1, "at": "0x00f7", "idx": "0x01", "script": "xiaomi_battery.js"}
+        },
+        {
+          "name": "config/offset",
+          "default": 0
+        },
+        {
+          "name": "config/on"
+        },
+        {
+          "name": "config/reachable"
+        },
+        {
+          "name": "state/lastupdated"
+        },
+        {
+          "name": "state/temperature",
+          "default": 0
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "bind": "unicast",
+      "src.ep": 1,
+      "dst.ep": 1,
+      "cl": "0x000C",
+      "report": [
+        {
+          "at": "0x0055",
+          "dt": "0x39",
+          "min": 60,
+          "max": 1800,
+          "change": "0x41200000"
+        }
+      ]
+    }
+  ]
+}
