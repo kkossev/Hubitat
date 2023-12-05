@@ -1,5 +1,5 @@
 /**
- *  Zigbee TRV - Device Driver for Hubitat Elevation
+ *  Zigbee TRVs and Thermostats - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -20,8 +20,10 @@
  * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
+ * ver. 3.0.4  2023-12-04 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default;
  *
- *                                   TODO: Aqara TRV refactoring : done ? publish the driver.
+ *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
+ *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
@@ -31,11 +33,9 @@
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
  *                                   TODO: cleanup trace and debug logs  invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]
  *                                   TODO: hide the maxTimeBetweenReport preferences (not used here)
- *                                   TODO: prepare for publishing the first version of this driver w/ Sonoff support
  *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
@@ -64,8 +64,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { "3.0.3" }
-static String timeStamp() {"2023/12/03 7:42 PM"}
+static String version() { "3.0.4" }
+static String timeStamp() {"2023/12/04 9:40 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -89,91 +89,77 @@ metadata {
     definition (
         name: 'Zigbee TRVs and Thermostats',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Zigbee%20TRV/Zigbee_TRV_lib_included.groovy',
-        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true 
-    ) {    
-        
-    capability "Actuator"
-    capability "Refresh"
-    capability "Sensor"
-    capability "Temperature Measurement"
-    capability "Thermostat"                 // needed for HomeKit
-    capability "ThermostatHeatingSetpoint"
-    capability "ThermostatCoolingSetpoint"
-    capability "ThermostatOperatingState"   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
-    capability "ThermostatSetpoint"
-    capability "ThermostatMode"    
-    capability "ThermostatFanMode"
+        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true ) 
+    {    
+        capability "Actuator"
+        capability "Refresh"
+        capability "Sensor"
+        capability "Temperature Measurement"
+        capability "Thermostat"                 // needed for HomeKit
+        capability "ThermostatHeatingSetpoint"
+        capability "ThermostatCoolingSetpoint"
+        capability "ThermostatOperatingState"   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
+        capability "ThermostatSetpoint"
+        capability "ThermostatMode"    
+        capability "ThermostatFanMode"
 
-    // Aqara E1 thermostat attributes
-    // TODO - add all other models attributes possible values
-    // BRT-100 attributes
-    attribute 'battery', "number"                               // Aqara, BRT-100
-    attribute 'boostTime', "number"                             // BRT-100
-    attribute 'calibrationTemp', "number"                       // BRT-100, Sonoff
-    attribute 'childLock', "enum", ["off", "on"]                // BRT-100, Aqara E1, Sonoff
-    attribute 'ecoMode', "enum", ["off", "on"]                  // BRT-100
-    attribute 'ecoTemp', "number"                               // BRT-100
-    attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
-    attribute 'emergencyHeatingTime', "number"                  // BRT-100
-    attribute 'frostProtectionTemperature', "number"            // Sonoff
-    attribute 'level', "number"                                 // BRT-100          
-    attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
-    attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
-    //attribute 'trvMode', "enum",  ["auto", "manual", "TempHold", "holidays"]        // BRT-100
-    attribute 'weeklyProgram', "number"                         // BRT-100
-    attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
-    attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
-    attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
+        // TODO - add all other models attributes possible values
+        attribute 'battery', "number"                               // Aqara, BRT-100
+        attribute 'boostTime', "number"                             // BRT-100
+        attribute "calibrated", 'enum', ['false', 'true']           // Aqara E1
+        attribute 'calibrationTemp', "number"                       // BRT-100, Sonoff
+        attribute 'childLock', "enum", ["off", "on"]                // BRT-100, Aqara E1, Sonoff
+        attribute 'ecoMode', "enum", ["off", "on"]                  // BRT-100
+        attribute 'ecoTemp', "number"                               // BRT-100
+        attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
+        attribute 'emergencyHeatingTime', "number"                  // BRT-100
+        attribute 'frostProtectionTemperature', "number"            // Sonoff
+        attribute 'level', "number"                                 // BRT-100          
+        attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
+        attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
+        attribute "sensor", 'enum', ['internal','external']         // Aqara E1
+        attribute "valveAlarm", 'enum',  ['false', 'true']          // Aqara E1
+        attribute "valveDetection", 'enum', ['off', 'on']           // Aqara E1
+        attribute 'weeklyProgram', "number"                         // BRT-100
+        attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
+        attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
+        attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
 
-    // Aqaura E1 attributes
-    attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'
-    attribute "preset", 'enum', PresetOpts.options.values() as List<String>                     // 'manual','auto','away'
-    attribute "valveDetection", 'enum', ValveDetectionOpts.options.values() as List<String>     // 'off','on'
-    attribute "valveAlarm", 'enum', ValveAlarmOpts.options.values() as List<String>             // 'false','true'
-    attribute "awayPresetTemperature", 'number'
-    attribute "calibrated", 'enum', CalibratedOpts.options.values() as List<String>
-    attribute "sensor", 'enum', SensorOpts.options.values() as List<String>
+        // Aqaura E1 attributes     TODO - consolidate a common set of attributes
+        attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'    - used!
+        attribute "preset", 'enum', PresetOpts.options.values() as List<String>                     // 'manual','auto','away'
+        attribute "awayPresetTemperature", 'number'
 
-    //command "preset", [[name:"select preset option", type: "ENUM",   constraints: ["--- select ---"]+PresetOpts.options.values() as List<String>]]
+        command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllPossibleThermostatModesOpts.options.values() as List<String>]]
+        if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
 
-    command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllThermostatModesOpts.options.values() as List<String>]]
-
-    if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
-
-    // TODO - add Sonoff TRVZB fingerprint
-
-    //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,FCC0,000A,0201", outClusters:"0003,FCC0,0201", model:"lumi.airrtc.agl001", manufacturer:"LUMI", deviceJoinName: "Aqara E1 Thermostat"     // model: 'SRTS-A01'
-    // fingerprints are inputed from the deviceProfile maps
-
-    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
-    // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
-    // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
+        // itterate through all the figerprints and add them on the fly
+        deviceProfilesV2.each { profileName, profileMap ->
+            if (profileMap.fingerprints != null) {
+                profileMap.fingerprints.each { 
+                    fingerprint it
+                }
+            }
+        }      
     }
-    
+
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (advancedOptions == true) {
-            input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TemperaturePollingIntervalOpts.options, defaultValue: TemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
+            input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
         }
+        // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
     }
     
 }
 
-//def isAqaraTRV()                     { return getDeviceGroup().contains("AQARA_E1_TRV") }
-//def isBRT100TRV()                    { return getDeviceGroup().contains("MOES_BRT-100") }
-//def isSonoffTRV()                    { return getDeviceGroup().contains("SONOFF_TRV") }
 
-
-
-// TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17 
-
-@Field static final Map TemperaturePollingIntervalOpts = [
+@Field static final Map TrvTemperaturePollingIntervalOpts = [
     defaultValue: 600,
     options     : [0: 'Disabled', 60: 'Every minute (not recommended)', 120: 'Every 2 minutes', 300: 'Every 5 minutes', 600: 'Every 10 minutes', 900: 'Every 15 minutes', 1800: 'Every 30 minutes', 3600: 'Every 1 hour']
 ]
-
-@Field static final Map AllThermostatModesOpts = [
+@Field static final Map AllPossibleThermostatModesOpts = [
     defaultValue: 1,
     options     : [0: 'off', 1: 'heat', 2: 'cool', 3: 'auto', 4: 'emergency heat', 5: 'eco']
 ]
@@ -185,36 +171,12 @@ metadata {
     defaultValue: 1,
     options     : [0: 'manual', 1: 'auto', 2: 'away']
 ]
-@Field static final Map WindowDetectionOpts = [   // window_detection   TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: 'off', 1: 'on']
-]
-@Field static final Map ValveDetectionOpts = [    // valve_detection    TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: 'off', 1: 'on']
-]
-@Field static final Map ValveAlarmOpts = [    // valve_alarm     TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: false, 1: true]
-]
-@Field static final Map ChildLockOpts = [    // child_lock    TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: 'unlock', 1: 'lock']
-]
-@Field static final Map WindowOpenOpts = [    // window_open     TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: false, 1: true]
-]
-@Field static final Map CalibratedOpts = [    // calibrated    TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: false, 1: true]
-]
-@Field static final Map SensorOpts = [  // sensor    TODO - remove it !!
-    defaultValue: 1,
-    options     : [0: 'internal', 1: 'external']
-]
+
 
 @Field static final Map deviceProfilesV2 = [
+    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
+    // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json 
+    // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
     "AQARA_E1_TRV"   : [
             description   : "Aqara E1 Thermostat model SRTS-A01",
             models        : ["LUMI"],
@@ -252,7 +214,6 @@ metadata {
                 //                      ^^^^                                reporting only ?
                 [at:"0x0201:0x001C",  name:'mode',                  type:"enum",    dt:"0x30", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b> Mode</b>",                   description:'<i>System Mode ?</i>'],
                 //                      ^^^^ TODO - check if this is the same as system_mode    
-                
                 [at:"0x0201:0x001E",  name:'thermostatRunMode',     type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",         title: "<b>thermostatRunMode</b>",                   description:'<i>thermostatRunMode</i>'],
                 //                          ^^ unsupported attribute?  or reporting only ?
                 [at:"0x0201:0x0020",  name:'battery2',              type:"number",  dt:"0x20", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
@@ -263,7 +224,6 @@ metadata {
                 //                          ^^ unsupported attribute?  or reporting only ?   encoding - 0x29 ?? ^^
                 [at:"0x0201:0xFFF2",  name:'unknown',                type:"number", dt:"0x21", rw: "ro", min:0,    max:100,  step:1,  scale:1,    unit:"%",  description:'<i>Battery percentage remaining</i>'],
                 //                          ^^ unsupported attribute?  or reporting only ?  
-                            
             ],
             supportedThermostatModes: ["off","auto", "heat", "away"/*, "emergency heat"*/],
             refresh: ["pollAqara"],
@@ -288,7 +248,7 @@ metadata {
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0020,0201,FC57,FC11", outClusters:"000A,0019", model:"TRVZB", manufacturer:"SONOFF", deviceJoinName: "Sonoff TRVZB"] 
             ],
-            commands      : ["setHeatingSetpoint":"setHeatingSetpoint", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : ["printFingerprints":"printFingerprints", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [:],
             attributes    : [   // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
                 [at:"0x0201:0x0000",  name:'temperature',           type:"decimal", dt:"0x29", rw:"ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Local temperature</i>'],
@@ -321,17 +281,6 @@ metadata {
                 [at:"0xFC11:0x6008",  name:'unknown1',              type:"number",  dt: "0x20", rw: "rw", min:0,    max:255, step:1,  scale:1,   unit:"", description:'<i>unknown1 (0xFC11:0x6008)/i>'],
                 [at:"0xFC11:0x6009",  name:'heatingSetpoint_FC11',  type:"decimal",  dt: "0x29", rw: "rw", min:4.0,,    max:35.0, step:1,  scale:100,   unit:"°C", title: "<b>Heating Setpoint</b>",      description:'<i>Occupied heating setpoint</i>'],
                 [at:"0xFC11:0x600A",  name:'unknown2',              type:"number",  dt: "0x29", rw: "rw", min:0,    max:9999, step:1,  scale:1,   unit:"", description:'<i>unknown2 (0xFC11:0x600A)/i>'],
-
-                //
-                // TODO :  e.battery(),
-                    // e.battery_low(),
-                    // e.child_lock().setAccess('state', ea.ALL),
-                    // e.open_window()                 .withLabel('Open window detection')   .withDescription('Automatically turns off the radiator when local temperature drops by more than 1.5°C in 4.5 minutes.')                 .withAccess(ea.ALL),
-                    // e.numeric('frost_protection_temperature', ea.ALL)                 .withValueMin(4.0)                 .withValueMax(35.0)                 .withValueStep(0.5)                 .withUnit('°C')  
-                    //               .withDescription(                    'Minimum temperature at which to automatically turn on the radiator, if system mode is off, to prevent pipes freezing.'),
-
-                // TODO :         toZigbee: [   tz.thermostat_local_temperature, tz.thermostat_local_temperature_calibration, tz.thermostat_occupied_heating_setpoint,             tz.thermostat_system_mode, tz.thermostat_running_state, tzLocal.child_lock, tzLocal.open_window, tzLocal.frost_protection_temperature],
-
                 // TODO :         configure: async (device, coordinatorEndpoint, logger) => { 
                     // const endpoint = device.getEndpoint(1);
                     // await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);
@@ -387,7 +336,6 @@ metadata {
             configuration : [:]
     ],
 
-
     "NAMRON"   : [
             description   : "NAMRON Thermostat",
             models        : ["*"],
@@ -395,103 +343,43 @@ metadata {
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : [],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,0408,0702,0B04,0B05,1000,FCCC", outClusters:"0019,1000", model:"4512749-N", manufacturer:"NAMRON AS", deviceJoinName: "NAMRON"] 
-                // EP02: 0000,0004,0005,0201 
-                // EPF2: 0021
+                [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0009,0408,0702,0B04,0B05,1000,FCCC", outClusters:"0019,1000", model:"4512749-N", manufacturer:"NAMRON AS", deviceJoinName: "NAMRON"]   // EP02: 0000,0004,0005,0201  // EPF2: 0021
             ],
             commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences",
                               "factoryResetThermostat":"factoryResetThermostat"
             ],
             attributes    : [
-                [at:"0x0201:0x0000",  name:'temperature',              type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", description:'<i>Measured room temperature</i>'],
-                // ^^^ (int16S, read-only) reportable LocalTemperature : Attribute This is room temperature, the maximum resolution this format allows is 0.01 ºC.
-                [at:"0x0201:0x0001",  name:'outdoorTemperature',       type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Floor temperature</i>'],
-                // ^^^ (int16S, read-only) reportable OutdoorTemperature : This is floor temperature, the maximum resolution this format allows is 0.01 ºC.
-                [at:"0x0201:0x0002",  name:'occupancy',                type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>Occupancy</i>'],
-                // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
-                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x21", rw: "rw", min:-30.0,  max:30.0, defaultValue:0.0, step:0.5, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],
-                // ^^^ (Int8S, reportable) TODO: check dt!!!    LocalTemperatureCalibration : Room temperature calibration, range is -30-30, the maximum resolution this format allows 0.1°C. Default value: 0
-                [at:"0x0201:0x0011",  name:'coolingSetpoint',          type:"decimal", dt:"0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>This system is not invalid</i>'],
-                // not used 
-                [at:"0x0201:0x0012",  name:'heatingSetpoint',          type:"decimal", dt:"0x21", rw: "rw", min:0.0,  max:40.0, defaultValue:30.0, step:0.01, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0xbb8(30.00ºC)
-                [at:"0x0201:0x0014",  name:'unoccupiedHeatingSetpoint', type:"decimal", dt:"0x21", rw: "rw", min:0.0,  max:40.0, defaultValue:30.0, step:0.01, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0x258(6.00ºC)
-                [at:"0x0201:0x001B",  name:'termostatRunningState',    type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],
-                // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
-
+                [at:"0x0201:0x0000",  name:'temperature',              type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", description:'<i>Measured room temperature</i>'],       // ^^^ (int16S, read-only) reportable LocalTemperature : Attribute This is room temperature, the maximum resolution this format allows is 0.01 ºC.
+                [at:"0x0201:0x0001",  name:'outdoorTemperature',       type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C",  description:'<i>Floor temperature</i>'],          // ^^^ (int16S, read-only) reportable OutdoorTemperature : This is floor temperature, the maximum resolution this format allows is 0.01 ºC.
+                [at:"0x0201:0x0002",  name:'occupancy',                type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>Occupancy</i>'],      // ^^^ (bitmap8, read-only) Occupancy : When this flag is set as 1, it means occupied, OccupiedHeatingSetpoint will be used, otherwise UnoccupiedHeatingSetpoint will be used
+                [at:"0x0201:0x0010",  name:'localTemperatureCalibration', type:"decimal", dt:"0x21", rw: "rw", min:-30.0,  max:30.0, defaultValue:0.0, step:0.5, scale:10,  unit:"°C", title: "<b>Local Temperature Calibration</b>", description:'<i>Room temperature calibration</i>'],       // ^^^ (Int8S, reportable) TODO: check dt!!!    LocalTemperatureCalibration : Room temperature calibration, range is -30-30, the maximum resolution this format allows 0.1°C. Default value: 0
+                [at:"0x0201:0x0011",  name:'coolingSetpoint',          type:"decimal", dt:"0x21", rw: "rw", min:5.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Cooling Setpoint</b>",              description:'<i>This system is not invalid</i>'],       // not used 
+                [at:"0x0201:0x0012",  name:'heatingSetpoint',          type:"decimal", dt:"0x21", rw: "rw", min:0.0,  max:40.0, defaultValue:30.0, step:0.01, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],                // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0xbb8(30.00ºC)
+                [at:"0x0201:0x0014",  name:'unoccupiedHeatingSetpoint', type:"decimal", dt:"0x21", rw: "rw", min:0.0,  max:40.0, defaultValue:30.0, step:0.01, scale:100,  unit:"°C", title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],                // ^^^(int16S, reportable)  OccupiedHeatingSetpoint : Range is 0-4000,the maximum resolution this format allows is 0.01 ºC. Default is 0x258(6.00ºC)
+                [at:"0x0201:0x001B",  name:'termostatRunningState',    type:"enum",    dt:"0x20", rw: "rw", min:0,    max:1,    step:1,  scale:1,    map:[0: "off", 1: "heat"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],                // ^^^(Map16, read-only, reportable) HVAC relay state/ termostatRunningState Indicates the relay on/off status, here only supports bit0( Heat State)
                 // ============ Proprietary Attributes: Manufacturer code 0x1224 ============
-                [at:"0x0201:0x0000",  name:'lcdBrightnesss',           type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"1",   step:1,  scale:1,    map:[0: "Low Level", 1: "Mid Level", 2: "High Level"], unit:"",  title: "<b>OLED brightness</b>",description:'<i>OLED brightness</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!!  OLED brightness when operate the buttons: Value=0 : Low Level Value=1 : Mid Level(default) Value=2 : High Level
-                [at:"0x0201:0x1002",  name:'floorSensorType',          type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:1,    max:5, defaultValue:"1",step:1,  scale:1,    map:[1: "NTC 10K/25", 2: "NTC 15K/25", 3: "NTC 12K/25", 4: "NTC 100K/25", 5: "NTC 50K/25"], unit:"",  title: "<b>Floor Sensor Type</b>",description:'<i>Floor Sensor Type</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!!  TODO: check why there are 3 diferent enum groups???    FloorSenserType Value=5 : NTC 12K/25  Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25 Value=5 : NTC 12K/25 Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25             
-                [at:"0x0201:0x1003",  name:'controlType',              type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"0",step:1,  scale:1,    map:[0: "Room sensor", 1: "floor sensor", 2: "Room+floor sensor"], unit:"",  title: "<b>Control Type</b>",description:'<i>Control Type</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!!  ControlType The referring sensor for heat control: Value=0 : Room sensor(Default) Value=1 : floor sensor Value=2 : Room+floor sensor
-                [at:"0x0201:0x1004",  name:'powerUpStatus',            type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"1",   step:1,  scale:1,    map:[0: "Low Level", 1: "Mid Level", 2: "High Level"], unit:"",  title: "<b>Power Up Status</b>",description:'<i>Power Up Status</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!! PowerUpStatus Value=0 : default mode The mode after reset power of the device: Value=1 : last status before power off (Default) 
-                [at:"0x0201:0x1005",  name:'floorSensorCalibration',   type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:-30.0,  max:30.0, defaultValue:0.0, step:0.5, scale:10,  unit:"°C", title: "<b>Floor Sensor Calibration</b>", description:'<i>Floor Sensor Calibration/i>'],
-                // ^^^ (Int8S, reportable) TODO: check dt!!!    FloorSenserCalibration The temp compensation for the external (floor) sensor, range is -30-30, unit is 0.1°C. default value 0
-                [at:"0x0201:0x1006",  name:'dryTime',                  type:"number",  dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:5,  max:100, defaultValue:5, step:1, scale:1,  unit:"minutes", title: "<b>Dry Time</b>", description:'<i>The duration of Dry Mode/i>'],
-                // ^^^ (Int8S, reportable) TODO: check dt!!!    DryTime The duration of Dry Mode, range is 5-100, unit is min. Default value is 5.
-                [at:"0x0201:0x1007",  name:'modeAfterDry',             type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"2",   step:1,  scale:1,    map:[0: "OFF", 1: "Manual mode", 2: "Auto mode", 3: "Away mode"], unit:"",  title: "<b>Mode After Dry</b>",description:'<i>The mode after Dry Mode</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!! ModeAfterDry The mode after Dry Mode: Value=0 : OFF Value=1 : Manual mode Value=2 : Auto mode –schedule (default) Value=3 : Away mode
-                [at:"0x0201:0x1008",  name:'temperatureDisplay',       type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"1",   step:1,  scale:1,    map:[0: "Room Temp", 1: "Floor Temp"], unit:"",  title: "<b>Temperature Display</b>",description:'<i>Temperature Display</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
-                [at:"0x0201:0x1009",  name:'windowOpenCheck',          type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:0.3, max:8.0, defaultValue:0, step:0.5, scale:10,  unit:"", title: "<b>Window Open Check</b>", description:'<i>The threshold to detect open window, 0 means disabled</i>'],
-                // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
-                [at:"0x0201:0x100A",  name:'hysterersis',              type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:5.0, max:20.0, defaultValue:5.0, step:0.5, scale:10,  unit:"", title: "<b>Hysterersis</b>", description:'<i>Hysterersis</i>'],
-                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysterersis setting, range is 5-20, unit is 0.1ºC, default value is 5 
-                [at:"0x0201:0x100B",  name:'displayAutoOffEnable',     type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"1",   step:1,  scale:1,    map:[0: "Disabled", 1: "Enabled"], unit:"",  title: "<b>Display Auto Off Enable</b>",description:'<i>Display Auto Off Enable</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
-                [at:"0x0201:0x2001",  name:'alarmAirTempOverValue',    type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:0.2, max:6.0, defaultValue:4.5, step:0.1, scale:10,  unit:"", title: "<b>Alarm Air Temp Over Value</b>", description:'<i>Alarm Air Temp Over Value, 0 means disabled,</i>'],
-                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
-                [at:"0x0201:0x2002",  name:'awayModeSet',              type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"0",   step:1,  scale:1,    map:[0: "Not away", 1: "Away"], unit:"",  title: "<b>Away Mode Set</b>",description:'<i>Away Mode Set</i>'],
-                // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
-
+                [at:"0x0201:0x0000",  name:'lcdBrightnesss',           type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"1",   step:1,  scale:1,    map:[0: "Low Level", 1: "Mid Level", 2: "High Level"], unit:"",  title: "<b>OLED brightness</b>",description:'<i>OLED brightness</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  OLED brightness when operate the buttons: Value=0 : Low Level Value=1 : Mid Level(default) Value=2 : High Level
+                [at:"0x0201:0x1002",  name:'floorSensorType',          type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:1,    max:5, defaultValue:"1",step:1,  scale:1,    map:[1: "NTC 10K/25", 2: "NTC 15K/25", 3: "NTC 12K/25", 4: "NTC 100K/25", 5: "NTC 50K/25"], unit:"",  title: "<b>Floor Sensor Type</b>",description:'<i>Floor Sensor Type</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  TODO: check why there are 3 diferent enum groups???    FloorSenserType Value=5 : NTC 12K/25  Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25 Value=5 : NTC 12K/25 Value=4 : NTC 100K/25 Value=3 : NTC 50K/25 Select external (Floor) sensor type: Value=1 : NTC 10K/25 (Default) Value=2 : NTC 15K/25             
+                [at:"0x0201:0x1003",  name:'controlType',              type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"0",step:1,  scale:1,    map:[0: "Room sensor", 1: "floor sensor", 2: "Room+floor sensor"], unit:"",  title: "<b>Control Type</b>",description:'<i>Control Type</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  ControlType The referring sensor for heat control: Value=0 : Room sensor(Default) Value=1 : floor sensor Value=2 : Room+floor sensor
+                [at:"0x0201:0x1004",  name:'powerUpStatus',            type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"1",   step:1,  scale:1,    map:[0: "Low Level", 1: "Mid Level", 2: "High Level"], unit:"",  title: "<b>Power Up Status</b>",description:'<i>Power Up Status</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!! PowerUpStatus Value=0 : default mode The mode after reset power of the device: Value=1 : last status before power off (Default) 
+                [at:"0x0201:0x1005",  name:'floorSensorCalibration',   type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:-30.0,  max:30.0, defaultValue:0.0, step:0.5, scale:10,  unit:"°C", title: "<b>Floor Sensor Calibration</b>", description:'<i>Floor Sensor Calibration/i>'],                // ^^^ (Int8S, reportable) TODO: check dt!!!    FloorSenserCalibration The temp compensation for the external (floor) sensor, range is -30-30, unit is 0.1°C. default value 0
+                [at:"0x0201:0x1006",  name:'dryTime',                  type:"number",  dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:5,  max:100, defaultValue:5, step:1, scale:1,  unit:"minutes", title: "<b>Dry Time</b>", description:'<i>The duration of Dry Mode/i>'],                // ^^^ (Int8S, reportable) TODO: check dt!!!    DryTime The duration of Dry Mode, range is 5-100, unit is min. Default value is 5.
+                [at:"0x0201:0x1007",  name:'modeAfterDry',             type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:2, defaultValue:"2",   step:1,  scale:1,    map:[0: "OFF", 1: "Manual mode", 2: "Auto mode", 3: "Away mode"], unit:"",  title: "<b>Mode After Dry</b>",description:'<i>The mode after Dry Mode</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!! ModeAfterDry The mode after Dry Mode: Value=0 : OFF Value=1 : Manual mode Value=2 : Auto mode –schedule (default) Value=3 : Away mode
+                [at:"0x0201:0x1008",  name:'temperatureDisplay',       type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"1",   step:1,  scale:1,    map:[0: "Room Temp", 1: "Floor Temp"], unit:"",  title: "<b>Temperature Display</b>",description:'<i>Temperature Display</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!! TemperatureDisplay Value=0 : Room Temp (Default) Value=1 : Floor Temp
+                [at:"0x0201:0x1009",  name:'windowOpenCheck',          type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:0.3, max:8.0, defaultValue:0, step:0.5, scale:10,  unit:"", title: "<b>Window Open Check</b>", description:'<i>The threshold to detect open window, 0 means disabled</i>'],                // ^^^ (INT8U,reportable) TODO: check dt!!!    WindowOpenCheck The threshold to detect open window, range is 0.3-8, unit is 0.5ºC, 0 means disabled, default is 0
+                [at:"0x0201:0x100A",  name:'hysterersis',              type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:5.0, max:20.0, defaultValue:5.0, step:0.5, scale:10,  unit:"", title: "<b>Hysterersis</b>", description:'<i>Hysterersis</i>'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  Hysterersis setting, range is 5-20, unit is 0.1ºC, default value is 5 
+                [at:"0x0201:0x100B",  name:'displayAutoOffEnable',     type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"1",   step:1,  scale:1,    map:[0: "Disabled", 1: "Enabled"], unit:"",  title: "<b>Display Auto Off Enable</b>",description:'<i>Display Auto Off Enable</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  DisplayAutoOffEnable 0, disable Display Auto Off function 1, enable Display Auto Off function
+                [at:"0x0201:0x2001",  name:'alarmAirTempOverValue',    type:"decimal", dt:"0x21",  mfgCode:"0x1224", rw: "rw", min:0.2, max:6.0, defaultValue:4.5, step:0.1, scale:10,  unit:"", title: "<b>Alarm Air Temp Over Value</b>", description:'<i>Alarm Air Temp Over Value, 0 means disabled,</i>'],                // ^^^ (INT8U,reportable) TODO: check dt!!!  TODO - check the scailing !!!  AlarmAirTempOverValue Room temp alarm threshold, range is 0.20-60, unit is 1ºC,0 means disabled, default is 45
+                [at:"0x0201:0x2002",  name:'awayModeSet',              type:"enum",    dt:"0x20",  mfgCode:"0x1224", rw: "rw", min:0,    max:1, defaultValue:"0",   step:1,  scale:1,    map:[0: "Not away", 1: "Away"], unit:"",  title: "<b>Away Mode Set</b>",description:'<i>Away Mode Set</i>'],                // ^^^ (ENUM8,reportable) TODO: check dt!!!  Away Mode Set: Value=1: away Value=0: not away (default)
                 // Command supported  !!!!!!!!!! TODO !!!!!!!!!!!! not attribute, but a command !!!!!!!!!!!!!!!!
-                [cmd:"0x0201:0x0000",  name:'setpointRaiseLower',       type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:10,  unit:"°C", description:'<i>Setpoint Raise/Lower</i>'],
-                // ^^^ Setpoint Raise/Lower Increase or decrease the set temperature according to current mode, unit is 0.1ºC
-
-                // Simple Meter-0x0702 (Server) 
-                // Attribute: 0x0000 (unsigned48, readonly, reportable)  CurrentSummationDelivered Indicates the current amount of electrical energy delivered to the load.
-                // Attribute: 0x0200 (bitmap8, read-only)                Status Flags indicating current device status, always is 0x00
-                // Attribute: 0x0300 (bitmap8, read-only)                UnitOfMeasure The unit of metering data, this is always kWh(0x00).
-                // Attribute: 0x0303 (bitmap8, read-only)                SummationFormatting The decimal point on the left and right sides of the data, this is always 0x00
-                // Attribute: 0x0306 (bitmap8, read-only)                MeteringDeviceType Metering data type, this is always Electric Metering (0x00)
-
-                // Electrical Measurement-0x0b04(Server)
-                // Attribute: 0x0000 (bitmap32, read-only)               MeasurementType Indicates the physical entities that this devices is able to measure. Supports only bit0: Active measurement (AC)
-                // Attribute: 0x0505 (int16U, read-only, reportable)     RMSVoltage Single phase valid voltage, unit is V
-                // Attribute: 0x0508 (int16U, read-only, reportable)     RMSCurrent Single phase valid current, unit is A
-                // Attribute: 0x050B (int16U, read-only, reportable)     ActivePower Single phase valid power, unit is W
-                // Attribute: 0x0600 (int16U, read-only)                 ACVoltageMultiplier
-                // Attribute: 0x0601 (int16U, read-only, reportable)     ACVoltageDivisor Used together with above attributes, the real displayed voltage = RMSVoltage* ACVoltageMultiplier / ACVoltageDivisor
-                // Attribute: 0x0602 (int16U, read-only)                 ACCurrentMultiplier
-                // Attribute: 0x0603 (int16U, read-only, reportable)     ACCurrentDivisor Used together with above attributes, the real displayed current = RMSCurrent * ACCurrentMultiplier / ACCurrentDivisor
-                // Attribute: 0x0604 (int16U, read-only)                 ACPowerMultiplier 0x01
-                // Attribute: 0x0605 (int16U, read-only, reportable)     ACPowerDivisor 0x01 Used together with above attributes, the real displayed power = Active Power * ACPowerMultiplie / ACPowerDivisor
-                // Attribute: 0x0800 (int16U)                            ACAlarmsMask Specifies which configurable alarms may be generated, only Bit1: Current Overload is set, if set=0, then ACCurrentOverload=0, over current will not be detected
-                // Attribute: 0x0802 (int16U, reportable, read-only)     ACCurrentOverload Alarms when the current is over a certain value, 0, 10-16, unit is A, for the unit please refer to RMSCurrent, ACCurrentMultiplier, ACCurrent Divisor
-                // Attribute: 0x0605 (Int8u,reportable, mfgCode: 0x1224) OverCurrent Over current value set by the user, range is 0, 10-16, ACCurrentOverload will change spontaneously if this value is modified.
-
-                // Alarm-0x0009(Server)                                  Please set a valid value for ACAlarmsMask of Electrical Measurement. The Alarm Server cluster can generate the following commands : 
-                // [Command!!!!] 0x00                                    Alarm: The alarm code of Electrical Measurement is 0
-                // [Command!!!!] 0x00 , mfgCode: 0x1224                  Room air temperature over heat, not alarm code
-
-                // OccupancySensing-0x0406(client)                       The attributes that can be received:
-                // Attribute: 0x0000 (bitmap8)                           Occupancy Bit 0 specifies the sensed occupancy as follows:1=occupied,0=unoccupied. This flag bit will affect the Occupancy attribute of HVAC cluster, and the operation mode 
-
-                // Thermostat User Interface Configuration- 0x0204(Server)
-                // Attribute: 0x0000 (Enum8, reportable)                 TemperatureDisplayMode 0x00 Temperature in, only support 
-                // Attribute: 0x0000 (Enum8, reportable)                 KeypadLockout 0x00 No Lockout, 0x01 - 0x05 lockout
-
-
+                [cmd:"0x0201:0x0000",  name:'setpointRaiseLower',       type:"decimal", dt:"0x21", rw: "ro", min:5.0,  max:35.0, step:0.5, scale:10,  unit:"°C", description:'<i>Setpoint Raise/Lower</i>'],                // ^^^ Setpoint Raise/Lower Increase or decrease the set temperature according to current mode, unit is 0.1ºC
             ],
             refresh: ["pollThermostatCluster"],
             deviceJoinName: "NAMRON Thermostat",
             configuration : [:]
     ],
 
+                // TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17 
     "UNKNOWN"   : [
             description   : "GENERIC TRV",
             models        : ["*"],
@@ -518,8 +406,7 @@ metadata {
 
 ]
 
-
-
+// TODO - use for all events sent by this driver !!
 void thermostatEvent(eventName, value, raw) {
     def descriptionText = "${eventName} is ${value}"
     Map eventMap = [name: eventName, value: value, descriptionText: descriptionText, type: "physical"]
@@ -613,14 +500,6 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
             value = CalibratedOpts.options[raw as int]
             thermostatEvent("calibrated", value, raw)
             break;
-        case 0x0276:    // unknown
-        case 0x027c:    // unknown
-        case 0x027d:    // unknown
-        case 0x0280:    // unknown
-        case 0xfff2:    // unknown
-        case 0x00ff:    // unknown
-        case 0x00f7:    // unknown
-        case 0xfff2:    // unknown
         case 0x00FF:
             try {
                 raw = hexStrToUnsignedInt(descMap.value)
@@ -840,53 +719,6 @@ def setCoolingSetpoint(temperature){
     sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
 }
 
-/*
-// TODO - remove !
-def preset( preset ) {
-    logTrace "preset(${preset}) called!"
-    if (preset == "auto") {
-        setPresetMode("auto")               // hand symbol NOT shown
-    }
-    else if (preset == "manual") {
-        setPresetMode("manual")             // hand symbol is shown on the LCD
-    }
-    else if (preset == "away") {
-        setPresetMode("away")               // 5 degreees 
-    }
-    else {
-        logWarn "preset: unknown preset ${preset}"
-    }
-}
-*/
-/*
-// TODO - remove !
-def setPresetMode(mode) {
-    List<String> cmds = []
-    logDebug "sending setPresetMode(${mode})"    
-    if (isAqaraTRV()) {
-        // {'manual': 0, 'auto': 1, 'away': 2}), type: 0x20}
-        if (mode == "auto") {
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x01, [mfgCode: 0x115F], delay=200)
-        }
-        else if (mode == "manual") {
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x00, [mfgCode: 0x115F], delay=200)
-        }
-        else if (mode == "away") {
-            cmds = zigbee.writeAttribute(0xFCC0, 0x0272, 0x20, 0x02, [mfgCode: 0x115F], delay=200)
-        }
-        else {
-            logWarn "setPresetMode: Aqara TRV unknown preset ${mode}"
-        }
-    }
-    else {
-        // TODO - set generic thermostat mode
-        logWarn "setPresetMode NOT IMPLEMENTED"
-        return
-    }
-    if (cmds == []) { cmds = ["delay 299"] }
-    sendZigbeeCommands(cmds)
-}
-*/
 
 def setThermostatMode( mode ) {
     List<String> cmds = []
@@ -942,7 +774,6 @@ def setThermostatMode( mode ) {
             logWarn "setThermostatMode: pre-processing: unknown mode ${mode}"
             break
     }
- 
 
     // try using the standard thermostat capability to switch to the selected new mode
     result = sendAttribute("thermostatMode", mode)
@@ -973,60 +804,6 @@ def setThermostatMode( mode ) {
             break
     }
     return
-
-
-/*    
-    // TODO - remove the code below
-    //state.mode = mode
-    if (isAqaraTRV()) {
-        // TODO - set Aqara E1 thermostat mode
-        switch(mode) {
-            case "heat":
-            case "auto":
-                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x01, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
-                break
-            case "off":
-                cmds = zigbee.writeAttribute(0xFCC0, 0x0271, 0x20, 0x00, [mfgCode: 0x115F], delay=200)        // 'off': 0, 'heat': 1
-                break
-            default:
-                logWarn "setThermostatMode: unknown AqaraTRV mode ${mode}"
-                break
-        }
-    }
-    else {
-        // TODO - set generic thermostat mode
-        switch(mode) {
-            case "heat":
-            case "auto":
-                if (device.currentValue('ecoMode') != 'off') {
-                    logInfo "setThermostatMode: switching the eco mode off"
-                    sendAttribute("ecoMode", 0)
-                }
-                if (device.currentValue('emergencyHeating') != 'off') {
-                    logInfo "setThermostatMode: switching the emergencyHeating mode off"
-                    sendAttribute("emergencyHeating", 0)
-                }
-                logInfo "setThermostatMode: setting manual mode on (${device.currentValue('heatingSetpoint')} &degC)"
-                sendAttribute("trvMode", 1)
-                break
-            case "off":
-            case "cool":
-                // BRT-100 does not have an explicit off command, so we use the  mode (16 degrees)      // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
-                logInfo "setThermostatMode: setting eco mode on (${settings.ecoTemp} &degC)"
-                sendAttribute("ecoMode", 1)
-                break
-            case "emergency heat":
-                logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
-                sendAttribute("emergencyHeating", 1)
-                break
-            default:
-                logWarn "setThermostatMode: unknown mode ${mode}"
-                break
-        }
-    }
-    if (cmds == []) { cmds = ["delay 299"] }
-    sendZigbeeCommands(cmds)
-    */
 }
 
 def thermostatOff() { setThermostatMode("off") }    // invoked from the common library
@@ -1113,28 +890,10 @@ void autoPollThermostat() {
         }   
         return
     }
-
-/*
-    if (isBRT100TRV()) {
-        logDebug "autoPollThermostat: no polling for device profile ${getDeviceGroup()}"
-        clearRefreshRequest()
-    }
-    else if (isAqaraTRV()) {
-        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
-    }
-    else {
-        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C, 0x0029], [:], delay=3500)      // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
-    }
-   
-    if (cmds != null && cmds != [] ) {
-        sendZigbeeCommands(cmds)
-    }    
-*/
-
 }
 
 //
-// called from updated() in the main code ...
+// called from updated() in the main code
 void updatedThermostat() {
     ArrayList<String> cmds = []
     logDebug "updatedThermostat: ..."
@@ -1187,7 +946,7 @@ def refreshAqaraE1() {
 
 // TODO - not actually used! pollAqara is called instead! TODO !
 def refreshThermostat() {
-    // state.states["isRefresh"] = true is set in the commonLib
+    // state.states["isRefresh"] = true is already set in the commonLib
     List<String> cmds = []
     setRefreshRequest()    
     if (DEVICE.refresh != null && DEVICE.refresh != []) {
@@ -1204,45 +963,6 @@ def refreshThermostat() {
     if (cmds == []) { cmds = ["delay 299"] }
     logDebug "refreshThermostat: ${cmds} "
     return cmds
-
-        /*
-
-    // TODO - remove the speicfics !!
-    else if (isAqaraTRV()) {
-        //cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)                                         // battery voltage (E1 does not send percentage)
-        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0011, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0011=cooling setpoint, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
-        cmds += zigbee.readAttribute(0xFCC0, [0x0271, 0x0272, 0x0273, 0x0274, 0x0275, 0x0277, 0x0279, 0x027A, 0x027B, 0x027E], [mfgCode: 0x115F], delay=3500)       
-        cmds += zigbee.readAttribute(0xFCC0, 0x040a, [mfgCode: 0x115F], delay=500)       
-        // stock Generic Zigbee Thermostat Refresh answer:
-        // raw:F669010201441C0030011E008600000029640A2900861B0000300412000029540B110000299808, dni:F669, endpoint:01, cluster:0201, size:44, attrId:001C, encoding:30, command:01, value:01, clusterInt:513, attrInt:28, additionalAttrs:[[status:86, attrId:001E, attrInt:30], [value:0A64, encoding:29, attrId:0000, consumedBytes:5, attrInt:0], [status:86, attrId:0029, attrInt:41], [value:04, encoding:30, attrId:001B, consumedBytes:4, attrInt:27], [value:0B54, encoding:29, attrId:0012, consumedBytes:5, attrInt:18], [value:0898, encoding:29, attrId:0011, consumedBytes:5, attrInt:17]]
-        // conclusion : binding and reporting configuration for this Aqara E1 thermostat does nothing... We need polling mechanism for faster updates of the internal temperature readings.
-    }
-
-    else if (isSonoffTRV()) {
-        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)                          // battery percentage 
-        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x0029], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint,        
-    }
-
-    else if (isBRT100TRV()) {
-        //logDebug "no refresh commands for MOES_BRT-100"
-        // TODO - research how to get the temperature updates from the BRT-100 !!
-        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200)
-
-    }
-    */
-    /*
-    else if (getDeviceGroup() == "UNKNOWN") {
-        cmds += zigbee.readAttribute(0x0201, [0x0000, 0x0012, 0x001B, 0x001C], [:], delay=3500)       // 0x0000=local temperature, 0x0012=heating setpoint, 0x001B=controlledSequenceOfOperation, 0x001C=system mode (enum8 )       
-    }
- 
-    else {
-        logWarn "refreshThermostat: unknown device profile ${getDeviceGroup()}"
-    }
-    
-    if (cmds == []) { cmds = ["delay 299"] }
-    logDebug "refreshThermostat: ${cmds} "
-    return cmds
-       */
 }
 
 def configureThermostat() {
@@ -1253,9 +973,9 @@ def configureThermostat() {
     return cmds    
 }
 
-// TODO - check ! - called even for Tuya devices ?
-// TODO - remove specifics !!
-def initializeThermostat()
+
+// called from initializeDevice in the commonLib code
+def initializeDeviceThermostat()
 {
     List<String> cmds = []
     int intMinTime = 300
@@ -1289,7 +1009,7 @@ void initVarsThermostat(boolean fullInit=false) {
 
     if (fullInit == true || state.lastThermostatMode == null) state.lastThermostatMode = "unknown"
     if (fullInit == true || state.lastThermostatOperatingState == null) state.lastThermostatOperatingState = "unknown"
-    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TrvTemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
 
     if (fullInit == true) {
         resetPreferencesToDefaults()
@@ -1354,7 +1074,6 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
             sendEvent(eventMap)
             logInfo "${descText}"
             if (valueScaled == "on") {  // ecoMode is on
-                //sendEvent(name: "thermostatMode", value: "off", isStateChange: true, description: "BRT-100 ecoMode is on")
                 sendEvent(name: "thermostatMode", value: "eco", isStateChange: true, description: "BRT-100 ecoMode is on")
                 sendEvent(name: "thermostatOperatingState", value: "idle", isStateChange: true, description: "BRT-100 ecoMode is on")
             }
@@ -1444,6 +1163,8 @@ def testT(par) {
 
 }
 
+// /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
+
 
 
 // ~~~~~ start include (144) kkossev.commonLib ~~~~~
@@ -1478,7 +1199,7 @@ library ( // library marker kkossev.commonLib, line 1
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x // library marker kkossev.commonLib, line 29
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x // library marker kkossev.commonLib, line 30
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x // library marker kkossev.commonLib, line 31
-  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default // library marker kkossev.commonLib, line 32
+  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck(); // library marker kkossev.commonLib, line 32
   * // library marker kkossev.commonLib, line 33
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib ! // library marker kkossev.commonLib, line 34
   *                                   TODO: add GetInof (endpoints list) command // library marker kkossev.commonLib, line 35
@@ -1489,7 +1210,7 @@ library ( // library marker kkossev.commonLib, line 1
 */ // library marker kkossev.commonLib, line 40
 
 def commonLibVersion()   {"3.0.1"} // library marker kkossev.commonLib, line 42
-def thermostatLibStamp() {"2023/12/02 10:43 AM"} // library marker kkossev.commonLib, line 43
+def thermostatLibStamp() {"2023/12/03 11:33 PM"} // library marker kkossev.commonLib, line 43
 
 import groovy.transform.Field // library marker kkossev.commonLib, line 45
 import hubitat.device.HubMultiAction // library marker kkossev.commonLib, line 46
@@ -1681,8 +1402,8 @@ metadata { // library marker kkossev.commonLib, line 56
 
 
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */} // library marker kkossev.commonLib, line 234
-def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] } // library marker kkossev.commonLib, line 235
-def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] } // library marker kkossev.commonLib, line 236
+//def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] } // library marker kkossev.commonLib, line 235
+def isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] } // library marker kkossev.commonLib, line 236
 def isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] } // library marker kkossev.commonLib, line 237
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] } // library marker kkossev.commonLib, line 238
 def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] } // library marker kkossev.commonLib, line 239
@@ -2079,2409 +1800,2365 @@ void parseXiaomiCluster(final Map descMap) { // library marker kkossev.commonLib
 } // library marker kkossev.commonLib, line 630
 
 
-/* // library marker kkossev.commonLib, line 633
-@Field static final int XIAOMI_CLUSTER_ID = 0xFCC0 // library marker kkossev.commonLib, line 634
+@Field static final int ROLLING_AVERAGE_N = 10 // library marker kkossev.commonLib, line 633
+double approxRollingAverage (double avg, double new_sample) { // library marker kkossev.commonLib, line 634
+    if (avg == null || avg == 0) { avg = new_sample} // library marker kkossev.commonLib, line 635
+    avg -= avg / ROLLING_AVERAGE_N // library marker kkossev.commonLib, line 636
+    avg += new_sample / ROLLING_AVERAGE_N // library marker kkossev.commonLib, line 637
+    // TOSO: try Method II : New average = old average * (n-1)/n + new value /n // library marker kkossev.commonLib, line 638
+    return avg // library marker kkossev.commonLib, line 639
+} // library marker kkossev.commonLib, line 640
 
-// Zigbee Attributes // library marker kkossev.commonLib, line 636
-@Field static final int DIRECTION_MODE_ATTR_ID = 0x0144 // library marker kkossev.commonLib, line 637
-@Field static final int MODEL_ATTR_ID = 0x05 // library marker kkossev.commonLib, line 638
-@Field static final int PRESENCE_ACTIONS_ATTR_ID = 0x0143 // library marker kkossev.commonLib, line 639
-@Field static final int PRESENCE_ATTR_ID = 0x0142 // library marker kkossev.commonLib, line 640
-@Field static final int REGION_EVENT_ATTR_ID = 0x0151 // library marker kkossev.commonLib, line 641
-@Field static final int RESET_PRESENCE_ATTR_ID = 0x0157 // library marker kkossev.commonLib, line 642
-@Field static final int SENSITIVITY_LEVEL_ATTR_ID = 0x010C // library marker kkossev.commonLib, line 643
-@Field static final int SET_EDGE_REGION_ATTR_ID = 0x0156 // library marker kkossev.commonLib, line 644
-@Field static final int SET_EXIT_REGION_ATTR_ID = 0x0153 // library marker kkossev.commonLib, line 645
-@Field static final int SET_INTERFERENCE_ATTR_ID = 0x0154 // library marker kkossev.commonLib, line 646
-@Field static final int SET_REGION_ATTR_ID = 0x0150 // library marker kkossev.commonLib, line 647
-@Field static final int TRIGGER_DISTANCE_ATTR_ID = 0x0146 // library marker kkossev.commonLib, line 648
-@Field static final int XIAOMI_RAW_ATTR_ID = 0xFFF2 // library marker kkossev.commonLib, line 649
-@Field static final int XIAOMI_SPECIAL_REPORT_ID = 0x00F7 // library marker kkossev.commonLib, line 650
-@Field static final Map MFG_CODE = [ mfgCode: 0x115F ] // library marker kkossev.commonLib, line 651
+/* // library marker kkossev.commonLib, line 642
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 643
+ * Standard clusters reporting handlers // library marker kkossev.commonLib, line 644
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 645
+*/ // library marker kkossev.commonLib, line 646
+@Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']] // library marker kkossev.commonLib, line 647
 
-// Xiaomi Tags // library marker kkossev.commonLib, line 653
-@Field static final int DIRECTION_MODE_TAG_ID = 0x67 // library marker kkossev.commonLib, line 654
-@Field static final int SENSITIVITY_LEVEL_TAG_ID = 0x66 // library marker kkossev.commonLib, line 655
-@Field static final int SWBUILD_TAG_ID = 0x08 // library marker kkossev.commonLib, line 656
-@Field static final int TRIGGER_DISTANCE_TAG_ID = 0x69 // library marker kkossev.commonLib, line 657
-@Field static final int PRESENCE_ACTIONS_TAG_ID = 0x66 // library marker kkossev.commonLib, line 658
-@Field static final int PRESENCE_TAG_ID = 0x65 // library marker kkossev.commonLib, line 659
-*/ // library marker kkossev.commonLib, line 660
+/** // library marker kkossev.commonLib, line 649
+ * Zigbee Basic Cluster Parsing  0x0000 // library marker kkossev.commonLib, line 650
+ * @param descMap Zigbee message in parsed map format // library marker kkossev.commonLib, line 651
+ */ // library marker kkossev.commonLib, line 652
+void parseBasicCluster(final Map descMap) { // library marker kkossev.commonLib, line 653
+    def now = new Date().getTime() // library marker kkossev.commonLib, line 654
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 655
+    if (state.lastTx == null) { state.lastTx = [:] } // library marker kkossev.commonLib, line 656
+    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 657
+    if (state.stats == null) { state.stats = [:] } // library marker kkossev.commonLib, line 658
+    state.lastRx["checkInTime"] = now // library marker kkossev.commonLib, line 659
+    switch (descMap.attrInt as Integer) { // library marker kkossev.commonLib, line 660
+        case 0x0000: // library marker kkossev.commonLib, line 661
+            logDebug "Basic cluster: ZCLVersion = ${descMap?.value}" // library marker kkossev.commonLib, line 662
+            break // library marker kkossev.commonLib, line 663
+        case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism // library marker kkossev.commonLib, line 664
+            boolean isPing = state.states["isPing"] ?: false // library marker kkossev.commonLib, line 665
+            if (isPing) { // library marker kkossev.commonLib, line 666
+                def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger() // library marker kkossev.commonLib, line 667
+                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) { // library marker kkossev.commonLib, line 668
+                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1 // library marker kkossev.commonLib, line 669
+                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning } // library marker kkossev.commonLib, line 670
+                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning } // library marker kkossev.commonLib, line 671
+                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']),safeToDouble(timeRunning)) as int // library marker kkossev.commonLib, line 672
+                    sendRttEvent() // library marker kkossev.commonLib, line 673
+                } // library marker kkossev.commonLib, line 674
+                else { // library marker kkossev.commonLib, line 675
+                    logWarn "unexpected ping timeRunning=${timeRunning} " // library marker kkossev.commonLib, line 676
+                } // library marker kkossev.commonLib, line 677
+                state.states["isPing"] = false // library marker kkossev.commonLib, line 678
+            } // library marker kkossev.commonLib, line 679
+            else { // library marker kkossev.commonLib, line 680
+                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})" // library marker kkossev.commonLib, line 681
+            } // library marker kkossev.commonLib, line 682
+            break // library marker kkossev.commonLib, line 683
+        case 0x0004: // library marker kkossev.commonLib, line 684
+            logDebug "received device manufacturer ${descMap?.value}" // library marker kkossev.commonLib, line 685
+            // received device manufacturer IKEA of Sweden // library marker kkossev.commonLib, line 686
+            def manufacturer = device.getDataValue("manufacturer") // library marker kkossev.commonLib, line 687
+            if ((manufacturer == null || manufacturer == "unknown") && (descMap?.value != null) ) { // library marker kkossev.commonLib, line 688
+                logWarn "updating device manufacturer from ${manufacturer} to ${descMap?.value}" // library marker kkossev.commonLib, line 689
+                device.updateDataValue("manufacturer", descMap?.value) // library marker kkossev.commonLib, line 690
+            } // library marker kkossev.commonLib, line 691
+            break // library marker kkossev.commonLib, line 692
+        case 0x0005: // library marker kkossev.commonLib, line 693
+            logDebug "received device model ${descMap?.value}" // library marker kkossev.commonLib, line 694
+            // received device model Remote Control N2 // library marker kkossev.commonLib, line 695
+            def model = device.getDataValue("model") // library marker kkossev.commonLib, line 696
+            if ((model == null || model == "unknown") && (descMap?.value != null) ) { // library marker kkossev.commonLib, line 697
+                logWarn "updating device model from ${model} to ${descMap?.value}" // library marker kkossev.commonLib, line 698
+                device.updateDataValue("model", descMap?.value) // library marker kkossev.commonLib, line 699
+            } // library marker kkossev.commonLib, line 700
+            break // library marker kkossev.commonLib, line 701
+        case 0x0007: // library marker kkossev.commonLib, line 702
+            def powerSourceReported = powerSourceOpts.options[descMap?.value as int] // library marker kkossev.commonLib, line 703
+            logDebug "received Power source <b>${powerSourceReported}</b> (${descMap?.value})" // library marker kkossev.commonLib, line 704
+            //powerSourceEvent( powerSourceReported ) // library marker kkossev.commonLib, line 705
+            break // library marker kkossev.commonLib, line 706
+        case 0xFFDF: // library marker kkossev.commonLib, line 707
+            logDebug "Tuya check-in (Cluster Revision=${descMap?.value})" // library marker kkossev.commonLib, line 708
+            break // library marker kkossev.commonLib, line 709
+        case 0xFFE2: // library marker kkossev.commonLib, line 710
+            logDebug "Tuya check-in (AppVersion=${descMap?.value})" // library marker kkossev.commonLib, line 711
+            break // library marker kkossev.commonLib, line 712
+        case [0xFFE0, 0xFFE1, 0xFFE3, 0xFFE4] : // library marker kkossev.commonLib, line 713
+            logDebug "Tuya unknown attribute ${descMap?.attrId} value=${descMap?.value}" // library marker kkossev.commonLib, line 714
+            break // library marker kkossev.commonLib, line 715
+        case 0xFFFE: // library marker kkossev.commonLib, line 716
+            logDebug "Tuya attributeReportingStatus (attribute FFFE) value=${descMap?.value}" // library marker kkossev.commonLib, line 717
+            break // library marker kkossev.commonLib, line 718
+        case FIRMWARE_VERSION_ID:    // 0x4000 // library marker kkossev.commonLib, line 719
+            final String version = descMap.value ?: 'unknown' // library marker kkossev.commonLib, line 720
+            log.info "device firmware version is ${version}" // library marker kkossev.commonLib, line 721
+            updateDataValue('softwareBuild', version) // library marker kkossev.commonLib, line 722
+            break // library marker kkossev.commonLib, line 723
+        default: // library marker kkossev.commonLib, line 724
+            logWarn "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.commonLib, line 725
+            break // library marker kkossev.commonLib, line 726
+    } // library marker kkossev.commonLib, line 727
+} // library marker kkossev.commonLib, line 728
 
+/* // library marker kkossev.commonLib, line 730
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 731
+ * power cluster            0x0001 // library marker kkossev.commonLib, line 732
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 733
+*/ // library marker kkossev.commonLib, line 734
+void parsePowerCluster(final Map descMap) { // library marker kkossev.commonLib, line 735
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 736
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 737
+    if (descMap.attrId in ["0020", "0021"]) { // library marker kkossev.commonLib, line 738
+        state.lastRx["batteryTime"] = new Date().getTime() // library marker kkossev.commonLib, line 739
+        state.stats["battCtr"] = (state.stats["battCtr"] ?: 0 ) + 1 // library marker kkossev.commonLib, line 740
+    } // library marker kkossev.commonLib, line 741
 
-// TODO - move to xiaomiLib // library marker kkossev.commonLib, line 663
-// TODO - move to thermostatLib // library marker kkossev.commonLib, line 664
-// TODO - move to aqaraQubeLib // library marker kkossev.commonLib, line 665
+    final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 743
+    if (descMap.attrId == "0020") { // library marker kkossev.commonLib, line 744
+        sendBatteryVoltageEvent(rawValue) // library marker kkossev.commonLib, line 745
+        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.commonLib, line 746
+            sendBatteryVoltageEvent(rawValue, convertToPercent=true) // library marker kkossev.commonLib, line 747
+        } // library marker kkossev.commonLib, line 748
+    } // library marker kkossev.commonLib, line 749
+    else if (descMap.attrId == "0021") { // library marker kkossev.commonLib, line 750
+        sendBatteryPercentageEvent(rawValue * 2)     // library marker kkossev.commonLib, line 751
+    } // library marker kkossev.commonLib, line 752
+    else { // library marker kkossev.commonLib, line 753
+        logWarn "zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.commonLib, line 754
+    } // library marker kkossev.commonLib, line 755
+} // library marker kkossev.commonLib, line 756
 
+def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) { // library marker kkossev.commonLib, line 758
+    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.commonLib, line 759
+    def result = [:] // library marker kkossev.commonLib, line 760
+    def volts = rawValue / 10 // library marker kkossev.commonLib, line 761
+    if (!(rawValue == 0 || rawValue == 255)) { // library marker kkossev.commonLib, line 762
+        def minVolts = 2.2 // library marker kkossev.commonLib, line 763
+        def maxVolts = 3.2 // library marker kkossev.commonLib, line 764
+        def pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.commonLib, line 765
+        def roundedPct = Math.round(pct * 100) // library marker kkossev.commonLib, line 766
+        if (roundedPct <= 0) roundedPct = 1 // library marker kkossev.commonLib, line 767
+        if (roundedPct >100) roundedPct = 100 // library marker kkossev.commonLib, line 768
+        if (convertToPercent == true) { // library marker kkossev.commonLib, line 769
+            result.value = Math.min(100, roundedPct) // library marker kkossev.commonLib, line 770
+            result.name = 'battery' // library marker kkossev.commonLib, line 771
+            result.unit  = '%' // library marker kkossev.commonLib, line 772
+            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.commonLib, line 773
+        } // library marker kkossev.commonLib, line 774
+        else { // library marker kkossev.commonLib, line 775
+            result.value = volts // library marker kkossev.commonLib, line 776
+            result.name = 'batteryVoltage' // library marker kkossev.commonLib, line 777
+            result.unit  = 'V' // library marker kkossev.commonLib, line 778
+            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.commonLib, line 779
+        } // library marker kkossev.commonLib, line 780
+        result.type = 'physical' // library marker kkossev.commonLib, line 781
+        result.isStateChange = true // library marker kkossev.commonLib, line 782
+        logInfo "${result.descriptionText}" // library marker kkossev.commonLib, line 783
+        sendEvent(result) // library marker kkossev.commonLib, line 784
+    } // library marker kkossev.commonLib, line 785
+    else { // library marker kkossev.commonLib, line 786
+        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.commonLib, line 787
+    }     // library marker kkossev.commonLib, line 788
+} // library marker kkossev.commonLib, line 789
 
+def sendBatteryPercentageEvent( batteryPercent, isDigital=false ) { // library marker kkossev.commonLib, line 791
+    if ((batteryPercent as int) == 255) { // library marker kkossev.commonLib, line 792
+        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.commonLib, line 793
+        return // library marker kkossev.commonLib, line 794
+    } // library marker kkossev.commonLib, line 795
+    def map = [:] // library marker kkossev.commonLib, line 796
+    map.name = 'battery' // library marker kkossev.commonLib, line 797
+    map.timeStamp = now() // library marker kkossev.commonLib, line 798
+    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.commonLib, line 799
+    map.unit  = '%' // library marker kkossev.commonLib, line 800
+    map.type = isDigital ? 'digital' : 'physical'     // library marker kkossev.commonLib, line 801
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.commonLib, line 802
+    map.isStateChange = true // library marker kkossev.commonLib, line 803
+    //  // library marker kkossev.commonLib, line 804
+    def latestBatteryEvent = device.latestState('battery', skipCache=true) // library marker kkossev.commonLib, line 805
+    def latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.commonLib, line 806
+    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.commonLib, line 807
+    def timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.commonLib, line 808
+    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.commonLib, line 809
+        // send it now! // library marker kkossev.commonLib, line 810
+        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.commonLib, line 811
+    } // library marker kkossev.commonLib, line 812
+    else { // library marker kkossev.commonLib, line 813
+        def delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.commonLib, line 814
+        map.delayed = delayedTime // library marker kkossev.commonLib, line 815
+        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.commonLib, line 816
+        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.commonLib, line 817
+        runIn( delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.commonLib, line 818
+    } // library marker kkossev.commonLib, line 819
+} // library marker kkossev.commonLib, line 820
 
-
-@Field static final int ROLLING_AVERAGE_N = 10 // library marker kkossev.commonLib, line 670
-double approxRollingAverage (double avg, double new_sample) { // library marker kkossev.commonLib, line 671
-    if (avg == null || avg == 0) { avg = new_sample} // library marker kkossev.commonLib, line 672
-    avg -= avg / ROLLING_AVERAGE_N // library marker kkossev.commonLib, line 673
-    avg += new_sample / ROLLING_AVERAGE_N // library marker kkossev.commonLib, line 674
-    // TOSO: try Method II : New average = old average * (n-1)/n + new value /n // library marker kkossev.commonLib, line 675
-    return avg // library marker kkossev.commonLib, line 676
-} // library marker kkossev.commonLib, line 677
-
-/* // library marker kkossev.commonLib, line 679
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 680
- * Standard clusters reporting handlers // library marker kkossev.commonLib, line 681
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 682
-*/ // library marker kkossev.commonLib, line 683
-@Field static final Map powerSourceOpts =  [ defaultValue: 0, options: [0: 'unknown', 1: 'mains', 2: 'mains', 3: 'battery', 4: 'dc', 5: 'emergency mains', 6: 'emergency mains']] // library marker kkossev.commonLib, line 684
-
-/** // library marker kkossev.commonLib, line 686
- * Zigbee Basic Cluster Parsing  0x0000 // library marker kkossev.commonLib, line 687
- * @param descMap Zigbee message in parsed map format // library marker kkossev.commonLib, line 688
- */ // library marker kkossev.commonLib, line 689
-void parseBasicCluster(final Map descMap) { // library marker kkossev.commonLib, line 690
-    def now = new Date().getTime() // library marker kkossev.commonLib, line 691
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 692
-    if (state.lastTx == null) { state.lastTx = [:] } // library marker kkossev.commonLib, line 693
-    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 694
-    if (state.stats == null) { state.stats = [:] } // library marker kkossev.commonLib, line 695
-    state.lastRx["checkInTime"] = now // library marker kkossev.commonLib, line 696
-    switch (descMap.attrInt as Integer) { // library marker kkossev.commonLib, line 697
-        case 0x0000: // library marker kkossev.commonLib, line 698
-            logDebug "Basic cluster: ZCLVersion = ${descMap?.value}" // library marker kkossev.commonLib, line 699
-            break // library marker kkossev.commonLib, line 700
-        case PING_ATTR_ID: // 0x01 - Using 0x01 read as a simple ping/pong mechanism // library marker kkossev.commonLib, line 701
-            boolean isPing = state.states["isPing"] ?: false // library marker kkossev.commonLib, line 702
-            if (isPing) { // library marker kkossev.commonLib, line 703
-                def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger() // library marker kkossev.commonLib, line 704
-                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) { // library marker kkossev.commonLib, line 705
-                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1 // library marker kkossev.commonLib, line 706
-                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning } // library marker kkossev.commonLib, line 707
-                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning } // library marker kkossev.commonLib, line 708
-                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']),safeToDouble(timeRunning)) as int // library marker kkossev.commonLib, line 709
-                    sendRttEvent() // library marker kkossev.commonLib, line 710
-                } // library marker kkossev.commonLib, line 711
-                else { // library marker kkossev.commonLib, line 712
-                    logWarn "unexpected ping timeRunning=${timeRunning} " // library marker kkossev.commonLib, line 713
-                } // library marker kkossev.commonLib, line 714
-                state.states["isPing"] = false // library marker kkossev.commonLib, line 715
-            } // library marker kkossev.commonLib, line 716
-            else { // library marker kkossev.commonLib, line 717
-                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})" // library marker kkossev.commonLib, line 718
-            } // library marker kkossev.commonLib, line 719
-            break // library marker kkossev.commonLib, line 720
-        case 0x0004: // library marker kkossev.commonLib, line 721
-            logDebug "received device manufacturer ${descMap?.value}" // library marker kkossev.commonLib, line 722
-            // received device manufacturer IKEA of Sweden // library marker kkossev.commonLib, line 723
-            def manufacturer = device.getDataValue("manufacturer") // library marker kkossev.commonLib, line 724
-            if ((manufacturer == null || manufacturer == "unknown") && (descMap?.value != null) ) { // library marker kkossev.commonLib, line 725
-                logWarn "updating device manufacturer from ${manufacturer} to ${descMap?.value}" // library marker kkossev.commonLib, line 726
-                device.updateDataValue("manufacturer", descMap?.value) // library marker kkossev.commonLib, line 727
-            } // library marker kkossev.commonLib, line 728
-            break // library marker kkossev.commonLib, line 729
-        case 0x0005: // library marker kkossev.commonLib, line 730
-            logDebug "received device model ${descMap?.value}" // library marker kkossev.commonLib, line 731
-            // received device model Remote Control N2 // library marker kkossev.commonLib, line 732
-            def model = device.getDataValue("model") // library marker kkossev.commonLib, line 733
-            if ((model == null || model == "unknown") && (descMap?.value != null) ) { // library marker kkossev.commonLib, line 734
-                logWarn "updating device model from ${model} to ${descMap?.value}" // library marker kkossev.commonLib, line 735
-                device.updateDataValue("model", descMap?.value) // library marker kkossev.commonLib, line 736
-            } // library marker kkossev.commonLib, line 737
-            break // library marker kkossev.commonLib, line 738
-        case 0x0007: // library marker kkossev.commonLib, line 739
-            def powerSourceReported = powerSourceOpts.options[descMap?.value as int] // library marker kkossev.commonLib, line 740
-            logDebug "received Power source <b>${powerSourceReported}</b> (${descMap?.value})" // library marker kkossev.commonLib, line 741
-            //powerSourceEvent( powerSourceReported ) // library marker kkossev.commonLib, line 742
-            break // library marker kkossev.commonLib, line 743
-        case 0xFFDF: // library marker kkossev.commonLib, line 744
-            logDebug "Tuya check-in (Cluster Revision=${descMap?.value})" // library marker kkossev.commonLib, line 745
-            break // library marker kkossev.commonLib, line 746
-        case 0xFFE2: // library marker kkossev.commonLib, line 747
-            logDebug "Tuya check-in (AppVersion=${descMap?.value})" // library marker kkossev.commonLib, line 748
-            break // library marker kkossev.commonLib, line 749
-        case [0xFFE0, 0xFFE1, 0xFFE3, 0xFFE4] : // library marker kkossev.commonLib, line 750
-            logDebug "Tuya unknown attribute ${descMap?.attrId} value=${descMap?.value}" // library marker kkossev.commonLib, line 751
-            break // library marker kkossev.commonLib, line 752
-        case 0xFFFE: // library marker kkossev.commonLib, line 753
-            logDebug "Tuya attributeReportingStatus (attribute FFFE) value=${descMap?.value}" // library marker kkossev.commonLib, line 754
-            break // library marker kkossev.commonLib, line 755
-        case FIRMWARE_VERSION_ID:    // 0x4000 // library marker kkossev.commonLib, line 756
-            final String version = descMap.value ?: 'unknown' // library marker kkossev.commonLib, line 757
-            log.info "device firmware version is ${version}" // library marker kkossev.commonLib, line 758
-            updateDataValue('softwareBuild', version) // library marker kkossev.commonLib, line 759
-            break // library marker kkossev.commonLib, line 760
-        default: // library marker kkossev.commonLib, line 761
-            logWarn "zigbee received unknown Basic cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.commonLib, line 762
-            break // library marker kkossev.commonLib, line 763
-    } // library marker kkossev.commonLib, line 764
-} // library marker kkossev.commonLib, line 765
-
-/* // library marker kkossev.commonLib, line 767
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 768
- * power cluster            0x0001 // library marker kkossev.commonLib, line 769
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 770
-*/ // library marker kkossev.commonLib, line 771
-void parsePowerCluster(final Map descMap) { // library marker kkossev.commonLib, line 772
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 773
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 774
-    if (descMap.attrId in ["0020", "0021"]) { // library marker kkossev.commonLib, line 775
-        state.lastRx["batteryTime"] = new Date().getTime() // library marker kkossev.commonLib, line 776
-        state.stats["battCtr"] = (state.stats["battCtr"] ?: 0 ) + 1 // library marker kkossev.commonLib, line 777
-    } // library marker kkossev.commonLib, line 778
-
-    final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 780
-    if (descMap.attrId == "0020") { // library marker kkossev.commonLib, line 781
-        sendBatteryVoltageEvent(rawValue) // library marker kkossev.commonLib, line 782
-        if ((settings.voltageToPercent ?: false) == true) { // library marker kkossev.commonLib, line 783
-            sendBatteryVoltageEvent(rawValue, convertToPercent=true) // library marker kkossev.commonLib, line 784
-        } // library marker kkossev.commonLib, line 785
-    } // library marker kkossev.commonLib, line 786
-    else if (descMap.attrId == "0021") { // library marker kkossev.commonLib, line 787
-        sendBatteryPercentageEvent(rawValue * 2)     // library marker kkossev.commonLib, line 788
-    } // library marker kkossev.commonLib, line 789
-    else { // library marker kkossev.commonLib, line 790
-        logWarn "zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})" // library marker kkossev.commonLib, line 791
-    } // library marker kkossev.commonLib, line 792
-} // library marker kkossev.commonLib, line 793
-
-def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) { // library marker kkossev.commonLib, line 795
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V" // library marker kkossev.commonLib, line 796
-    def result = [:] // library marker kkossev.commonLib, line 797
-    def volts = rawValue / 10 // library marker kkossev.commonLib, line 798
-    if (!(rawValue == 0 || rawValue == 255)) { // library marker kkossev.commonLib, line 799
-        def minVolts = 2.2 // library marker kkossev.commonLib, line 800
-        def maxVolts = 3.2 // library marker kkossev.commonLib, line 801
-        def pct = (volts - minVolts) / (maxVolts - minVolts) // library marker kkossev.commonLib, line 802
-        def roundedPct = Math.round(pct * 100) // library marker kkossev.commonLib, line 803
-        if (roundedPct <= 0) roundedPct = 1 // library marker kkossev.commonLib, line 804
-        if (roundedPct >100) roundedPct = 100 // library marker kkossev.commonLib, line 805
-        if (convertToPercent == true) { // library marker kkossev.commonLib, line 806
-            result.value = Math.min(100, roundedPct) // library marker kkossev.commonLib, line 807
-            result.name = 'battery' // library marker kkossev.commonLib, line 808
-            result.unit  = '%' // library marker kkossev.commonLib, line 809
-            result.descriptionText = "battery is ${roundedPct} %" // library marker kkossev.commonLib, line 810
-        } // library marker kkossev.commonLib, line 811
-        else { // library marker kkossev.commonLib, line 812
-            result.value = volts // library marker kkossev.commonLib, line 813
-            result.name = 'batteryVoltage' // library marker kkossev.commonLib, line 814
-            result.unit  = 'V' // library marker kkossev.commonLib, line 815
-            result.descriptionText = "battery is ${volts} Volts" // library marker kkossev.commonLib, line 816
-        } // library marker kkossev.commonLib, line 817
-        result.type = 'physical' // library marker kkossev.commonLib, line 818
-        result.isStateChange = true // library marker kkossev.commonLib, line 819
-        logInfo "${result.descriptionText}" // library marker kkossev.commonLib, line 820
-        sendEvent(result) // library marker kkossev.commonLib, line 821
-    } // library marker kkossev.commonLib, line 822
-    else { // library marker kkossev.commonLib, line 823
-        logWarn "ignoring BatteryResult(${rawValue})" // library marker kkossev.commonLib, line 824
-    }     // library marker kkossev.commonLib, line 825
+private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.commonLib, line 822
+    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 823
+    //map.each {log.trace "$it"} // library marker kkossev.commonLib, line 824
+    sendEvent(map) // library marker kkossev.commonLib, line 825
 } // library marker kkossev.commonLib, line 826
 
-def sendBatteryPercentageEvent( batteryPercent, isDigital=false ) { // library marker kkossev.commonLib, line 828
-    if ((batteryPercent as int) == 255) { // library marker kkossev.commonLib, line 829
-        logWarn "ignoring battery report raw=${batteryPercent}" // library marker kkossev.commonLib, line 830
-        return // library marker kkossev.commonLib, line 831
-    } // library marker kkossev.commonLib, line 832
-    def map = [:] // library marker kkossev.commonLib, line 833
-    map.name = 'battery' // library marker kkossev.commonLib, line 834
-    map.timeStamp = now() // library marker kkossev.commonLib, line 835
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int) // library marker kkossev.commonLib, line 836
-    map.unit  = '%' // library marker kkossev.commonLib, line 837
-    map.type = isDigital ? 'digital' : 'physical'     // library marker kkossev.commonLib, line 838
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}" // library marker kkossev.commonLib, line 839
-    map.isStateChange = true // library marker kkossev.commonLib, line 840
-    //  // library marker kkossev.commonLib, line 841
-    def latestBatteryEvent = device.latestState('battery', skipCache=true) // library marker kkossev.commonLib, line 842
-    def latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now() // library marker kkossev.commonLib, line 843
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}" // library marker kkossev.commonLib, line 844
-    def timeDiff = ((now() - latestBatteryEventTime) / 1000) as int // library marker kkossev.commonLib, line 845
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) { // library marker kkossev.commonLib, line 846
-        // send it now! // library marker kkossev.commonLib, line 847
-        sendDelayedBatteryPercentageEvent(map) // library marker kkossev.commonLib, line 848
-    } // library marker kkossev.commonLib, line 849
-    else { // library marker kkossev.commonLib, line 850
-        def delayedTime = (settings?.batteryDelay as int) - timeDiff // library marker kkossev.commonLib, line 851
-        map.delayed = delayedTime // library marker kkossev.commonLib, line 852
-        map.descriptionText += " [delayed ${map.delayed} seconds]" // library marker kkossev.commonLib, line 853
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds" // library marker kkossev.commonLib, line 854
-        runIn( delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map]) // library marker kkossev.commonLib, line 855
+private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.commonLib, line 828
+    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 829
+    //map.each {log.trace "$it"} // library marker kkossev.commonLib, line 830
+    sendEvent(map) // library marker kkossev.commonLib, line 831
+} // library marker kkossev.commonLib, line 832
+
+/* // library marker kkossev.commonLib, line 834
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 835
+ * Zigbee Identity Cluster 0x0003 // library marker kkossev.commonLib, line 836
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 837
+*/ // library marker kkossev.commonLib, line 838
+void parseIdentityCluster(final Map descMap) { // library marker kkossev.commonLib, line 839
+    logDebug "unprocessed parseIdentityCluster" // library marker kkossev.commonLib, line 840
+} // library marker kkossev.commonLib, line 841
+
+
+
+/* // library marker kkossev.commonLib, line 845
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 846
+ * Zigbee Scenes Cluster 0x005 // library marker kkossev.commonLib, line 847
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 848
+*/ // library marker kkossev.commonLib, line 849
+void parseScenesCluster(final Map descMap) { // library marker kkossev.commonLib, line 850
+    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 851
+        parseScenesClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 852
+    }     // library marker kkossev.commonLib, line 853
+    else { // library marker kkossev.commonLib, line 854
+        logWarn "unprocessed ScenesCluste attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 855
     } // library marker kkossev.commonLib, line 856
 } // library marker kkossev.commonLib, line 857
 
-private void sendDelayedBatteryPercentageEvent(Map map) { // library marker kkossev.commonLib, line 859
-    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 860
-    //map.each {log.trace "$it"} // library marker kkossev.commonLib, line 861
-    sendEvent(map) // library marker kkossev.commonLib, line 862
-} // library marker kkossev.commonLib, line 863
 
-private void sendDelayedBatteryVoltageEvent(Map map) { // library marker kkossev.commonLib, line 865
-    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 866
-    //map.each {log.trace "$it"} // library marker kkossev.commonLib, line 867
-    sendEvent(map) // library marker kkossev.commonLib, line 868
-} // library marker kkossev.commonLib, line 869
+/* // library marker kkossev.commonLib, line 860
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 861
+ * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts // library marker kkossev.commonLib, line 862
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 863
+*/ // library marker kkossev.commonLib, line 864
+void parseGroupsCluster(final Map descMap) { // library marker kkossev.commonLib, line 865
+    // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]] // library marker kkossev.commonLib, line 866
+    logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}" // library marker kkossev.commonLib, line 867
+    if (state.zigbeeGroups == null) state.zigbeeGroups = [:]     // library marker kkossev.commonLib, line 868
+    switch (descMap.command as Integer) { // library marker kkossev.commonLib, line 869
+        case 0x00: // Add group    0x0001 – 0xfff7 // library marker kkossev.commonLib, line 870
+            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 871
+            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 872
+            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 873
+            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 874
+            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 875
+            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 876
+                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) <b>error: ${statusName}</b>" // library marker kkossev.commonLib, line 877
+            } // library marker kkossev.commonLib, line 878
+            else { // library marker kkossev.commonLib, line 879
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) statusCode: ${statusName}" // library marker kkossev.commonLib, line 880
+                // add the group to state.zigbeeGroups['groups'] if not exist // library marker kkossev.commonLib, line 881
+                int groupCount = state.zigbeeGroups['groups'].size() // library marker kkossev.commonLib, line 882
+                for (int i=0; i<groupCount; i++ ) { // library marker kkossev.commonLib, line 883
+                    if (safeToInt(state.zigbeeGroups['groups'][i]) == groupIdInt) { // library marker kkossev.commonLib, line 884
+                        logDebug "Zigbee group ${groupIdInt} (0x${groupId}) already exist" // library marker kkossev.commonLib, line 885
+                        return // library marker kkossev.commonLib, line 886
+                    } // library marker kkossev.commonLib, line 887
+                } // library marker kkossev.commonLib, line 888
+                state.zigbeeGroups['groups'].add(groupIdInt) // library marker kkossev.commonLib, line 889
+                logInfo "Zigbee group added new group ${groupIdInt} (0x${zigbee.convertToHexString(groupIdInt,4)})" // library marker kkossev.commonLib, line 890
+                state.zigbeeGroups['groups'].sort() // library marker kkossev.commonLib, line 891
+            } // library marker kkossev.commonLib, line 892
+            break // library marker kkossev.commonLib, line 893
+        case 0x01: // View group // library marker kkossev.commonLib, line 894
+            // The view group command allows the sending device to request that the receiving entity or entities respond with a view group response command containing the application name string for a particular group. // library marker kkossev.commonLib, line 895
+            logDebug "received View group GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 896
+            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 897
+            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 898
+            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 899
+            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 900
+            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 901
+            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 902
+                logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}" // library marker kkossev.commonLib, line 903
+            } // library marker kkossev.commonLib, line 904
+            else { // library marker kkossev.commonLib, line 905
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}" // library marker kkossev.commonLib, line 906
+            } // library marker kkossev.commonLib, line 907
+            break // library marker kkossev.commonLib, line 908
+        case 0x02: // Get group membership // library marker kkossev.commonLib, line 909
+            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 910
+            final int capacity = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 911
+            final int groupCount = hexStrToUnsignedInt(data[1]) // library marker kkossev.commonLib, line 912
+            final Set<String> groups = [] // library marker kkossev.commonLib, line 913
+            for (int i = 0; i < groupCount; i++) { // library marker kkossev.commonLib, line 914
+                int pos = (i * 2) + 2 // library marker kkossev.commonLib, line 915
+                String group = data[pos + 1] + data[pos] // library marker kkossev.commonLib, line 916
+                groups.add(hexStrToUnsignedInt(group)) // library marker kkossev.commonLib, line 917
+            } // library marker kkossev.commonLib, line 918
+            state.zigbeeGroups['groups'] = groups // library marker kkossev.commonLib, line 919
+            state.zigbeeGroups['capacity'] = capacity // library marker kkossev.commonLib, line 920
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}" // library marker kkossev.commonLib, line 921
+            break // library marker kkossev.commonLib, line 922
+        case 0x03: // Remove group // library marker kkossev.commonLib, line 923
+            logInfo "received  Remove group GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 924
+            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 925
+            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 926
+            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 927
+            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 928
+            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 929
+            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 930
+                logWarn "zigbee response remove group ${groupIdInt} (0x${groupId}) error: ${statusName}" // library marker kkossev.commonLib, line 931
+            } // library marker kkossev.commonLib, line 932
+            else { // library marker kkossev.commonLib, line 933
+                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}" // library marker kkossev.commonLib, line 934
+            } // library marker kkossev.commonLib, line 935
+            // remove it from the states, even if status code was 'Not Found' // library marker kkossev.commonLib, line 936
+            def index = state.zigbeeGroups['groups'].indexOf(groupIdInt) // library marker kkossev.commonLib, line 937
+            if (index >= 0) { // library marker kkossev.commonLib, line 938
+                state.zigbeeGroups['groups'].remove(index) // library marker kkossev.commonLib, line 939
+                logDebug "Zigbee group ${groupIdInt} (0x${groupId}) removed" // library marker kkossev.commonLib, line 940
+            } // library marker kkossev.commonLib, line 941
+            break // library marker kkossev.commonLib, line 942
+        case 0x04: //Remove all groups // library marker kkossev.commonLib, line 943
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}" // library marker kkossev.commonLib, line 944
+            logWarn "not implemented!" // library marker kkossev.commonLib, line 945
+            break // library marker kkossev.commonLib, line 946
+        case 0x05: // Add group if identifying // library marker kkossev.commonLib, line 947
+            //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5).  // library marker kkossev.commonLib, line 948
+            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}" // library marker kkossev.commonLib, line 949
+            logWarn "not implemented!" // library marker kkossev.commonLib, line 950
+            break // library marker kkossev.commonLib, line 951
+        default: // library marker kkossev.commonLib, line 952
+            logWarn "received unknown GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 953
+            break // library marker kkossev.commonLib, line 954
+    } // library marker kkossev.commonLib, line 955
+} // library marker kkossev.commonLib, line 956
 
+List<String> addGroupMembership(groupNr) { // library marker kkossev.commonLib, line 958
+    List<String> cmds = [] // library marker kkossev.commonLib, line 959
+    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 960
+    if (group < 1 || group > 0xFFF7) { // library marker kkossev.commonLib, line 961
+        logWarn "addGroupMembership: invalid group ${groupNr}" // library marker kkossev.commonLib, line 962
+        return // library marker kkossev.commonLib, line 963
+    } // library marker kkossev.commonLib, line 964
+    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 965
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x00, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 966
+    logDebug "addGroupMembership: adding group ${group} to ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 967
+    return cmds // library marker kkossev.commonLib, line 968
+} // library marker kkossev.commonLib, line 969
 
-/* // library marker kkossev.commonLib, line 872
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 873
- * Zigbee Identity Cluster 0x0003 // library marker kkossev.commonLib, line 874
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 875
-*/ // library marker kkossev.commonLib, line 876
+List<String> viewGroupMembership(groupNr) { // library marker kkossev.commonLib, line 971
+    List<String> cmds = [] // library marker kkossev.commonLib, line 972
+    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 973
+    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 974
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x01, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 975
+    logDebug "viewGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 976
+    return cmds // library marker kkossev.commonLib, line 977
+} // library marker kkossev.commonLib, line 978
 
-void parseIdentityCluster(final Map descMap) { // library marker kkossev.commonLib, line 878
-    logDebug "unprocessed parseIdentityCluster" // library marker kkossev.commonLib, line 879
-} // library marker kkossev.commonLib, line 880
+List<String> getGroupMembership(dummy) { // library marker kkossev.commonLib, line 980
+    List<String> cmds = [] // library marker kkossev.commonLib, line 981
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, "00") // library marker kkossev.commonLib, line 982
+    logDebug "getGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 983
+    return cmds // library marker kkossev.commonLib, line 984
+} // library marker kkossev.commonLib, line 985
 
+List<String> removeGroupMembership(groupNr) { // library marker kkossev.commonLib, line 987
+    List<String> cmds = [] // library marker kkossev.commonLib, line 988
+    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 989
+    if (group < 1 || group > 0xFFF7) { // library marker kkossev.commonLib, line 990
+        logWarn "removeGroupMembership: invalid group ${groupNr}" // library marker kkossev.commonLib, line 991
+        return // library marker kkossev.commonLib, line 992
+    } // library marker kkossev.commonLib, line 993
+    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 994
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x03, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 995
+    logDebug "removeGroupMembership: deleting group ${group} from ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 996
+    return cmds // library marker kkossev.commonLib, line 997
+} // library marker kkossev.commonLib, line 998
 
+List<String> removeAllGroups(groupNr) { // library marker kkossev.commonLib, line 1000
+    List<String> cmds = [] // library marker kkossev.commonLib, line 1001
+    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1002
+    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1003
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x04, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 1004
+    logDebug "removeAllGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1005
+    return cmds // library marker kkossev.commonLib, line 1006
+} // library marker kkossev.commonLib, line 1007
 
-/* // library marker kkossev.commonLib, line 884
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 885
- * Zigbee Scenes Cluster 0x005 // library marker kkossev.commonLib, line 886
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 887
-*/ // library marker kkossev.commonLib, line 888
+List<String> notImplementedGroups(groupNr) { // library marker kkossev.commonLib, line 1009
+    List<String> cmds = [] // library marker kkossev.commonLib, line 1010
+    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1011
+    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1012
+    logWarn "notImplementedGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1013
+    return cmds // library marker kkossev.commonLib, line 1014
+} // library marker kkossev.commonLib, line 1015
 
-void parseScenesCluster(final Map descMap) { // library marker kkossev.commonLib, line 890
-    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 891
-        parseScenesClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 892
-    }     // library marker kkossev.commonLib, line 893
-    else { // library marker kkossev.commonLib, line 894
-        logWarn "unprocessed ScenesCluste attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 895
-    } // library marker kkossev.commonLib, line 896
-} // library marker kkossev.commonLib, line 897
+@Field static final Map GroupCommandsMap = [ // library marker kkossev.commonLib, line 1017
+    "--- select ---"           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'GroupCommandsHelp'], // library marker kkossev.commonLib, line 1018
+    "Add group"                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'], // library marker kkossev.commonLib, line 1019
+    "View group"               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'], // library marker kkossev.commonLib, line 1020
+    "Get group membership"     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'], // library marker kkossev.commonLib, line 1021
+    "Remove group"             : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'], // library marker kkossev.commonLib, line 1022
+    "Remove all groups"        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'], // library marker kkossev.commonLib, line 1023
+    "Add group if identifying" : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups'] // library marker kkossev.commonLib, line 1024
+] // library marker kkossev.commonLib, line 1025
 
+def zigbeeGroups( command=null, par=null ) // library marker kkossev.commonLib, line 1027
+{ // library marker kkossev.commonLib, line 1028
+    logInfo "executing command \'${command}\', parameter ${par}" // library marker kkossev.commonLib, line 1029
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 1030
+    if (state.zigbeeGroups == null) state.zigbeeGroups = [:] // library marker kkossev.commonLib, line 1031
+    if (state.zigbeeGroups['groups'] == null) state.zigbeeGroups['groups'] = [] // library marker kkossev.commonLib, line 1032
+    def value // library marker kkossev.commonLib, line 1033
+    Boolean validated = false // library marker kkossev.commonLib, line 1034
+    if (command == null || !(command in (GroupCommandsMap.keySet() as List))) { // library marker kkossev.commonLib, line 1035
+        logWarn "zigbeeGroups: command <b>${command}</b> must be one of these : ${GroupCommandsMap.keySet() as List}" // library marker kkossev.commonLib, line 1036
+        return // library marker kkossev.commonLib, line 1037
+    } // library marker kkossev.commonLib, line 1038
+    value = GroupCommandsMap[command]?.type == "number" ? safeToInt(par, -1) : 0 // library marker kkossev.commonLib, line 1039
+    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) validated = true // library marker kkossev.commonLib, line 1040
+    if (validated == false && GroupCommandsMap[command]?.min != null && GroupCommandsMap[command]?.max != null) { // library marker kkossev.commonLib, line 1041
+        log.warn "zigbeeGroups: command <b>command</b> parameter <b>${par}</b> must be within ${GroupCommandsMap[command]?.min} and  ${GroupCommandsMap[command]?.max} " // library marker kkossev.commonLib, line 1042
+        return // library marker kkossev.commonLib, line 1043
+    } // library marker kkossev.commonLib, line 1044
+    // // library marker kkossev.commonLib, line 1045
+    def func // library marker kkossev.commonLib, line 1046
+   // try { // library marker kkossev.commonLib, line 1047
+        func = GroupCommandsMap[command]?.function // library marker kkossev.commonLib, line 1048
+        def type = GroupCommandsMap[command]?.type // library marker kkossev.commonLib, line 1049
+        // device.updateSetting("$par", [value:value, type:type])  // TODO !!! // library marker kkossev.commonLib, line 1050
+        cmds = "$func"(value) // library marker kkossev.commonLib, line 1051
+ //   } // library marker kkossev.commonLib, line 1052
+//    catch (e) { // library marker kkossev.commonLib, line 1053
+//        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 1054
+//        return // library marker kkossev.commonLib, line 1055
+//    } // library marker kkossev.commonLib, line 1056
 
-/* // library marker kkossev.commonLib, line 900
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 901
- * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts // library marker kkossev.commonLib, line 902
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 903
-*/ // library marker kkossev.commonLib, line 904
+    logDebug "executed <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 1058
+    sendZigbeeCommands( cmds ) // library marker kkossev.commonLib, line 1059
+} // library marker kkossev.commonLib, line 1060
 
-void parseGroupsCluster(final Map descMap) { // library marker kkossev.commonLib, line 906
-    // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]] // library marker kkossev.commonLib, line 907
-    logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}" // library marker kkossev.commonLib, line 908
-    if (state.zigbeeGroups == null) state.zigbeeGroups = [:]     // library marker kkossev.commonLib, line 909
-    switch (descMap.command as Integer) { // library marker kkossev.commonLib, line 910
-        case 0x00: // Add group    0x0001 – 0xfff7 // library marker kkossev.commonLib, line 911
-            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 912
-            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 913
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 914
-            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 915
-            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 916
-            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 917
-                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) <b>error: ${statusName}</b>" // library marker kkossev.commonLib, line 918
-            } // library marker kkossev.commonLib, line 919
-            else { // library marker kkossev.commonLib, line 920
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) statusCode: ${statusName}" // library marker kkossev.commonLib, line 921
-                // add the group to state.zigbeeGroups['groups'] if not exist // library marker kkossev.commonLib, line 922
-                int groupCount = state.zigbeeGroups['groups'].size() // library marker kkossev.commonLib, line 923
-                for (int i=0; i<groupCount; i++ ) { // library marker kkossev.commonLib, line 924
-                    if (safeToInt(state.zigbeeGroups['groups'][i]) == groupIdInt) { // library marker kkossev.commonLib, line 925
-                        logDebug "Zigbee group ${groupIdInt} (0x${groupId}) already exist" // library marker kkossev.commonLib, line 926
-                        return // library marker kkossev.commonLib, line 927
-                    } // library marker kkossev.commonLib, line 928
-                } // library marker kkossev.commonLib, line 929
-                state.zigbeeGroups['groups'].add(groupIdInt) // library marker kkossev.commonLib, line 930
-                logInfo "Zigbee group added new group ${groupIdInt} (0x${zigbee.convertToHexString(groupIdInt,4)})" // library marker kkossev.commonLib, line 931
-                state.zigbeeGroups['groups'].sort() // library marker kkossev.commonLib, line 932
-            } // library marker kkossev.commonLib, line 933
-            break // library marker kkossev.commonLib, line 934
-        case 0x01: // View group // library marker kkossev.commonLib, line 935
-            // The view group command allows the sending device to request that the receiving entity or entities respond with a view group response command containing the application name string for a particular group. // library marker kkossev.commonLib, line 936
-            logDebug "received View group GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 937
-            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 938
-            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 939
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 940
-            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 941
-            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 942
-            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 943
-                logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}" // library marker kkossev.commonLib, line 944
-            } // library marker kkossev.commonLib, line 945
-            else { // library marker kkossev.commonLib, line 946
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}" // library marker kkossev.commonLib, line 947
-            } // library marker kkossev.commonLib, line 948
-            break // library marker kkossev.commonLib, line 949
-        case 0x02: // Get group membership // library marker kkossev.commonLib, line 950
-            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 951
-            final int capacity = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 952
-            final int groupCount = hexStrToUnsignedInt(data[1]) // library marker kkossev.commonLib, line 953
-            final Set<String> groups = [] // library marker kkossev.commonLib, line 954
-            for (int i = 0; i < groupCount; i++) { // library marker kkossev.commonLib, line 955
-                int pos = (i * 2) + 2 // library marker kkossev.commonLib, line 956
-                String group = data[pos + 1] + data[pos] // library marker kkossev.commonLib, line 957
-                groups.add(hexStrToUnsignedInt(group)) // library marker kkossev.commonLib, line 958
-            } // library marker kkossev.commonLib, line 959
-            state.zigbeeGroups['groups'] = groups // library marker kkossev.commonLib, line 960
-            state.zigbeeGroups['capacity'] = capacity // library marker kkossev.commonLib, line 961
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}" // library marker kkossev.commonLib, line 962
-            break // library marker kkossev.commonLib, line 963
-        case 0x03: // Remove group // library marker kkossev.commonLib, line 964
-            logInfo "received  Remove group GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 965
-            final List<String> data = descMap.data as List<String> // library marker kkossev.commonLib, line 966
-            final int statusCode = hexStrToUnsignedInt(data[0]) // library marker kkossev.commonLib, line 967
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}" // library marker kkossev.commonLib, line 968
-            final String groupId = data[2] + data[1] // library marker kkossev.commonLib, line 969
-            final int groupIdInt = hexStrToUnsignedInt(groupId) // library marker kkossev.commonLib, line 970
-            if (statusCode > 0x00) { // library marker kkossev.commonLib, line 971
-                logWarn "zigbee response remove group ${groupIdInt} (0x${groupId}) error: ${statusName}" // library marker kkossev.commonLib, line 972
-            } // library marker kkossev.commonLib, line 973
-            else { // library marker kkossev.commonLib, line 974
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}" // library marker kkossev.commonLib, line 975
-            } // library marker kkossev.commonLib, line 976
-            // remove it from the states, even if status code was 'Not Found' // library marker kkossev.commonLib, line 977
-            def index = state.zigbeeGroups['groups'].indexOf(groupIdInt) // library marker kkossev.commonLib, line 978
-            if (index >= 0) { // library marker kkossev.commonLib, line 979
-                state.zigbeeGroups['groups'].remove(index) // library marker kkossev.commonLib, line 980
-                logDebug "Zigbee group ${groupIdInt} (0x${groupId}) removed" // library marker kkossev.commonLib, line 981
-            } // library marker kkossev.commonLib, line 982
-            break // library marker kkossev.commonLib, line 983
-        case 0x04: //Remove all groups // library marker kkossev.commonLib, line 984
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}" // library marker kkossev.commonLib, line 985
-            logWarn "not implemented!" // library marker kkossev.commonLib, line 986
-            break // library marker kkossev.commonLib, line 987
-        case 0x05: // Add group if identifying // library marker kkossev.commonLib, line 988
-            //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5).  // library marker kkossev.commonLib, line 989
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}" // library marker kkossev.commonLib, line 990
-            logWarn "not implemented!" // library marker kkossev.commonLib, line 991
-            break // library marker kkossev.commonLib, line 992
-        default: // library marker kkossev.commonLib, line 993
-            logWarn "received unknown GROUPS cluster command: ${descMap.command} (${descMap})" // library marker kkossev.commonLib, line 994
-            break // library marker kkossev.commonLib, line 995
-    } // library marker kkossev.commonLib, line 996
-} // library marker kkossev.commonLib, line 997
+def GroupCommandsHelp( val ) { // library marker kkossev.commonLib, line 1062
+    logWarn "GroupCommands: select one of the commands in this list!"              // library marker kkossev.commonLib, line 1063
+} // library marker kkossev.commonLib, line 1064
 
-List<String> addGroupMembership(groupNr) { // library marker kkossev.commonLib, line 999
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1000
-    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1001
-    if (group < 1 || group > 0xFFF7) { // library marker kkossev.commonLib, line 1002
-        logWarn "addGroupMembership: invalid group ${groupNr}" // library marker kkossev.commonLib, line 1003
-        return // library marker kkossev.commonLib, line 1004
-    } // library marker kkossev.commonLib, line 1005
-    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1006
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x00, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 1007
-    logDebug "addGroupMembership: adding group ${group} to ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1008
-    return cmds // library marker kkossev.commonLib, line 1009
-} // library marker kkossev.commonLib, line 1010
+/* // library marker kkossev.commonLib, line 1066
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1067
+ * on/off cluster            0x0006 // library marker kkossev.commonLib, line 1068
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1069
+*/ // library marker kkossev.commonLib, line 1070
 
-List<String> viewGroupMembership(groupNr) { // library marker kkossev.commonLib, line 1012
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1013
-    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1014
-    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1015
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x01, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 1016
-    logDebug "viewGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1017
-    return cmds // library marker kkossev.commonLib, line 1018
-} // library marker kkossev.commonLib, line 1019
+void parseOnOffCluster(final Map descMap) { // library marker kkossev.commonLib, line 1072
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1073
+    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 1074
+        parseOnOffClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 1075
+    }     // library marker kkossev.commonLib, line 1076
 
-List<String> getGroupMembership(dummy) { // library marker kkossev.commonLib, line 1021
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1022
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, "00") // library marker kkossev.commonLib, line 1023
-    logDebug "getGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1024
-    return cmds // library marker kkossev.commonLib, line 1025
-} // library marker kkossev.commonLib, line 1026
-
-List<String> removeGroupMembership(groupNr) { // library marker kkossev.commonLib, line 1028
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1029
-    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1030
-    if (group < 1 || group > 0xFFF7) { // library marker kkossev.commonLib, line 1031
-        logWarn "removeGroupMembership: invalid group ${groupNr}" // library marker kkossev.commonLib, line 1032
-        return // library marker kkossev.commonLib, line 1033
-    } // library marker kkossev.commonLib, line 1034
-    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1035
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x03, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 1036
-    logDebug "removeGroupMembership: deleting group ${group} from ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1037
-    return cmds // library marker kkossev.commonLib, line 1038
-} // library marker kkossev.commonLib, line 1039
-
-List<String> removeAllGroups(groupNr) { // library marker kkossev.commonLib, line 1041
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1042
-    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1043
-    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1044
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x04, [:], DELAY_MS, "${groupHex} 00") // library marker kkossev.commonLib, line 1045
-    logDebug "removeAllGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1046
-    return cmds // library marker kkossev.commonLib, line 1047
-} // library marker kkossev.commonLib, line 1048
-
-List<String> notImplementedGroups(groupNr) { // library marker kkossev.commonLib, line 1050
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1051
-    final Integer group = safeToInt(groupNr) // library marker kkossev.commonLib, line 1052
-    final String groupHex = DataType.pack(group, DataType.UINT16, true) // library marker kkossev.commonLib, line 1053
-    logWarn "notImplementedGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}" // library marker kkossev.commonLib, line 1054
-    return cmds // library marker kkossev.commonLib, line 1055
-} // library marker kkossev.commonLib, line 1056
-
-@Field static final Map GroupCommandsMap = [ // library marker kkossev.commonLib, line 1058
-    "--- select ---"           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'GroupCommandsHelp'], // library marker kkossev.commonLib, line 1059
-    "Add group"                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'], // library marker kkossev.commonLib, line 1060
-    "View group"               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'], // library marker kkossev.commonLib, line 1061
-    "Get group membership"     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'], // library marker kkossev.commonLib, line 1062
-    "Remove group"             : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'], // library marker kkossev.commonLib, line 1063
-    "Remove all groups"        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'], // library marker kkossev.commonLib, line 1064
-    "Add group if identifying" : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups'] // library marker kkossev.commonLib, line 1065
-] // library marker kkossev.commonLib, line 1066
-/* // library marker kkossev.commonLib, line 1067
-@Field static final Map ZigbeeGroupsOpts = [ // library marker kkossev.commonLib, line 1068
-    defaultValue: 0, // library marker kkossev.commonLib, line 1069
-    options     : [99: '--- select ---', 0: 'Add group', 1: 'View group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups', 5: 'Add group if identifying'] // library marker kkossev.commonLib, line 1070
-] // library marker kkossev.commonLib, line 1071
-*/ // library marker kkossev.commonLib, line 1072
-
-def zigbeeGroups( command=null, par=null ) // library marker kkossev.commonLib, line 1074
-{ // library marker kkossev.commonLib, line 1075
-    logInfo "executing command \'${command}\', parameter ${par}" // library marker kkossev.commonLib, line 1076
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 1077
-    if (state.zigbeeGroups == null) state.zigbeeGroups = [:] // library marker kkossev.commonLib, line 1078
-    if (state.zigbeeGroups['groups'] == null) state.zigbeeGroups['groups'] = [] // library marker kkossev.commonLib, line 1079
-    def value // library marker kkossev.commonLib, line 1080
-    Boolean validated = false // library marker kkossev.commonLib, line 1081
-    if (command == null || !(command in (GroupCommandsMap.keySet() as List))) { // library marker kkossev.commonLib, line 1082
-        logWarn "zigbeeGroups: command <b>${command}</b> must be one of these : ${GroupCommandsMap.keySet() as List}" // library marker kkossev.commonLib, line 1083
-        return // library marker kkossev.commonLib, line 1084
+    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1078
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1079
+        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1080
+        sendSwitchEvent(rawValue) // library marker kkossev.commonLib, line 1081
+    } // library marker kkossev.commonLib, line 1082
+    else if (descMap.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"]) { // library marker kkossev.commonLib, line 1083
+        parseOnOffAttributes(descMap) // library marker kkossev.commonLib, line 1084
     } // library marker kkossev.commonLib, line 1085
-    value = GroupCommandsMap[command]?.type == "number" ? safeToInt(par, -1) : 0 // library marker kkossev.commonLib, line 1086
-    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) validated = true // library marker kkossev.commonLib, line 1087
-    if (validated == false && GroupCommandsMap[command]?.min != null && GroupCommandsMap[command]?.max != null) { // library marker kkossev.commonLib, line 1088
-        log.warn "zigbeeGroups: command <b>command</b> parameter <b>${par}</b> must be within ${GroupCommandsMap[command]?.min} and  ${GroupCommandsMap[command]?.max} " // library marker kkossev.commonLib, line 1089
-        return // library marker kkossev.commonLib, line 1090
-    } // library marker kkossev.commonLib, line 1091
-    // // library marker kkossev.commonLib, line 1092
-    def func // library marker kkossev.commonLib, line 1093
-   // try { // library marker kkossev.commonLib, line 1094
-        func = GroupCommandsMap[command]?.function // library marker kkossev.commonLib, line 1095
-        def type = GroupCommandsMap[command]?.type // library marker kkossev.commonLib, line 1096
-        // device.updateSetting("$par", [value:value, type:type])  // TODO !!! // library marker kkossev.commonLib, line 1097
-        cmds = "$func"(value) // library marker kkossev.commonLib, line 1098
- //   } // library marker kkossev.commonLib, line 1099
-//    catch (e) { // library marker kkossev.commonLib, line 1100
-//        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 1101
-//        return // library marker kkossev.commonLib, line 1102
-//    } // library marker kkossev.commonLib, line 1103
+    else { // library marker kkossev.commonLib, line 1086
+        logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1087
+    } // library marker kkossev.commonLib, line 1088
+} // library marker kkossev.commonLib, line 1089
 
-    logDebug "executed <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 1105
-    sendZigbeeCommands( cmds ) // library marker kkossev.commonLib, line 1106
+def clearIsDigital()        { state.states["isDigital"] = false } // library marker kkossev.commonLib, line 1091
+def switchDebouncingClear() { state.states["debounce"]  = false } // library marker kkossev.commonLib, line 1092
+def isRefreshRequestClear() { state.states["isRefresh"] = false } // library marker kkossev.commonLib, line 1093
+
+def toggle() { // library marker kkossev.commonLib, line 1095
+    def descriptionText = "central button switch is " // library marker kkossev.commonLib, line 1096
+    def state = "" // library marker kkossev.commonLib, line 1097
+    if ((device.currentState('switch')?.value ?: 'n/a') == 'off' ) { // library marker kkossev.commonLib, line 1098
+        state = "on" // library marker kkossev.commonLib, line 1099
+    } // library marker kkossev.commonLib, line 1100
+    else { // library marker kkossev.commonLib, line 1101
+        state = "off" // library marker kkossev.commonLib, line 1102
+    } // library marker kkossev.commonLib, line 1103
+    descriptionText += state // library marker kkossev.commonLib, line 1104
+    sendEvent(name: "switch", value: state, descriptionText: descriptionText, type: "physical", isStateChange: true) // library marker kkossev.commonLib, line 1105
+    logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1106
 } // library marker kkossev.commonLib, line 1107
 
-def GroupCommandsHelp( val ) { // library marker kkossev.commonLib, line 1109
-    logWarn "GroupCommands: select one of the commands in this list!"              // library marker kkossev.commonLib, line 1110
-} // library marker kkossev.commonLib, line 1111
-
-/* // library marker kkossev.commonLib, line 1113
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1114
- * on/off cluster            0x0006 // library marker kkossev.commonLib, line 1115
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1116
-*/ // library marker kkossev.commonLib, line 1117
-
-void parseOnOffCluster(final Map descMap) { // library marker kkossev.commonLib, line 1119
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1120
-    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 1121
-        parseOnOffClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 1122
-    }     // library marker kkossev.commonLib, line 1123
-
-    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1125
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1126
-        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1127
-        sendSwitchEvent(rawValue) // library marker kkossev.commonLib, line 1128
-    } // library marker kkossev.commonLib, line 1129
-    else if (descMap.attrId in ["4000", "4001", "4002", "4004", "8000", "8001", "8002", "8003"]) { // library marker kkossev.commonLib, line 1130
-        parseOnOffAttributes(descMap) // library marker kkossev.commonLib, line 1131
-    } // library marker kkossev.commonLib, line 1132
-    else { // library marker kkossev.commonLib, line 1133
-        logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1134
-    } // library marker kkossev.commonLib, line 1135
-} // library marker kkossev.commonLib, line 1136
-
-def clearIsDigital()        { state.states["isDigital"] = false } // library marker kkossev.commonLib, line 1138
-def switchDebouncingClear() { state.states["debounce"]  = false } // library marker kkossev.commonLib, line 1139
-def isRefreshRequestClear() { state.states["isRefresh"] = false } // library marker kkossev.commonLib, line 1140
-
-def toggle() { // library marker kkossev.commonLib, line 1142
-    def descriptionText = "central button switch is " // library marker kkossev.commonLib, line 1143
-    def state = "" // library marker kkossev.commonLib, line 1144
-    if ((device.currentState('switch')?.value ?: 'n/a') == 'off' ) { // library marker kkossev.commonLib, line 1145
-        state = "on" // library marker kkossev.commonLib, line 1146
-    } // library marker kkossev.commonLib, line 1147
-    else { // library marker kkossev.commonLib, line 1148
-        state = "off" // library marker kkossev.commonLib, line 1149
-    } // library marker kkossev.commonLib, line 1150
-    descriptionText += state // library marker kkossev.commonLib, line 1151
-    sendEvent(name: "switch", value: state, descriptionText: descriptionText, type: "physical", isStateChange: true) // library marker kkossev.commonLib, line 1152
-    logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1153
-} // library marker kkossev.commonLib, line 1154
-
-def off() { // library marker kkossev.commonLib, line 1156
-    if (DEVICE_TYPE in ["Thermostat"]) { thermostatOff(); return } // library marker kkossev.commonLib, line 1157
-    if ((settings?.alwaysOn ?: false) == true) { // library marker kkossev.commonLib, line 1158
-        logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!" // library marker kkossev.commonLib, line 1159
-        return // library marker kkossev.commonLib, line 1160
-    } // library marker kkossev.commonLib, line 1161
-    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 1162
-    state.states["isDigital"] = true // library marker kkossev.commonLib, line 1163
-    logDebug "Switching ${device.displayName} Off" // library marker kkossev.commonLib, line 1164
-    def cmds = zigbee.off() // library marker kkossev.commonLib, line 1165
-    /* // library marker kkossev.commonLib, line 1166
-    if (device.getDataValue("model") == "HY0105") { // library marker kkossev.commonLib, line 1167
-        cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02]) // library marker kkossev.commonLib, line 1168
-    } // library marker kkossev.commonLib, line 1169
-        else if (state.model == "TS0601") { // library marker kkossev.commonLib, line 1170
-            if (isDinRail() || isRTXCircuitBreaker()) { // library marker kkossev.commonLib, line 1171
-                cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "00") // library marker kkossev.commonLib, line 1172
-            } // library marker kkossev.commonLib, line 1173
-            else { // library marker kkossev.commonLib, line 1174
-                cmds = zigbee.command(0xEF00, 0x0, "00010101000100") // library marker kkossev.commonLib, line 1175
-            } // library marker kkossev.commonLib, line 1176
-        } // library marker kkossev.commonLib, line 1177
-        else if (isHEProblematic()) { // library marker kkossev.commonLib, line 1178
-            cmds = ["he cmd 0x${device.deviceNetworkId}  0x01 0x0006 0 {}","delay 200"] // library marker kkossev.commonLib, line 1179
-            logWarn "isHEProblematic() : sending off() : ${cmds}" // library marker kkossev.commonLib, line 1180
-        } // library marker kkossev.commonLib, line 1181
-        else if (device.endpointId == "F2") { // library marker kkossev.commonLib, line 1182
-            cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0 {}","delay 200"] // library marker kkossev.commonLib, line 1183
-        } // library marker kkossev.commonLib, line 1184
-*/ // library marker kkossev.commonLib, line 1185
-    if (_THREE_STATE == true && settings?.threeStateEnable == true) { // library marker kkossev.commonLib, line 1186
-        if ((device.currentState('switch')?.value ?: 'n/a') == 'off' ) { // library marker kkossev.commonLib, line 1187
-            runIn(1, 'refresh',  [overwrite: true]) // library marker kkossev.commonLib, line 1188
-        } // library marker kkossev.commonLib, line 1189
-        def value = SwitchThreeStateOpts.options[2]    // 'switching_on' // library marker kkossev.commonLib, line 1190
-        def descriptionText = "${value}" // library marker kkossev.commonLib, line 1191
-        if (logEnable) { descriptionText += " (2)" } // library marker kkossev.commonLib, line 1192
-        sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true) // library marker kkossev.commonLib, line 1193
-        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1194
-    } // library marker kkossev.commonLib, line 1195
-    else { // library marker kkossev.commonLib, line 1196
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}" // library marker kkossev.commonLib, line 1197
-    } // library marker kkossev.commonLib, line 1198
+def off() { // library marker kkossev.commonLib, line 1109
+    if (DEVICE_TYPE in ["Thermostat"]) { thermostatOff(); return } // library marker kkossev.commonLib, line 1110
+    if ((settings?.alwaysOn ?: false) == true) { // library marker kkossev.commonLib, line 1111
+        logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!" // library marker kkossev.commonLib, line 1112
+        return // library marker kkossev.commonLib, line 1113
+    } // library marker kkossev.commonLib, line 1114
+    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 1115
+    state.states["isDigital"] = true // library marker kkossev.commonLib, line 1116
+    logDebug "Switching ${device.displayName} Off" // library marker kkossev.commonLib, line 1117
+    def cmds = zigbee.off() // library marker kkossev.commonLib, line 1118
+    /* // library marker kkossev.commonLib, line 1119
+    if (device.getDataValue("model") == "HY0105") { // library marker kkossev.commonLib, line 1120
+        cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02]) // library marker kkossev.commonLib, line 1121
+    } // library marker kkossev.commonLib, line 1122
+        else if (state.model == "TS0601") { // library marker kkossev.commonLib, line 1123
+            if (isDinRail() || isRTXCircuitBreaker()) { // library marker kkossev.commonLib, line 1124
+                cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "00") // library marker kkossev.commonLib, line 1125
+            } // library marker kkossev.commonLib, line 1126
+            else { // library marker kkossev.commonLib, line 1127
+                cmds = zigbee.command(0xEF00, 0x0, "00010101000100") // library marker kkossev.commonLib, line 1128
+            } // library marker kkossev.commonLib, line 1129
+        } // library marker kkossev.commonLib, line 1130
+        else if (isHEProblematic()) { // library marker kkossev.commonLib, line 1131
+            cmds = ["he cmd 0x${device.deviceNetworkId}  0x01 0x0006 0 {}","delay 200"] // library marker kkossev.commonLib, line 1132
+            logWarn "isHEProblematic() : sending off() : ${cmds}" // library marker kkossev.commonLib, line 1133
+        } // library marker kkossev.commonLib, line 1134
+        else if (device.endpointId == "F2") { // library marker kkossev.commonLib, line 1135
+            cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0 {}","delay 200"] // library marker kkossev.commonLib, line 1136
+        } // library marker kkossev.commonLib, line 1137
+*/ // library marker kkossev.commonLib, line 1138
+    if (_THREE_STATE == true && settings?.threeStateEnable == true) { // library marker kkossev.commonLib, line 1139
+        if ((device.currentState('switch')?.value ?: 'n/a') == 'off' ) { // library marker kkossev.commonLib, line 1140
+            runIn(1, 'refresh',  [overwrite: true]) // library marker kkossev.commonLib, line 1141
+        } // library marker kkossev.commonLib, line 1142
+        def value = SwitchThreeStateOpts.options[2]    // 'switching_on' // library marker kkossev.commonLib, line 1143
+        def descriptionText = "${value}" // library marker kkossev.commonLib, line 1144
+        if (logEnable) { descriptionText += " (2)" } // library marker kkossev.commonLib, line 1145
+        sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true) // library marker kkossev.commonLib, line 1146
+        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1147
+    } // library marker kkossev.commonLib, line 1148
+    else { // library marker kkossev.commonLib, line 1149
+        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}" // library marker kkossev.commonLib, line 1150
+    } // library marker kkossev.commonLib, line 1151
 
 
-    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true]) // library marker kkossev.commonLib, line 1201
-    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 1202
-} // library marker kkossev.commonLib, line 1203
+    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true]) // library marker kkossev.commonLib, line 1154
+    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 1155
+} // library marker kkossev.commonLib, line 1156
 
-def on() { // library marker kkossev.commonLib, line 1205
-    if (DEVICE_TYPE in ["Thermostat"]) { thermostatOn(); return } // library marker kkossev.commonLib, line 1206
-    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 1207
-    state.states["isDigital"] = true // library marker kkossev.commonLib, line 1208
-    logDebug "Switching ${device.displayName} On" // library marker kkossev.commonLib, line 1209
-    def cmds = zigbee.on() // library marker kkossev.commonLib, line 1210
-/* // library marker kkossev.commonLib, line 1211
-    if (device.getDataValue("model") == "HY0105") { // library marker kkossev.commonLib, line 1212
-        cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02]) // library marker kkossev.commonLib, line 1213
-    }     // library marker kkossev.commonLib, line 1214
-    else if (state.model == "TS0601") { // library marker kkossev.commonLib, line 1215
-        if (isDinRail() || isRTXCircuitBreaker()) { // library marker kkossev.commonLib, line 1216
-            cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "01") // library marker kkossev.commonLib, line 1217
-        } // library marker kkossev.commonLib, line 1218
-        else { // library marker kkossev.commonLib, line 1219
-            cmds = zigbee.command(0xEF00, 0x0, "00010101000101") // library marker kkossev.commonLib, line 1220
-        } // library marker kkossev.commonLib, line 1221
-    } // library marker kkossev.commonLib, line 1222
-    else if (isHEProblematic()) { // library marker kkossev.commonLib, line 1223
-        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"] // library marker kkossev.commonLib, line 1224
-        logWarn "isHEProblematic() : sending off() : ${cmds}" // library marker kkossev.commonLib, line 1225
-    } // library marker kkossev.commonLib, line 1226
-    else if (device.endpointId == "F2") { // library marker kkossev.commonLib, line 1227
-        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"] // library marker kkossev.commonLib, line 1228
-    } // library marker kkossev.commonLib, line 1229
-*/ // library marker kkossev.commonLib, line 1230
-    if (_THREE_STATE == true && settings?.threeStateEnable == true) { // library marker kkossev.commonLib, line 1231
-        if ((device.currentState('switch')?.value ?: 'n/a') == 'on' ) { // library marker kkossev.commonLib, line 1232
-            runIn(1, 'refresh',  [overwrite: true]) // library marker kkossev.commonLib, line 1233
-        } // library marker kkossev.commonLib, line 1234
-        def value = SwitchThreeStateOpts.options[3]    // 'switching_on' // library marker kkossev.commonLib, line 1235
-        def descriptionText = "${value}" // library marker kkossev.commonLib, line 1236
-        if (logEnable) { descriptionText += " (2)" } // library marker kkossev.commonLib, line 1237
-        sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true) // library marker kkossev.commonLib, line 1238
-        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1239
-    } // library marker kkossev.commonLib, line 1240
-    else { // library marker kkossev.commonLib, line 1241
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}" // library marker kkossev.commonLib, line 1242
-    } // library marker kkossev.commonLib, line 1243
+def on() { // library marker kkossev.commonLib, line 1158
+    if (DEVICE_TYPE in ["Thermostat"]) { thermostatOn(); return } // library marker kkossev.commonLib, line 1159
+    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 1160
+    state.states["isDigital"] = true // library marker kkossev.commonLib, line 1161
+    logDebug "Switching ${device.displayName} On" // library marker kkossev.commonLib, line 1162
+    def cmds = zigbee.on() // library marker kkossev.commonLib, line 1163
+/* // library marker kkossev.commonLib, line 1164
+    if (device.getDataValue("model") == "HY0105") { // library marker kkossev.commonLib, line 1165
+        cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02]) // library marker kkossev.commonLib, line 1166
+    }     // library marker kkossev.commonLib, line 1167
+    else if (state.model == "TS0601") { // library marker kkossev.commonLib, line 1168
+        if (isDinRail() || isRTXCircuitBreaker()) { // library marker kkossev.commonLib, line 1169
+            cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "01") // library marker kkossev.commonLib, line 1170
+        } // library marker kkossev.commonLib, line 1171
+        else { // library marker kkossev.commonLib, line 1172
+            cmds = zigbee.command(0xEF00, 0x0, "00010101000101") // library marker kkossev.commonLib, line 1173
+        } // library marker kkossev.commonLib, line 1174
+    } // library marker kkossev.commonLib, line 1175
+    else if (isHEProblematic()) { // library marker kkossev.commonLib, line 1176
+        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"] // library marker kkossev.commonLib, line 1177
+        logWarn "isHEProblematic() : sending off() : ${cmds}" // library marker kkossev.commonLib, line 1178
+    } // library marker kkossev.commonLib, line 1179
+    else if (device.endpointId == "F2") { // library marker kkossev.commonLib, line 1180
+        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"] // library marker kkossev.commonLib, line 1181
+    } // library marker kkossev.commonLib, line 1182
+*/ // library marker kkossev.commonLib, line 1183
+    if (_THREE_STATE == true && settings?.threeStateEnable == true) { // library marker kkossev.commonLib, line 1184
+        if ((device.currentState('switch')?.value ?: 'n/a') == 'on' ) { // library marker kkossev.commonLib, line 1185
+            runIn(1, 'refresh',  [overwrite: true]) // library marker kkossev.commonLib, line 1186
+        } // library marker kkossev.commonLib, line 1187
+        def value = SwitchThreeStateOpts.options[3]    // 'switching_on' // library marker kkossev.commonLib, line 1188
+        def descriptionText = "${value}" // library marker kkossev.commonLib, line 1189
+        if (logEnable) { descriptionText += " (2)" } // library marker kkossev.commonLib, line 1190
+        sendEvent(name: "switch", value: value, descriptionText: descriptionText, type: "digital", isStateChange: true) // library marker kkossev.commonLib, line 1191
+        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 1192
+    } // library marker kkossev.commonLib, line 1193
+    else { // library marker kkossev.commonLib, line 1194
+        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}" // library marker kkossev.commonLib, line 1195
+    } // library marker kkossev.commonLib, line 1196
 
-    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true]) // library marker kkossev.commonLib, line 1245
-    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 1246
-} // library marker kkossev.commonLib, line 1247
+    runInMillis( DIGITAL_TIMER, clearIsDigital, [overwrite: true]) // library marker kkossev.commonLib, line 1198
+    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 1199
+} // library marker kkossev.commonLib, line 1200
 
-def sendSwitchEvent( switchValue ) { // library marker kkossev.commonLib, line 1249
-    def value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown' // library marker kkossev.commonLib, line 1250
-    def map = [:]  // library marker kkossev.commonLib, line 1251
-    boolean bWasChange = false // library marker kkossev.commonLib, line 1252
-    boolean debounce   = state.states["debounce"] ?: false // library marker kkossev.commonLib, line 1253
-    def lastSwitch = state.states["lastSwitch"] ?: "unknown" // library marker kkossev.commonLib, line 1254
-    if (value == lastSwitch && (debounce == true || (settings.ignoreDuplicated ?: false) == true)) {    // some devices send only catchall events, some only readattr reports, but some will fire both... // library marker kkossev.commonLib, line 1255
-        logDebug "Ignored duplicated switch event ${value}" // library marker kkossev.commonLib, line 1256
-        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true]) // library marker kkossev.commonLib, line 1257
-        return null // library marker kkossev.commonLib, line 1258
-    } // library marker kkossev.commonLib, line 1259
-    else { // library marker kkossev.commonLib, line 1260
-        logTrace "value=${value}  lastSwitch=${state.states['lastSwitch']}" // library marker kkossev.commonLib, line 1261
+def sendSwitchEvent( switchValue ) { // library marker kkossev.commonLib, line 1202
+    def value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown' // library marker kkossev.commonLib, line 1203
+    def map = [:]  // library marker kkossev.commonLib, line 1204
+    boolean bWasChange = false // library marker kkossev.commonLib, line 1205
+    boolean debounce   = state.states["debounce"] ?: false // library marker kkossev.commonLib, line 1206
+    def lastSwitch = state.states["lastSwitch"] ?: "unknown" // library marker kkossev.commonLib, line 1207
+    if (value == lastSwitch && (debounce == true || (settings.ignoreDuplicated ?: false) == true)) {    // some devices send only catchall events, some only readattr reports, but some will fire both... // library marker kkossev.commonLib, line 1208
+        logDebug "Ignored duplicated switch event ${value}" // library marker kkossev.commonLib, line 1209
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true]) // library marker kkossev.commonLib, line 1210
+        return null // library marker kkossev.commonLib, line 1211
+    } // library marker kkossev.commonLib, line 1212
+    else { // library marker kkossev.commonLib, line 1213
+        logTrace "value=${value}  lastSwitch=${state.states['lastSwitch']}" // library marker kkossev.commonLib, line 1214
+    } // library marker kkossev.commonLib, line 1215
+    def isDigital = state.states["isDigital"] // library marker kkossev.commonLib, line 1216
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1217
+    if (lastSwitch != value ) { // library marker kkossev.commonLib, line 1218
+        bWasChange = true // library marker kkossev.commonLib, line 1219
+        logDebug "switch state changed from <b>${lastSwitch}</b> to <b>${value}</b>" // library marker kkossev.commonLib, line 1220
+        state.states["debounce"]   = true // library marker kkossev.commonLib, line 1221
+        state.states["lastSwitch"] = value // library marker kkossev.commonLib, line 1222
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])         // library marker kkossev.commonLib, line 1223
+    } // library marker kkossev.commonLib, line 1224
+    else { // library marker kkossev.commonLib, line 1225
+        state.states["debounce"] = true // library marker kkossev.commonLib, line 1226
+        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])      // library marker kkossev.commonLib, line 1227
+    } // library marker kkossev.commonLib, line 1228
+
+    map.name = "switch" // library marker kkossev.commonLib, line 1230
+    map.value = value // library marker kkossev.commonLib, line 1231
+    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.commonLib, line 1232
+    if (isRefresh == true) { // library marker kkossev.commonLib, line 1233
+        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.commonLib, line 1234
+        map.isStateChange = true // library marker kkossev.commonLib, line 1235
+    } // library marker kkossev.commonLib, line 1236
+    else { // library marker kkossev.commonLib, line 1237
+        map.descriptionText = "${device.displayName} is ${value} [${map.type}]" // library marker kkossev.commonLib, line 1238
+    } // library marker kkossev.commonLib, line 1239
+    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 1240
+    sendEvent(map) // library marker kkossev.commonLib, line 1241
+    clearIsDigital() // library marker kkossev.commonLib, line 1242
+} // library marker kkossev.commonLib, line 1243
+
+@Field static final Map powerOnBehaviourOptions = [    // library marker kkossev.commonLib, line 1245
+    '0': 'switch off', // library marker kkossev.commonLib, line 1246
+    '1': 'switch on', // library marker kkossev.commonLib, line 1247
+    '2': 'switch last state' // library marker kkossev.commonLib, line 1248
+] // library marker kkossev.commonLib, line 1249
+
+@Field static final Map switchTypeOptions = [    // library marker kkossev.commonLib, line 1251
+    '0': 'toggle', // library marker kkossev.commonLib, line 1252
+    '1': 'state', // library marker kkossev.commonLib, line 1253
+    '2': 'momentary' // library marker kkossev.commonLib, line 1254
+] // library marker kkossev.commonLib, line 1255
+
+Map myParseDescriptionAsMap( String description ) // library marker kkossev.commonLib, line 1257
+{ // library marker kkossev.commonLib, line 1258
+    def descMap = [:] // library marker kkossev.commonLib, line 1259
+    try { // library marker kkossev.commonLib, line 1260
+        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1261
     } // library marker kkossev.commonLib, line 1262
-    def isDigital = state.states["isDigital"] // library marker kkossev.commonLib, line 1263
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1264
-    if (lastSwitch != value ) { // library marker kkossev.commonLib, line 1265
-        bWasChange = true // library marker kkossev.commonLib, line 1266
-        logDebug "switch state changed from <b>${lastSwitch}</b> to <b>${value}</b>" // library marker kkossev.commonLib, line 1267
-        state.states["debounce"]   = true // library marker kkossev.commonLib, line 1268
-        state.states["lastSwitch"] = value // library marker kkossev.commonLib, line 1269
-        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])         // library marker kkossev.commonLib, line 1270
-    } // library marker kkossev.commonLib, line 1271
-    else { // library marker kkossev.commonLib, line 1272
-        state.states["debounce"] = true // library marker kkossev.commonLib, line 1273
-        runInMillis( DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])      // library marker kkossev.commonLib, line 1274
-    } // library marker kkossev.commonLib, line 1275
+    catch (e1) { // library marker kkossev.commonLib, line 1263
+        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}" // library marker kkossev.commonLib, line 1264
+        // try alternative custom parsing // library marker kkossev.commonLib, line 1265
+        descMap = [:] // library marker kkossev.commonLib, line 1266
+        try { // library marker kkossev.commonLib, line 1267
+            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry -> // library marker kkossev.commonLib, line 1268
+                def pair = entry.split(':') // library marker kkossev.commonLib, line 1269
+                [(pair.first().trim()): pair.last().trim()] // library marker kkossev.commonLib, line 1270
+            }         // library marker kkossev.commonLib, line 1271
+        } // library marker kkossev.commonLib, line 1272
+        catch (e2) { // library marker kkossev.commonLib, line 1273
+            logWarn "exception ${e2} caught while parsing using an alternative method <b>myParseDescriptionAsMap</b> description:  ${description}" // library marker kkossev.commonLib, line 1274
+            return [:] // library marker kkossev.commonLib, line 1275
+        } // library marker kkossev.commonLib, line 1276
+        logDebug "alternative method parsing success: descMap=${descMap}" // library marker kkossev.commonLib, line 1277
+    } // library marker kkossev.commonLib, line 1278
+    return descMap // library marker kkossev.commonLib, line 1279
+} // library marker kkossev.commonLib, line 1280
 
-    map.name = "switch" // library marker kkossev.commonLib, line 1277
-    map.value = value // library marker kkossev.commonLib, line 1278
-    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.commonLib, line 1279
-    if (isRefresh == true) { // library marker kkossev.commonLib, line 1280
-        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.commonLib, line 1281
-        map.isStateChange = true // library marker kkossev.commonLib, line 1282
-    } // library marker kkossev.commonLib, line 1283
-    else { // library marker kkossev.commonLib, line 1284
-        map.descriptionText = "${device.displayName} is ${value} [${map.type}]" // library marker kkossev.commonLib, line 1285
+boolean isTuyaE00xCluster( String description ) // library marker kkossev.commonLib, line 1282
+{ // library marker kkossev.commonLib, line 1283
+    if(description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) { // library marker kkossev.commonLib, line 1284
+        return false  // library marker kkossev.commonLib, line 1285
     } // library marker kkossev.commonLib, line 1286
-    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 1287
-    sendEvent(map) // library marker kkossev.commonLib, line 1288
-    clearIsDigital() // library marker kkossev.commonLib, line 1289
-} // library marker kkossev.commonLib, line 1290
+    // try to parse ... // library marker kkossev.commonLib, line 1287
+    //logDebug "Tuya cluster: E000 or E001 - try to parse it..." // library marker kkossev.commonLib, line 1288
+    def descMap = [:] // library marker kkossev.commonLib, line 1289
+    try { // library marker kkossev.commonLib, line 1290
+        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1291
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}" // library marker kkossev.commonLib, line 1292
+    } // library marker kkossev.commonLib, line 1293
+    catch ( e ) { // library marker kkossev.commonLib, line 1294
+        logDebug "<b>exception</b> caught while parsing description:  ${description}" // library marker kkossev.commonLib, line 1295
+        logDebug "TuyaE00xCluster Desc Map: ${descMap}" // library marker kkossev.commonLib, line 1296
+        // cluster E001 is the one that is generating exceptions... // library marker kkossev.commonLib, line 1297
+        return true // library marker kkossev.commonLib, line 1298
+    } // library marker kkossev.commonLib, line 1299
 
-@Field static final Map powerOnBehaviourOptions = [    // library marker kkossev.commonLib, line 1292
-    '0': 'switch off', // library marker kkossev.commonLib, line 1293
-    '1': 'switch on', // library marker kkossev.commonLib, line 1294
-    '2': 'switch last state' // library marker kkossev.commonLib, line 1295
-] // library marker kkossev.commonLib, line 1296
-
-@Field static final Map switchTypeOptions = [    // library marker kkossev.commonLib, line 1298
-    '0': 'toggle', // library marker kkossev.commonLib, line 1299
-    '1': 'state', // library marker kkossev.commonLib, line 1300
-    '2': 'momentary' // library marker kkossev.commonLib, line 1301
-] // library marker kkossev.commonLib, line 1302
-
-Map myParseDescriptionAsMap( String description ) // library marker kkossev.commonLib, line 1304
-{ // library marker kkossev.commonLib, line 1305
-    def descMap = [:] // library marker kkossev.commonLib, line 1306
-    try { // library marker kkossev.commonLib, line 1307
-        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1308
+    if (descMap.cluster == "E000" && descMap.attrId in ["D001", "D002", "D003"]) { // library marker kkossev.commonLib, line 1301
+        logDebug "Tuya Specific cluster ${descMap.cluster} attribute ${descMap.attrId} value is ${descMap.value}" // library marker kkossev.commonLib, line 1302
+    } // library marker kkossev.commonLib, line 1303
+    else if (descMap.cluster == "E001" && descMap.attrId == "D010") { // library marker kkossev.commonLib, line 1304
+        if (settings?.logEnable) { logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" } // library marker kkossev.commonLib, line 1305
+    } // library marker kkossev.commonLib, line 1306
+    else if (descMap.cluster == "E001" && descMap.attrId == "D030") { // library marker kkossev.commonLib, line 1307
+        if (settings?.logEnable) { logInfo "swith type is <b>${switchTypeOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" } // library marker kkossev.commonLib, line 1308
     } // library marker kkossev.commonLib, line 1309
-    catch (e1) { // library marker kkossev.commonLib, line 1310
-        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>myParseDescriptionAsMap</b> description:  ${description}" // library marker kkossev.commonLib, line 1311
-        // try alternative custom parsing // library marker kkossev.commonLib, line 1312
-        descMap = [:] // library marker kkossev.commonLib, line 1313
-        try { // library marker kkossev.commonLib, line 1314
-            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry -> // library marker kkossev.commonLib, line 1315
-                def pair = entry.split(':') // library marker kkossev.commonLib, line 1316
-                [(pair.first().trim()): pair.last().trim()] // library marker kkossev.commonLib, line 1317
-            }         // library marker kkossev.commonLib, line 1318
-        } // library marker kkossev.commonLib, line 1319
-        catch (e2) { // library marker kkossev.commonLib, line 1320
-            logWarn "exception ${e2} caught while parsing using an alternative method <b>myParseDescriptionAsMap</b> description:  ${description}" // library marker kkossev.commonLib, line 1321
-            return [:] // library marker kkossev.commonLib, line 1322
-        } // library marker kkossev.commonLib, line 1323
-        logDebug "alternative method parsing success: descMap=${descMap}" // library marker kkossev.commonLib, line 1324
-    } // library marker kkossev.commonLib, line 1325
-    return descMap // library marker kkossev.commonLib, line 1326
-} // library marker kkossev.commonLib, line 1327
+    else { // library marker kkossev.commonLib, line 1310
+        logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap" // library marker kkossev.commonLib, line 1311
+        return false  // library marker kkossev.commonLib, line 1312
+    } // library marker kkossev.commonLib, line 1313
+    return true    // processed // library marker kkossev.commonLib, line 1314
+} // library marker kkossev.commonLib, line 1315
 
-boolean isTuyaE00xCluster( String description ) // library marker kkossev.commonLib, line 1329
-{ // library marker kkossev.commonLib, line 1330
-    if(description == null || !(description.indexOf('cluster: E000') >= 0 || description.indexOf('cluster: E001') >= 0)) { // library marker kkossev.commonLib, line 1331
-        return false  // library marker kkossev.commonLib, line 1332
-    } // library marker kkossev.commonLib, line 1333
-    // try to parse ... // library marker kkossev.commonLib, line 1334
-    //logDebug "Tuya cluster: E000 or E001 - try to parse it..." // library marker kkossev.commonLib, line 1335
-    def descMap = [:] // library marker kkossev.commonLib, line 1336
-    try { // library marker kkossev.commonLib, line 1337
-        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1338
-        logDebug "TuyaE00xCluster Desc Map: ${descMap}" // library marker kkossev.commonLib, line 1339
-    } // library marker kkossev.commonLib, line 1340
-    catch ( e ) { // library marker kkossev.commonLib, line 1341
-        logDebug "<b>exception</b> caught while parsing description:  ${description}" // library marker kkossev.commonLib, line 1342
-        logDebug "TuyaE00xCluster Desc Map: ${descMap}" // library marker kkossev.commonLib, line 1343
-        // cluster E001 is the one that is generating exceptions... // library marker kkossev.commonLib, line 1344
-        return true // library marker kkossev.commonLib, line 1345
-    } // library marker kkossev.commonLib, line 1346
-
-    if (descMap.cluster == "E000" && descMap.attrId in ["D001", "D002", "D003"]) { // library marker kkossev.commonLib, line 1348
-        logDebug "Tuya Specific cluster ${descMap.cluster} attribute ${descMap.attrId} value is ${descMap.value}" // library marker kkossev.commonLib, line 1349
+// return true if further processing in the main parse method should be cancelled ! // library marker kkossev.commonLib, line 1317
+boolean otherTuyaOddities( String description ) { // library marker kkossev.commonLib, line 1318
+  /* // library marker kkossev.commonLib, line 1319
+    if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) { // library marker kkossev.commonLib, line 1320
+        if (logEnable) log.debug "${device.displayName} skipping Tuya parse of  cluster 0 attrId 4"             // parseDescriptionAsMap throws exception when processing Tuya cluster 0 attrId 4  // library marker kkossev.commonLib, line 1321
+        return true // library marker kkossev.commonLib, line 1322
+    } // library marker kkossev.commonLib, line 1323
+*/ // library marker kkossev.commonLib, line 1324
+    def descMap = [:] // library marker kkossev.commonLib, line 1325
+    try { // library marker kkossev.commonLib, line 1326
+        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1327
+    } // library marker kkossev.commonLib, line 1328
+    catch (e1) { // library marker kkossev.commonLib, line 1329
+        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>otherTuyaOddities</b> description:  ${description}" // library marker kkossev.commonLib, line 1330
+        // try alternative custom parsing // library marker kkossev.commonLib, line 1331
+        descMap = [:] // library marker kkossev.commonLib, line 1332
+        try { // library marker kkossev.commonLib, line 1333
+            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry -> // library marker kkossev.commonLib, line 1334
+                def pair = entry.split(':') // library marker kkossev.commonLib, line 1335
+                [(pair.first().trim()): pair.last().trim()] // library marker kkossev.commonLib, line 1336
+            }         // library marker kkossev.commonLib, line 1337
+        } // library marker kkossev.commonLib, line 1338
+        catch (e2) { // library marker kkossev.commonLib, line 1339
+            logWarn "exception ${e2} caught while parsing using an alternative method <b>otherTuyaOddities</b> description:  ${description}" // library marker kkossev.commonLib, line 1340
+            return true // library marker kkossev.commonLib, line 1341
+        } // library marker kkossev.commonLib, line 1342
+        logDebug "alternative method parsing success: descMap=${descMap}" // library marker kkossev.commonLib, line 1343
+    } // library marker kkossev.commonLib, line 1344
+    //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}         // library marker kkossev.commonLib, line 1345
+    if (descMap.attrId == null ) { // library marker kkossev.commonLib, line 1346
+        //logDebug "otherTuyaOddities: descMap = ${descMap}" // library marker kkossev.commonLib, line 1347
+        //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping" // library marker kkossev.commonLib, line 1348
+        return false // library marker kkossev.commonLib, line 1349
     } // library marker kkossev.commonLib, line 1350
-    else if (descMap.cluster == "E001" && descMap.attrId == "D010") { // library marker kkossev.commonLib, line 1351
-        if (settings?.logEnable) { logInfo "power on behavior is <b>${powerOnBehaviourOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" } // library marker kkossev.commonLib, line 1352
-    } // library marker kkossev.commonLib, line 1353
-    else if (descMap.cluster == "E001" && descMap.attrId == "D030") { // library marker kkossev.commonLib, line 1354
-        if (settings?.logEnable) { logInfo "swith type is <b>${switchTypeOptions[safeToInt(descMap.value).toString()]}</b> (${descMap.value})" } // library marker kkossev.commonLib, line 1355
-    } // library marker kkossev.commonLib, line 1356
-    else { // library marker kkossev.commonLib, line 1357
-        logDebug "<b>unprocessed</b> TuyaE00xCluster Desc Map: $descMap" // library marker kkossev.commonLib, line 1358
-        return false  // library marker kkossev.commonLib, line 1359
-    } // library marker kkossev.commonLib, line 1360
-    return true    // processed // library marker kkossev.commonLib, line 1361
-} // library marker kkossev.commonLib, line 1362
+    boolean bWasAtLeastOneAttributeProcessed = false // library marker kkossev.commonLib, line 1351
+    boolean bWasThereAnyStandardAttribite = false // library marker kkossev.commonLib, line 1352
+    // attribute report received // library marker kkossev.commonLib, line 1353
+    List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]] // library marker kkossev.commonLib, line 1354
+    descMap.additionalAttrs.each { // library marker kkossev.commonLib, line 1355
+        attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status] // library marker kkossev.commonLib, line 1356
+        //log.trace "Tuya oddity: filling in attrData ${attrData}" // library marker kkossev.commonLib, line 1357
+    } // library marker kkossev.commonLib, line 1358
+    attrData.each { // library marker kkossev.commonLib, line 1359
+        //log.trace "each it=${it}" // library marker kkossev.commonLib, line 1360
+        def map = [:] // library marker kkossev.commonLib, line 1361
+        if (it.status == "86") { // library marker kkossev.commonLib, line 1362
+            logWarn "Tuya Cluster ${descMap.cluster} unsupported attrId ${it.attrId}" // library marker kkossev.commonLib, line 1363
+            // TODO - skip parsing? // library marker kkossev.commonLib, line 1364
+        } // library marker kkossev.commonLib, line 1365
+        switch (it.cluster) { // library marker kkossev.commonLib, line 1366
+            case "0000" : // library marker kkossev.commonLib, line 1367
+                if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) { // library marker kkossev.commonLib, line 1368
+                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})" // library marker kkossev.commonLib, line 1369
+                    bWasAtLeastOneAttributeProcessed = true // library marker kkossev.commonLib, line 1370
+                } // library marker kkossev.commonLib, line 1371
+                else if (it.attrId in ["FFFE", "FFDF"]) { // library marker kkossev.commonLib, line 1372
+                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})" // library marker kkossev.commonLib, line 1373
+                    bWasAtLeastOneAttributeProcessed = true // library marker kkossev.commonLib, line 1374
+                } // library marker kkossev.commonLib, line 1375
+                else { // library marker kkossev.commonLib, line 1376
+                    //logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping" // library marker kkossev.commonLib, line 1377
+                    bWasThereAnyStandardAttribite = true // library marker kkossev.commonLib, line 1378
+                } // library marker kkossev.commonLib, line 1379
+                break // library marker kkossev.commonLib, line 1380
+            default : // library marker kkossev.commonLib, line 1381
+                //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} N/A, skipping" // library marker kkossev.commonLib, line 1382
+                break // library marker kkossev.commonLib, line 1383
+        } // switch // library marker kkossev.commonLib, line 1384
+    } // for each attribute // library marker kkossev.commonLib, line 1385
+    return bWasAtLeastOneAttributeProcessed && !bWasThereAnyStandardAttribite // library marker kkossev.commonLib, line 1386
+} // library marker kkossev.commonLib, line 1387
 
-// return true if further processing in the main parse method should be cancelled ! // library marker kkossev.commonLib, line 1364
-boolean otherTuyaOddities( String description ) { // library marker kkossev.commonLib, line 1365
-  /* // library marker kkossev.commonLib, line 1366
-    if (description.indexOf('cluster: 0000') >= 0 && description.indexOf('attrId: 0004') >= 0) { // library marker kkossev.commonLib, line 1367
-        if (logEnable) log.debug "${device.displayName} skipping Tuya parse of  cluster 0 attrId 4"             // parseDescriptionAsMap throws exception when processing Tuya cluster 0 attrId 4  // library marker kkossev.commonLib, line 1368
-        return true // library marker kkossev.commonLib, line 1369
-    } // library marker kkossev.commonLib, line 1370
-*/ // library marker kkossev.commonLib, line 1371
-    def descMap = [:] // library marker kkossev.commonLib, line 1372
-    try { // library marker kkossev.commonLib, line 1373
-        descMap = zigbee.parseDescriptionAsMap(description) // library marker kkossev.commonLib, line 1374
-    } // library marker kkossev.commonLib, line 1375
-    catch (e1) { // library marker kkossev.commonLib, line 1376
-        logWarn "exception ${e1} caught while parseDescriptionAsMap <b>otherTuyaOddities</b> description:  ${description}" // library marker kkossev.commonLib, line 1377
-        // try alternative custom parsing // library marker kkossev.commonLib, line 1378
-        descMap = [:] // library marker kkossev.commonLib, line 1379
-        try { // library marker kkossev.commonLib, line 1380
-            descMap += description.replaceAll('\\[|\\]', '').split(',').collectEntries { entry -> // library marker kkossev.commonLib, line 1381
-                def pair = entry.split(':') // library marker kkossev.commonLib, line 1382
-                [(pair.first().trim()): pair.last().trim()] // library marker kkossev.commonLib, line 1383
-            }         // library marker kkossev.commonLib, line 1384
-        } // library marker kkossev.commonLib, line 1385
-        catch (e2) { // library marker kkossev.commonLib, line 1386
-            logWarn "exception ${e2} caught while parsing using an alternative method <b>otherTuyaOddities</b> description:  ${description}" // library marker kkossev.commonLib, line 1387
-            return true // library marker kkossev.commonLib, line 1388
-        } // library marker kkossev.commonLib, line 1389
-        logDebug "alternative method parsing success: descMap=${descMap}" // library marker kkossev.commonLib, line 1390
-    } // library marker kkossev.commonLib, line 1391
-    //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}         // library marker kkossev.commonLib, line 1392
-    if (descMap.attrId == null ) { // library marker kkossev.commonLib, line 1393
-        //logDebug "otherTuyaOddities: descMap = ${descMap}" // library marker kkossev.commonLib, line 1394
-        //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping" // library marker kkossev.commonLib, line 1395
-        return false // library marker kkossev.commonLib, line 1396
-    } // library marker kkossev.commonLib, line 1397
-    boolean bWasAtLeastOneAttributeProcessed = false // library marker kkossev.commonLib, line 1398
-    boolean bWasThereAnyStandardAttribite = false // library marker kkossev.commonLib, line 1399
-    // attribute report received // library marker kkossev.commonLib, line 1400
-    List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]] // library marker kkossev.commonLib, line 1401
-    descMap.additionalAttrs.each { // library marker kkossev.commonLib, line 1402
-        attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status] // library marker kkossev.commonLib, line 1403
-        //log.trace "Tuya oddity: filling in attrData ${attrData}" // library marker kkossev.commonLib, line 1404
-    } // library marker kkossev.commonLib, line 1405
-    attrData.each { // library marker kkossev.commonLib, line 1406
-        //log.trace "each it=${it}" // library marker kkossev.commonLib, line 1407
-        def map = [:] // library marker kkossev.commonLib, line 1408
-        if (it.status == "86") { // library marker kkossev.commonLib, line 1409
-            logWarn "Tuya Cluster ${descMap.cluster} unsupported attrId ${it.attrId}" // library marker kkossev.commonLib, line 1410
-            // TODO - skip parsing? // library marker kkossev.commonLib, line 1411
-        } // library marker kkossev.commonLib, line 1412
-        switch (it.cluster) { // library marker kkossev.commonLib, line 1413
-            case "0000" : // library marker kkossev.commonLib, line 1414
-                if (it.attrId in ["FFE0", "FFE1", "FFE2", "FFE4"]) { // library marker kkossev.commonLib, line 1415
-                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})" // library marker kkossev.commonLib, line 1416
-                    bWasAtLeastOneAttributeProcessed = true // library marker kkossev.commonLib, line 1417
-                } // library marker kkossev.commonLib, line 1418
-                else if (it.attrId in ["FFFE", "FFDF"]) { // library marker kkossev.commonLib, line 1419
-                    logDebug "Cluster ${descMap.cluster} Tuya specific attrId ${it.attrId} value ${it.value})" // library marker kkossev.commonLib, line 1420
-                    bWasAtLeastOneAttributeProcessed = true // library marker kkossev.commonLib, line 1421
-                } // library marker kkossev.commonLib, line 1422
-                else { // library marker kkossev.commonLib, line 1423
-                    //logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping" // library marker kkossev.commonLib, line 1424
-                    bWasThereAnyStandardAttribite = true // library marker kkossev.commonLib, line 1425
-                } // library marker kkossev.commonLib, line 1426
-                break // library marker kkossev.commonLib, line 1427
-            default : // library marker kkossev.commonLib, line 1428
-                //if (logEnable) log.trace "${device.displayName} otherTuyaOddities - Cluster ${it.cluster} N/A, skipping" // library marker kkossev.commonLib, line 1429
-                break // library marker kkossev.commonLib, line 1430
-        } // switch // library marker kkossev.commonLib, line 1431
-    } // for each attribute // library marker kkossev.commonLib, line 1432
-    return bWasAtLeastOneAttributeProcessed && !bWasThereAnyStandardAttribite // library marker kkossev.commonLib, line 1433
-} // library marker kkossev.commonLib, line 1434
+private boolean isCircuitBreaker()      { device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] } // library marker kkossev.commonLib, line 1389
+private boolean isRTXCircuitBreaker()   { device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] } // library marker kkossev.commonLib, line 1390
 
-private boolean isCircuitBreaker()      { device.getDataValue("manufacturer") in ["_TZ3000_ky0fq4ho"] } // library marker kkossev.commonLib, line 1436
-private boolean isRTXCircuitBreaker()   { device.getDataValue("manufacturer") in ["_TZE200_abatw3kj"] } // library marker kkossev.commonLib, line 1437
+def parseOnOffAttributes( it ) { // library marker kkossev.commonLib, line 1392
+    logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" // library marker kkossev.commonLib, line 1393
+    def mode // library marker kkossev.commonLib, line 1394
+    def attrName // library marker kkossev.commonLib, line 1395
+    if (it.value == null) { // library marker kkossev.commonLib, line 1396
+        logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } skipping NULL value status=${it.status}" // library marker kkossev.commonLib, line 1397
+        return // library marker kkossev.commonLib, line 1398
+    } // library marker kkossev.commonLib, line 1399
+    def value = zigbee.convertHexToInt(it.value) // library marker kkossev.commonLib, line 1400
+    switch (it.attrId) { // library marker kkossev.commonLib, line 1401
+        case "4000" :    // non-Tuya GlobalSceneControl (bool), read-only // library marker kkossev.commonLib, line 1402
+            attrName = "Global Scene Control" // library marker kkossev.commonLib, line 1403
+            mode = value == 0 ? "off" : value == 1 ? "on" : null // library marker kkossev.commonLib, line 1404
+            break // library marker kkossev.commonLib, line 1405
+        case "4001" :    // non-Tuya OnTime (UINT16), read-only // library marker kkossev.commonLib, line 1406
+            attrName = "On Time" // library marker kkossev.commonLib, line 1407
+            mode = value // library marker kkossev.commonLib, line 1408
+            break // library marker kkossev.commonLib, line 1409
+        case "4002" :    // non-Tuya OffWaitTime (UINT16), read-only // library marker kkossev.commonLib, line 1410
+            attrName = "Off Wait Time" // library marker kkossev.commonLib, line 1411
+            mode = value // library marker kkossev.commonLib, line 1412
+            break // library marker kkossev.commonLib, line 1413
+        case "4003" :    // non-Tuya "powerOnState" (ENUM8), read-write, default=1  // library marker kkossev.commonLib, line 1414
+            attrName = "Power On State" // library marker kkossev.commonLib, line 1415
+            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : "UNKNOWN" // library marker kkossev.commonLib, line 1416
+            break // library marker kkossev.commonLib, line 1417
+        case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]] // library marker kkossev.commonLib, line 1418
+            attrName = "Child Lock" // library marker kkossev.commonLib, line 1419
+            mode = value == 0 ? "off" : "on" // library marker kkossev.commonLib, line 1420
+            break // library marker kkossev.commonLib, line 1421
+        case "8001" :    // command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]] // library marker kkossev.commonLib, line 1422
+            attrName = "LED mode" // library marker kkossev.commonLib, line 1423
+            if (isCircuitBreaker()) { // library marker kkossev.commonLib, line 1424
+                mode = value == 0 ? "Always Green" : value == 1 ? "Red when On; Green when Off" : value == 2 ? "Green when On; Red when Off" : value == 3 ? "Always Red" : null // library marker kkossev.commonLib, line 1425
+            } // library marker kkossev.commonLib, line 1426
+            else { // library marker kkossev.commonLib, line 1427
+                mode = value == 0 ? "Disabled"  : value == 1 ? "Lit when On" : value == 2 ? "Lit when Off" : value == 3 ? "Freeze": null // library marker kkossev.commonLib, line 1428
+            } // library marker kkossev.commonLib, line 1429
+            break // library marker kkossev.commonLib, line 1430
+        case "8002" :    // command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]] // library marker kkossev.commonLib, line 1431
+            attrName = "Power On State" // library marker kkossev.commonLib, line 1432
+            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : null // library marker kkossev.commonLib, line 1433
+            break // library marker kkossev.commonLib, line 1434
+        case "8003" : //  Over current alarm // library marker kkossev.commonLib, line 1435
+            attrName = "Over current alarm" // library marker kkossev.commonLib, line 1436
+            mode = value == 0 ? "Over Current OK" : value == 1 ? "Over Current Alarm" : null // library marker kkossev.commonLib, line 1437
+            break // library marker kkossev.commonLib, line 1438
+        default : // library marker kkossev.commonLib, line 1439
+            logWarn "Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" // library marker kkossev.commonLib, line 1440
+            return // library marker kkossev.commonLib, line 1441
+    } // library marker kkossev.commonLib, line 1442
+    if (settings?.logEnable) { logInfo "${attrName} is ${mode}" } // library marker kkossev.commonLib, line 1443
+} // library marker kkossev.commonLib, line 1444
 
-def parseOnOffAttributes( it ) { // library marker kkossev.commonLib, line 1439
-    logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" // library marker kkossev.commonLib, line 1440
-    def mode // library marker kkossev.commonLib, line 1441
-    def attrName // library marker kkossev.commonLib, line 1442
-    if (it.value == null) { // library marker kkossev.commonLib, line 1443
-        logDebug "OnOff attribute ${it.attrId} cluster ${it.cluster } skipping NULL value status=${it.status}" // library marker kkossev.commonLib, line 1444
-        return // library marker kkossev.commonLib, line 1445
-    } // library marker kkossev.commonLib, line 1446
-    def value = zigbee.convertHexToInt(it.value) // library marker kkossev.commonLib, line 1447
-    switch (it.attrId) { // library marker kkossev.commonLib, line 1448
-        case "4000" :    // non-Tuya GlobalSceneControl (bool), read-only // library marker kkossev.commonLib, line 1449
-            attrName = "Global Scene Control" // library marker kkossev.commonLib, line 1450
-            mode = value == 0 ? "off" : value == 1 ? "on" : null // library marker kkossev.commonLib, line 1451
-            break // library marker kkossev.commonLib, line 1452
-        case "4001" :    // non-Tuya OnTime (UINT16), read-only // library marker kkossev.commonLib, line 1453
-            attrName = "On Time" // library marker kkossev.commonLib, line 1454
-            mode = value // library marker kkossev.commonLib, line 1455
-            break // library marker kkossev.commonLib, line 1456
-        case "4002" :    // non-Tuya OffWaitTime (UINT16), read-only // library marker kkossev.commonLib, line 1457
-            attrName = "Off Wait Time" // library marker kkossev.commonLib, line 1458
-            mode = value // library marker kkossev.commonLib, line 1459
-            break // library marker kkossev.commonLib, line 1460
-        case "4003" :    // non-Tuya "powerOnState" (ENUM8), read-write, default=1  // library marker kkossev.commonLib, line 1461
-            attrName = "Power On State" // library marker kkossev.commonLib, line 1462
-            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : "UNKNOWN" // library marker kkossev.commonLib, line 1463
-            break // library marker kkossev.commonLib, line 1464
-        case "8000" :    // command "childLock", [[name:"Child Lock", type: "ENUM", description: "Select Child Lock mode", constraints: ["off", "on"]]] // library marker kkossev.commonLib, line 1465
-            attrName = "Child Lock" // library marker kkossev.commonLib, line 1466
-            mode = value == 0 ? "off" : "on" // library marker kkossev.commonLib, line 1467
-            break // library marker kkossev.commonLib, line 1468
-        case "8001" :    // command "ledMode", [[name:"LED mode", type: "ENUM", description: "Select LED mode", constraints: ["Disabled", "Lit when On", "Lit when Off", "Always Green", "Red when On; Green when Off", "Green when On; Red when Off", "Always Red" ]]] // library marker kkossev.commonLib, line 1469
-            attrName = "LED mode" // library marker kkossev.commonLib, line 1470
-            if (isCircuitBreaker()) { // library marker kkossev.commonLib, line 1471
-                mode = value == 0 ? "Always Green" : value == 1 ? "Red when On; Green when Off" : value == 2 ? "Green when On; Red when Off" : value == 3 ? "Always Red" : null // library marker kkossev.commonLib, line 1472
-            } // library marker kkossev.commonLib, line 1473
-            else { // library marker kkossev.commonLib, line 1474
-                mode = value == 0 ? "Disabled"  : value == 1 ? "Lit when On" : value == 2 ? "Lit when Off" : value == 3 ? "Freeze": null // library marker kkossev.commonLib, line 1475
-            } // library marker kkossev.commonLib, line 1476
-            break // library marker kkossev.commonLib, line 1477
-        case "8002" :    // command "powerOnState", [[name:"Power On State", type: "ENUM", description: "Select Power On State", constraints: ["off","on", "Last state"]]] // library marker kkossev.commonLib, line 1478
-            attrName = "Power On State" // library marker kkossev.commonLib, line 1479
-            mode = value == 0 ? "off" : value == 1 ? "on" : value == 2 ?  "Last state" : null // library marker kkossev.commonLib, line 1480
-            break // library marker kkossev.commonLib, line 1481
-        case "8003" : //  Over current alarm // library marker kkossev.commonLib, line 1482
-            attrName = "Over current alarm" // library marker kkossev.commonLib, line 1483
-            mode = value == 0 ? "Over Current OK" : value == 1 ? "Over Current Alarm" : null // library marker kkossev.commonLib, line 1484
-            break // library marker kkossev.commonLib, line 1485
-        default : // library marker kkossev.commonLib, line 1486
-            logWarn "Unprocessed Tuya OnOff attribute ${it.attrId} cluster ${it.cluster } reported: value=${it.value}" // library marker kkossev.commonLib, line 1487
-            return // library marker kkossev.commonLib, line 1488
-    } // library marker kkossev.commonLib, line 1489
-    if (settings?.logEnable) { logInfo "${attrName} is ${mode}" } // library marker kkossev.commonLib, line 1490
-} // library marker kkossev.commonLib, line 1491
+def sendButtonEvent(buttonNumber, buttonState, isDigital=false) { // library marker kkossev.commonLib, line 1446
+    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital==true ? 'digital' : 'physical'] // library marker kkossev.commonLib, line 1447
+    if (txtEnable) {log.info "${device.displayName} $event.descriptionText"} // library marker kkossev.commonLib, line 1448
+    sendEvent(event) // library marker kkossev.commonLib, line 1449
+} // library marker kkossev.commonLib, line 1450
 
-def sendButtonEvent(buttonNumber, buttonState, isDigital=false) { // library marker kkossev.commonLib, line 1493
-    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital==true ? 'digital' : 'physical'] // library marker kkossev.commonLib, line 1494
-    if (txtEnable) {log.info "${device.displayName} $event.descriptionText"} // library marker kkossev.commonLib, line 1495
-    sendEvent(event) // library marker kkossev.commonLib, line 1496
-} // library marker kkossev.commonLib, line 1497
+def push() {                // Momentary capability // library marker kkossev.commonLib, line 1452
+    logDebug "push momentary" // library marker kkossev.commonLib, line 1453
+    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(); return }     // library marker kkossev.commonLib, line 1454
+    logWarn "push() not implemented for ${(DEVICE_TYPE)}" // library marker kkossev.commonLib, line 1455
+} // library marker kkossev.commonLib, line 1456
 
-def push() {                // Momentary capability // library marker kkossev.commonLib, line 1499
-    logDebug "push momentary" // library marker kkossev.commonLib, line 1500
-    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(); return }     // library marker kkossev.commonLib, line 1501
-    logWarn "push() not implemented for ${(DEVICE_TYPE)}" // library marker kkossev.commonLib, line 1502
-} // library marker kkossev.commonLib, line 1503
+def push(buttonNumber) {    //pushableButton capability // library marker kkossev.commonLib, line 1458
+    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(buttonNumber); return }     // library marker kkossev.commonLib, line 1459
+    sendButtonEvent(buttonNumber, "pushed", isDigital=true) // library marker kkossev.commonLib, line 1460
+} // library marker kkossev.commonLib, line 1461
 
-def push(buttonNumber) {    //pushableButton capability // library marker kkossev.commonLib, line 1505
-    if (DEVICE_TYPE in ["Fingerbot"])     { pushFingerbot(buttonNumber); return }     // library marker kkossev.commonLib, line 1506
-    sendButtonEvent(buttonNumber, "pushed", isDigital=true) // library marker kkossev.commonLib, line 1507
-} // library marker kkossev.commonLib, line 1508
+def doubleTap(buttonNumber) { // library marker kkossev.commonLib, line 1463
+    sendButtonEvent(buttonNumber, "doubleTapped", isDigital=true) // library marker kkossev.commonLib, line 1464
+} // library marker kkossev.commonLib, line 1465
 
-def doubleTap(buttonNumber) { // library marker kkossev.commonLib, line 1510
-    sendButtonEvent(buttonNumber, "doubleTapped", isDigital=true) // library marker kkossev.commonLib, line 1511
-} // library marker kkossev.commonLib, line 1512
+def hold(buttonNumber) { // library marker kkossev.commonLib, line 1467
+    sendButtonEvent(buttonNumber, "held", isDigital=true) // library marker kkossev.commonLib, line 1468
+} // library marker kkossev.commonLib, line 1469
 
-def hold(buttonNumber) { // library marker kkossev.commonLib, line 1514
-    sendButtonEvent(buttonNumber, "held", isDigital=true) // library marker kkossev.commonLib, line 1515
-} // library marker kkossev.commonLib, line 1516
+def release(buttonNumber) { // library marker kkossev.commonLib, line 1471
+    sendButtonEvent(buttonNumber, "released", isDigital=true) // library marker kkossev.commonLib, line 1472
+} // library marker kkossev.commonLib, line 1473
 
-def release(buttonNumber) { // library marker kkossev.commonLib, line 1518
-    sendButtonEvent(buttonNumber, "released", isDigital=true) // library marker kkossev.commonLib, line 1519
-} // library marker kkossev.commonLib, line 1520
+void sendNumberOfButtonsEvent(numberOfButtons) { // library marker kkossev.commonLib, line 1475
+    sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true, type: "digital") // library marker kkossev.commonLib, line 1476
+} // library marker kkossev.commonLib, line 1477
 
-void sendNumberOfButtonsEvent(numberOfButtons) { // library marker kkossev.commonLib, line 1522
-    sendEvent(name: "numberOfButtons", value: numberOfButtons, isStateChange: true, type: "digital") // library marker kkossev.commonLib, line 1523
-} // library marker kkossev.commonLib, line 1524
-
-void sendSupportedButtonValuesEvent(supportedValues) { // library marker kkossev.commonLib, line 1526
-    sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true, type: "digital") // library marker kkossev.commonLib, line 1527
-} // library marker kkossev.commonLib, line 1528
+void sendSupportedButtonValuesEvent(supportedValues) { // library marker kkossev.commonLib, line 1479
+    sendEvent(name: "supportedButtonValues", value: JsonOutput.toJson(supportedValues), isStateChange: true, type: "digital") // library marker kkossev.commonLib, line 1480
+} // library marker kkossev.commonLib, line 1481
 
 
-/* // library marker kkossev.commonLib, line 1531
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1532
- * Level Control Cluster            0x0008 // library marker kkossev.commonLib, line 1533
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1534
-*/ // library marker kkossev.commonLib, line 1535
-void parseLevelControlCluster(final Map descMap) { // library marker kkossev.commonLib, line 1536
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1537
-    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 1538
-        parseLevelControlClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 1539
-    } // library marker kkossev.commonLib, line 1540
-    else if (DEVICE_TYPE in ["Bulb"]) { // library marker kkossev.commonLib, line 1541
-        parseLevelControlClusterBulb(descMap) // library marker kkossev.commonLib, line 1542
-    } // library marker kkossev.commonLib, line 1543
-    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1544
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1545
-        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1546
-        sendLevelControlEvent(rawValue) // library marker kkossev.commonLib, line 1547
-    } // library marker kkossev.commonLib, line 1548
-    else { // library marker kkossev.commonLib, line 1549
-        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1550
-    } // library marker kkossev.commonLib, line 1551
-} // library marker kkossev.commonLib, line 1552
+/* // library marker kkossev.commonLib, line 1484
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1485
+ * Level Control Cluster            0x0008 // library marker kkossev.commonLib, line 1486
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1487
+*/ // library marker kkossev.commonLib, line 1488
+void parseLevelControlCluster(final Map descMap) { // library marker kkossev.commonLib, line 1489
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1490
+    if (DEVICE_TYPE in ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 1491
+        parseLevelControlClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 1492
+    } // library marker kkossev.commonLib, line 1493
+    else if (DEVICE_TYPE in ["Bulb"]) { // library marker kkossev.commonLib, line 1494
+        parseLevelControlClusterBulb(descMap) // library marker kkossev.commonLib, line 1495
+    } // library marker kkossev.commonLib, line 1496
+    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1497
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1498
+        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1499
+        sendLevelControlEvent(rawValue) // library marker kkossev.commonLib, line 1500
+    } // library marker kkossev.commonLib, line 1501
+    else { // library marker kkossev.commonLib, line 1502
+        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1503
+    } // library marker kkossev.commonLib, line 1504
+} // library marker kkossev.commonLib, line 1505
 
 
-def sendLevelControlEvent( rawValue ) { // library marker kkossev.commonLib, line 1555
-    def value = rawValue as int // library marker kkossev.commonLib, line 1556
-    if (value <0) value = 0 // library marker kkossev.commonLib, line 1557
-    if (value >100) value = 100 // library marker kkossev.commonLib, line 1558
-    def map = [:]  // library marker kkossev.commonLib, line 1559
+def sendLevelControlEvent( rawValue ) { // library marker kkossev.commonLib, line 1508
+    def value = rawValue as int // library marker kkossev.commonLib, line 1509
+    if (value <0) value = 0 // library marker kkossev.commonLib, line 1510
+    if (value >100) value = 100 // library marker kkossev.commonLib, line 1511
+    def map = [:]  // library marker kkossev.commonLib, line 1512
 
-    def isDigital = state.states["isDigital"] // library marker kkossev.commonLib, line 1561
-    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1562
+    def isDigital = state.states["isDigital"] // library marker kkossev.commonLib, line 1514
+    map.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1515
 
-    map.name = "level" // library marker kkossev.commonLib, line 1564
-    map.value = value // library marker kkossev.commonLib, line 1565
-    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.commonLib, line 1566
-    if (isRefresh == true) { // library marker kkossev.commonLib, line 1567
-        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.commonLib, line 1568
-        map.isStateChange = true // library marker kkossev.commonLib, line 1569
-    } // library marker kkossev.commonLib, line 1570
-    else { // library marker kkossev.commonLib, line 1571
-        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]" // library marker kkossev.commonLib, line 1572
-    } // library marker kkossev.commonLib, line 1573
-    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 1574
-    sendEvent(map) // library marker kkossev.commonLib, line 1575
-    clearIsDigital() // library marker kkossev.commonLib, line 1576
-} // library marker kkossev.commonLib, line 1577
+    map.name = "level" // library marker kkossev.commonLib, line 1517
+    map.value = value // library marker kkossev.commonLib, line 1518
+    boolean isRefresh = state.states["isRefresh"] ?: false // library marker kkossev.commonLib, line 1519
+    if (isRefresh == true) { // library marker kkossev.commonLib, line 1520
+        map.descriptionText = "${device.displayName} is ${value} [Refresh]" // library marker kkossev.commonLib, line 1521
+        map.isStateChange = true // library marker kkossev.commonLib, line 1522
+    } // library marker kkossev.commonLib, line 1523
+    else { // library marker kkossev.commonLib, line 1524
+        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]" // library marker kkossev.commonLib, line 1525
+    } // library marker kkossev.commonLib, line 1526
+    logInfo "${map.descriptionText}" // library marker kkossev.commonLib, line 1527
+    sendEvent(map) // library marker kkossev.commonLib, line 1528
+    clearIsDigital() // library marker kkossev.commonLib, line 1529
+} // library marker kkossev.commonLib, line 1530
 
-/** // library marker kkossev.commonLib, line 1579
- * Get the level transition rate // library marker kkossev.commonLib, line 1580
- * @param level desired target level (0-100) // library marker kkossev.commonLib, line 1581
- * @param transitionTime transition time in seconds (optional) // library marker kkossev.commonLib, line 1582
- * @return transition rate in 1/10ths of a second // library marker kkossev.commonLib, line 1583
- */ // library marker kkossev.commonLib, line 1584
-private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer transitionTime = null) { // library marker kkossev.commonLib, line 1585
-    int rate = 0 // library marker kkossev.commonLib, line 1586
-    final Boolean isOn = device.currentValue('switch') == 'on' // library marker kkossev.commonLib, line 1587
-    Integer currentLevel = (device.currentValue('level') as Integer) ?: 0 // library marker kkossev.commonLib, line 1588
-    if (!isOn) { // library marker kkossev.commonLib, line 1589
-        currentLevel = 0 // library marker kkossev.commonLib, line 1590
-    } // library marker kkossev.commonLib, line 1591
-    // Check if 'transitionTime' has a value // library marker kkossev.commonLib, line 1592
-    if (transitionTime > 0) { // library marker kkossev.commonLib, line 1593
-        // Calculate the rate by converting 'transitionTime' to BigDecimal, multiplying by 10, and converting to Integer // library marker kkossev.commonLib, line 1594
-        rate = transitionTime * 10 // library marker kkossev.commonLib, line 1595
-    } else { // library marker kkossev.commonLib, line 1596
-        // Check if the 'levelUpTransition' setting has a value and the current level is less than the desired level // library marker kkossev.commonLib, line 1597
-        if (((settings.levelUpTransition ?: 0) as Integer) > 0 && currentLevel < desiredLevel) { // library marker kkossev.commonLib, line 1598
-            // Set the rate to the value of the 'levelUpTransition' setting converted to Integer // library marker kkossev.commonLib, line 1599
-            rate = settings.levelUpTransition.toInteger() // library marker kkossev.commonLib, line 1600
-        } // library marker kkossev.commonLib, line 1601
-        // Check if the 'levelDownTransition' setting has a value and the current level is greater than the desired level // library marker kkossev.commonLib, line 1602
-        else if (((settings.levelDownTransition ?: 0) as Integer) > 0 && currentLevel > desiredLevel) { // library marker kkossev.commonLib, line 1603
-            // Set the rate to the value of the 'levelDownTransition' setting converted to Integer // library marker kkossev.commonLib, line 1604
-            rate = settings.levelDownTransition.toInteger() // library marker kkossev.commonLib, line 1605
-        } // library marker kkossev.commonLib, line 1606
-    } // library marker kkossev.commonLib, line 1607
-    logDebug "using level transition rate ${rate}" // library marker kkossev.commonLib, line 1608
-    return rate // library marker kkossev.commonLib, line 1609
-} // library marker kkossev.commonLib, line 1610
+/** // library marker kkossev.commonLib, line 1532
+ * Get the level transition rate // library marker kkossev.commonLib, line 1533
+ * @param level desired target level (0-100) // library marker kkossev.commonLib, line 1534
+ * @param transitionTime transition time in seconds (optional) // library marker kkossev.commonLib, line 1535
+ * @return transition rate in 1/10ths of a second // library marker kkossev.commonLib, line 1536
+ */ // library marker kkossev.commonLib, line 1537
+private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer transitionTime = null) { // library marker kkossev.commonLib, line 1538
+    int rate = 0 // library marker kkossev.commonLib, line 1539
+    final Boolean isOn = device.currentValue('switch') == 'on' // library marker kkossev.commonLib, line 1540
+    Integer currentLevel = (device.currentValue('level') as Integer) ?: 0 // library marker kkossev.commonLib, line 1541
+    if (!isOn) { // library marker kkossev.commonLib, line 1542
+        currentLevel = 0 // library marker kkossev.commonLib, line 1543
+    } // library marker kkossev.commonLib, line 1544
+    // Check if 'transitionTime' has a value // library marker kkossev.commonLib, line 1545
+    if (transitionTime > 0) { // library marker kkossev.commonLib, line 1546
+        // Calculate the rate by converting 'transitionTime' to BigDecimal, multiplying by 10, and converting to Integer // library marker kkossev.commonLib, line 1547
+        rate = transitionTime * 10 // library marker kkossev.commonLib, line 1548
+    } else { // library marker kkossev.commonLib, line 1549
+        // Check if the 'levelUpTransition' setting has a value and the current level is less than the desired level // library marker kkossev.commonLib, line 1550
+        if (((settings.levelUpTransition ?: 0) as Integer) > 0 && currentLevel < desiredLevel) { // library marker kkossev.commonLib, line 1551
+            // Set the rate to the value of the 'levelUpTransition' setting converted to Integer // library marker kkossev.commonLib, line 1552
+            rate = settings.levelUpTransition.toInteger() // library marker kkossev.commonLib, line 1553
+        } // library marker kkossev.commonLib, line 1554
+        // Check if the 'levelDownTransition' setting has a value and the current level is greater than the desired level // library marker kkossev.commonLib, line 1555
+        else if (((settings.levelDownTransition ?: 0) as Integer) > 0 && currentLevel > desiredLevel) { // library marker kkossev.commonLib, line 1556
+            // Set the rate to the value of the 'levelDownTransition' setting converted to Integer // library marker kkossev.commonLib, line 1557
+            rate = settings.levelDownTransition.toInteger() // library marker kkossev.commonLib, line 1558
+        } // library marker kkossev.commonLib, line 1559
+    } // library marker kkossev.commonLib, line 1560
+    logDebug "using level transition rate ${rate}" // library marker kkossev.commonLib, line 1561
+    return rate // library marker kkossev.commonLib, line 1562
+} // library marker kkossev.commonLib, line 1563
 
-// Command option that enable changes when off // library marker kkossev.commonLib, line 1612
-@Field static final String PRE_STAGING_OPTION = '01 01' // library marker kkossev.commonLib, line 1613
+// Command option that enable changes when off // library marker kkossev.commonLib, line 1565
+@Field static final String PRE_STAGING_OPTION = '01 01' // library marker kkossev.commonLib, line 1566
 
-/** // library marker kkossev.commonLib, line 1615
- * Constrain a value to a range // library marker kkossev.commonLib, line 1616
- * @param value value to constrain // library marker kkossev.commonLib, line 1617
- * @param min minimum value (default 0) // library marker kkossev.commonLib, line 1618
- * @param max maximum value (default 100) // library marker kkossev.commonLib, line 1619
- * @param nullValue value to return if value is null (default 0) // library marker kkossev.commonLib, line 1620
- */ // library marker kkossev.commonLib, line 1621
-private static BigDecimal constrain(final BigDecimal value, final BigDecimal min = 0, final BigDecimal max = 100, final BigDecimal nullValue = 0) { // library marker kkossev.commonLib, line 1622
-    if (min == null || max == null) { // library marker kkossev.commonLib, line 1623
-        return value // library marker kkossev.commonLib, line 1624
-    } // library marker kkossev.commonLib, line 1625
-    return value != null ? max.min(value.max(min)) : nullValue // library marker kkossev.commonLib, line 1626
-} // library marker kkossev.commonLib, line 1627
+/** // library marker kkossev.commonLib, line 1568
+ * Constrain a value to a range // library marker kkossev.commonLib, line 1569
+ * @param value value to constrain // library marker kkossev.commonLib, line 1570
+ * @param min minimum value (default 0) // library marker kkossev.commonLib, line 1571
+ * @param max maximum value (default 100) // library marker kkossev.commonLib, line 1572
+ * @param nullValue value to return if value is null (default 0) // library marker kkossev.commonLib, line 1573
+ */ // library marker kkossev.commonLib, line 1574
+private static BigDecimal constrain(final BigDecimal value, final BigDecimal min = 0, final BigDecimal max = 100, final BigDecimal nullValue = 0) { // library marker kkossev.commonLib, line 1575
+    if (min == null || max == null) { // library marker kkossev.commonLib, line 1576
+        return value // library marker kkossev.commonLib, line 1577
+    } // library marker kkossev.commonLib, line 1578
+    return value != null ? max.min(value.max(min)) : nullValue // library marker kkossev.commonLib, line 1579
+} // library marker kkossev.commonLib, line 1580
 
-/** // library marker kkossev.commonLib, line 1629
- * Constrain a value to a range // library marker kkossev.commonLib, line 1630
- * @param value value to constrain // library marker kkossev.commonLib, line 1631
- * @param min minimum value (default 0) // library marker kkossev.commonLib, line 1632
- * @param max maximum value (default 100) // library marker kkossev.commonLib, line 1633
- * @param nullValue value to return if value is null (default 0) // library marker kkossev.commonLib, line 1634
- */ // library marker kkossev.commonLib, line 1635
-private static Integer constrain(final Object value, final Integer min = 0, final Integer max = 100, final Integer nullValue = 0) { // library marker kkossev.commonLib, line 1636
-    if (min == null || max == null) { // library marker kkossev.commonLib, line 1637
-        return value as Integer // library marker kkossev.commonLib, line 1638
-    } // library marker kkossev.commonLib, line 1639
-    return value != null ? Math.min(Math.max(value as Integer, min) as Integer, max) : nullValue // library marker kkossev.commonLib, line 1640
-} // library marker kkossev.commonLib, line 1641
+/** // library marker kkossev.commonLib, line 1582
+ * Constrain a value to a range // library marker kkossev.commonLib, line 1583
+ * @param value value to constrain // library marker kkossev.commonLib, line 1584
+ * @param min minimum value (default 0) // library marker kkossev.commonLib, line 1585
+ * @param max maximum value (default 100) // library marker kkossev.commonLib, line 1586
+ * @param nullValue value to return if value is null (default 0) // library marker kkossev.commonLib, line 1587
+ */ // library marker kkossev.commonLib, line 1588
+private static Integer constrain(final Object value, final Integer min = 0, final Integer max = 100, final Integer nullValue = 0) { // library marker kkossev.commonLib, line 1589
+    if (min == null || max == null) { // library marker kkossev.commonLib, line 1590
+        return value as Integer // library marker kkossev.commonLib, line 1591
+    } // library marker kkossev.commonLib, line 1592
+    return value != null ? Math.min(Math.max(value as Integer, min) as Integer, max) : nullValue // library marker kkossev.commonLib, line 1593
+} // library marker kkossev.commonLib, line 1594
 
-// Delay before reading attribute (when using polling) // library marker kkossev.commonLib, line 1643
-@Field static final int POLL_DELAY_MS = 1000 // library marker kkossev.commonLib, line 1644
+// Delay before reading attribute (when using polling) // library marker kkossev.commonLib, line 1596
+@Field static final int POLL_DELAY_MS = 1000 // library marker kkossev.commonLib, line 1597
 
-/** // library marker kkossev.commonLib, line 1646
- * If the device is polling, delay the execution of the provided commands // library marker kkossev.commonLib, line 1647
- * @param delayMs delay in milliseconds // library marker kkossev.commonLib, line 1648
- * @param commands commands to execute // library marker kkossev.commonLib, line 1649
- * @return list of commands to be sent to the device // library marker kkossev.commonLib, line 1650
- */ // library marker kkossev.commonLib, line 1651
-private List<String> ifPolling(final int delayMs = 0, final Closure commands) { // library marker kkossev.commonLib, line 1652
-    if (state.reportingEnabled == false) { // library marker kkossev.commonLib, line 1653
-        final int value = Math.max(delayMs, POLL_DELAY_MS) // library marker kkossev.commonLib, line 1654
-        return ["delay ${value}"] + (commands() as List<String>) as List<String> // library marker kkossev.commonLib, line 1655
-    } // library marker kkossev.commonLib, line 1656
-    return [] // library marker kkossev.commonLib, line 1657
-} // library marker kkossev.commonLib, line 1658
+/** // library marker kkossev.commonLib, line 1599
+ * If the device is polling, delay the execution of the provided commands // library marker kkossev.commonLib, line 1600
+ * @param delayMs delay in milliseconds // library marker kkossev.commonLib, line 1601
+ * @param commands commands to execute // library marker kkossev.commonLib, line 1602
+ * @return list of commands to be sent to the device // library marker kkossev.commonLib, line 1603
+ */ // library marker kkossev.commonLib, line 1604
+private List<String> ifPolling(final int delayMs = 0, final Closure commands) { // library marker kkossev.commonLib, line 1605
+    if (state.reportingEnabled == false) { // library marker kkossev.commonLib, line 1606
+        final int value = Math.max(delayMs, POLL_DELAY_MS) // library marker kkossev.commonLib, line 1607
+        return ["delay ${value}"] + (commands() as List<String>) as List<String> // library marker kkossev.commonLib, line 1608
+    } // library marker kkossev.commonLib, line 1609
+    return [] // library marker kkossev.commonLib, line 1610
+} // library marker kkossev.commonLib, line 1611
 
-def intTo16bitUnsignedHex(value) { // library marker kkossev.commonLib, line 1660
-    def hexStr = zigbee.convertToHexString(value.toInteger(),4) // library marker kkossev.commonLib, line 1661
-    return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2)) // library marker kkossev.commonLib, line 1662
-} // library marker kkossev.commonLib, line 1663
+def intTo16bitUnsignedHex(value) { // library marker kkossev.commonLib, line 1613
+    def hexStr = zigbee.convertToHexString(value.toInteger(),4) // library marker kkossev.commonLib, line 1614
+    return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2)) // library marker kkossev.commonLib, line 1615
+} // library marker kkossev.commonLib, line 1616
 
-def intTo8bitUnsignedHex(value) { // library marker kkossev.commonLib, line 1665
-    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.commonLib, line 1666
-} // library marker kkossev.commonLib, line 1667
+def intTo8bitUnsignedHex(value) { // library marker kkossev.commonLib, line 1618
+    return zigbee.convertToHexString(value.toInteger(), 2) // library marker kkossev.commonLib, line 1619
+} // library marker kkossev.commonLib, line 1620
 
-/** // library marker kkossev.commonLib, line 1669
- * Send 'switchLevel' attribute event // library marker kkossev.commonLib, line 1670
- * @param isOn true if light is on, false otherwise // library marker kkossev.commonLib, line 1671
- * @param level brightness level (0-254) // library marker kkossev.commonLib, line 1672
- */ // library marker kkossev.commonLib, line 1673
-private List<String> setLevelPrivate(final Object value, final Integer rate = 0, final Integer delay = 0, final Boolean levelPreset = false) { // library marker kkossev.commonLib, line 1674
-    List<String> cmds = [] // library marker kkossev.commonLib, line 1675
-    final Integer level = constrain(value) // library marker kkossev.commonLib, line 1676
-    final String hexLevel = DataType.pack(Math.round(level * 2.54).intValue(), DataType.UINT8) // library marker kkossev.commonLib, line 1677
-    final String hexRate = DataType.pack(rate, DataType.UINT16, true) // library marker kkossev.commonLib, line 1678
-    final int levelCommand = levelPreset ? 0x00 : 0x04 // library marker kkossev.commonLib, line 1679
-    if (device.currentValue('switch') == 'off' && level > 0 && levelPreset == false) { // library marker kkossev.commonLib, line 1680
-        // If light is off, first go to level 0 then to desired level // library marker kkossev.commonLib, line 1681
-        cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x00, [destEndpoint:safeToInt(getDestinationEP())], delay, "00 0000 ${PRE_STAGING_OPTION}") // library marker kkossev.commonLib, line 1682
-    } // library marker kkossev.commonLib, line 1683
-    // Payload: Level | Transition Time | Options Mask | Options Override // library marker kkossev.commonLib, line 1684
-    // Options: Bit 0x01 enables pre-staging level // library marker kkossev.commonLib, line 1685
-    /* // library marker kkossev.commonLib, line 1686
-    cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, levelCommand, [destEndpoint:safeToInt(getDestinationEP())], delay, "${hexLevel} ${hexRate} ${PRE_STAGING_OPTION}") + // library marker kkossev.commonLib, line 1687
-        ifPolling(DELAY_MS + (rate * 100)) { zigbee.levelRefresh(0) } // library marker kkossev.commonLib, line 1688
-    */ // library marker kkossev.commonLib, line 1689
-    int duration = 10            // TODO !!! // library marker kkossev.commonLib, line 1690
-    String endpointId = "01"     // TODO !!! // library marker kkossev.commonLib, line 1691
-     cmds +=  ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0x0008 4 { 0x${intTo8bitUnsignedHex(level)} 0x${intTo16bitUnsignedHex(duration)} }",] // library marker kkossev.commonLib, line 1692
+/** // library marker kkossev.commonLib, line 1622
+ * Send 'switchLevel' attribute event // library marker kkossev.commonLib, line 1623
+ * @param isOn true if light is on, false otherwise // library marker kkossev.commonLib, line 1624
+ * @param level brightness level (0-254) // library marker kkossev.commonLib, line 1625
+ */ // library marker kkossev.commonLib, line 1626
+private List<String> setLevelPrivate(final Object value, final Integer rate = 0, final Integer delay = 0, final Boolean levelPreset = false) { // library marker kkossev.commonLib, line 1627
+    List<String> cmds = [] // library marker kkossev.commonLib, line 1628
+    final Integer level = constrain(value) // library marker kkossev.commonLib, line 1629
+    final String hexLevel = DataType.pack(Math.round(level * 2.54).intValue(), DataType.UINT8) // library marker kkossev.commonLib, line 1630
+    final String hexRate = DataType.pack(rate, DataType.UINT16, true) // library marker kkossev.commonLib, line 1631
+    final int levelCommand = levelPreset ? 0x00 : 0x04 // library marker kkossev.commonLib, line 1632
+    if (device.currentValue('switch') == 'off' && level > 0 && levelPreset == false) { // library marker kkossev.commonLib, line 1633
+        // If light is off, first go to level 0 then to desired level // library marker kkossev.commonLib, line 1634
+        cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x00, [destEndpoint:safeToInt(getDestinationEP())], delay, "00 0000 ${PRE_STAGING_OPTION}") // library marker kkossev.commonLib, line 1635
+    } // library marker kkossev.commonLib, line 1636
+    // Payload: Level | Transition Time | Options Mask | Options Override // library marker kkossev.commonLib, line 1637
+    // Options: Bit 0x01 enables pre-staging level // library marker kkossev.commonLib, line 1638
+    /* // library marker kkossev.commonLib, line 1639
+    cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, levelCommand, [destEndpoint:safeToInt(getDestinationEP())], delay, "${hexLevel} ${hexRate} ${PRE_STAGING_OPTION}") + // library marker kkossev.commonLib, line 1640
+        ifPolling(DELAY_MS + (rate * 100)) { zigbee.levelRefresh(0) } // library marker kkossev.commonLib, line 1641
+    */ // library marker kkossev.commonLib, line 1642
+    int duration = 10            // TODO !!! // library marker kkossev.commonLib, line 1643
+    String endpointId = "01"     // TODO !!! // library marker kkossev.commonLib, line 1644
+     cmds +=  ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0x0008 4 { 0x${intTo8bitUnsignedHex(level)} 0x${intTo16bitUnsignedHex(duration)} }",] // library marker kkossev.commonLib, line 1645
 
-    return cmds // library marker kkossev.commonLib, line 1694
-} // library marker kkossev.commonLib, line 1695
+    return cmds // library marker kkossev.commonLib, line 1647
+} // library marker kkossev.commonLib, line 1648
 
 
-/** // library marker kkossev.commonLib, line 1698
- * Set Level Command // library marker kkossev.commonLib, line 1699
- * @param value level percent (0-100) // library marker kkossev.commonLib, line 1700
- * @param transitionTime transition time in seconds // library marker kkossev.commonLib, line 1701
- * @return List of zigbee commands // library marker kkossev.commonLib, line 1702
- */ // library marker kkossev.commonLib, line 1703
-void /*List<String>*/ setLevel(final Object value, final Object transitionTime = null) { // library marker kkossev.commonLib, line 1704
-    logInfo "setLevel (${value}, ${transitionTime})" // library marker kkossev.commonLib, line 1705
-    if (DEVICE_TYPE in  ["ButtonDimmer"]) { setLevelButtonDimmer(value, transitionTime); return } // library marker kkossev.commonLib, line 1706
-    if (DEVICE_TYPE in  ["Bulb"]) { setLevelBulb(value, transitionTime); return } // library marker kkossev.commonLib, line 1707
-    else { // library marker kkossev.commonLib, line 1708
-        final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer) // library marker kkossev.commonLib, line 1709
-        scheduleCommandTimeoutCheck() // library marker kkossev.commonLib, line 1710
-        /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate)) // library marker kkossev.commonLib, line 1711
-    } // library marker kkossev.commonLib, line 1712
-} // library marker kkossev.commonLib, line 1713
+/** // library marker kkossev.commonLib, line 1651
+ * Set Level Command // library marker kkossev.commonLib, line 1652
+ * @param value level percent (0-100) // library marker kkossev.commonLib, line 1653
+ * @param transitionTime transition time in seconds // library marker kkossev.commonLib, line 1654
+ * @return List of zigbee commands // library marker kkossev.commonLib, line 1655
+ */ // library marker kkossev.commonLib, line 1656
+void /*List<String>*/ setLevel(final Object value, final Object transitionTime = null) { // library marker kkossev.commonLib, line 1657
+    logInfo "setLevel (${value}, ${transitionTime})" // library marker kkossev.commonLib, line 1658
+    if (DEVICE_TYPE in  ["ButtonDimmer"]) { setLevelButtonDimmer(value, transitionTime); return } // library marker kkossev.commonLib, line 1659
+    if (DEVICE_TYPE in  ["Bulb"]) { setLevelBulb(value, transitionTime); return } // library marker kkossev.commonLib, line 1660
+    else { // library marker kkossev.commonLib, line 1661
+        final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer) // library marker kkossev.commonLib, line 1662
+        scheduleCommandTimeoutCheck() // library marker kkossev.commonLib, line 1663
+        /*return*/ sendZigbeeCommands ( setLevelPrivate(value, rate)) // library marker kkossev.commonLib, line 1664
+    } // library marker kkossev.commonLib, line 1665
+} // library marker kkossev.commonLib, line 1666
 
-/* // library marker kkossev.commonLib, line 1715
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1716
- * Color Control Cluster            0x0300 // library marker kkossev.commonLib, line 1717
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1718
-*/ // library marker kkossev.commonLib, line 1719
-void parseColorControlCluster(final Map descMap, description) { // library marker kkossev.commonLib, line 1720
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1721
-    if (DEVICE_TYPE in ["Bulb"]) { // library marker kkossev.commonLib, line 1722
-        parseColorControlClusterBulb(descMap, description) // library marker kkossev.commonLib, line 1723
-    } // library marker kkossev.commonLib, line 1724
-    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1725
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1726
-        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1727
-        sendLevelControlEvent(rawValue) // library marker kkossev.commonLib, line 1728
+/* // library marker kkossev.commonLib, line 1668
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1669
+ * Color Control Cluster            0x0300 // library marker kkossev.commonLib, line 1670
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1671
+*/ // library marker kkossev.commonLib, line 1672
+void parseColorControlCluster(final Map descMap, description) { // library marker kkossev.commonLib, line 1673
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1674
+    if (DEVICE_TYPE in ["Bulb"]) { // library marker kkossev.commonLib, line 1675
+        parseColorControlClusterBulb(descMap, description) // library marker kkossev.commonLib, line 1676
+    } // library marker kkossev.commonLib, line 1677
+    else if (descMap.attrId == "0000") { // library marker kkossev.commonLib, line 1678
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value // library marker kkossev.commonLib, line 1679
+        final long rawValue = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1680
+        sendLevelControlEvent(rawValue) // library marker kkossev.commonLib, line 1681
+    } // library marker kkossev.commonLib, line 1682
+    else { // library marker kkossev.commonLib, line 1683
+        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1684
+    } // library marker kkossev.commonLib, line 1685
+} // library marker kkossev.commonLib, line 1686
+
+/* // library marker kkossev.commonLib, line 1688
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1689
+ * Illuminance    cluster 0x0400 // library marker kkossev.commonLib, line 1690
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1691
+*/ // library marker kkossev.commonLib, line 1692
+void parseIlluminanceCluster(final Map descMap) { // library marker kkossev.commonLib, line 1693
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1694
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1695
+    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1696
+    def lux = value > 0 ? Math.round(Math.pow(10,(value/10000))) : 0 // library marker kkossev.commonLib, line 1697
+    handleIlluminanceEvent(lux) // library marker kkossev.commonLib, line 1698
+} // library marker kkossev.commonLib, line 1699
+
+void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1701
+    def eventMap = [:] // library marker kkossev.commonLib, line 1702
+    if (state.stats != null) state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1703
+    eventMap.name = "illuminance" // library marker kkossev.commonLib, line 1704
+    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float))) // library marker kkossev.commonLib, line 1705
+    eventMap.value  = illumCorrected // library marker kkossev.commonLib, line 1706
+    eventMap.type = isDigital ? "digital" : "physical" // library marker kkossev.commonLib, line 1707
+    eventMap.unit = "lx" // library marker kkossev.commonLib, line 1708
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 1709
+    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1710
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1711
+    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.commonLib, line 1712
+    Integer lastIllum = device.currentValue("illuminance") ?: 0 // library marker kkossev.commonLib, line 1713
+    Integer delta = Math.abs(lastIllum- illumCorrected) // library marker kkossev.commonLib, line 1714
+    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) { // library marker kkossev.commonLib, line 1715
+        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})" // library marker kkossev.commonLib, line 1716
+        return // library marker kkossev.commonLib, line 1717
+    } // library marker kkossev.commonLib, line 1718
+    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1719
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1720
+        unschedule("sendDelayedIllumEvent")        //get rid of stale queued reports // library marker kkossev.commonLib, line 1721
+        state.lastRx['illumTime'] = now() // library marker kkossev.commonLib, line 1722
+        sendEvent(eventMap) // library marker kkossev.commonLib, line 1723
+    }         // library marker kkossev.commonLib, line 1724
+    else {         // queue the event // library marker kkossev.commonLib, line 1725
+        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1726
+        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}" // library marker kkossev.commonLib, line 1727
+        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1728
     } // library marker kkossev.commonLib, line 1729
-    else { // library marker kkossev.commonLib, line 1730
-        logWarn "unprocessed LevelControl attribute ${descMap.attrId}" // library marker kkossev.commonLib, line 1731
-    } // library marker kkossev.commonLib, line 1732
-} // library marker kkossev.commonLib, line 1733
+} // library marker kkossev.commonLib, line 1730
 
-/* // library marker kkossev.commonLib, line 1735
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1736
- * Illuminance    cluster 0x0400 // library marker kkossev.commonLib, line 1737
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1738
-*/ // library marker kkossev.commonLib, line 1739
-void parseIlluminanceCluster(final Map descMap) { // library marker kkossev.commonLib, line 1740
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1741
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1742
-    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1743
-    def lux = value > 0 ? Math.round(Math.pow(10,(value/10000))) : 0 // library marker kkossev.commonLib, line 1744
-    handleIlluminanceEvent(lux) // library marker kkossev.commonLib, line 1745
-} // library marker kkossev.commonLib, line 1746
+private void sendDelayedIllumEvent(Map eventMap) { // library marker kkossev.commonLib, line 1732
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1733
+    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1734
+    sendEvent(eventMap) // library marker kkossev.commonLib, line 1735
+} // library marker kkossev.commonLib, line 1736
 
-void handleIlluminanceEvent( illuminance, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1748
-    def eventMap = [:] // library marker kkossev.commonLib, line 1749
-    if (state.stats != null) state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1750
-    eventMap.name = "illuminance" // library marker kkossev.commonLib, line 1751
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float))) // library marker kkossev.commonLib, line 1752
-    eventMap.value  = illumCorrected // library marker kkossev.commonLib, line 1753
-    eventMap.type = isDigital ? "digital" : "physical" // library marker kkossev.commonLib, line 1754
-    eventMap.unit = "lx" // library marker kkossev.commonLib, line 1755
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 1756
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1757
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1758
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.commonLib, line 1759
-    Integer lastIllum = device.currentValue("illuminance") ?: 0 // library marker kkossev.commonLib, line 1760
-    Integer delta = Math.abs(lastIllum- illumCorrected) // library marker kkossev.commonLib, line 1761
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) { // library marker kkossev.commonLib, line 1762
-        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})" // library marker kkossev.commonLib, line 1763
-        return // library marker kkossev.commonLib, line 1764
-    } // library marker kkossev.commonLib, line 1765
-    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1766
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1767
-        unschedule("sendDelayedIllumEvent")        //get rid of stale queued reports // library marker kkossev.commonLib, line 1768
-        state.lastRx['illumTime'] = now() // library marker kkossev.commonLib, line 1769
-        sendEvent(eventMap) // library marker kkossev.commonLib, line 1770
-    }         // library marker kkossev.commonLib, line 1771
-    else {         // queue the event // library marker kkossev.commonLib, line 1772
-        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1773
-        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}" // library marker kkossev.commonLib, line 1774
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1775
-    } // library marker kkossev.commonLib, line 1776
-} // library marker kkossev.commonLib, line 1777
-
-private void sendDelayedIllumEvent(Map eventMap) { // library marker kkossev.commonLib, line 1779
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1780
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1781
-    sendEvent(eventMap) // library marker kkossev.commonLib, line 1782
-} // library marker kkossev.commonLib, line 1783
-
-@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high'] // library marker kkossev.commonLib, line 1785
+@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high'] // library marker kkossev.commonLib, line 1738
 
 
-/* // library marker kkossev.commonLib, line 1788
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1789
- * temperature // library marker kkossev.commonLib, line 1790
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1791
-*/ // library marker kkossev.commonLib, line 1792
-void parseTemperatureCluster(final Map descMap) { // library marker kkossev.commonLib, line 1793
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1794
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1795
-    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1796
-    handleTemperatureEvent(value/100.0F as Float) // library marker kkossev.commonLib, line 1797
-} // library marker kkossev.commonLib, line 1798
+/* // library marker kkossev.commonLib, line 1741
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1742
+ * temperature // library marker kkossev.commonLib, line 1743
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1744
+*/ // library marker kkossev.commonLib, line 1745
+void parseTemperatureCluster(final Map descMap) { // library marker kkossev.commonLib, line 1746
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1747
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1748
+    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1749
+    handleTemperatureEvent(value/100.0F as Float) // library marker kkossev.commonLib, line 1750
+} // library marker kkossev.commonLib, line 1751
 
-void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1800
-    def eventMap = [:] // library marker kkossev.commonLib, line 1801
-    if (state.stats != null) state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1802
-    eventMap.name = "temperature" // library marker kkossev.commonLib, line 1803
-    def Scale = location.temperatureScale // library marker kkossev.commonLib, line 1804
-    if (Scale == "F") { // library marker kkossev.commonLib, line 1805
-        temperature = (temperature * 1.8) + 32 // library marker kkossev.commonLib, line 1806
-        eventMap.unit = "\u00B0"+"F" // library marker kkossev.commonLib, line 1807
-    } // library marker kkossev.commonLib, line 1808
-    else { // library marker kkossev.commonLib, line 1809
-        eventMap.unit = "\u00B0"+"C" // library marker kkossev.commonLib, line 1810
-    } // library marker kkossev.commonLib, line 1811
-    def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float // library marker kkossev.commonLib, line 1812
-    eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float // library marker kkossev.commonLib, line 1813
-    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1814
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 1815
-    if (state.states["isRefresh"] == true) { // library marker kkossev.commonLib, line 1816
-        eventMap.descriptionText += " [refresh]" // library marker kkossev.commonLib, line 1817
-        eventMap.isStateChange = true // library marker kkossev.commonLib, line 1818
-    }    // library marker kkossev.commonLib, line 1819
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1820
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1821
-    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.commonLib, line 1822
-    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1823
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1824
-        unschedule("sendDelayedTempEvent")        //get rid of stale queued reports // library marker kkossev.commonLib, line 1825
-        state.lastRx['tempTime'] = now() // library marker kkossev.commonLib, line 1826
-        sendEvent(eventMap) // library marker kkossev.commonLib, line 1827
-    }         // library marker kkossev.commonLib, line 1828
-    else {         // queue the event // library marker kkossev.commonLib, line 1829
-        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1830
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1831
-        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1832
-    } // library marker kkossev.commonLib, line 1833
-} // library marker kkossev.commonLib, line 1834
+void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1753
+    def eventMap = [:] // library marker kkossev.commonLib, line 1754
+    if (state.stats != null) state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1755
+    eventMap.name = "temperature" // library marker kkossev.commonLib, line 1756
+    def Scale = location.temperatureScale // library marker kkossev.commonLib, line 1757
+    if (Scale == "F") { // library marker kkossev.commonLib, line 1758
+        temperature = (temperature * 1.8) + 32 // library marker kkossev.commonLib, line 1759
+        eventMap.unit = "\u00B0"+"F" // library marker kkossev.commonLib, line 1760
+    } // library marker kkossev.commonLib, line 1761
+    else { // library marker kkossev.commonLib, line 1762
+        eventMap.unit = "\u00B0"+"C" // library marker kkossev.commonLib, line 1763
+    } // library marker kkossev.commonLib, line 1764
+    def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float // library marker kkossev.commonLib, line 1765
+    eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float // library marker kkossev.commonLib, line 1766
+    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1767
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 1768
+    if (state.states["isRefresh"] == true) { // library marker kkossev.commonLib, line 1769
+        eventMap.descriptionText += " [refresh]" // library marker kkossev.commonLib, line 1770
+        eventMap.isStateChange = true // library marker kkossev.commonLib, line 1771
+    }    // library marker kkossev.commonLib, line 1772
+    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1773
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1774
+    Integer timeRamaining = (minTime - timeElapsed) as Integer // library marker kkossev.commonLib, line 1775
+    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1776
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1777
+        unschedule("sendDelayedTempEvent")        //get rid of stale queued reports // library marker kkossev.commonLib, line 1778
+        state.lastRx['tempTime'] = now() // library marker kkossev.commonLib, line 1779
+        sendEvent(eventMap) // library marker kkossev.commonLib, line 1780
+    }         // library marker kkossev.commonLib, line 1781
+    else {         // queue the event // library marker kkossev.commonLib, line 1782
+        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1783
+        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1784
+        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1785
+    } // library marker kkossev.commonLib, line 1786
+} // library marker kkossev.commonLib, line 1787
 
-private void sendDelayedTempEvent(Map eventMap) { // library marker kkossev.commonLib, line 1836
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1837
-    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1838
-    sendEvent(eventMap) // library marker kkossev.commonLib, line 1839
-} // library marker kkossev.commonLib, line 1840
+private void sendDelayedTempEvent(Map eventMap) { // library marker kkossev.commonLib, line 1789
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1790
+    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1791
+    sendEvent(eventMap) // library marker kkossev.commonLib, line 1792
+} // library marker kkossev.commonLib, line 1793
 
-/* // library marker kkossev.commonLib, line 1842
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1843
- * humidity // library marker kkossev.commonLib, line 1844
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1845
-*/ // library marker kkossev.commonLib, line 1846
-void parseHumidityCluster(final Map descMap) { // library marker kkossev.commonLib, line 1847
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1848
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1849
-    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1850
-    handleHumidityEvent(value/100.0F as Float) // library marker kkossev.commonLib, line 1851
-} // library marker kkossev.commonLib, line 1852
+/* // library marker kkossev.commonLib, line 1795
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1796
+ * humidity // library marker kkossev.commonLib, line 1797
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1798
+*/ // library marker kkossev.commonLib, line 1799
+void parseHumidityCluster(final Map descMap) { // library marker kkossev.commonLib, line 1800
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1801
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1802
+    final long value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1803
+    handleHumidityEvent(value/100.0F as Float) // library marker kkossev.commonLib, line 1804
+} // library marker kkossev.commonLib, line 1805
 
-void handleHumidityEvent( Float humidity, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1854
-    def eventMap = [:] // library marker kkossev.commonLib, line 1855
-    if (state.stats != null) state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1856
-    double humidityAsDouble = safeToDouble(humidity) + safeToDouble(settings?.humidityOffset ?: 0) // library marker kkossev.commonLib, line 1857
-    if (humidityAsDouble <= 0.0 || humidityAsDouble > 100.0) { // library marker kkossev.commonLib, line 1858
-        logWarn "ignored invalid humidity ${humidity} (${humidityAsDouble})" // library marker kkossev.commonLib, line 1859
-        return // library marker kkossev.commonLib, line 1860
-    } // library marker kkossev.commonLib, line 1861
-    eventMap.value = Math.round(humidityAsDouble) // library marker kkossev.commonLib, line 1862
-    eventMap.name = "humidity" // library marker kkossev.commonLib, line 1863
-    eventMap.unit = "% RH" // library marker kkossev.commonLib, line 1864
-    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1865
-    //eventMap.isStateChange = true // library marker kkossev.commonLib, line 1866
-    eventMap.descriptionText = "${eventMap.name} is ${humidityAsDouble.round(1)} ${eventMap.unit}" // library marker kkossev.commonLib, line 1867
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1868
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1869
-    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.commonLib, line 1870
-    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1871
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1872
-        unschedule("sendDelayedHumidityEvent") // library marker kkossev.commonLib, line 1873
-        state.lastRx['humiTime'] = now() // library marker kkossev.commonLib, line 1874
-        sendEvent(eventMap) // library marker kkossev.commonLib, line 1875
+void handleHumidityEvent( Float humidity, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1807
+    def eventMap = [:] // library marker kkossev.commonLib, line 1808
+    if (state.stats != null) state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1809
+    double humidityAsDouble = safeToDouble(humidity) + safeToDouble(settings?.humidityOffset ?: 0) // library marker kkossev.commonLib, line 1810
+    if (humidityAsDouble <= 0.0 || humidityAsDouble > 100.0) { // library marker kkossev.commonLib, line 1811
+        logWarn "ignored invalid humidity ${humidity} (${humidityAsDouble})" // library marker kkossev.commonLib, line 1812
+        return // library marker kkossev.commonLib, line 1813
+    } // library marker kkossev.commonLib, line 1814
+    eventMap.value = Math.round(humidityAsDouble) // library marker kkossev.commonLib, line 1815
+    eventMap.name = "humidity" // library marker kkossev.commonLib, line 1816
+    eventMap.unit = "% RH" // library marker kkossev.commonLib, line 1817
+    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1818
+    //eventMap.isStateChange = true // library marker kkossev.commonLib, line 1819
+    eventMap.descriptionText = "${eventMap.name} is ${humidityAsDouble.round(1)} ${eventMap.unit}" // library marker kkossev.commonLib, line 1820
+    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now()))/1000) // library marker kkossev.commonLib, line 1821
+    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1822
+    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.commonLib, line 1823
+    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1824
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1825
+        unschedule("sendDelayedHumidityEvent") // library marker kkossev.commonLib, line 1826
+        state.lastRx['humiTime'] = now() // library marker kkossev.commonLib, line 1827
+        sendEvent(eventMap) // library marker kkossev.commonLib, line 1828
+    } // library marker kkossev.commonLib, line 1829
+    else { // library marker kkossev.commonLib, line 1830
+        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1831
+        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1832
+        runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1833
+    } // library marker kkossev.commonLib, line 1834
+} // library marker kkossev.commonLib, line 1835
+
+private void sendDelayedHumidityEvent(Map eventMap) { // library marker kkossev.commonLib, line 1837
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1838
+    state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1839
+    sendEvent(eventMap) // library marker kkossev.commonLib, line 1840
+} // library marker kkossev.commonLib, line 1841
+
+/* // library marker kkossev.commonLib, line 1843
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1844
+ * Electrical Measurement Cluster 0x0702 // library marker kkossev.commonLib, line 1845
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1846
+*/ // library marker kkossev.commonLib, line 1847
+
+void parseElectricalMeasureCluster(final Map descMap) { // library marker kkossev.commonLib, line 1849
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1850
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1851
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1852
+    if (DEVICE_TYPE in  ["Switch"]) { // library marker kkossev.commonLib, line 1853
+        parseElectricalMeasureClusterSwitch(descMap) // library marker kkossev.commonLib, line 1854
+    } // library marker kkossev.commonLib, line 1855
+    else { // library marker kkossev.commonLib, line 1856
+        logWarn "parseElectricalMeasureCluster is NOT implemented1" // library marker kkossev.commonLib, line 1857
+    } // library marker kkossev.commonLib, line 1858
+} // library marker kkossev.commonLib, line 1859
+
+/* // library marker kkossev.commonLib, line 1861
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1862
+ * Metering Cluster 0x0B04 // library marker kkossev.commonLib, line 1863
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1864
+*/ // library marker kkossev.commonLib, line 1865
+
+void parseMeteringCluster(final Map descMap) { // library marker kkossev.commonLib, line 1867
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1868
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1869
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1870
+    if (DEVICE_TYPE in  ["Switch"]) { // library marker kkossev.commonLib, line 1871
+        parseMeteringClusterSwitch(descMap) // library marker kkossev.commonLib, line 1872
+    } // library marker kkossev.commonLib, line 1873
+    else { // library marker kkossev.commonLib, line 1874
+        logWarn "parseMeteringCluster is NOT implemented1" // library marker kkossev.commonLib, line 1875
     } // library marker kkossev.commonLib, line 1876
-    else { // library marker kkossev.commonLib, line 1877
-        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1878
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1879
-        runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1880
-    } // library marker kkossev.commonLib, line 1881
-} // library marker kkossev.commonLib, line 1882
+} // library marker kkossev.commonLib, line 1877
 
-private void sendDelayedHumidityEvent(Map eventMap) { // library marker kkossev.commonLib, line 1884
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1885
-    state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1886
-    sendEvent(eventMap) // library marker kkossev.commonLib, line 1887
-} // library marker kkossev.commonLib, line 1888
 
-/* // library marker kkossev.commonLib, line 1890
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1891
- * Electrical Measurement Cluster 0x0702 // library marker kkossev.commonLib, line 1892
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1893
-*/ // library marker kkossev.commonLib, line 1894
+/* // library marker kkossev.commonLib, line 1880
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1881
+ * pm2.5 // library marker kkossev.commonLib, line 1882
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1883
+*/ // library marker kkossev.commonLib, line 1884
+void parsePm25Cluster(final Map descMap) { // library marker kkossev.commonLib, line 1885
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1886
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1887
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1888
+    Float floatValue = Float.intBitsToFloat(value.intValue()) // library marker kkossev.commonLib, line 1889
+    //logDebug "pm25 float value = ${floatValue}" // library marker kkossev.commonLib, line 1890
+    handlePm25Event(floatValue as Integer) // library marker kkossev.commonLib, line 1891
+} // library marker kkossev.commonLib, line 1892
+// TODO - check if handlePm25Event handler exists !! // library marker kkossev.commonLib, line 1893
 
-void parseElectricalMeasureCluster(final Map descMap) { // library marker kkossev.commonLib, line 1896
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1897
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1898
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1899
-    if (DEVICE_TYPE in  ["Switch"]) { // library marker kkossev.commonLib, line 1900
-        parseElectricalMeasureClusterSwitch(descMap) // library marker kkossev.commonLib, line 1901
-    } // library marker kkossev.commonLib, line 1902
-    else { // library marker kkossev.commonLib, line 1903
-        logWarn "parseElectricalMeasureCluster is NOT implemented1" // library marker kkossev.commonLib, line 1904
-    } // library marker kkossev.commonLib, line 1905
-} // library marker kkossev.commonLib, line 1906
-
-/* // library marker kkossev.commonLib, line 1908
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1909
- * Metering Cluster 0x0B04 // library marker kkossev.commonLib, line 1910
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1911
-*/ // library marker kkossev.commonLib, line 1912
-
-void parseMeteringCluster(final Map descMap) { // library marker kkossev.commonLib, line 1914
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1915
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1916
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1917
-    if (DEVICE_TYPE in  ["Switch"]) { // library marker kkossev.commonLib, line 1918
-        parseMeteringClusterSwitch(descMap) // library marker kkossev.commonLib, line 1919
-    } // library marker kkossev.commonLib, line 1920
-    else { // library marker kkossev.commonLib, line 1921
-        logWarn "parseMeteringCluster is NOT implemented1" // library marker kkossev.commonLib, line 1922
+/* // library marker kkossev.commonLib, line 1895
+void handlePm25Event( Integer pm25, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1896
+    def eventMap = [:] // library marker kkossev.commonLib, line 1897
+    if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1898
+    double pm25AsDouble = safeToDouble(pm25) + safeToDouble(settings?.pm25Offset ?: 0) // library marker kkossev.commonLib, line 1899
+    if (pm25AsDouble <= 0.0 || pm25AsDouble > 999.0) { // library marker kkossev.commonLib, line 1900
+        logWarn "ignored invalid pm25 ${pm25} (${pm25AsDouble})" // library marker kkossev.commonLib, line 1901
+        return // library marker kkossev.commonLib, line 1902
+    } // library marker kkossev.commonLib, line 1903
+    eventMap.value = Math.round(pm25AsDouble) // library marker kkossev.commonLib, line 1904
+    eventMap.name = "pm25" // library marker kkossev.commonLib, line 1905
+    eventMap.unit = "\u03BCg/m3"    //"mg/m3" // library marker kkossev.commonLib, line 1906
+    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1907
+    eventMap.isStateChange = true // library marker kkossev.commonLib, line 1908
+    eventMap.descriptionText = "${eventMap.name} is ${pm25AsDouble.round()} ${eventMap.unit}" // library marker kkossev.commonLib, line 1909
+    Integer timeElapsed = Math.round((now() - (state.lastRx['pm25Time'] ?: now()))/1000) // library marker kkossev.commonLib, line 1910
+    Integer minTime = settings?.minReportingTimePm25 ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1911
+    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.commonLib, line 1912
+    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1913
+        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1914
+        unschedule("sendDelayedPm25Event") // library marker kkossev.commonLib, line 1915
+        state.lastRx['pm25Time'] = now() // library marker kkossev.commonLib, line 1916
+        sendEvent(eventMap) // library marker kkossev.commonLib, line 1917
+    } // library marker kkossev.commonLib, line 1918
+    else { // library marker kkossev.commonLib, line 1919
+        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1920
+        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1921
+        runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1922
     } // library marker kkossev.commonLib, line 1923
 } // library marker kkossev.commonLib, line 1924
 
-
-/* // library marker kkossev.commonLib, line 1927
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1928
- * pm2.5 // library marker kkossev.commonLib, line 1929
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1930
+private void sendDelayedPm25Event(Map eventMap) { // library marker kkossev.commonLib, line 1926
+    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1927
+    state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1928
+    sendEvent(eventMap) // library marker kkossev.commonLib, line 1929
+} // library marker kkossev.commonLib, line 1930
 */ // library marker kkossev.commonLib, line 1931
-void parsePm25Cluster(final Map descMap) { // library marker kkossev.commonLib, line 1932
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1933
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1934
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1935
-    Float floatValue = Float.intBitsToFloat(value.intValue()) // library marker kkossev.commonLib, line 1936
-    //logDebug "pm25 float value = ${floatValue}" // library marker kkossev.commonLib, line 1937
-    handlePm25Event(floatValue as Integer) // library marker kkossev.commonLib, line 1938
-} // library marker kkossev.commonLib, line 1939
 
-void handlePm25Event( Integer pm25, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1941
-    def eventMap = [:] // library marker kkossev.commonLib, line 1942
-    if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:] // library marker kkossev.commonLib, line 1943
-    double pm25AsDouble = safeToDouble(pm25) + safeToDouble(settings?.pm25Offset ?: 0) // library marker kkossev.commonLib, line 1944
-    if (pm25AsDouble <= 0.0 || pm25AsDouble > 999.0) { // library marker kkossev.commonLib, line 1945
-        logWarn "ignored invalid pm25 ${pm25} (${pm25AsDouble})" // library marker kkossev.commonLib, line 1946
-        return // library marker kkossev.commonLib, line 1947
-    } // library marker kkossev.commonLib, line 1948
-    eventMap.value = Math.round(pm25AsDouble) // library marker kkossev.commonLib, line 1949
-    eventMap.name = "pm25" // library marker kkossev.commonLib, line 1950
-    eventMap.unit = "\u03BCg/m3"    //"mg/m3" // library marker kkossev.commonLib, line 1951
-    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1952
-    eventMap.isStateChange = true // library marker kkossev.commonLib, line 1953
-    eventMap.descriptionText = "${eventMap.name} is ${pm25AsDouble.round()} ${eventMap.unit}" // library marker kkossev.commonLib, line 1954
-    Integer timeElapsed = Math.round((now() - (state.lastRx['pm25Time'] ?: now()))/1000) // library marker kkossev.commonLib, line 1955
-    Integer minTime = settings?.minReportingTimePm25 ?: DEFAULT_MIN_REPORTING_TIME // library marker kkossev.commonLib, line 1956
-    Integer timeRamaining = (minTime - timeElapsed) as Integer     // library marker kkossev.commonLib, line 1957
-    if (timeElapsed >= minTime) { // library marker kkossev.commonLib, line 1958
-        logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1959
-        unschedule("sendDelayedPm25Event") // library marker kkossev.commonLib, line 1960
-        state.lastRx['pm25Time'] = now() // library marker kkossev.commonLib, line 1961
-        sendEvent(eventMap) // library marker kkossev.commonLib, line 1962
-    } // library marker kkossev.commonLib, line 1963
-    else { // library marker kkossev.commonLib, line 1964
-        eventMap.type = "delayed" // library marker kkossev.commonLib, line 1965
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}" // library marker kkossev.commonLib, line 1966
-        runIn(timeRamaining, 'sendDelayedPm25Event',  [overwrite: true, data: eventMap]) // library marker kkossev.commonLib, line 1967
-    } // library marker kkossev.commonLib, line 1968
-} // library marker kkossev.commonLib, line 1969
+/* // library marker kkossev.commonLib, line 1933
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1934
+ * Analog Input Cluster 0x000C // library marker kkossev.commonLib, line 1935
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1936
+*/ // library marker kkossev.commonLib, line 1937
+void parseAnalogInputCluster(final Map descMap) { // library marker kkossev.commonLib, line 1938
+    if (DEVICE_TYPE in ["AirQuality"]) { // library marker kkossev.commonLib, line 1939
+        parseAirQualityIndexCluster(descMap) // library marker kkossev.commonLib, line 1940
+    } // library marker kkossev.commonLib, line 1941
+    else if (DEVICE_TYPE in ["AqaraCube"]) { // library marker kkossev.commonLib, line 1942
+        parseAqaraCubeAnalogInputCluster(descMap) // library marker kkossev.commonLib, line 1943
+    } // library marker kkossev.commonLib, line 1944
+    else { // library marker kkossev.commonLib, line 1945
+        logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 1946
+    } // library marker kkossev.commonLib, line 1947
+} // library marker kkossev.commonLib, line 1948
 
-private void sendDelayedPm25Event(Map eventMap) { // library marker kkossev.commonLib, line 1971
-    logInfo "${eventMap.descriptionText} (${eventMap.type})" // library marker kkossev.commonLib, line 1972
-    state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000) // library marker kkossev.commonLib, line 1973
-    sendEvent(eventMap) // library marker kkossev.commonLib, line 1974
-} // library marker kkossev.commonLib, line 1975
 
-/* // library marker kkossev.commonLib, line 1977
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1978
- * Analog Input Cluster 0x000C // library marker kkossev.commonLib, line 1979
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1980
-*/ // library marker kkossev.commonLib, line 1981
-void parseAnalogInputCluster(final Map descMap) { // library marker kkossev.commonLib, line 1982
-    if (DEVICE_TYPE in ["AirQuality"]) { // library marker kkossev.commonLib, line 1983
-        parseAirQualityIndexCluster(descMap) // library marker kkossev.commonLib, line 1984
-    } // library marker kkossev.commonLib, line 1985
-    else if (DEVICE_TYPE in ["AqaraCube"]) { // library marker kkossev.commonLib, line 1986
-        parseAqaraCubeAnalogInputCluster(descMap) // library marker kkossev.commonLib, line 1987
-    } // library marker kkossev.commonLib, line 1988
-    else { // library marker kkossev.commonLib, line 1989
-        logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 1990
+/* // library marker kkossev.commonLib, line 1951
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1952
+ * Multistate Input Cluster 0x0012 // library marker kkossev.commonLib, line 1953
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1954
+*/ // library marker kkossev.commonLib, line 1955
+
+void parseMultistateInputCluster(final Map descMap) { // library marker kkossev.commonLib, line 1957
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1958
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 1959
+    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 1960
+    Float floatValue = Float.intBitsToFloat(value.intValue()) // library marker kkossev.commonLib, line 1961
+    if (DEVICE_TYPE in  ["AqaraCube"]) { // library marker kkossev.commonLib, line 1962
+        parseMultistateInputClusterAqaraCube(descMap) // library marker kkossev.commonLib, line 1963
+    } // library marker kkossev.commonLib, line 1964
+    else { // library marker kkossev.commonLib, line 1965
+        handleMultistateInputEvent(value as Integer) // library marker kkossev.commonLib, line 1966
+    } // library marker kkossev.commonLib, line 1967
+} // library marker kkossev.commonLib, line 1968
+
+void handleMultistateInputEvent( Integer value, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 1970
+    def eventMap = [:] // library marker kkossev.commonLib, line 1971
+    eventMap.value = value // library marker kkossev.commonLib, line 1972
+    eventMap.name = "multistateInput" // library marker kkossev.commonLib, line 1973
+    eventMap.unit = "" // library marker kkossev.commonLib, line 1974
+    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 1975
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 1976
+    sendEvent(eventMap) // library marker kkossev.commonLib, line 1977
+    logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 1978
+} // library marker kkossev.commonLib, line 1979
+
+/* // library marker kkossev.commonLib, line 1981
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1982
+ * Window Covering Cluster 0x0102 // library marker kkossev.commonLib, line 1983
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1984
+*/ // library marker kkossev.commonLib, line 1985
+
+void parseWindowCoveringCluster(final Map descMap) { // library marker kkossev.commonLib, line 1987
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 1988
+    if (DEVICE_TYPE in  ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 1989
+        parseWindowCoveringClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 1990
     } // library marker kkossev.commonLib, line 1991
-} // library marker kkossev.commonLib, line 1992
+    else { // library marker kkossev.commonLib, line 1992
+        logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 1993
+    } // library marker kkossev.commonLib, line 1994
+} // library marker kkossev.commonLib, line 1995
 
-
-/* // library marker kkossev.commonLib, line 1995
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1996
- * Multistate Input Cluster 0x0012 // library marker kkossev.commonLib, line 1997
+/* // library marker kkossev.commonLib, line 1997
  * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 1998
-*/ // library marker kkossev.commonLib, line 1999
+ * thermostat cluster 0x0201 // library marker kkossev.commonLib, line 1999
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2000
+*/ // library marker kkossev.commonLib, line 2001
+void parseThermostatCluster(final Map descMap) { // library marker kkossev.commonLib, line 2002
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2003
+    if (DEVICE_TYPE in  ["Thermostat"]) { // library marker kkossev.commonLib, line 2004
+        parseThermostatClusterThermostat(descMap) // library marker kkossev.commonLib, line 2005
+    } // library marker kkossev.commonLib, line 2006
+    else { // library marker kkossev.commonLib, line 2007
+        logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 2008
+    } // library marker kkossev.commonLib, line 2009
+} // library marker kkossev.commonLib, line 2010
 
-void parseMultistateInputCluster(final Map descMap) { // library marker kkossev.commonLib, line 2001
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2002
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value // library marker kkossev.commonLib, line 2003
-    def value = hexStrToUnsignedInt(descMap.value) // library marker kkossev.commonLib, line 2004
-    Float floatValue = Float.intBitsToFloat(value.intValue()) // library marker kkossev.commonLib, line 2005
-    if (DEVICE_TYPE in  ["AqaraCube"]) { // library marker kkossev.commonLib, line 2006
-        parseMultistateInputClusterAqaraCube(descMap) // library marker kkossev.commonLib, line 2007
-    } // library marker kkossev.commonLib, line 2008
-    else { // library marker kkossev.commonLib, line 2009
-        handleMultistateInputEvent(value as Integer) // library marker kkossev.commonLib, line 2010
-    } // library marker kkossev.commonLib, line 2011
-} // library marker kkossev.commonLib, line 2012
+// ------------------------------------------------------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2012
 
-void handleMultistateInputEvent( Integer value, Boolean isDigital=false ) { // library marker kkossev.commonLib, line 2014
-    def eventMap = [:] // library marker kkossev.commonLib, line 2015
-    eventMap.value = value // library marker kkossev.commonLib, line 2016
-    eventMap.name = "multistateInput" // library marker kkossev.commonLib, line 2017
-    eventMap.unit = "" // library marker kkossev.commonLib, line 2018
-    eventMap.type = isDigital == true ? "digital" : "physical" // library marker kkossev.commonLib, line 2019
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}" // library marker kkossev.commonLib, line 2020
-    sendEvent(eventMap) // library marker kkossev.commonLib, line 2021
-    logInfo "${eventMap.descriptionText}" // library marker kkossev.commonLib, line 2022
-} // library marker kkossev.commonLib, line 2023
+def parseFC11Cluster( descMap ) { // library marker kkossev.commonLib, line 2014
+    if (DEVICE_TYPE in ["Thermostat"])     { parseFC11ClusterThermostat(descMap) }     // library marker kkossev.commonLib, line 2015
+    else { // library marker kkossev.commonLib, line 2016
+        logWarn "Unprocessed cluster 0xFC11 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" // library marker kkossev.commonLib, line 2017
+    } // library marker kkossev.commonLib, line 2018
+} // library marker kkossev.commonLib, line 2019
 
-/* // library marker kkossev.commonLib, line 2025
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2026
- * Window Covering Cluster 0x0102 // library marker kkossev.commonLib, line 2027
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2028
-*/ // library marker kkossev.commonLib, line 2029
+// ------------------------------------------------------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2021
 
-void parseWindowCoveringCluster(final Map descMap) { // library marker kkossev.commonLib, line 2031
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2032
-    if (DEVICE_TYPE in  ["ButtonDimmer"]) { // library marker kkossev.commonLib, line 2033
-        parseWindowCoveringClusterButtonDimmer(descMap) // library marker kkossev.commonLib, line 2034
-    } // library marker kkossev.commonLib, line 2035
-    else { // library marker kkossev.commonLib, line 2036
-        logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 2037
-    } // library marker kkossev.commonLib, line 2038
-} // library marker kkossev.commonLib, line 2039
+def parseE002Cluster( descMap ) { // library marker kkossev.commonLib, line 2023
+    if (DEVICE_TYPE in ["Radar"])     { parseE002ClusterRadar(descMap) }     // library marker kkossev.commonLib, line 2024
+    else { // library marker kkossev.commonLib, line 2025
+        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" // library marker kkossev.commonLib, line 2026
+    } // library marker kkossev.commonLib, line 2027
+} // library marker kkossev.commonLib, line 2028
 
-/* // library marker kkossev.commonLib, line 2041
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2042
- * thermostat cluster 0x0201 // library marker kkossev.commonLib, line 2043
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2044
-*/ // library marker kkossev.commonLib, line 2045
-void parseThermostatCluster(final Map descMap) { // library marker kkossev.commonLib, line 2046
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2047
-    if (DEVICE_TYPE in  ["Thermostat"]) { // library marker kkossev.commonLib, line 2048
-        parseThermostatClusterThermostat(descMap) // library marker kkossev.commonLib, line 2049
-    } // library marker kkossev.commonLib, line 2050
-    else { // library marker kkossev.commonLib, line 2051
-        logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}" // library marker kkossev.commonLib, line 2052
-    } // library marker kkossev.commonLib, line 2053
-} // library marker kkossev.commonLib, line 2054
 
-// ------------------------------------------------------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2056
+/* // library marker kkossev.commonLib, line 2031
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2032
+ * Tuya cluster EF00 specific code // library marker kkossev.commonLib, line 2033
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2034
+*/ // library marker kkossev.commonLib, line 2035
+private static getCLUSTER_TUYA()       { 0xEF00 } // library marker kkossev.commonLib, line 2036
+private static getSETDATA()            { 0x00 } // library marker kkossev.commonLib, line 2037
+private static getSETTIME()            { 0x24 } // library marker kkossev.commonLib, line 2038
 
-def parseFC11Cluster( descMap ) { // library marker kkossev.commonLib, line 2058
-    if (DEVICE_TYPE in ["Thermostat"])     { parseFC11ClusterThermostat(descMap) }     // library marker kkossev.commonLib, line 2059
-    else { // library marker kkossev.commonLib, line 2060
-        logWarn "Unprocessed cluster 0xFC11 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" // library marker kkossev.commonLib, line 2061
-    } // library marker kkossev.commonLib, line 2062
-} // library marker kkossev.commonLib, line 2063
+// Tuya Commands // library marker kkossev.commonLib, line 2040
+private static getTUYA_REQUEST()       { 0x00 } // library marker kkossev.commonLib, line 2041
+private static getTUYA_REPORTING()     { 0x01 } // library marker kkossev.commonLib, line 2042
+private static getTUYA_QUERY()         { 0x02 } // library marker kkossev.commonLib, line 2043
+private static getTUYA_STATUS_SEARCH() { 0x06 } // library marker kkossev.commonLib, line 2044
+private static getTUYA_TIME_SYNCHRONISATION() { 0x24 } // library marker kkossev.commonLib, line 2045
 
-// ------------------------------------------------------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2065
+// tuya DP type // library marker kkossev.commonLib, line 2047
+private static getDP_TYPE_RAW()        { "01" }    // [ bytes ] // library marker kkossev.commonLib, line 2048
+private static getDP_TYPE_BOOL()       { "01" }    // [ 0/1 ] // library marker kkossev.commonLib, line 2049
+private static getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ] // library marker kkossev.commonLib, line 2050
+private static getDP_TYPE_STRING()     { "03" }    // [ N byte string ] // library marker kkossev.commonLib, line 2051
+private static getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ] // library marker kkossev.commonLib, line 2052
+private static getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits // library marker kkossev.commonLib, line 2053
 
-def parseE002Cluster( descMap ) { // library marker kkossev.commonLib, line 2067
-    if (DEVICE_TYPE in ["Radar"])     { parseE002ClusterRadar(descMap) }     // library marker kkossev.commonLib, line 2068
-    else { // library marker kkossev.commonLib, line 2069
-        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" // library marker kkossev.commonLib, line 2070
+
+void parseTuyaCluster(final Map descMap) { // library marker kkossev.commonLib, line 2056
+    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME // library marker kkossev.commonLib, line 2057
+        logDebug "Tuya time synchronization request from device, descMap = ${descMap}" // library marker kkossev.commonLib, line 2058
+        def offset = 0 // library marker kkossev.commonLib, line 2059
+        try { // library marker kkossev.commonLib, line 2060
+            offset = location.getTimeZone().getOffset(new Date().getTime()) // library marker kkossev.commonLib, line 2061
+            //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}" // library marker kkossev.commonLib, line 2062
+        } // library marker kkossev.commonLib, line 2063
+        catch(e) { // library marker kkossev.commonLib, line 2064
+            logWarn "cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero" // library marker kkossev.commonLib, line 2065
+        } // library marker kkossev.commonLib, line 2066
+        def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8)) // library marker kkossev.commonLib, line 2067
+        logDebug "sending time data : ${cmds}" // library marker kkossev.commonLib, line 2068
+        cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) } // library marker kkossev.commonLib, line 2069
+        //if (state.txCounter != null) state.txCounter = state.txCounter + 1 // library marker kkossev.commonLib, line 2070
     } // library marker kkossev.commonLib, line 2071
-} // library marker kkossev.commonLib, line 2072
+    else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response // library marker kkossev.commonLib, line 2072
+        String clusterCmd = descMap?.data[0] // library marker kkossev.commonLib, line 2073
+        def status = descMap?.data[1]             // library marker kkossev.commonLib, line 2074
+        logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}" // library marker kkossev.commonLib, line 2075
+        if (status != "00") { // library marker kkossev.commonLib, line 2076
+            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                 // library marker kkossev.commonLib, line 2077
+        } // library marker kkossev.commonLib, line 2078
+    }  // library marker kkossev.commonLib, line 2079
+    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02" || descMap?.command == "05" || descMap?.command == "06")) // library marker kkossev.commonLib, line 2080
+    { // library marker kkossev.commonLib, line 2081
+        def dataLen = descMap?.data.size() // library marker kkossev.commonLib, line 2082
+        //log.warn "dataLen=${dataLen}" // library marker kkossev.commonLib, line 2083
+        def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command // library marker kkossev.commonLib, line 2084
+        if (dataLen <= 5) { // library marker kkossev.commonLib, line 2085
+            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})" // library marker kkossev.commonLib, line 2086
+            return // library marker kkossev.commonLib, line 2087
+        } // library marker kkossev.commonLib, line 2088
+        for (int i = 0; i < (dataLen-4); ) { // library marker kkossev.commonLib, line 2089
+            def dp = zigbee.convertHexToInt(descMap?.data[2+i])          // "dp" field describes the action/message of a command frame // library marker kkossev.commonLib, line 2090
+            def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])       // "dp_identifier" is device dependant // library marker kkossev.commonLib, line 2091
+            def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i])  // library marker kkossev.commonLib, line 2092
+            def fncmd = getTuyaAttributeValue(descMap?.data, i)          // // library marker kkossev.commonLib, line 2093
+            logDebug "dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})" // library marker kkossev.commonLib, line 2094
+            processTuyaDP( descMap, dp, dp_id, fncmd) // library marker kkossev.commonLib, line 2095
+            i = i + fncmd_len + 4; // library marker kkossev.commonLib, line 2096
+        } // library marker kkossev.commonLib, line 2097
+    } // library marker kkossev.commonLib, line 2098
+    else { // library marker kkossev.commonLib, line 2099
+        logWarn "unprocessed Tuya command ${descMap?.command}" // library marker kkossev.commonLib, line 2100
+    } // library marker kkossev.commonLib, line 2101
+} // library marker kkossev.commonLib, line 2102
+
+void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len=0) { // library marker kkossev.commonLib, line 2104
+    if (DEVICE_TYPE in ["Radar"])         { processTuyaDpRadar(descMap, dp, dp_id, fncmd); return }     // library marker kkossev.commonLib, line 2105
+    if (DEVICE_TYPE in ["Fingerbot"])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }     // library marker kkossev.commonLib, line 2106
+    // check if the method  method exists // library marker kkossev.commonLib, line 2107
+    if (this.respondsTo(processTuyaDPfromDeviceProfile)) { // library marker kkossev.commonLib, line 2108
+        if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {    // sucessfuly processed the new way - we are done.  version 3.0  // library marker kkossev.commonLib, line 2109
+            return // library marker kkossev.commonLib, line 2110
+        }     // library marker kkossev.commonLib, line 2111
+    } // library marker kkossev.commonLib, line 2112
+    switch (dp) { // library marker kkossev.commonLib, line 2113
+        case 0x01 : // on/off // library marker kkossev.commonLib, line 2114
+            if (DEVICE_TYPE in  ["LightSensor"]) { // library marker kkossev.commonLib, line 2115
+                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})" // library marker kkossev.commonLib, line 2116
+            } // library marker kkossev.commonLib, line 2117
+            else { // library marker kkossev.commonLib, line 2118
+                sendSwitchEvent(fncmd) // library marker kkossev.commonLib, line 2119
+            } // library marker kkossev.commonLib, line 2120
+            break // library marker kkossev.commonLib, line 2121
+        case 0x02 : // library marker kkossev.commonLib, line 2122
+            if (DEVICE_TYPE in  ["LightSensor"]) { // library marker kkossev.commonLib, line 2123
+                handleIlluminanceEvent(fncmd) // library marker kkossev.commonLib, line 2124
+            } // library marker kkossev.commonLib, line 2125
+            else { // library marker kkossev.commonLib, line 2126
+                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.commonLib, line 2127
+            } // library marker kkossev.commonLib, line 2128
+            break // library marker kkossev.commonLib, line 2129
+        case 0x04 : // battery // library marker kkossev.commonLib, line 2130
+            sendBatteryPercentageEvent(fncmd) // library marker kkossev.commonLib, line 2131
+            break // library marker kkossev.commonLib, line 2132
+        default : // library marker kkossev.commonLib, line 2133
+            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.commonLib, line 2134
+            break             // library marker kkossev.commonLib, line 2135
+    } // library marker kkossev.commonLib, line 2136
+} // library marker kkossev.commonLib, line 2137
+
+private int getTuyaAttributeValue(ArrayList _data, index) { // library marker kkossev.commonLib, line 2139
+    int retValue = 0 // library marker kkossev.commonLib, line 2140
+
+    if (_data.size() >= 6) { // library marker kkossev.commonLib, line 2142
+        int dataLength = _data[5+index] as Integer // library marker kkossev.commonLib, line 2143
+        int power = 1; // library marker kkossev.commonLib, line 2144
+        for (i in dataLength..1) { // library marker kkossev.commonLib, line 2145
+            retValue = retValue + power * zigbee.convertHexToInt(_data[index+i+5]) // library marker kkossev.commonLib, line 2146
+            power = power * 256 // library marker kkossev.commonLib, line 2147
+        } // library marker kkossev.commonLib, line 2148
+    } // library marker kkossev.commonLib, line 2149
+    return retValue // library marker kkossev.commonLib, line 2150
+} // library marker kkossev.commonLib, line 2151
 
 
-/* // library marker kkossev.commonLib, line 2075
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2076
- * Tuya cluster EF00 specific code // library marker kkossev.commonLib, line 2077
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2078
-*/ // library marker kkossev.commonLib, line 2079
-private static getCLUSTER_TUYA()       { 0xEF00 } // library marker kkossev.commonLib, line 2080
-private static getSETDATA()            { 0x00 } // library marker kkossev.commonLib, line 2081
-private static getSETTIME()            { 0x24 } // library marker kkossev.commonLib, line 2082
+private sendTuyaCommand(dp, dp_type, fncmd) { // library marker kkossev.commonLib, line 2154
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2155
+    def ep = safeToInt(state.destinationEP) // library marker kkossev.commonLib, line 2156
+    if (ep==null || ep==0) ep = 1 // library marker kkossev.commonLib, line 2157
+    def tuyaCmd = isFingerbot() ? 0x04 : SETDATA // library marker kkossev.commonLib, line 2158
 
-// Tuya Commands // library marker kkossev.commonLib, line 2084
-private static getTUYA_REQUEST()       { 0x00 } // library marker kkossev.commonLib, line 2085
-private static getTUYA_REPORTING()     { 0x01 } // library marker kkossev.commonLib, line 2086
-private static getTUYA_QUERY()         { 0x02 } // library marker kkossev.commonLib, line 2087
-private static getTUYA_STATUS_SEARCH() { 0x06 } // library marker kkossev.commonLib, line 2088
-private static getTUYA_TIME_SYNCHRONISATION() { 0x24 } // library marker kkossev.commonLib, line 2089
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd ) // library marker kkossev.commonLib, line 2160
+    logDebug "${device.displayName} sendTuyaCommand = ${cmds}" // library marker kkossev.commonLib, line 2161
+    return cmds // library marker kkossev.commonLib, line 2162
+} // library marker kkossev.commonLib, line 2163
 
-// tuya DP type // library marker kkossev.commonLib, line 2091
-private static getDP_TYPE_RAW()        { "01" }    // [ bytes ] // library marker kkossev.commonLib, line 2092
-private static getDP_TYPE_BOOL()       { "01" }    // [ 0/1 ] // library marker kkossev.commonLib, line 2093
-private static getDP_TYPE_VALUE()      { "02" }    // [ 4 byte value ] // library marker kkossev.commonLib, line 2094
-private static getDP_TYPE_STRING()     { "03" }    // [ N byte string ] // library marker kkossev.commonLib, line 2095
-private static getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ] // library marker kkossev.commonLib, line 2096
-private static getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits // library marker kkossev.commonLib, line 2097
+private getPACKET_ID() { // library marker kkossev.commonLib, line 2165
+    return zigbee.convertToHexString(new Random().nextInt(65536), 4)  // library marker kkossev.commonLib, line 2166
+} // library marker kkossev.commonLib, line 2167
 
+def tuyaTest( dpCommand, dpValue, dpTypeString ) { // library marker kkossev.commonLib, line 2169
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2170
+    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null // library marker kkossev.commonLib, line 2171
+    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue // library marker kkossev.commonLib, line 2172
 
-void parseTuyaCluster(final Map descMap) { // library marker kkossev.commonLib, line 2100
-    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "24") {        //getSETTIME // library marker kkossev.commonLib, line 2101
-        logDebug "Tuya time synchronization request from device, descMap = ${descMap}" // library marker kkossev.commonLib, line 2102
-        def offset = 0 // library marker kkossev.commonLib, line 2103
-        try { // library marker kkossev.commonLib, line 2104
-            offset = location.getTimeZone().getOffset(new Date().getTime()) // library marker kkossev.commonLib, line 2105
-            //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}" // library marker kkossev.commonLib, line 2106
-        } // library marker kkossev.commonLib, line 2107
-        catch(e) { // library marker kkossev.commonLib, line 2108
-            logWarn "cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero" // library marker kkossev.commonLib, line 2109
-        } // library marker kkossev.commonLib, line 2110
-        def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, "0008" +zigbee.convertToHexString((int)(now()/1000),8) +  zigbee.convertToHexString((int)((now()+offset)/1000), 8)) // library marker kkossev.commonLib, line 2111
-        logDebug "sending time data : ${cmds}" // library marker kkossev.commonLib, line 2112
-        cmds.each{ sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) } // library marker kkossev.commonLib, line 2113
-        //if (state.txCounter != null) state.txCounter = state.txCounter + 1 // library marker kkossev.commonLib, line 2114
-    } // library marker kkossev.commonLib, line 2115
-    else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == "0B") {    // ZCL Command Default Response // library marker kkossev.commonLib, line 2116
-        String clusterCmd = descMap?.data[0] // library marker kkossev.commonLib, line 2117
-        def status = descMap?.data[1]             // library marker kkossev.commonLib, line 2118
-        logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}" // library marker kkossev.commonLib, line 2119
-        if (status != "00") { // library marker kkossev.commonLib, line 2120
-            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                 // library marker kkossev.commonLib, line 2121
-        } // library marker kkossev.commonLib, line 2122
-    }  // library marker kkossev.commonLib, line 2123
-    else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02" || descMap?.command == "05" || descMap?.command == "06")) // library marker kkossev.commonLib, line 2124
-    { // library marker kkossev.commonLib, line 2125
-        def dataLen = descMap?.data.size() // library marker kkossev.commonLib, line 2126
-        //log.warn "dataLen=${dataLen}" // library marker kkossev.commonLib, line 2127
-        def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command // library marker kkossev.commonLib, line 2128
-        if (dataLen <= 5) { // library marker kkossev.commonLib, line 2129
-            logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})" // library marker kkossev.commonLib, line 2130
-            return // library marker kkossev.commonLib, line 2131
-        } // library marker kkossev.commonLib, line 2132
-        for (int i = 0; i < (dataLen-4); ) { // library marker kkossev.commonLib, line 2133
-            def dp = zigbee.convertHexToInt(descMap?.data[2+i])          // "dp" field describes the action/message of a command frame // library marker kkossev.commonLib, line 2134
-            def dp_id = zigbee.convertHexToInt(descMap?.data[3+i])       // "dp_identifier" is device dependant // library marker kkossev.commonLib, line 2135
-            def fncmd_len = zigbee.convertHexToInt(descMap?.data[5+i])  // library marker kkossev.commonLib, line 2136
-            def fncmd = getTuyaAttributeValue(descMap?.data, i)          // // library marker kkossev.commonLib, line 2137
-            logDebug "dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})" // library marker kkossev.commonLib, line 2138
-            processTuyaDP( descMap, dp, dp_id, fncmd) // library marker kkossev.commonLib, line 2139
-            i = i + fncmd_len + 4; // library marker kkossev.commonLib, line 2140
-        } // library marker kkossev.commonLib, line 2141
-    } // library marker kkossev.commonLib, line 2142
-    else { // library marker kkossev.commonLib, line 2143
-        logWarn "unprocessed Tuya command ${descMap?.command}" // library marker kkossev.commonLib, line 2144
-    } // library marker kkossev.commonLib, line 2145
-} // library marker kkossev.commonLib, line 2146
+    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}" // library marker kkossev.commonLib, line 2174
 
-void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len=0) { // library marker kkossev.commonLib, line 2148
-    if (DEVICE_TYPE in ["Radar"])         { processTuyaDpRadar(descMap, dp, dp_id, fncmd); return }     // library marker kkossev.commonLib, line 2149
-    if (DEVICE_TYPE in ["Fingerbot"])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }     // library marker kkossev.commonLib, line 2150
-    // check if the method  method exists // library marker kkossev.commonLib, line 2151
-    if (this.respondsTo(processTuyaDPfromDeviceProfile)) { // library marker kkossev.commonLib, line 2152
-        if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {    // sucessfuly processed the new way - we are done.  version 3.0  // library marker kkossev.commonLib, line 2153
-            return // library marker kkossev.commonLib, line 2154
-        }     // library marker kkossev.commonLib, line 2155
-    } // library marker kkossev.commonLib, line 2156
-    switch (dp) { // library marker kkossev.commonLib, line 2157
-        case 0x01 : // on/off // library marker kkossev.commonLib, line 2158
-            if (DEVICE_TYPE in  ["LightSensor"]) { // library marker kkossev.commonLib, line 2159
-                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})" // library marker kkossev.commonLib, line 2160
-            } // library marker kkossev.commonLib, line 2161
-            else { // library marker kkossev.commonLib, line 2162
-                sendSwitchEvent(fncmd) // library marker kkossev.commonLib, line 2163
-            } // library marker kkossev.commonLib, line 2164
-            break // library marker kkossev.commonLib, line 2165
-        case 0x02 : // library marker kkossev.commonLib, line 2166
-            if (DEVICE_TYPE in  ["LightSensor"]) { // library marker kkossev.commonLib, line 2167
-                handleIlluminanceEvent(fncmd) // library marker kkossev.commonLib, line 2168
-            } // library marker kkossev.commonLib, line 2169
-            else { // library marker kkossev.commonLib, line 2170
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.commonLib, line 2171
-            } // library marker kkossev.commonLib, line 2172
-            break // library marker kkossev.commonLib, line 2173
-        case 0x04 : // battery // library marker kkossev.commonLib, line 2174
-            sendBatteryPercentageEvent(fncmd) // library marker kkossev.commonLib, line 2175
-            break // library marker kkossev.commonLib, line 2176
-        default : // library marker kkossev.commonLib, line 2177
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"  // library marker kkossev.commonLib, line 2178
-            break             // library marker kkossev.commonLib, line 2179
-    } // library marker kkossev.commonLib, line 2180
-} // library marker kkossev.commonLib, line 2181
+    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) ) // library marker kkossev.commonLib, line 2176
+} // library marker kkossev.commonLib, line 2177
 
-private int getTuyaAttributeValue(ArrayList _data, index) { // library marker kkossev.commonLib, line 2183
-    int retValue = 0 // library marker kkossev.commonLib, line 2184
+private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C } // library marker kkossev.commonLib, line 2179
+private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 } // library marker kkossev.commonLib, line 2180
 
-    if (_data.size() >= 6) { // library marker kkossev.commonLib, line 2186
-        int dataLength = _data[5+index] as Integer // library marker kkossev.commonLib, line 2187
-        int power = 1; // library marker kkossev.commonLib, line 2188
-        for (i in dataLength..1) { // library marker kkossev.commonLib, line 2189
-            retValue = retValue + power * zigbee.convertHexToInt(_data[index+i+5]) // library marker kkossev.commonLib, line 2190
-            power = power * 256 // library marker kkossev.commonLib, line 2191
-        } // library marker kkossev.commonLib, line 2192
-    } // library marker kkossev.commonLib, line 2193
-    return retValue // library marker kkossev.commonLib, line 2194
-} // library marker kkossev.commonLib, line 2195
+def tuyaBlackMagic() { // library marker kkossev.commonLib, line 2182
+    def ep = safeToInt(state.destinationEP ?: 01) // library marker kkossev.commonLib, line 2183
+    if (ep==null || ep==0) ep = 1 // library marker kkossev.commonLib, line 2184
+    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay=200) // library marker kkossev.commonLib, line 2185
+} // library marker kkossev.commonLib, line 2186
+
+void aqaraBlackMagic() { // library marker kkossev.commonLib, line 2188
+    List<String> cmds = [] // library marker kkossev.commonLib, line 2189
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) { // library marker kkossev.commonLib, line 2190
+        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",] // library marker kkossev.commonLib, line 2191
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}" // library marker kkossev.commonLib, line 2192
+        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}" // library marker kkossev.commonLib, line 2193
+        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage // library marker kkossev.commonLib, line 2194
+        if (isAqaraTVOC_OLD()) { // library marker kkossev.commonLib, line 2195
+            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // TVOC only // library marker kkossev.commonLib, line 2196
+        } // library marker kkossev.commonLib, line 2197
+        sendZigbeeCommands( cmds ) // library marker kkossev.commonLib, line 2198
+        logDebug "sent aqaraBlackMagic()" // library marker kkossev.commonLib, line 2199
+    } // library marker kkossev.commonLib, line 2200
+    else { // library marker kkossev.commonLib, line 2201
+        logDebug "aqaraBlackMagic() was SKIPPED" // library marker kkossev.commonLib, line 2202
+    } // library marker kkossev.commonLib, line 2203
+} // library marker kkossev.commonLib, line 2204
 
 
-private sendTuyaCommand(dp, dp_type, fncmd) { // library marker kkossev.commonLib, line 2198
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2199
-    def ep = safeToInt(state.destinationEP) // library marker kkossev.commonLib, line 2200
-    if (ep==null || ep==0) ep = 1 // library marker kkossev.commonLib, line 2201
-    def tuyaCmd = isFingerbot() ? 0x04 : SETDATA // library marker kkossev.commonLib, line 2202
+/** // library marker kkossev.commonLib, line 2207
+ * initializes the device // library marker kkossev.commonLib, line 2208
+ * Invoked from configure() // library marker kkossev.commonLib, line 2209
+ * @return zigbee commands // library marker kkossev.commonLib, line 2210
+ */ // library marker kkossev.commonLib, line 2211
+def initializeDevice() { // library marker kkossev.commonLib, line 2212
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2213
+    logInfo 'initializeDevice...' // library marker kkossev.commonLib, line 2214
 
-    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd ) // library marker kkossev.commonLib, line 2204
-    logDebug "${device.displayName} sendTuyaCommand = ${cmds}" // library marker kkossev.commonLib, line 2205
-    return cmds // library marker kkossev.commonLib, line 2206
-} // library marker kkossev.commonLib, line 2207
-
-private getPACKET_ID() { // library marker kkossev.commonLib, line 2209
-    return zigbee.convertToHexString(new Random().nextInt(65536), 4)  // library marker kkossev.commonLib, line 2210
-} // library marker kkossev.commonLib, line 2211
-
-def tuyaTest( dpCommand, dpValue, dpTypeString ) { // library marker kkossev.commonLib, line 2213
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2214
-    def dpType   = dpTypeString=="DP_TYPE_VALUE" ? DP_TYPE_VALUE : dpTypeString=="DP_TYPE_BOOL" ? DP_TYPE_BOOL : dpTypeString=="DP_TYPE_ENUM" ? DP_TYPE_ENUM : null // library marker kkossev.commonLib, line 2215
-    def dpValHex = dpTypeString=="DP_TYPE_VALUE" ? zigbee.convertToHexString(dpValue as int, 8) : dpValue // library marker kkossev.commonLib, line 2216
-
-    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}" // library marker kkossev.commonLib, line 2218
-
-    sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) ) // library marker kkossev.commonLib, line 2220
-} // library marker kkossev.commonLib, line 2221
-
-private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C } // library marker kkossev.commonLib, line 2223
-private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 } // library marker kkossev.commonLib, line 2224
-
-def tuyaBlackMagic() { // library marker kkossev.commonLib, line 2226
-    def ep = safeToInt(state.destinationEP ?: 01) // library marker kkossev.commonLib, line 2227
-    if (ep==null || ep==0) ep = 1 // library marker kkossev.commonLib, line 2228
-    return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay=200) // library marker kkossev.commonLib, line 2229
-} // library marker kkossev.commonLib, line 2230
-
-void aqaraBlackMagic() { // library marker kkossev.commonLib, line 2232
-    List<String> cmds = [] // library marker kkossev.commonLib, line 2233
-    if (isAqaraTVOC() || isAqaraTRV_OLD()) { // library marker kkossev.commonLib, line 2234
-        cmds += ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",] // library marker kkossev.commonLib, line 2235
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0xFCC0 {${device.zigbeeId}} {}" // library marker kkossev.commonLib, line 2236
-        cmds += "zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}" // library marker kkossev.commonLib, line 2237
-        cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)    // TODO: check - battery voltage // library marker kkossev.commonLib, line 2238
-        if (isAqaraTVOC()) { // library marker kkossev.commonLib, line 2239
-            cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay=200)    // TVOC only // library marker kkossev.commonLib, line 2240
-        } // library marker kkossev.commonLib, line 2241
-        sendZigbeeCommands( cmds ) // library marker kkossev.commonLib, line 2242
-        logDebug "sent aqaraBlackMagic()" // library marker kkossev.commonLib, line 2243
-    } // library marker kkossev.commonLib, line 2244
-    else { // library marker kkossev.commonLib, line 2245
-        logDebug "aqaraBlackMagic() was SKIPPED" // library marker kkossev.commonLib, line 2246
-    } // library marker kkossev.commonLib, line 2247
-} // library marker kkossev.commonLib, line 2248
+    // start with the device-specific initialization first. // library marker kkossev.commonLib, line 2216
+    if (DEVICE_TYPE in  ["AirQuality"])          { return initializeDeviceAirQuality() } // library marker kkossev.commonLib, line 2217
+    else if (DEVICE_TYPE in  ["IRBlaster"])      { return initializeDeviceIrBlaster() } // library marker kkossev.commonLib, line 2218
+    else if (DEVICE_TYPE in  ["Radar"])          { return initializeDeviceRadar() } // library marker kkossev.commonLib, line 2219
+    else if (DEVICE_TYPE in  ["ButtonDimmer"])   { return initializeDeviceButtonDimmer() } // library marker kkossev.commonLib, line 2220
+    else if (DEVICE_TYPE in  ["Thermostat"])     { return initializeDeviceThermostat() } // library marker kkossev.commonLib, line 2221
 
 
-/** // library marker kkossev.commonLib, line 2251
- * initializes the device // library marker kkossev.commonLib, line 2252
- * Invoked from configure() // library marker kkossev.commonLib, line 2253
- * @return zigbee commands // library marker kkossev.commonLib, line 2254
- */ // library marker kkossev.commonLib, line 2255
-def initializeDevice() { // library marker kkossev.commonLib, line 2256
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2257
-    logInfo 'initializeDevice...' // library marker kkossev.commonLib, line 2258
-
-    // start with the device-specific initialization first. // library marker kkossev.commonLib, line 2260
-    if (DEVICE_TYPE in  ["AirQuality"])          { return initializeDeviceAirQuality() } // library marker kkossev.commonLib, line 2261
-    else if (DEVICE_TYPE in  ["IRBlaster"])      { return initializeDeviceIrBlaster() } // library marker kkossev.commonLib, line 2262
-    else if (DEVICE_TYPE in  ["Radar"])          { return initializeDeviceRadar() } // library marker kkossev.commonLib, line 2263
-    else if (DEVICE_TYPE in  ["ButtonDimmer"])   { return initializeDeviceButtonDimmer() } // library marker kkossev.commonLib, line 2264
+    // not specific device type - do some generic initializations // library marker kkossev.commonLib, line 2224
+    if (DEVICE_TYPE in  ["THSensor"]) { // library marker kkossev.commonLib, line 2225
+        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature // library marker kkossev.commonLib, line 2226
+        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity // library marker kkossev.commonLib, line 2227
+    } // library marker kkossev.commonLib, line 2228
+    // // library marker kkossev.commonLib, line 2229
+    if (cmds == []) { // library marker kkossev.commonLib, line 2230
+        cmds = ["delay 299"] // library marker kkossev.commonLib, line 2231
+    } // library marker kkossev.commonLib, line 2232
+    return cmds // library marker kkossev.commonLib, line 2233
+} // library marker kkossev.commonLib, line 2234
 
 
-    // not specific device type - do some generic initializations // library marker kkossev.commonLib, line 2267
-    if (DEVICE_TYPE in  ["THSensor"]) { // library marker kkossev.commonLib, line 2268
-        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature // library marker kkossev.commonLib, line 2269
-        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity // library marker kkossev.commonLib, line 2270
-    } // library marker kkossev.commonLib, line 2271
-    // // library marker kkossev.commonLib, line 2272
-    if (cmds == []) { // library marker kkossev.commonLib, line 2273
-        cmds = ["delay 299"] // library marker kkossev.commonLib, line 2274
-    } // library marker kkossev.commonLib, line 2275
-    return cmds // library marker kkossev.commonLib, line 2276
-} // library marker kkossev.commonLib, line 2277
+/** // library marker kkossev.commonLib, line 2237
+ * configures the device // library marker kkossev.commonLib, line 2238
+ * Invoked from updated() // library marker kkossev.commonLib, line 2239
+ * @return zigbee commands // library marker kkossev.commonLib, line 2240
+ */ // library marker kkossev.commonLib, line 2241
+def configureDevice() { // library marker kkossev.commonLib, line 2242
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2243
+    logInfo 'configureDevice...' // library marker kkossev.commonLib, line 2244
 
+    if (DEVICE_TYPE in  ["AirQuality"]) { cmds += configureDeviceAirQuality() } // library marker kkossev.commonLib, line 2246
+    else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() } // library marker kkossev.commonLib, line 2247
+    else if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() } // library marker kkossev.commonLib, line 2248
+    else if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() } // library marker kkossev.commonLib, line 2249
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureDeviceIrBlaster() } // library marker kkossev.commonLib, line 2250
+    else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() } // library marker kkossev.commonLib, line 2251
+    else if (DEVICE_TYPE in  ["ButtonDimmer"]) { cmds += configureDeviceButtonDimmer() } // library marker kkossev.commonLib, line 2252
+    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += configureBulb() } // library marker kkossev.commonLib, line 2253
+    if (cmds == []) {  // library marker kkossev.commonLib, line 2254
+        cmds = ["delay 277",] // library marker kkossev.commonLib, line 2255
+    } // library marker kkossev.commonLib, line 2256
+    sendZigbeeCommands(cmds)   // library marker kkossev.commonLib, line 2257
+} // library marker kkossev.commonLib, line 2258
 
-/** // library marker kkossev.commonLib, line 2280
- * configures the device // library marker kkossev.commonLib, line 2281
- * Invoked from updated() // library marker kkossev.commonLib, line 2282
- * @return zigbee commands // library marker kkossev.commonLib, line 2283
- */ // library marker kkossev.commonLib, line 2284
-def configureDevice() { // library marker kkossev.commonLib, line 2285
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2286
-    logInfo 'configureDevice...' // library marker kkossev.commonLib, line 2287
+/* // library marker kkossev.commonLib, line 2260
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2261
+ * Hubitat default handlers methods // library marker kkossev.commonLib, line 2262
+ * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2263
+*/ // library marker kkossev.commonLib, line 2264
 
-    if (DEVICE_TYPE in  ["AirQuality"]) { cmds += configureDeviceAirQuality() } // library marker kkossev.commonLib, line 2289
-    else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += configureDeviceFingerbot() } // library marker kkossev.commonLib, line 2290
-    else if (DEVICE_TYPE in  ["AqaraCube"])  { cmds += configureDeviceAqaraCube() } // library marker kkossev.commonLib, line 2291
-    else if (DEVICE_TYPE in  ["Switch"])     { cmds += configureDeviceSwitch() } // library marker kkossev.commonLib, line 2292
-    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += configureDeviceIrBlaster() } // library marker kkossev.commonLib, line 2293
-    else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() } // library marker kkossev.commonLib, line 2294
-    else if (DEVICE_TYPE in  ["ButtonDimmer"]) { cmds += configureDeviceButtonDimmer() } // library marker kkossev.commonLib, line 2295
-    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += configureBulb() } // library marker kkossev.commonLib, line 2296
-    if (cmds == []) {  // library marker kkossev.commonLib, line 2297
-        cmds = ["delay 277",] // library marker kkossev.commonLib, line 2298
-    } // library marker kkossev.commonLib, line 2299
-    sendZigbeeCommands(cmds)   // library marker kkossev.commonLib, line 2300
-} // library marker kkossev.commonLib, line 2301
+def refresh() { // library marker kkossev.commonLib, line 2266
+    logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2267
+    checkDriverVersion() // library marker kkossev.commonLib, line 2268
+    List<String> cmds = [] // library marker kkossev.commonLib, line 2269
+    setRefreshRequest()    // 3 seconds // library marker kkossev.commonLib, line 2270
 
-/* // library marker kkossev.commonLib, line 2303
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2304
- * Hubitat default handlers methods // library marker kkossev.commonLib, line 2305
- * ----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2306
-*/ // library marker kkossev.commonLib, line 2307
+    // device type specific refresh handlers // library marker kkossev.commonLib, line 2272
+    if (DEVICE_TYPE in  ["AqaraCube"])       { cmds += refreshAqaraCube() } // library marker kkossev.commonLib, line 2273
+    else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += refreshFingerbot() } // library marker kkossev.commonLib, line 2274
+    else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() } // library marker kkossev.commonLib, line 2275
+    else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() } // library marker kkossev.commonLib, line 2276
+    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() } // library marker kkossev.commonLib, line 2277
+    else if (DEVICE_TYPE in  ["Radar"])      { cmds += refreshRadar() } // library marker kkossev.commonLib, line 2278
+    else if (DEVICE_TYPE in  ["Thermostat"]) { cmds += refreshThermostat() } // library marker kkossev.commonLib, line 2279
+    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += refreshBulb() } // library marker kkossev.commonLib, line 2280
+    else { // library marker kkossev.commonLib, line 2281
+        // generic refresh handling, based on teh device capabilities  // library marker kkossev.commonLib, line 2282
+        if (device.hasCapability("Battery")) { // library marker kkossev.commonLib, line 2283
+            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage // library marker kkossev.commonLib, line 2284
+            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage  // library marker kkossev.commonLib, line 2285
+        } // library marker kkossev.commonLib, line 2286
+        if (DEVICE_TYPE in  ["Plug", "Dimmer"]) { // library marker kkossev.commonLib, line 2287
+            cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200) // library marker kkossev.commonLib, line 2288
+            cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership // library marker kkossev.commonLib, line 2289
+        } // library marker kkossev.commonLib, line 2290
+        if (DEVICE_TYPE in  ["Dimmer"]) { // library marker kkossev.commonLib, line 2291
+            cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2292
+        } // library marker kkossev.commonLib, line 2293
+        if (DEVICE_TYPE in  ["THSensor", "AirQuality"]) { // library marker kkossev.commonLib, line 2294
+            cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2295
+            cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2296
+        } // library marker kkossev.commonLib, line 2297
+    } // library marker kkossev.commonLib, line 2298
 
-def refresh() { // library marker kkossev.commonLib, line 2309
-    logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2310
-    checkDriverVersion() // library marker kkossev.commonLib, line 2311
-    List<String> cmds = [] // library marker kkossev.commonLib, line 2312
-    setRefreshRequest()    // 3 seconds // library marker kkossev.commonLib, line 2313
+    if (cmds != null && cmds != [] ) { // library marker kkossev.commonLib, line 2300
+        sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2301
+    } // library marker kkossev.commonLib, line 2302
+    else { // library marker kkossev.commonLib, line 2303
+        logDebug "no refresh() commands defined for device type ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2304
+    } // library marker kkossev.commonLib, line 2305
+} // library marker kkossev.commonLib, line 2306
 
-    // device type specific refresh handlers // library marker kkossev.commonLib, line 2315
-    if (DEVICE_TYPE in  ["AqaraCube"])       { cmds += refreshAqaraCube() } // library marker kkossev.commonLib, line 2316
-    else if (DEVICE_TYPE in  ["Fingerbot"])  { cmds += refreshFingerbot() } // library marker kkossev.commonLib, line 2317
-    else if (DEVICE_TYPE in  ["AirQuality"]) { cmds += refreshAirQuality() } // library marker kkossev.commonLib, line 2318
-    else if (DEVICE_TYPE in  ["Switch"])     { cmds += refreshSwitch() } // library marker kkossev.commonLib, line 2319
-    else if (DEVICE_TYPE in  ["IRBlaster"])  { cmds += refreshIrBlaster() } // library marker kkossev.commonLib, line 2320
-    else if (DEVICE_TYPE in  ["Radar"])      { cmds += refreshRadar() } // library marker kkossev.commonLib, line 2321
-    else if (DEVICE_TYPE in  ["Thermostat"]) { cmds += refreshThermostat() } // library marker kkossev.commonLib, line 2322
-    else if (DEVICE_TYPE in  ["Bulb"])       { cmds += refreshBulb() } // library marker kkossev.commonLib, line 2323
-    else { // library marker kkossev.commonLib, line 2324
-        // generic refresh handling, based on teh device capabilities  // library marker kkossev.commonLib, line 2325
-        if (device.hasCapability("Battery")) { // library marker kkossev.commonLib, line 2326
-            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)         // battery voltage // library marker kkossev.commonLib, line 2327
-            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=200)         // battery percentage  // library marker kkossev.commonLib, line 2328
-        } // library marker kkossev.commonLib, line 2329
-        if (DEVICE_TYPE in  ["Plug", "Dimmer"]) { // library marker kkossev.commonLib, line 2330
-            cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200) // library marker kkossev.commonLib, line 2331
-            cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership // library marker kkossev.commonLib, line 2332
-        } // library marker kkossev.commonLib, line 2333
-        if (DEVICE_TYPE in  ["Dimmer"]) { // library marker kkossev.commonLib, line 2334
-            cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2335
-        } // library marker kkossev.commonLib, line 2336
-        if (DEVICE_TYPE in  ["THSensor", "AirQuality"]) { // library marker kkossev.commonLib, line 2337
-            cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2338
-            cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay=200)         // library marker kkossev.commonLib, line 2339
-        } // library marker kkossev.commonLib, line 2340
+def setRefreshRequest()   { if (state.states == null) {state.states = [:]};   state.states["isRefresh"] = true; runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds // library marker kkossev.commonLib, line 2308
+def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false } // library marker kkossev.commonLib, line 2309
+
+void clearInfoEvent() { // library marker kkossev.commonLib, line 2311
+    sendInfoEvent('clear') // library marker kkossev.commonLib, line 2312
+} // library marker kkossev.commonLib, line 2313
+
+void sendInfoEvent(String info=null) { // library marker kkossev.commonLib, line 2315
+    if (info == null || info == "clear") { // library marker kkossev.commonLib, line 2316
+        logDebug "clearing the Status event" // library marker kkossev.commonLib, line 2317
+        sendEvent(name: "Status", value: "clear", isDigital: true) // library marker kkossev.commonLib, line 2318
+    } // library marker kkossev.commonLib, line 2319
+    else { // library marker kkossev.commonLib, line 2320
+        logInfo "${info}" // library marker kkossev.commonLib, line 2321
+        sendEvent(name: "Status", value: info, isDigital: true) // library marker kkossev.commonLib, line 2322
+        runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute // library marker kkossev.commonLib, line 2323
+    } // library marker kkossev.commonLib, line 2324
+} // library marker kkossev.commonLib, line 2325
+
+def ping() { // library marker kkossev.commonLib, line 2327
+    if (!(isAqaraTVOC_OLD())) { // library marker kkossev.commonLib, line 2328
+        if (state.lastTx == nill ) state.lastTx = [:]  // library marker kkossev.commonLib, line 2329
+        state.lastTx["pingTime"] = new Date().getTime() // library marker kkossev.commonLib, line 2330
+        if (state.states == nill ) state.states = [:]  // library marker kkossev.commonLib, line 2331
+        state.states["isPing"] = true // library marker kkossev.commonLib, line 2332
+        scheduleCommandTimeoutCheck() // library marker kkossev.commonLib, line 2333
+        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) ) // library marker kkossev.commonLib, line 2334
+        logDebug 'ping...' // library marker kkossev.commonLib, line 2335
+    } // library marker kkossev.commonLib, line 2336
+    else { // library marker kkossev.commonLib, line 2337
+        // Aqara TVOC is sleepy or does not respond to the ping. // library marker kkossev.commonLib, line 2338
+        logInfo "ping() command is not available for this sleepy device." // library marker kkossev.commonLib, line 2339
+        sendRttEvent("n/a") // library marker kkossev.commonLib, line 2340
     } // library marker kkossev.commonLib, line 2341
+} // library marker kkossev.commonLib, line 2342
 
-    if (cmds != null && cmds != [] ) { // library marker kkossev.commonLib, line 2343
-        sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2344
-    } // library marker kkossev.commonLib, line 2345
-    else { // library marker kkossev.commonLib, line 2346
-        logDebug "no refresh() commands defined for device type ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2347
-    } // library marker kkossev.commonLib, line 2348
-} // library marker kkossev.commonLib, line 2349
+/** // library marker kkossev.commonLib, line 2344
+ * sends 'rtt'event (after a ping() command) // library marker kkossev.commonLib, line 2345
+ * @param null: calculate the RTT in ms // library marker kkossev.commonLib, line 2346
+ *        value: send the text instead ('timeout', 'n/a', etc..) // library marker kkossev.commonLib, line 2347
+ * @return none // library marker kkossev.commonLib, line 2348
+ */ // library marker kkossev.commonLib, line 2349
+void sendRttEvent( String value=null) { // library marker kkossev.commonLib, line 2350
+    def now = new Date().getTime() // library marker kkossev.commonLib, line 2351
+    if (state.lastTx == null ) state.lastTx = [:] // library marker kkossev.commonLib, line 2352
+    def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger() // library marker kkossev.commonLib, line 2353
+    def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats["pingsMin"]} max=${state.stats["pingsMax"]} average=${state.stats["pingsAvg"]})" // library marker kkossev.commonLib, line 2354
+    if (value == null) { // library marker kkossev.commonLib, line 2355
+        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2356
+        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)     // library marker kkossev.commonLib, line 2357
+    } // library marker kkossev.commonLib, line 2358
+    else { // library marker kkossev.commonLib, line 2359
+        descriptionText = "Round-trip time : ${value}" // library marker kkossev.commonLib, line 2360
+        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2361
+        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, isDigital: true)     // library marker kkossev.commonLib, line 2362
+    } // library marker kkossev.commonLib, line 2363
+} // library marker kkossev.commonLib, line 2364
 
-def setRefreshRequest()   { if (state.states == null) {state.states = [:]};   state.states["isRefresh"] = true; runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds // library marker kkossev.commonLib, line 2351
-def clearRefreshRequest() { if (state.states == null) {state.states = [:] }; state.states["isRefresh"] = false } // library marker kkossev.commonLib, line 2352
+/** // library marker kkossev.commonLib, line 2366
+ * Lookup the cluster name from the cluster ID // library marker kkossev.commonLib, line 2367
+ * @param cluster cluster ID // library marker kkossev.commonLib, line 2368
+ * @return cluster name if known, otherwise "private cluster" // library marker kkossev.commonLib, line 2369
+ */ // library marker kkossev.commonLib, line 2370
+private String clusterLookup(final Object cluster) { // library marker kkossev.commonLib, line 2371
+    if (cluster != null) { // library marker kkossev.commonLib, line 2372
+        return zigbee.clusterLookup(cluster.toInteger()) ?: "private cluster 0x${intToHexStr(cluster.toInteger())}" // library marker kkossev.commonLib, line 2373
+    } // library marker kkossev.commonLib, line 2374
+    else { // library marker kkossev.commonLib, line 2375
+        logWarn "cluster is NULL!" // library marker kkossev.commonLib, line 2376
+        return "NULL" // library marker kkossev.commonLib, line 2377
+    } // library marker kkossev.commonLib, line 2378
+} // library marker kkossev.commonLib, line 2379
 
-void clearInfoEvent() { // library marker kkossev.commonLib, line 2354
-    sendInfoEvent('clear') // library marker kkossev.commonLib, line 2355
-} // library marker kkossev.commonLib, line 2356
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) { // library marker kkossev.commonLib, line 2381
+    runIn(delay, 'deviceCommandTimeout') // library marker kkossev.commonLib, line 2382
+} // library marker kkossev.commonLib, line 2383
 
-void sendInfoEvent(String info=null) { // library marker kkossev.commonLib, line 2358
-    if (info == null || info == "clear") { // library marker kkossev.commonLib, line 2359
-        logDebug "clearing the Status event" // library marker kkossev.commonLib, line 2360
-        sendEvent(name: "Status", value: "clear", isDigital: true) // library marker kkossev.commonLib, line 2361
-    } // library marker kkossev.commonLib, line 2362
-    else { // library marker kkossev.commonLib, line 2363
-        logInfo "${info}" // library marker kkossev.commonLib, line 2364
-        sendEvent(name: "Status", value: info, isDigital: true) // library marker kkossev.commonLib, line 2365
-        runIn(INFO_AUTO_CLEAR_PERIOD, "clearInfoEvent")            // automatically clear the Info attribute after 1 minute // library marker kkossev.commonLib, line 2366
-    } // library marker kkossev.commonLib, line 2367
-} // library marker kkossev.commonLib, line 2368
+void deviceCommandTimeout() { // library marker kkossev.commonLib, line 2385
+    logWarn 'no response received (sleepy device or offline?)' // library marker kkossev.commonLib, line 2386
+    sendRttEvent("timeout") // library marker kkossev.commonLib, line 2387
+    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 // library marker kkossev.commonLib, line 2388
+} // library marker kkossev.commonLib, line 2389
 
-def ping() { // library marker kkossev.commonLib, line 2370
-    if (!(isAqaraTVOC())) { // library marker kkossev.commonLib, line 2371
-        if (state.lastTx == nill ) state.lastTx = [:]  // library marker kkossev.commonLib, line 2372
-        state.lastTx["pingTime"] = new Date().getTime() // library marker kkossev.commonLib, line 2373
-        if (state.states == nill ) state.states = [:]  // library marker kkossev.commonLib, line 2374
-        state.states["isPing"] = true // library marker kkossev.commonLib, line 2375
-        scheduleCommandTimeoutCheck() // library marker kkossev.commonLib, line 2376
-        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) ) // library marker kkossev.commonLib, line 2377
-        logDebug 'ping...' // library marker kkossev.commonLib, line 2378
-    } // library marker kkossev.commonLib, line 2379
-    else { // library marker kkossev.commonLib, line 2380
-        // Aqara TVOC is sleepy or does not respond to the ping. // library marker kkossev.commonLib, line 2381
-        logInfo "ping() command is not available for this sleepy device." // library marker kkossev.commonLib, line 2382
-        sendRttEvent("n/a") // library marker kkossev.commonLib, line 2383
-    } // library marker kkossev.commonLib, line 2384
-} // library marker kkossev.commonLib, line 2385
+/** // library marker kkossev.commonLib, line 2391
+ * Schedule a device health check // library marker kkossev.commonLib, line 2392
+ * @param intervalMins interval in minutes // library marker kkossev.commonLib, line 2393
+ */ // library marker kkossev.commonLib, line 2394
+private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) { // library marker kkossev.commonLib, line 2395
+    if (healthMethod == 1 || healthMethod == 2)  { // library marker kkossev.commonLib, line 2396
+        String cron = getCron( intervalMins*60 ) // library marker kkossev.commonLib, line 2397
+        schedule(cron, 'deviceHealthCheck') // library marker kkossev.commonLib, line 2398
+        logDebug "deviceHealthCheck is scheduled every ${intervalMins} minutes" // library marker kkossev.commonLib, line 2399
+    } // library marker kkossev.commonLib, line 2400
+    else { // library marker kkossev.commonLib, line 2401
+        logWarn "deviceHealthCheck is not scheduled!" // library marker kkossev.commonLib, line 2402
+        unschedule('deviceHealthCheck') // library marker kkossev.commonLib, line 2403
+    } // library marker kkossev.commonLib, line 2404
+} // library marker kkossev.commonLib, line 2405
 
-/** // library marker kkossev.commonLib, line 2387
- * sends 'rtt'event (after a ping() command) // library marker kkossev.commonLib, line 2388
- * @param null: calculate the RTT in ms // library marker kkossev.commonLib, line 2389
- *        value: send the text instead ('timeout', 'n/a', etc..) // library marker kkossev.commonLib, line 2390
- * @return none // library marker kkossev.commonLib, line 2391
- */ // library marker kkossev.commonLib, line 2392
-void sendRttEvent( String value=null) { // library marker kkossev.commonLib, line 2393
-    def now = new Date().getTime() // library marker kkossev.commonLib, line 2394
-    if (state.lastTx == null ) state.lastTx = [:] // library marker kkossev.commonLib, line 2395
-    def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: now).toInteger() // library marker kkossev.commonLib, line 2396
-    def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats["pingsMin"]} max=${state.stats["pingsMax"]} average=${state.stats["pingsAvg"]})" // library marker kkossev.commonLib, line 2397
-    if (value == null) { // library marker kkossev.commonLib, line 2398
-        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2399
-        sendEvent(name: "rtt", value: timeRunning, descriptionText: descriptionText, unit: "ms", isDigital: true)     // library marker kkossev.commonLib, line 2400
-    } // library marker kkossev.commonLib, line 2401
-    else { // library marker kkossev.commonLib, line 2402
-        descriptionText = "Round-trip time : ${value}" // library marker kkossev.commonLib, line 2403
-        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2404
-        sendEvent(name: "rtt", value: value, descriptionText: descriptionText, isDigital: true)     // library marker kkossev.commonLib, line 2405
-    } // library marker kkossev.commonLib, line 2406
-} // library marker kkossev.commonLib, line 2407
+private void unScheduleDeviceHealthCheck() { // library marker kkossev.commonLib, line 2407
+    unschedule('deviceHealthCheck') // library marker kkossev.commonLib, line 2408
+    device.deleteCurrentState('healthStatus') // library marker kkossev.commonLib, line 2409
+    logWarn "device health check is disabled!" // library marker kkossev.commonLib, line 2410
 
-/** // library marker kkossev.commonLib, line 2409
- * Lookup the cluster name from the cluster ID // library marker kkossev.commonLib, line 2410
- * @param cluster cluster ID // library marker kkossev.commonLib, line 2411
- * @return cluster name if known, otherwise "private cluster" // library marker kkossev.commonLib, line 2412
- */ // library marker kkossev.commonLib, line 2413
-private String clusterLookup(final Object cluster) { // library marker kkossev.commonLib, line 2414
-    if (cluster != null) { // library marker kkossev.commonLib, line 2415
-        return zigbee.clusterLookup(cluster.toInteger()) ?: "private cluster 0x${intToHexStr(cluster.toInteger())}" // library marker kkossev.commonLib, line 2416
-    } // library marker kkossev.commonLib, line 2417
-    else { // library marker kkossev.commonLib, line 2418
-        logWarn "cluster is NULL!" // library marker kkossev.commonLib, line 2419
-        return "NULL" // library marker kkossev.commonLib, line 2420
+} // library marker kkossev.commonLib, line 2412
+
+// called when any event was received from the Zigbee device in the parse() method. // library marker kkossev.commonLib, line 2414
+void setHealthStatusOnline() { // library marker kkossev.commonLib, line 2415
+    if(state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2416
+    state.health['checkCtr3']  = 0 // library marker kkossev.commonLib, line 2417
+    if (!((device.currentValue('healthStatus') ?: 'unknown') in ['online'])) {    // library marker kkossev.commonLib, line 2418
+        sendHealthStatusEvent('online') // library marker kkossev.commonLib, line 2419
+        logInfo "is now online!" // library marker kkossev.commonLib, line 2420
     } // library marker kkossev.commonLib, line 2421
 } // library marker kkossev.commonLib, line 2422
 
-private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) { // library marker kkossev.commonLib, line 2424
-    runIn(delay, 'deviceCommandTimeout') // library marker kkossev.commonLib, line 2425
-} // library marker kkossev.commonLib, line 2426
 
-void deviceCommandTimeout() { // library marker kkossev.commonLib, line 2428
-    logWarn 'no response received (sleepy device or offline?)' // library marker kkossev.commonLib, line 2429
-    sendRttEvent("timeout") // library marker kkossev.commonLib, line 2430
-    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 // library marker kkossev.commonLib, line 2431
-} // library marker kkossev.commonLib, line 2432
+def deviceHealthCheck() { // library marker kkossev.commonLib, line 2425
+    checkDriverVersion() // library marker kkossev.commonLib, line 2426
+    if (state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2427
+    def ctr = state.health['checkCtr3'] ?: 0 // library marker kkossev.commonLib, line 2428
+    if (ctr  >= PRESENCE_COUNT_THRESHOLD) { // library marker kkossev.commonLib, line 2429
+        if ((device.currentValue("healthStatus") ?: 'unknown') != 'offline' ) { // library marker kkossev.commonLib, line 2430
+            logWarn "not present!" // library marker kkossev.commonLib, line 2431
+            sendHealthStatusEvent('offline') // library marker kkossev.commonLib, line 2432
+        } // library marker kkossev.commonLib, line 2433
+    } // library marker kkossev.commonLib, line 2434
+    else { // library marker kkossev.commonLib, line 2435
+        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})" // library marker kkossev.commonLib, line 2436
+    } // library marker kkossev.commonLib, line 2437
+    state.health['checkCtr3'] = ctr + 1 // library marker kkossev.commonLib, line 2438
+} // library marker kkossev.commonLib, line 2439
 
-/** // library marker kkossev.commonLib, line 2434
- * Schedule a device health check // library marker kkossev.commonLib, line 2435
- * @param intervalMins interval in minutes // library marker kkossev.commonLib, line 2436
- */ // library marker kkossev.commonLib, line 2437
-private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) { // library marker kkossev.commonLib, line 2438
-    if (healthMethod == 1 || healthMethod == 2)  { // library marker kkossev.commonLib, line 2439
-        String cron = getCron( intervalMins*60 ) // library marker kkossev.commonLib, line 2440
-        schedule(cron, 'deviceHealthCheck') // library marker kkossev.commonLib, line 2441
-        logDebug "deviceHealthCheck is scheduled every ${intervalMins} minutes" // library marker kkossev.commonLib, line 2442
-    } // library marker kkossev.commonLib, line 2443
-    else { // library marker kkossev.commonLib, line 2444
-        logWarn "deviceHealthCheck is not scheduled!" // library marker kkossev.commonLib, line 2445
-        unschedule('deviceHealthCheck') // library marker kkossev.commonLib, line 2446
-    } // library marker kkossev.commonLib, line 2447
-} // library marker kkossev.commonLib, line 2448
-
-private void unScheduleDeviceHealthCheck() { // library marker kkossev.commonLib, line 2450
-    unschedule('deviceHealthCheck') // library marker kkossev.commonLib, line 2451
-    device.deleteCurrentState('healthStatus') // library marker kkossev.commonLib, line 2452
-    logWarn "device health check is disabled!" // library marker kkossev.commonLib, line 2453
-
-} // library marker kkossev.commonLib, line 2455
-
-// called when any event was received from the Zigbee device in the parse() method. // library marker kkossev.commonLib, line 2457
-void setHealthStatusOnline() { // library marker kkossev.commonLib, line 2458
-    if(state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2459
-    state.health['checkCtr3']  = 0 // library marker kkossev.commonLib, line 2460
-    if (!((device.currentValue('healthStatus') ?: 'unknown') in ['online'])) {    // library marker kkossev.commonLib, line 2461
-        sendHealthStatusEvent('online') // library marker kkossev.commonLib, line 2462
-        logInfo "is now online!" // library marker kkossev.commonLib, line 2463
-    } // library marker kkossev.commonLib, line 2464
-} // library marker kkossev.commonLib, line 2465
-
-
-def deviceHealthCheck() { // library marker kkossev.commonLib, line 2468
-    if (state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2469
-    def ctr = state.health['checkCtr3'] ?: 0 // library marker kkossev.commonLib, line 2470
-    if (ctr  >= PRESENCE_COUNT_THRESHOLD) { // library marker kkossev.commonLib, line 2471
-        if ((device.currentValue("healthStatus") ?: 'unknown') != 'offline' ) { // library marker kkossev.commonLib, line 2472
-            logWarn "not present!" // library marker kkossev.commonLib, line 2473
-            sendHealthStatusEvent('offline') // library marker kkossev.commonLib, line 2474
-        } // library marker kkossev.commonLib, line 2475
-    } // library marker kkossev.commonLib, line 2476
-    else { // library marker kkossev.commonLib, line 2477
-        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})" // library marker kkossev.commonLib, line 2478
-    } // library marker kkossev.commonLib, line 2479
-    state.health['checkCtr3'] = ctr + 1 // library marker kkossev.commonLib, line 2480
-} // library marker kkossev.commonLib, line 2481
-
-void sendHealthStatusEvent(value) { // library marker kkossev.commonLib, line 2483
-    def descriptionText = "healthStatus changed to ${value}" // library marker kkossev.commonLib, line 2484
-    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true) // library marker kkossev.commonLib, line 2485
-    if (value == 'online') { // library marker kkossev.commonLib, line 2486
-        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2487
-    } // library marker kkossev.commonLib, line 2488
-    else { // library marker kkossev.commonLib, line 2489
-        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" } // library marker kkossev.commonLib, line 2490
-    } // library marker kkossev.commonLib, line 2491
-} // library marker kkossev.commonLib, line 2492
+void sendHealthStatusEvent(value) { // library marker kkossev.commonLib, line 2441
+    def descriptionText = "healthStatus changed to ${value}" // library marker kkossev.commonLib, line 2442
+    sendEvent(name: "healthStatus", value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true) // library marker kkossev.commonLib, line 2443
+    if (value == 'online') { // library marker kkossev.commonLib, line 2444
+        logInfo "${descriptionText}" // library marker kkossev.commonLib, line 2445
+    } // library marker kkossev.commonLib, line 2446
+    else { // library marker kkossev.commonLib, line 2447
+        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" } // library marker kkossev.commonLib, line 2448
+    } // library marker kkossev.commonLib, line 2449
+} // library marker kkossev.commonLib, line 2450
 
 
 
-/** // library marker kkossev.commonLib, line 2496
- * Scheduled job for polling device specific attribute(s) // library marker kkossev.commonLib, line 2497
- */ // library marker kkossev.commonLib, line 2498
-void autoPoll() { // library marker kkossev.commonLib, line 2499
-    logDebug "autoPoll()..." // library marker kkossev.commonLib, line 2500
-    checkDriverVersion() // library marker kkossev.commonLib, line 2501
-    List<String> cmds = [] // library marker kkossev.commonLib, line 2502
-    if (state.states == null) state.states = [:] // library marker kkossev.commonLib, line 2503
-    //state.states["isRefresh"] = true // library marker kkossev.commonLib, line 2504
+/** // library marker kkossev.commonLib, line 2454
+ * Scheduled job for polling device specific attribute(s) // library marker kkossev.commonLib, line 2455
+ */ // library marker kkossev.commonLib, line 2456
+void autoPoll() { // library marker kkossev.commonLib, line 2457
+    logDebug "autoPoll()..." // library marker kkossev.commonLib, line 2458
+    checkDriverVersion() // library marker kkossev.commonLib, line 2459
+    List<String> cmds = [] // library marker kkossev.commonLib, line 2460
+    if (state.states == null) state.states = [:] // library marker kkossev.commonLib, line 2461
+    //state.states["isRefresh"] = true // library marker kkossev.commonLib, line 2462
 
-    if (DEVICE_TYPE in  ["AirQuality"]) { // library marker kkossev.commonLib, line 2506
-        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.commonLib, line 2507
-    } // library marker kkossev.commonLib, line 2508
+    if (DEVICE_TYPE in  ["AirQuality"]) { // library marker kkossev.commonLib, line 2464
+        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay=200)      // tVOC   !! mfcode="0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value; // library marker kkossev.commonLib, line 2465
+    } // library marker kkossev.commonLib, line 2466
 
-    if (cmds != null && cmds != [] ) { // library marker kkossev.commonLib, line 2510
-        sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2511
-    }     // library marker kkossev.commonLib, line 2512
-} // library marker kkossev.commonLib, line 2513
+    if (cmds != null && cmds != [] ) { // library marker kkossev.commonLib, line 2468
+        sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2469
+    }     // library marker kkossev.commonLib, line 2470
+} // library marker kkossev.commonLib, line 2471
 
+
+/** // library marker kkossev.commonLib, line 2474
+ * Invoked by Hubitat when the driver configuration is updated // library marker kkossev.commonLib, line 2475
+ */ // library marker kkossev.commonLib, line 2476
+void updated() { // library marker kkossev.commonLib, line 2477
+    logInfo 'updated...' // library marker kkossev.commonLib, line 2478
+    checkDriverVersion() // library marker kkossev.commonLib, line 2479
+    logInfo"driver version ${driverVersionAndTimeStamp()}" // library marker kkossev.commonLib, line 2480
+    unschedule() // library marker kkossev.commonLib, line 2481
+
+    if (settings.logEnable) { // library marker kkossev.commonLib, line 2483
+        logTrace settings // library marker kkossev.commonLib, line 2484
+        runIn(86400, logsOff) // library marker kkossev.commonLib, line 2485
+    } // library marker kkossev.commonLib, line 2486
+    if (settings.traceEnable) { // library marker kkossev.commonLib, line 2487
+        logTrace settings // library marker kkossev.commonLib, line 2488
+        runIn(1800, traceOff) // library marker kkossev.commonLib, line 2489
+    }     // library marker kkossev.commonLib, line 2490
+
+    final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0 // library marker kkossev.commonLib, line 2492
+    if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling'] // library marker kkossev.commonLib, line 2493
+        // schedule the periodic timer // library marker kkossev.commonLib, line 2494
+        final int interval = (settings.healthCheckInterval as Integer) ?: 0 // library marker kkossev.commonLib, line 2495
+        if (interval > 0) { // library marker kkossev.commonLib, line 2496
+            //log.trace "healthMethod=${healthMethod} interval=${interval}" // library marker kkossev.commonLib, line 2497
+            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method" // library marker kkossev.commonLib, line 2498
+            scheduleDeviceHealthCheck(interval, healthMethod) // library marker kkossev.commonLib, line 2499
+        } // library marker kkossev.commonLib, line 2500
+    } // library marker kkossev.commonLib, line 2501
+    else { // library marker kkossev.commonLib, line 2502
+        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod // library marker kkossev.commonLib, line 2503
+        log.info "Health Check is disabled!" // library marker kkossev.commonLib, line 2504
+    } // library marker kkossev.commonLib, line 2505
+
+    if (DEVICE_TYPE in ["AirQuality"])  { updatedAirQuality() } // library marker kkossev.commonLib, line 2507
+    if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() } // library marker kkossev.commonLib, line 2508
+    if (DEVICE_TYPE in ["Thermostat"])  { updatedThermostat() } // library marker kkossev.commonLib, line 2509
+
+    //configureDevice()    // sends Zigbee commands  // commented out 11/18/2023 // library marker kkossev.commonLib, line 2511
+
+    sendInfoEvent("updated") // library marker kkossev.commonLib, line 2513
+} // library marker kkossev.commonLib, line 2514
 
 /** // library marker kkossev.commonLib, line 2516
- * Invoked by Hubitat when the driver configuration is updated // library marker kkossev.commonLib, line 2517
+ * Disable logging (for debugging) // library marker kkossev.commonLib, line 2517
  */ // library marker kkossev.commonLib, line 2518
-void updated() { // library marker kkossev.commonLib, line 2519
-    logInfo 'updated...' // library marker kkossev.commonLib, line 2520
-    logInfo"driver version ${driverVersionAndTimeStamp()}" // library marker kkossev.commonLib, line 2521
-    unschedule() // library marker kkossev.commonLib, line 2522
+void logsOff() { // library marker kkossev.commonLib, line 2519
+    logInfo "debug logging disabled..." // library marker kkossev.commonLib, line 2520
+    device.updateSetting('logEnable', [value: 'false', type: 'bool']) // library marker kkossev.commonLib, line 2521
+} // library marker kkossev.commonLib, line 2522
+void traceOff() { // library marker kkossev.commonLib, line 2523
+    logInfo "trace logging disabled..." // library marker kkossev.commonLib, line 2524
+    device.updateSetting('traceEnable', [value: 'false', type: 'bool']) // library marker kkossev.commonLib, line 2525
+} // library marker kkossev.commonLib, line 2526
 
-    if (settings.logEnable) { // library marker kkossev.commonLib, line 2524
-        logTrace settings // library marker kkossev.commonLib, line 2525
-        runIn(86400, logsOff) // library marker kkossev.commonLib, line 2526
-    } // library marker kkossev.commonLib, line 2527
-    if (settings.traceEnable) { // library marker kkossev.commonLib, line 2528
-        logTrace settings // library marker kkossev.commonLib, line 2529
-        runIn(1800, traceOff) // library marker kkossev.commonLib, line 2530
-    }     // library marker kkossev.commonLib, line 2531
+def configure(command) { // library marker kkossev.commonLib, line 2528
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2529
+    logInfo "configure(${command})..." // library marker kkossev.commonLib, line 2530
 
-    final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0 // library marker kkossev.commonLib, line 2533
-    if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling'] // library marker kkossev.commonLib, line 2534
-        // schedule the periodic timer // library marker kkossev.commonLib, line 2535
-        final int interval = (settings.healthCheckInterval as Integer) ?: 0 // library marker kkossev.commonLib, line 2536
-        if (interval > 0) { // library marker kkossev.commonLib, line 2537
-            //log.trace "healthMethod=${healthMethod} interval=${interval}" // library marker kkossev.commonLib, line 2538
-            log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method" // library marker kkossev.commonLib, line 2539
-            scheduleDeviceHealthCheck(interval, healthMethod) // library marker kkossev.commonLib, line 2540
-        } // library marker kkossev.commonLib, line 2541
-    } // library marker kkossev.commonLib, line 2542
-    else { // library marker kkossev.commonLib, line 2543
-        unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod // library marker kkossev.commonLib, line 2544
-        log.info "Health Check is disabled!" // library marker kkossev.commonLib, line 2545
-    } // library marker kkossev.commonLib, line 2546
+    Boolean validated = false // library marker kkossev.commonLib, line 2532
+    if (!(command in (ConfigureOpts.keySet() as List))) { // library marker kkossev.commonLib, line 2533
+        logWarn "configure: command <b>${command}</b> must be one of these : ${ConfigureOpts.keySet() as List}" // library marker kkossev.commonLib, line 2534
+        return // library marker kkossev.commonLib, line 2535
+    } // library marker kkossev.commonLib, line 2536
+    // // library marker kkossev.commonLib, line 2537
+    def func // library marker kkossev.commonLib, line 2538
+   // try { // library marker kkossev.commonLib, line 2539
+        func = ConfigureOpts[command]?.function // library marker kkossev.commonLib, line 2540
+        cmds = "$func"() // library marker kkossev.commonLib, line 2541
+ //   } // library marker kkossev.commonLib, line 2542
+//    catch (e) { // library marker kkossev.commonLib, line 2543
+//        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 2544
+//        return // library marker kkossev.commonLib, line 2545
+//    } // library marker kkossev.commonLib, line 2546
 
-    if (DEVICE_TYPE in ["AirQuality"])  { updatedAirQuality() } // library marker kkossev.commonLib, line 2548
-    if (DEVICE_TYPE in ["IRBlaster"])   { updatedIrBlaster() } // library marker kkossev.commonLib, line 2549
-    if (DEVICE_TYPE in ["Thermostat"])  { updatedThermostat() } // library marker kkossev.commonLib, line 2550
+    logInfo "executed '${func}'" // library marker kkossev.commonLib, line 2548
+} // library marker kkossev.commonLib, line 2549
 
-    //configureDevice()    // sends Zigbee commands  // commented out 11/18/2023 // library marker kkossev.commonLib, line 2552
+def configureHelp( val ) { // library marker kkossev.commonLib, line 2551
+    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" } // library marker kkossev.commonLib, line 2552
+} // library marker kkossev.commonLib, line 2553
 
-    sendInfoEvent("updated") // library marker kkossev.commonLib, line 2554
-} // library marker kkossev.commonLib, line 2555
 
-/** // library marker kkossev.commonLib, line 2557
- * Disable logging (for debugging) // library marker kkossev.commonLib, line 2558
- */ // library marker kkossev.commonLib, line 2559
-void logsOff() { // library marker kkossev.commonLib, line 2560
-    logInfo "debug logging disabled..." // library marker kkossev.commonLib, line 2561
-    device.updateSetting('logEnable', [value: 'false', type: 'bool']) // library marker kkossev.commonLib, line 2562
-} // library marker kkossev.commonLib, line 2563
-void traceOff() { // library marker kkossev.commonLib, line 2564
-    logInfo "trace logging disabled..." // library marker kkossev.commonLib, line 2565
-    device.updateSetting('traceEnable', [value: 'false', type: 'bool']) // library marker kkossev.commonLib, line 2566
+def loadAllDefaults() { // library marker kkossev.commonLib, line 2556
+    logWarn "loadAllDefaults() !!!" // library marker kkossev.commonLib, line 2557
+    deleteAllSettings() // library marker kkossev.commonLib, line 2558
+    deleteAllCurrentStates() // library marker kkossev.commonLib, line 2559
+    deleteAllScheduledJobs() // library marker kkossev.commonLib, line 2560
+    deleteAllStates() // library marker kkossev.commonLib, line 2561
+    deleteAllChildDevices() // library marker kkossev.commonLib, line 2562
+    initialize() // library marker kkossev.commonLib, line 2563
+    configure() // library marker kkossev.commonLib, line 2564
+    updated() // calls  also   configureDevice() // library marker kkossev.commonLib, line 2565
+    sendInfoEvent("All Defaults Loaded! F5 to refresh") // library marker kkossev.commonLib, line 2566
 } // library marker kkossev.commonLib, line 2567
 
-def configure(command) { // library marker kkossev.commonLib, line 2569
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2570
-    logInfo "configure(${command})..." // library marker kkossev.commonLib, line 2571
+/** // library marker kkossev.commonLib, line 2569
+ * Send configuration parameters to the device // library marker kkossev.commonLib, line 2570
+ * Invoked when device is first installed and when the user updates the configuration // library marker kkossev.commonLib, line 2571
+ * @return sends zigbee commands // library marker kkossev.commonLib, line 2572
+ */ // library marker kkossev.commonLib, line 2573
+def configure() { // library marker kkossev.commonLib, line 2574
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2575
+    logInfo 'configure...' // library marker kkossev.commonLib, line 2576
+    logDebug settings // library marker kkossev.commonLib, line 2577
+    cmds += tuyaBlackMagic() // library marker kkossev.commonLib, line 2578
+    if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) { // library marker kkossev.commonLib, line 2579
+        aqaraBlackMagic() // library marker kkossev.commonLib, line 2580
+    } // library marker kkossev.commonLib, line 2581
+    cmds += initializeDevice() // library marker kkossev.commonLib, line 2582
+    cmds += configureDevice() // library marker kkossev.commonLib, line 2583
+    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2584
+    sendInfoEvent("sent device configuration") // library marker kkossev.commonLib, line 2585
+} // library marker kkossev.commonLib, line 2586
 
-    Boolean validated = false // library marker kkossev.commonLib, line 2573
-    if (!(command in (ConfigureOpts.keySet() as List))) { // library marker kkossev.commonLib, line 2574
-        logWarn "configure: command <b>${command}</b> must be one of these : ${ConfigureOpts.keySet() as List}" // library marker kkossev.commonLib, line 2575
-        return // library marker kkossev.commonLib, line 2576
-    } // library marker kkossev.commonLib, line 2577
-    // // library marker kkossev.commonLib, line 2578
-    def func // library marker kkossev.commonLib, line 2579
-   // try { // library marker kkossev.commonLib, line 2580
-        func = ConfigureOpts[command]?.function // library marker kkossev.commonLib, line 2581
-        cmds = "$func"() // library marker kkossev.commonLib, line 2582
- //   } // library marker kkossev.commonLib, line 2583
-//    catch (e) { // library marker kkossev.commonLib, line 2584
-//        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)" // library marker kkossev.commonLib, line 2585
-//        return // library marker kkossev.commonLib, line 2586
-//    } // library marker kkossev.commonLib, line 2587
+/** // library marker kkossev.commonLib, line 2588
+ * Invoked by Hubitat when driver is installed // library marker kkossev.commonLib, line 2589
+ */ // library marker kkossev.commonLib, line 2590
+void installed() { // library marker kkossev.commonLib, line 2591
+    logInfo 'installed...' // library marker kkossev.commonLib, line 2592
+    // populate some default values for attributes // library marker kkossev.commonLib, line 2593
+    sendEvent(name: 'healthStatus', value: 'unknown') // library marker kkossev.commonLib, line 2594
+    sendEvent(name: 'powerSource', value: 'unknown') // library marker kkossev.commonLib, line 2595
+    sendInfoEvent("installed") // library marker kkossev.commonLib, line 2596
+    runIn(3, 'updated') // library marker kkossev.commonLib, line 2597
+} // library marker kkossev.commonLib, line 2598
 
-    logInfo "executed '${func}'" // library marker kkossev.commonLib, line 2589
-} // library marker kkossev.commonLib, line 2590
-
-def configureHelp( val ) { // library marker kkossev.commonLib, line 2592
-    if (settings?.txtEnable) { log.warn "${device.displayName} configureHelp: select one of the commands in this list!" } // library marker kkossev.commonLib, line 2593
-} // library marker kkossev.commonLib, line 2594
-
-def loadAllDefaults() { // library marker kkossev.commonLib, line 2596
-    logWarn "loadAllDefaults() !!!" // library marker kkossev.commonLib, line 2597
-    deleteAllSettings() // library marker kkossev.commonLib, line 2598
-    deleteAllCurrentStates() // library marker kkossev.commonLib, line 2599
-    deleteAllScheduledJobs() // library marker kkossev.commonLib, line 2600
-    deleteAllStates() // library marker kkossev.commonLib, line 2601
-    deleteAllChildDevices() // library marker kkossev.commonLib, line 2602
-    initialize() // library marker kkossev.commonLib, line 2603
-    configure() // library marker kkossev.commonLib, line 2604
-    updated() // calls  also   configureDevice() // library marker kkossev.commonLib, line 2605
-    sendInfoEvent("All Defaults Loaded! F5 to refresh") // library marker kkossev.commonLib, line 2606
-} // library marker kkossev.commonLib, line 2607
-
-/** // library marker kkossev.commonLib, line 2609
- * Send configuration parameters to the device // library marker kkossev.commonLib, line 2610
- * Invoked when device is first installed and when the user updates the configuration // library marker kkossev.commonLib, line 2611
- * @return sends zigbee commands // library marker kkossev.commonLib, line 2612
- */ // library marker kkossev.commonLib, line 2613
-def configure() { // library marker kkossev.commonLib, line 2614
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2615
-    logInfo 'configure...' // library marker kkossev.commonLib, line 2616
-    logDebug settings // library marker kkossev.commonLib, line 2617
-    cmds += tuyaBlackMagic() // library marker kkossev.commonLib, line 2618
-    if (isAqaraTVOC() || isAqaraTRV_OLD()) { // library marker kkossev.commonLib, line 2619
-        aqaraBlackMagic() // library marker kkossev.commonLib, line 2620
-    } // library marker kkossev.commonLib, line 2621
-    cmds += initializeDevice() // library marker kkossev.commonLib, line 2622
-    cmds += configureDevice() // library marker kkossev.commonLib, line 2623
-    sendZigbeeCommands(cmds) // library marker kkossev.commonLib, line 2624
-    sendInfoEvent("sent device configuration") // library marker kkossev.commonLib, line 2625
-} // library marker kkossev.commonLib, line 2626
-
-/** // library marker kkossev.commonLib, line 2628
- * Invoked by Hubitat when driver is installed // library marker kkossev.commonLib, line 2629
- */ // library marker kkossev.commonLib, line 2630
-void installed() { // library marker kkossev.commonLib, line 2631
-    logInfo 'installed...' // library marker kkossev.commonLib, line 2632
-    // populate some default values for attributes // library marker kkossev.commonLib, line 2633
-    sendEvent(name: 'healthStatus', value: 'unknown') // library marker kkossev.commonLib, line 2634
-    sendEvent(name: 'powerSource', value: 'unknown') // library marker kkossev.commonLib, line 2635
-    sendInfoEvent("installed") // library marker kkossev.commonLib, line 2636
-    runIn(3, 'updated') // library marker kkossev.commonLib, line 2637
-} // library marker kkossev.commonLib, line 2638
-
-/** // library marker kkossev.commonLib, line 2640
- * Invoked when initialize button is clicked // library marker kkossev.commonLib, line 2641
- */ // library marker kkossev.commonLib, line 2642
-void initialize() { // library marker kkossev.commonLib, line 2643
-    logInfo 'initialize...' // library marker kkossev.commonLib, line 2644
-    initializeVars(fullInit = true) // library marker kkossev.commonLib, line 2645
-    updateTuyaVersion() // library marker kkossev.commonLib, line 2646
-    updateAqaraVersion() // library marker kkossev.commonLib, line 2647
-} // library marker kkossev.commonLib, line 2648
+/** // library marker kkossev.commonLib, line 2600
+ * Invoked when initialize button is clicked // library marker kkossev.commonLib, line 2601
+ */ // library marker kkossev.commonLib, line 2602
+void initialize() { // library marker kkossev.commonLib, line 2603
+    logInfo 'initialize...' // library marker kkossev.commonLib, line 2604
+    initializeVars(fullInit = true) // library marker kkossev.commonLib, line 2605
+    updateTuyaVersion() // library marker kkossev.commonLib, line 2606
+    updateAqaraVersion() // library marker kkossev.commonLib, line 2607
+} // library marker kkossev.commonLib, line 2608
 
 
-/* // library marker kkossev.commonLib, line 2651
- *----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2652
- * kkossev drivers commonly used functions // library marker kkossev.commonLib, line 2653
- *----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2654
-*/ // library marker kkossev.commonLib, line 2655
+/* // library marker kkossev.commonLib, line 2611
+ *----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2612
+ * kkossev drivers commonly used functions // library marker kkossev.commonLib, line 2613
+ *----------------------------------------------------------------------------- // library marker kkossev.commonLib, line 2614
+*/ // library marker kkossev.commonLib, line 2615
 
-static Integer safeToInt(val, Integer defaultVal=0) { // library marker kkossev.commonLib, line 2657
-    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal // library marker kkossev.commonLib, line 2658
-} // library marker kkossev.commonLib, line 2659
+static Integer safeToInt(val, Integer defaultVal=0) { // library marker kkossev.commonLib, line 2617
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal // library marker kkossev.commonLib, line 2618
+} // library marker kkossev.commonLib, line 2619
 
-static Double safeToDouble(val, Double defaultVal=0.0) { // library marker kkossev.commonLib, line 2661
-    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal // library marker kkossev.commonLib, line 2662
-} // library marker kkossev.commonLib, line 2663
+static Double safeToDouble(val, Double defaultVal=0.0) { // library marker kkossev.commonLib, line 2621
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal // library marker kkossev.commonLib, line 2622
+} // library marker kkossev.commonLib, line 2623
 
-void sendZigbeeCommands(ArrayList<String> cmd) { // library marker kkossev.commonLib, line 2665
-    logDebug "sendZigbeeCommands(cmd=$cmd)" // library marker kkossev.commonLib, line 2666
-    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction() // library marker kkossev.commonLib, line 2667
-    cmd.each { // library marker kkossev.commonLib, line 2668
-            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) // library marker kkossev.commonLib, line 2669
-            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] } // library marker kkossev.commonLib, line 2670
-    } // library marker kkossev.commonLib, line 2671
-    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] } // library marker kkossev.commonLib, line 2672
-    sendHubCommand(allActions) // library marker kkossev.commonLib, line 2673
+void sendZigbeeCommands(ArrayList<String> cmd) { // library marker kkossev.commonLib, line 2625
+    logDebug "sendZigbeeCommands(cmd=$cmd)" // library marker kkossev.commonLib, line 2626
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction() // library marker kkossev.commonLib, line 2627
+    cmd.each { // library marker kkossev.commonLib, line 2628
+            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) // library marker kkossev.commonLib, line 2629
+            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats=[:] } // library marker kkossev.commonLib, line 2630
+    } // library marker kkossev.commonLib, line 2631
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] } // library marker kkossev.commonLib, line 2632
+    sendHubCommand(allActions) // library marker kkossev.commonLib, line 2633
+} // library marker kkossev.commonLib, line 2634
+
+def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!) " : " ") + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString}) "} // library marker kkossev.commonLib, line 2636
+
+def getDeviceInfo() { // library marker kkossev.commonLib, line 2638
+    return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>" // library marker kkossev.commonLib, line 2639
+} // library marker kkossev.commonLib, line 2640
+
+def getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationEP())] // library marker kkossev.commonLib, line 2642
+    return state.destinationEP ?: device.endpointId ?: "01" // library marker kkossev.commonLib, line 2643
+} // library marker kkossev.commonLib, line 2644
+
+def checkDriverVersion() { // library marker kkossev.commonLib, line 2646
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) { // library marker kkossev.commonLib, line 2647
+        logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}" // library marker kkossev.commonLib, line 2648
+        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}") // library marker kkossev.commonLib, line 2649
+        state.driverVersion = driverVersionAndTimeStamp() // library marker kkossev.commonLib, line 2650
+        initializeVars(fullInit = false) // library marker kkossev.commonLib, line 2651
+        updateTuyaVersion() // library marker kkossev.commonLib, line 2652
+        updateAqaraVersion() // library marker kkossev.commonLib, line 2653
+    } // library marker kkossev.commonLib, line 2654
+    else { // library marker kkossev.commonLib, line 2655
+        // no driver version change // library marker kkossev.commonLib, line 2656
+    } // library marker kkossev.commonLib, line 2657
+} // library marker kkossev.commonLib, line 2658
+
+// credits @thebearmay // library marker kkossev.commonLib, line 2660
+String getModel(){ // library marker kkossev.commonLib, line 2661
+    try{ // library marker kkossev.commonLib, line 2662
+        String model = getHubVersion() // requires >=2.2.8.141 // library marker kkossev.commonLib, line 2663
+    } catch (ignore){ // library marker kkossev.commonLib, line 2664
+        try{ // library marker kkossev.commonLib, line 2665
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res -> // library marker kkossev.commonLib, line 2666
+                model = res.data.device.modelName // library marker kkossev.commonLib, line 2667
+            return model // library marker kkossev.commonLib, line 2668
+            }         // library marker kkossev.commonLib, line 2669
+        } catch(ignore_again) { // library marker kkossev.commonLib, line 2670
+            return "" // library marker kkossev.commonLib, line 2671
+        } // library marker kkossev.commonLib, line 2672
+    } // library marker kkossev.commonLib, line 2673
 } // library marker kkossev.commonLib, line 2674
 
-def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? " (debug version!) " : " ") + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString}) "} // library marker kkossev.commonLib, line 2676
+// credits @thebearmay // library marker kkossev.commonLib, line 2676
+boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 ) // library marker kkossev.commonLib, line 2677
+    String model = getModel()            // <modelName>Rev C-7</modelName> // library marker kkossev.commonLib, line 2678
+    String[] tokens = model.split('-') // library marker kkossev.commonLib, line 2679
+    String revision = tokens.last() // library marker kkossev.commonLib, line 2680
+    return (Integer.parseInt(revision) >= minLevel) // library marker kkossev.commonLib, line 2681
+} // library marker kkossev.commonLib, line 2682
 
-def getDeviceInfo() { // library marker kkossev.commonLib, line 2678
-    return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>" // library marker kkossev.commonLib, line 2679
-} // library marker kkossev.commonLib, line 2680
+/** // library marker kkossev.commonLib, line 2684
+ * called from TODO // library marker kkossev.commonLib, line 2685
+ *  // library marker kkossev.commonLib, line 2686
+ */ // library marker kkossev.commonLib, line 2687
 
-def getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationEP())] // library marker kkossev.commonLib, line 2682
-    return state.destinationEP ?: device.endpointId ?: "01" // library marker kkossev.commonLib, line 2683
-} // library marker kkossev.commonLib, line 2684
+def deleteAllStatesAndJobs() { // library marker kkossev.commonLib, line 2689
+    state.clear()    // clear all states // library marker kkossev.commonLib, line 2690
+    unschedule() // library marker kkossev.commonLib, line 2691
+    device.deleteCurrentState('*') // library marker kkossev.commonLib, line 2692
+    device.deleteCurrentState('') // library marker kkossev.commonLib, line 2693
 
-def checkDriverVersion() { // library marker kkossev.commonLib, line 2686
-    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) { // library marker kkossev.commonLib, line 2687
-        logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}" // library marker kkossev.commonLib, line 2688
-        sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}") // library marker kkossev.commonLib, line 2689
-        state.driverVersion = driverVersionAndTimeStamp() // library marker kkossev.commonLib, line 2690
-        initializeVars(fullInit = false) // library marker kkossev.commonLib, line 2691
-        updateTuyaVersion() // library marker kkossev.commonLib, line 2692
-        updateAqaraVersion() // library marker kkossev.commonLib, line 2693
-    } // library marker kkossev.commonLib, line 2694
-    else { // library marker kkossev.commonLib, line 2695
-        // no driver version change // library marker kkossev.commonLib, line 2696
-    } // library marker kkossev.commonLib, line 2697
-} // library marker kkossev.commonLib, line 2698
+    log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}" // library marker kkossev.commonLib, line 2695
+} // library marker kkossev.commonLib, line 2696
 
-// credits @thebearmay // library marker kkossev.commonLib, line 2700
-String getModel(){ // library marker kkossev.commonLib, line 2701
-    try{ // library marker kkossev.commonLib, line 2702
-        String model = getHubVersion() // requires >=2.2.8.141 // library marker kkossev.commonLib, line 2703
-    } catch (ignore){ // library marker kkossev.commonLib, line 2704
-        try{ // library marker kkossev.commonLib, line 2705
-            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res -> // library marker kkossev.commonLib, line 2706
-                model = res.data.device.modelName // library marker kkossev.commonLib, line 2707
-            return model // library marker kkossev.commonLib, line 2708
-            }         // library marker kkossev.commonLib, line 2709
-        } catch(ignore_again) { // library marker kkossev.commonLib, line 2710
-            return "" // library marker kkossev.commonLib, line 2711
-        } // library marker kkossev.commonLib, line 2712
-    } // library marker kkossev.commonLib, line 2713
-} // library marker kkossev.commonLib, line 2714
 
-// credits @thebearmay // library marker kkossev.commonLib, line 2716
-boolean isCompatible(Integer minLevel) { //check to see if the hub version meets the minimum requirement ( 7 or 8 ) // library marker kkossev.commonLib, line 2717
-    String model = getModel()            // <modelName>Rev C-7</modelName> // library marker kkossev.commonLib, line 2718
-    String[] tokens = model.split('-') // library marker kkossev.commonLib, line 2719
-    String revision = tokens.last() // library marker kkossev.commonLib, line 2720
-    return (Integer.parseInt(revision) >= minLevel) // library marker kkossev.commonLib, line 2721
+def resetStatistics() { // library marker kkossev.commonLib, line 2699
+    runIn(1, "resetStats") // library marker kkossev.commonLib, line 2700
+    sendInfoEvent("Statistics are reset. Refresh the web page") // library marker kkossev.commonLib, line 2701
+} // library marker kkossev.commonLib, line 2702
+
+/** // library marker kkossev.commonLib, line 2704
+ * called from TODO // library marker kkossev.commonLib, line 2705
+ *  // library marker kkossev.commonLib, line 2706
+ */ // library marker kkossev.commonLib, line 2707
+def resetStats() { // library marker kkossev.commonLib, line 2708
+    logDebug "resetStats..." // library marker kkossev.commonLib, line 2709
+    state.stats = [:] // library marker kkossev.commonLib, line 2710
+    state.states = [:] // library marker kkossev.commonLib, line 2711
+    state.lastRx = [:] // library marker kkossev.commonLib, line 2712
+    state.lastTx = [:] // library marker kkossev.commonLib, line 2713
+    state.health = [:] // library marker kkossev.commonLib, line 2714
+    state.zigbeeGroups = [:]  // library marker kkossev.commonLib, line 2715
+    state.stats["rxCtr"] = 0 // library marker kkossev.commonLib, line 2716
+    state.stats["txCtr"] = 0 // library marker kkossev.commonLib, line 2717
+    state.states["isDigital"] = false // library marker kkossev.commonLib, line 2718
+    state.states["isRefresh"] = false // library marker kkossev.commonLib, line 2719
+    state.health["offlineCtr"] = 0 // library marker kkossev.commonLib, line 2720
+    state.health["checkCtr3"] = 0 // library marker kkossev.commonLib, line 2721
 } // library marker kkossev.commonLib, line 2722
 
 /** // library marker kkossev.commonLib, line 2724
  * called from TODO // library marker kkossev.commonLib, line 2725
  *  // library marker kkossev.commonLib, line 2726
  */ // library marker kkossev.commonLib, line 2727
+void initializeVars( boolean fullInit = false ) { // library marker kkossev.commonLib, line 2728
+    logDebug "InitializeVars()... fullInit = ${fullInit}" // library marker kkossev.commonLib, line 2729
+    if (fullInit == true ) { // library marker kkossev.commonLib, line 2730
+        state.clear() // library marker kkossev.commonLib, line 2731
+        unschedule() // library marker kkossev.commonLib, line 2732
+        resetStats() // library marker kkossev.commonLib, line 2733
+        //setDeviceNameAndProfile() // library marker kkossev.commonLib, line 2734
+        //state.comment = 'Works with Tuya Zigbee Devices' // library marker kkossev.commonLib, line 2735
+        logInfo "all states and scheduled jobs cleared!" // library marker kkossev.commonLib, line 2736
+        state.driverVersion = driverVersionAndTimeStamp() // library marker kkossev.commonLib, line 2737
+        logInfo "DEVICE_TYPE = ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2738
+        state.deviceType = DEVICE_TYPE // library marker kkossev.commonLib, line 2739
+        sendInfoEvent("Initialized") // library marker kkossev.commonLib, line 2740
+    } // library marker kkossev.commonLib, line 2741
 
-def deleteAllStatesAndJobs() { // library marker kkossev.commonLib, line 2729
-    state.clear()    // clear all states // library marker kkossev.commonLib, line 2730
-    unschedule() // library marker kkossev.commonLib, line 2731
-    device.deleteCurrentState('*') // library marker kkossev.commonLib, line 2732
-    device.deleteCurrentState('') // library marker kkossev.commonLib, line 2733
+    if (state.stats == null)  { state.stats  = [:] } // library marker kkossev.commonLib, line 2743
+    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 2744
+    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2745
+    if (state.lastTx == null) { state.lastTx = [:] } // library marker kkossev.commonLib, line 2746
+    if (state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2747
+    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] } // library marker kkossev.commonLib, line 2748
 
-    log.info "${device.displayName} jobs and states cleared. HE hub is ${getHubVersion()}, version is ${location.hub.firmwareVersionString}" // library marker kkossev.commonLib, line 2735
-} // library marker kkossev.commonLib, line 2736
+    if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true) // library marker kkossev.commonLib, line 2750
+    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", true) // library marker kkossev.commonLib, line 2751
+    if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false) // library marker kkossev.commonLib, line 2752
+    if (fullInit || settings?.alwaysOn == null) device.updateSetting("alwaysOn", false) // library marker kkossev.commonLib, line 2753
+    if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"]) // library marker kkossev.commonLib, line 2754
+    if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.commonLib, line 2755
+    if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.commonLib, line 2756
+    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown') // library marker kkossev.commonLib, line 2757
+    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false) // library marker kkossev.commonLib, line 2758
+    if (device.hasCapability("IlluminanceMeasurement")) { // library marker kkossev.commonLib, line 2759
+        if (fullInit || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value:DEFAULT_MIN_REPORTING_TIME, type:"number"]) // library marker kkossev.commonLib, line 2760
+        if (fullInit || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value:DEFAULT_MAX_REPORTING_TIME, type:"number"]) // library marker kkossev.commonLib, line 2761
+    } // library marker kkossev.commonLib, line 2762
+    if (device.hasCapability("IlluminanceMeasurement")) { // library marker kkossev.commonLib, line 2763
+        if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:"number"]) // library marker kkossev.commonLib, line 2764
+        if (fullInit || settings?.illuminanceCoeff == null) device.updateSetting("illuminanceCoeff", [value:1.00, type:"decimal"]) // library marker kkossev.commonLib, line 2765
+    } // library marker kkossev.commonLib, line 2766
+    // device specific initialization should be at the end // library marker kkossev.commonLib, line 2767
+    if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) } // library marker kkossev.commonLib, line 2768
+    if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) } // library marker kkossev.commonLib, line 2769
+    if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) } // library marker kkossev.commonLib, line 2770
+    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit);    initEventsSwitch(fullInit) }         // threeStateEnable, ignoreDuplicated // library marker kkossev.commonLib, line 2771
+    if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none // library marker kkossev.commonLib, line 2772
+    if (DEVICE_TYPE in ["Radar"])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none // library marker kkossev.commonLib, line 2773
+    if (DEVICE_TYPE in ["ButtonDimmer"]) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) } // library marker kkossev.commonLib, line 2774
+    if (DEVICE_TYPE in ["Thermostat"]) { initVarsThermostat(fullInit);     initEventsThermostat(fullInit) } // library marker kkossev.commonLib, line 2775
+    if (DEVICE_TYPE in ["Bulb"])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) } // library marker kkossev.commonLib, line 2776
 
-
-def resetStatistics() { // library marker kkossev.commonLib, line 2739
-    runIn(1, "resetStats") // library marker kkossev.commonLib, line 2740
-    sendInfoEvent("Statistics are reset. Refresh the web page") // library marker kkossev.commonLib, line 2741
-} // library marker kkossev.commonLib, line 2742
-
-/** // library marker kkossev.commonLib, line 2744
- * called from TODO // library marker kkossev.commonLib, line 2745
- *  // library marker kkossev.commonLib, line 2746
- */ // library marker kkossev.commonLib, line 2747
-def resetStats() { // library marker kkossev.commonLib, line 2748
-    logDebug "resetStats..." // library marker kkossev.commonLib, line 2749
-    state.stats = [:] // library marker kkossev.commonLib, line 2750
-    state.states = [:] // library marker kkossev.commonLib, line 2751
-    state.lastRx = [:] // library marker kkossev.commonLib, line 2752
-    state.lastTx = [:] // library marker kkossev.commonLib, line 2753
-    state.health = [:] // library marker kkossev.commonLib, line 2754
-    state.zigbeeGroups = [:]  // library marker kkossev.commonLib, line 2755
-    state.stats["rxCtr"] = 0 // library marker kkossev.commonLib, line 2756
-    state.stats["txCtr"] = 0 // library marker kkossev.commonLib, line 2757
-    state.states["isDigital"] = false // library marker kkossev.commonLib, line 2758
-    state.states["isRefresh"] = false // library marker kkossev.commonLib, line 2759
-    state.health["offlineCtr"] = 0 // library marker kkossev.commonLib, line 2760
-    state.health["checkCtr3"] = 0 // library marker kkossev.commonLib, line 2761
-} // library marker kkossev.commonLib, line 2762
-
-/** // library marker kkossev.commonLib, line 2764
- * called from TODO // library marker kkossev.commonLib, line 2765
- *  // library marker kkossev.commonLib, line 2766
- */ // library marker kkossev.commonLib, line 2767
-void initializeVars( boolean fullInit = false ) { // library marker kkossev.commonLib, line 2768
-    logDebug "InitializeVars()... fullInit = ${fullInit}" // library marker kkossev.commonLib, line 2769
-    if (fullInit == true ) { // library marker kkossev.commonLib, line 2770
-        state.clear() // library marker kkossev.commonLib, line 2771
-        unschedule() // library marker kkossev.commonLib, line 2772
-        resetStats() // library marker kkossev.commonLib, line 2773
-        //setDeviceNameAndProfile() // library marker kkossev.commonLib, line 2774
-        //state.comment = 'Works with Tuya Zigbee Devices' // library marker kkossev.commonLib, line 2775
-        logInfo "all states and scheduled jobs cleared!" // library marker kkossev.commonLib, line 2776
-        state.driverVersion = driverVersionAndTimeStamp() // library marker kkossev.commonLib, line 2777
-        logInfo "DEVICE_TYPE = ${DEVICE_TYPE}" // library marker kkossev.commonLib, line 2778
-        state.deviceType = DEVICE_TYPE // library marker kkossev.commonLib, line 2779
-        sendInfoEvent("Initialized") // library marker kkossev.commonLib, line 2780
+    def mm = device.getDataValue("model") // library marker kkossev.commonLib, line 2778
+    if ( mm != null) { // library marker kkossev.commonLib, line 2779
+        logTrace " model = ${mm}" // library marker kkossev.commonLib, line 2780
     } // library marker kkossev.commonLib, line 2781
+    else { // library marker kkossev.commonLib, line 2782
+        logWarn " Model not found, please re-pair the device!" // library marker kkossev.commonLib, line 2783
+    } // library marker kkossev.commonLib, line 2784
+    def ep = device.getEndpointId() // library marker kkossev.commonLib, line 2785
+    if ( ep  != null) { // library marker kkossev.commonLib, line 2786
+        //state.destinationEP = ep // library marker kkossev.commonLib, line 2787
+        logTrace " destinationEP = ${ep}" // library marker kkossev.commonLib, line 2788
+    } // library marker kkossev.commonLib, line 2789
+    else { // library marker kkossev.commonLib, line 2790
+        logWarn " Destination End Point not found, please re-pair the device!" // library marker kkossev.commonLib, line 2791
+        //state.destinationEP = "01"    // fallback // library marker kkossev.commonLib, line 2792
+    }     // library marker kkossev.commonLib, line 2793
+} // library marker kkossev.commonLib, line 2794
 
-    if (state.stats == null)  { state.stats  = [:] } // library marker kkossev.commonLib, line 2783
-    if (state.states == null) { state.states = [:] } // library marker kkossev.commonLib, line 2784
-    if (state.lastRx == null) { state.lastRx = [:] } // library marker kkossev.commonLib, line 2785
-    if (state.lastTx == null) { state.lastTx = [:] } // library marker kkossev.commonLib, line 2786
-    if (state.health == null) { state.health = [:] } // library marker kkossev.commonLib, line 2787
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] } // library marker kkossev.commonLib, line 2788
 
-    if (fullInit || settings?.txtEnable == null) device.updateSetting("txtEnable", true) // library marker kkossev.commonLib, line 2790
-    if (fullInit || settings?.logEnable == null) device.updateSetting("logEnable", false) // library marker kkossev.commonLib, line 2791
-    if (fullInit || settings?.traceEnable == null) device.updateSetting("traceEnable", false) // library marker kkossev.commonLib, line 2792
-    if (fullInit || settings?.alwaysOn == null) device.updateSetting("alwaysOn", false) // library marker kkossev.commonLib, line 2793
-    if (fullInit || settings?.advancedOptions == null) device.updateSetting("advancedOptions", [value:false, type:"bool"]) // library marker kkossev.commonLib, line 2794
-    if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.commonLib, line 2795
-    if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) // library marker kkossev.commonLib, line 2796
-    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown') // library marker kkossev.commonLib, line 2797
-    if (fullInit || settings?.voltageToPercent == null) device.updateSetting("voltageToPercent", false) // library marker kkossev.commonLib, line 2798
-    if (device.hasCapability("IlluminanceMeasurement")) { // library marker kkossev.commonLib, line 2799
-        if (fullInit || settings?.minReportingTime == null) device.updateSetting("minReportingTime", [value:DEFAULT_MIN_REPORTING_TIME, type:"number"]) // library marker kkossev.commonLib, line 2800
-        if (fullInit || settings?.maxReportingTime == null) device.updateSetting("maxReportingTime", [value:DEFAULT_MAX_REPORTING_TIME, type:"number"]) // library marker kkossev.commonLib, line 2801
-    } // library marker kkossev.commonLib, line 2802
-    if (device.hasCapability("IlluminanceMeasurement")) { // library marker kkossev.commonLib, line 2803
-        if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:"number"]) // library marker kkossev.commonLib, line 2804
-        if (fullInit || settings?.illuminanceCoeff == null) device.updateSetting("illuminanceCoeff", [value:1.00, type:"decimal"]) // library marker kkossev.commonLib, line 2805
+/** // library marker kkossev.commonLib, line 2797
+ * called from TODO // library marker kkossev.commonLib, line 2798
+ *  // library marker kkossev.commonLib, line 2799
+ */ // library marker kkossev.commonLib, line 2800
+def setDestinationEP() { // library marker kkossev.commonLib, line 2801
+    def ep = device.getEndpointId() // library marker kkossev.commonLib, line 2802
+    if (ep != null && ep != 'F2') { // library marker kkossev.commonLib, line 2803
+        state.destinationEP = ep // library marker kkossev.commonLib, line 2804
+        logDebug "setDestinationEP() destinationEP = ${state.destinationEP}" // library marker kkossev.commonLib, line 2805
     } // library marker kkossev.commonLib, line 2806
-    // device specific initialization should be at the end // library marker kkossev.commonLib, line 2807
-    if (DEVICE_TYPE in ["AirQuality"]) { initVarsAirQuality(fullInit) } // library marker kkossev.commonLib, line 2808
-    if (DEVICE_TYPE in ["Fingerbot"])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) } // library marker kkossev.commonLib, line 2809
-    if (DEVICE_TYPE in ["AqaraCube"])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) } // library marker kkossev.commonLib, line 2810
-    if (DEVICE_TYPE in ["Switch"])     { initVarsSwitch(fullInit);    initEventsSwitch(fullInit) }         // threeStateEnable, ignoreDuplicated // library marker kkossev.commonLib, line 2811
-    if (DEVICE_TYPE in ["IRBlaster"])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none // library marker kkossev.commonLib, line 2812
-    if (DEVICE_TYPE in ["Radar"])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none // library marker kkossev.commonLib, line 2813
-    if (DEVICE_TYPE in ["ButtonDimmer"]) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) } // library marker kkossev.commonLib, line 2814
-    if (DEVICE_TYPE in ["Thermostat"]) { initVarsThermostat(fullInit);     initEventsThermostat(fullInit) } // library marker kkossev.commonLib, line 2815
-    if (DEVICE_TYPE in ["Bulb"])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) } // library marker kkossev.commonLib, line 2816
+    else { // library marker kkossev.commonLib, line 2807
+        logWarn "setDestinationEP() Destination End Point not found or invalid(${ep}), activating the F2 bug patch!" // library marker kkossev.commonLib, line 2808
+        state.destinationEP = "01"    // fallback EP // library marker kkossev.commonLib, line 2809
+    }       // library marker kkossev.commonLib, line 2810
+} // library marker kkossev.commonLib, line 2811
 
-    def mm = device.getDataValue("model") // library marker kkossev.commonLib, line 2818
-    if ( mm != null) { // library marker kkossev.commonLib, line 2819
-        logTrace " model = ${mm}" // library marker kkossev.commonLib, line 2820
-    } // library marker kkossev.commonLib, line 2821
-    else { // library marker kkossev.commonLib, line 2822
-        logWarn " Model not found, please re-pair the device!" // library marker kkossev.commonLib, line 2823
-    } // library marker kkossev.commonLib, line 2824
-    def ep = device.getEndpointId() // library marker kkossev.commonLib, line 2825
-    if ( ep  != null) { // library marker kkossev.commonLib, line 2826
-        //state.destinationEP = ep // library marker kkossev.commonLib, line 2827
-        logTrace " destinationEP = ${ep}" // library marker kkossev.commonLib, line 2828
+
+def logDebug(msg) { // library marker kkossev.commonLib, line 2814
+    if (settings.logEnable) { // library marker kkossev.commonLib, line 2815
+        log.debug "${device.displayName} " + msg // library marker kkossev.commonLib, line 2816
+    } // library marker kkossev.commonLib, line 2817
+} // library marker kkossev.commonLib, line 2818
+
+def logInfo(msg) { // library marker kkossev.commonLib, line 2820
+    if (settings.txtEnable) { // library marker kkossev.commonLib, line 2821
+        log.info "${device.displayName} " + msg // library marker kkossev.commonLib, line 2822
+    } // library marker kkossev.commonLib, line 2823
+} // library marker kkossev.commonLib, line 2824
+
+def logWarn(msg) { // library marker kkossev.commonLib, line 2826
+    if (settings.logEnable) { // library marker kkossev.commonLib, line 2827
+        log.warn "${device.displayName} " + msg // library marker kkossev.commonLib, line 2828
     } // library marker kkossev.commonLib, line 2829
-    else { // library marker kkossev.commonLib, line 2830
-        logWarn " Destination End Point not found, please re-pair the device!" // library marker kkossev.commonLib, line 2831
-        //state.destinationEP = "01"    // fallback // library marker kkossev.commonLib, line 2832
-    }     // library marker kkossev.commonLib, line 2833
-} // library marker kkossev.commonLib, line 2834
+} // library marker kkossev.commonLib, line 2830
+
+def logTrace(msg) { // library marker kkossev.commonLib, line 2832
+    if (settings.traceEnable) { // library marker kkossev.commonLib, line 2833
+        log.trace "${device.displayName} " + msg // library marker kkossev.commonLib, line 2834
+    } // library marker kkossev.commonLib, line 2835
+} // library marker kkossev.commonLib, line 2836
 
 
-/** // library marker kkossev.commonLib, line 2837
- * called from TODO // library marker kkossev.commonLib, line 2838
- *  // library marker kkossev.commonLib, line 2839
- */ // library marker kkossev.commonLib, line 2840
-def setDestinationEP() { // library marker kkossev.commonLib, line 2841
-    def ep = device.getEndpointId() // library marker kkossev.commonLib, line 2842
-    if (ep != null && ep != 'F2') { // library marker kkossev.commonLib, line 2843
-        state.destinationEP = ep // library marker kkossev.commonLib, line 2844
-        logDebug "setDestinationEP() destinationEP = ${state.destinationEP}" // library marker kkossev.commonLib, line 2845
-    } // library marker kkossev.commonLib, line 2846
-    else { // library marker kkossev.commonLib, line 2847
-        logWarn "setDestinationEP() Destination End Point not found or invalid(${ep}), activating the F2 bug patch!" // library marker kkossev.commonLib, line 2848
-        state.destinationEP = "01"    // fallback EP // library marker kkossev.commonLib, line 2849
-    }       // library marker kkossev.commonLib, line 2850
+
+// _DEBUG mode only // library marker kkossev.commonLib, line 2840
+void getAllProperties() { // library marker kkossev.commonLib, line 2841
+    log.trace 'Properties:'     // library marker kkossev.commonLib, line 2842
+    device.properties.each { it-> // library marker kkossev.commonLib, line 2843
+        log.debug it // library marker kkossev.commonLib, line 2844
+    } // library marker kkossev.commonLib, line 2845
+    log.trace 'Settings:'     // library marker kkossev.commonLib, line 2846
+    settings.each { it-> // library marker kkossev.commonLib, line 2847
+        log.debug "${it.key} =  ${it.value}"    // https://community.hubitat.com/t/how-do-i-get-the-datatype-for-an-app-setting/104228/6?u=kkossev // library marker kkossev.commonLib, line 2848
+    }     // library marker kkossev.commonLib, line 2849
+    log.trace 'Done'     // library marker kkossev.commonLib, line 2850
 } // library marker kkossev.commonLib, line 2851
 
+// delete all Preferences // library marker kkossev.commonLib, line 2853
+void deleteAllSettings() { // library marker kkossev.commonLib, line 2854
+    settings.each { it-> // library marker kkossev.commonLib, line 2855
+        logDebug "deleting ${it.key}" // library marker kkossev.commonLib, line 2856
+        device.removeSetting("${it.key}") // library marker kkossev.commonLib, line 2857
+    } // library marker kkossev.commonLib, line 2858
+    logInfo  "All settings (preferences) DELETED" // library marker kkossev.commonLib, line 2859
+} // library marker kkossev.commonLib, line 2860
 
-def logDebug(msg) { // library marker kkossev.commonLib, line 2854
-    if (settings.logEnable) { // library marker kkossev.commonLib, line 2855
-        log.debug "${device.displayName} " + msg // library marker kkossev.commonLib, line 2856
-    } // library marker kkossev.commonLib, line 2857
-} // library marker kkossev.commonLib, line 2858
+// delete all attributes // library marker kkossev.commonLib, line 2862
+void deleteAllCurrentStates() { // library marker kkossev.commonLib, line 2863
+    device.properties.supportedAttributes.each { it-> // library marker kkossev.commonLib, line 2864
+        logDebug "deleting $it" // library marker kkossev.commonLib, line 2865
+        device.deleteCurrentState("$it") // library marker kkossev.commonLib, line 2866
+    } // library marker kkossev.commonLib, line 2867
+    logInfo "All current states (attributes) DELETED" // library marker kkossev.commonLib, line 2868
+} // library marker kkossev.commonLib, line 2869
 
-def logInfo(msg) { // library marker kkossev.commonLib, line 2860
-    if (settings.txtEnable) { // library marker kkossev.commonLib, line 2861
-        log.info "${device.displayName} " + msg // library marker kkossev.commonLib, line 2862
-    } // library marker kkossev.commonLib, line 2863
-} // library marker kkossev.commonLib, line 2864
-
-def logWarn(msg) { // library marker kkossev.commonLib, line 2866
-    if (settings.logEnable) { // library marker kkossev.commonLib, line 2867
-        log.warn "${device.displayName} " + msg // library marker kkossev.commonLib, line 2868
-    } // library marker kkossev.commonLib, line 2869
-} // library marker kkossev.commonLib, line 2870
-
-def logTrace(msg) { // library marker kkossev.commonLib, line 2872
-    if (settings.traceEnable) { // library marker kkossev.commonLib, line 2873
-        log.trace "${device.displayName} " + msg // library marker kkossev.commonLib, line 2874
+// delete all State Variables // library marker kkossev.commonLib, line 2871
+void deleteAllStates() { // library marker kkossev.commonLib, line 2872
+    state.each { it-> // library marker kkossev.commonLib, line 2873
+        logDebug "deleting state ${it.key}" // library marker kkossev.commonLib, line 2874
     } // library marker kkossev.commonLib, line 2875
-} // library marker kkossev.commonLib, line 2876
+    state.clear() // library marker kkossev.commonLib, line 2876
+    logInfo "All States DELETED" // library marker kkossev.commonLib, line 2877
+} // library marker kkossev.commonLib, line 2878
 
+void deleteAllScheduledJobs() { // library marker kkossev.commonLib, line 2880
+    unschedule() // library marker kkossev.commonLib, line 2881
+    logInfo "All scheduled jobs DELETED" // library marker kkossev.commonLib, line 2882
+} // library marker kkossev.commonLib, line 2883
 
+void deleteAllChildDevices() { // library marker kkossev.commonLib, line 2885
+    logDebug "deleteAllChildDevices : not implemented!" // library marker kkossev.commonLib, line 2886
+} // library marker kkossev.commonLib, line 2887
 
-// _DEBUG mode only // library marker kkossev.commonLib, line 2880
-void getAllProperties() { // library marker kkossev.commonLib, line 2881
-    log.trace 'Properties:'     // library marker kkossev.commonLib, line 2882
-    device.properties.each { it-> // library marker kkossev.commonLib, line 2883
-        log.debug it // library marker kkossev.commonLib, line 2884
-    } // library marker kkossev.commonLib, line 2885
-    log.trace 'Settings:'     // library marker kkossev.commonLib, line 2886
-    settings.each { it-> // library marker kkossev.commonLib, line 2887
-        log.debug "${it.key} =  ${it.value}"    // https://community.hubitat.com/t/how-do-i-get-the-datatype-for-an-app-setting/104228/6?u=kkossev // library marker kkossev.commonLib, line 2888
-    }     // library marker kkossev.commonLib, line 2889
-    log.trace 'Done'     // library marker kkossev.commonLib, line 2890
-} // library marker kkossev.commonLib, line 2891
+def parseTest(par) { // library marker kkossev.commonLib, line 2889
+//read attr - raw: DF8D0104020A000029280A, dni: DF8D, endpoint: 01, cluster: 0402, size: 0A, attrId: 0000, encoding: 29, command: 0A, value: 280A // library marker kkossev.commonLib, line 2890
+    log.warn "parseTest(${par})" // library marker kkossev.commonLib, line 2891
+    parse(par) // library marker kkossev.commonLib, line 2892
+} // library marker kkossev.commonLib, line 2893
 
-// delete all Preferences // library marker kkossev.commonLib, line 2893
-void deleteAllSettings() { // library marker kkossev.commonLib, line 2894
-    settings.each { it-> // library marker kkossev.commonLib, line 2895
-        logDebug "deleting ${it.key}" // library marker kkossev.commonLib, line 2896
-        device.removeSetting("${it.key}") // library marker kkossev.commonLib, line 2897
-    } // library marker kkossev.commonLib, line 2898
-    logInfo  "All settings (preferences) DELETED" // library marker kkossev.commonLib, line 2899
-} // library marker kkossev.commonLib, line 2900
+def testJob() { // library marker kkossev.commonLib, line 2895
+    log.warn "test job executed" // library marker kkossev.commonLib, line 2896
+} // library marker kkossev.commonLib, line 2897
 
-// delete all attributes // library marker kkossev.commonLib, line 2902
-void deleteAllCurrentStates() { // library marker kkossev.commonLib, line 2903
-    device.properties.supportedAttributes.each { it-> // library marker kkossev.commonLib, line 2904
-        logDebug "deleting $it" // library marker kkossev.commonLib, line 2905
-        device.deleteCurrentState("$it") // library marker kkossev.commonLib, line 2906
-    } // library marker kkossev.commonLib, line 2907
-    logInfo "All current states (attributes) DELETED" // library marker kkossev.commonLib, line 2908
-} // library marker kkossev.commonLib, line 2909
-
-// delete all State Variables // library marker kkossev.commonLib, line 2911
-void deleteAllStates() { // library marker kkossev.commonLib, line 2912
-    state.each { it-> // library marker kkossev.commonLib, line 2913
-        logDebug "deleting state ${it.key}" // library marker kkossev.commonLib, line 2914
-    } // library marker kkossev.commonLib, line 2915
-    state.clear() // library marker kkossev.commonLib, line 2916
-    logInfo "All States DELETED" // library marker kkossev.commonLib, line 2917
-} // library marker kkossev.commonLib, line 2918
-
-void deleteAllScheduledJobs() { // library marker kkossev.commonLib, line 2920
-    unschedule() // library marker kkossev.commonLib, line 2921
-    logInfo "All scheduled jobs DELETED" // library marker kkossev.commonLib, line 2922
+/** // library marker kkossev.commonLib, line 2899
+ * Calculates and returns the cron expression // library marker kkossev.commonLib, line 2900
+ * @param timeInSeconds interval in seconds // library marker kkossev.commonLib, line 2901
+ */ // library marker kkossev.commonLib, line 2902
+def getCron( timeInSeconds ) { // library marker kkossev.commonLib, line 2903
+    //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping') // library marker kkossev.commonLib, line 2904
+    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours // library marker kkossev.commonLib, line 2905
+    final Random rnd = new Random() // library marker kkossev.commonLib, line 2906
+    def minutes = (timeInSeconds / 60 ) as int // library marker kkossev.commonLib, line 2907
+    def hours = (minutes / 60 ) as int // library marker kkossev.commonLib, line 2908
+    if (hours > 23) { hours = 23 } // library marker kkossev.commonLib, line 2909
+    String cron // library marker kkossev.commonLib, line 2910
+    if (timeInSeconds < 60) { // library marker kkossev.commonLib, line 2911
+        cron = "*/$timeInSeconds * * * * ? *" // library marker kkossev.commonLib, line 2912
+    } // library marker kkossev.commonLib, line 2913
+    else { // library marker kkossev.commonLib, line 2914
+        if (minutes < 60) { // library marker kkossev.commonLib, line 2915
+            cron = "${rnd.nextInt(59)} ${rnd.nextInt(9)}/$minutes * ? * *"   // library marker kkossev.commonLib, line 2916
+        } // library marker kkossev.commonLib, line 2917
+        else { // library marker kkossev.commonLib, line 2918
+            cron = "${rnd.nextInt(59)} ${rnd.nextInt(59)} */$hours ? * *"                    // library marker kkossev.commonLib, line 2919
+        } // library marker kkossev.commonLib, line 2920
+    } // library marker kkossev.commonLib, line 2921
+    return cron // library marker kkossev.commonLib, line 2922
 } // library marker kkossev.commonLib, line 2923
 
-void deleteAllChildDevices() { // library marker kkossev.commonLib, line 2925
-    logDebug "deleteAllChildDevices : not implemented!" // library marker kkossev.commonLib, line 2926
-} // library marker kkossev.commonLib, line 2927
+boolean isTuya() { // library marker kkossev.commonLib, line 2925
+    def model = device.getDataValue("model")  // library marker kkossev.commonLib, line 2926
+    def manufacturer = device.getDataValue("manufacturer")  // library marker kkossev.commonLib, line 2927
+    if (model?.startsWith("TS") && manufacturer?.startsWith("_TZ")) { // library marker kkossev.commonLib, line 2928
+        return true // library marker kkossev.commonLib, line 2929
+    } // library marker kkossev.commonLib, line 2930
+    return false // library marker kkossev.commonLib, line 2931
+} // library marker kkossev.commonLib, line 2932
 
-def parseTest(par) { // library marker kkossev.commonLib, line 2929
-//read attr - raw: DF8D0104020A000029280A, dni: DF8D, endpoint: 01, cluster: 0402, size: 0A, attrId: 0000, encoding: 29, command: 0A, value: 280A // library marker kkossev.commonLib, line 2930
-    log.warn "parseTest(${par})" // library marker kkossev.commonLib, line 2931
-    parse(par) // library marker kkossev.commonLib, line 2932
-} // library marker kkossev.commonLib, line 2933
+void updateTuyaVersion() { // library marker kkossev.commonLib, line 2934
+    if (!isTuya()) { // library marker kkossev.commonLib, line 2935
+        logTrace "not Tuya" // library marker kkossev.commonLib, line 2936
+        return // library marker kkossev.commonLib, line 2937
+    } // library marker kkossev.commonLib, line 2938
+    def application = device.getDataValue("application")  // library marker kkossev.commonLib, line 2939
+    if (application != null) { // library marker kkossev.commonLib, line 2940
+        Integer ver // library marker kkossev.commonLib, line 2941
+        try { // library marker kkossev.commonLib, line 2942
+            ver = zigbee.convertHexToInt(application) // library marker kkossev.commonLib, line 2943
+        } // library marker kkossev.commonLib, line 2944
+        catch (e) { // library marker kkossev.commonLib, line 2945
+            logWarn "exception caught while converting application version ${application} to tuyaVersion" // library marker kkossev.commonLib, line 2946
+            return // library marker kkossev.commonLib, line 2947
+        } // library marker kkossev.commonLib, line 2948
+        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString() // library marker kkossev.commonLib, line 2949
+        if (device.getDataValue("tuyaVersion") != str) { // library marker kkossev.commonLib, line 2950
+            device.updateDataValue("tuyaVersion", str) // library marker kkossev.commonLib, line 2951
+            logInfo "tuyaVersion set to $str" // library marker kkossev.commonLib, line 2952
+        } // library marker kkossev.commonLib, line 2953
+    } // library marker kkossev.commonLib, line 2954
+} // library marker kkossev.commonLib, line 2955
 
-def testJob() { // library marker kkossev.commonLib, line 2935
-    log.warn "test job executed" // library marker kkossev.commonLib, line 2936
-} // library marker kkossev.commonLib, line 2937
+boolean isAqara() { // library marker kkossev.commonLib, line 2957
+    def model = device.getDataValue("model")  // library marker kkossev.commonLib, line 2958
+    def manufacturer = device.getDataValue("manufacturer")  // library marker kkossev.commonLib, line 2959
+    if (model?.startsWith("lumi")) { // library marker kkossev.commonLib, line 2960
+        return true // library marker kkossev.commonLib, line 2961
+    } // library marker kkossev.commonLib, line 2962
+    return false // library marker kkossev.commonLib, line 2963
+} // library marker kkossev.commonLib, line 2964
 
-/** // library marker kkossev.commonLib, line 2939
- * Calculates and returns the cron expression // library marker kkossev.commonLib, line 2940
- * @param timeInSeconds interval in seconds // library marker kkossev.commonLib, line 2941
- */ // library marker kkossev.commonLib, line 2942
-def getCron( timeInSeconds ) { // library marker kkossev.commonLib, line 2943
-    //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping') // library marker kkossev.commonLib, line 2944
-    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours // library marker kkossev.commonLib, line 2945
-    final Random rnd = new Random() // library marker kkossev.commonLib, line 2946
-    def minutes = (timeInSeconds / 60 ) as int // library marker kkossev.commonLib, line 2947
-    def hours = (minutes / 60 ) as int // library marker kkossev.commonLib, line 2948
-    if (hours > 23) { hours = 23 } // library marker kkossev.commonLib, line 2949
-    String cron // library marker kkossev.commonLib, line 2950
-    if (timeInSeconds < 60) { // library marker kkossev.commonLib, line 2951
-        cron = "*/$timeInSeconds * * * * ? *" // library marker kkossev.commonLib, line 2952
-    } // library marker kkossev.commonLib, line 2953
-    else { // library marker kkossev.commonLib, line 2954
-        if (minutes < 60) { // library marker kkossev.commonLib, line 2955
-            cron = "${rnd.nextInt(59)} ${rnd.nextInt(9)}/$minutes * ? * *"   // library marker kkossev.commonLib, line 2956
-        } // library marker kkossev.commonLib, line 2957
-        else { // library marker kkossev.commonLib, line 2958
-            cron = "${rnd.nextInt(59)} ${rnd.nextInt(59)} */$hours ? * *"                    // library marker kkossev.commonLib, line 2959
-        } // library marker kkossev.commonLib, line 2960
-    } // library marker kkossev.commonLib, line 2961
-    return cron // library marker kkossev.commonLib, line 2962
-} // library marker kkossev.commonLib, line 2963
-
-boolean isTuya() { // library marker kkossev.commonLib, line 2965
-    def model = device.getDataValue("model")  // library marker kkossev.commonLib, line 2966
-    def manufacturer = device.getDataValue("manufacturer")  // library marker kkossev.commonLib, line 2967
-    if (model?.startsWith("TS") && manufacturer?.startsWith("_TZ")) { // library marker kkossev.commonLib, line 2968
-        return true // library marker kkossev.commonLib, line 2969
-    } // library marker kkossev.commonLib, line 2970
-    return false // library marker kkossev.commonLib, line 2971
-} // library marker kkossev.commonLib, line 2972
-
-void updateTuyaVersion() { // library marker kkossev.commonLib, line 2974
-    if (!isTuya()) { // library marker kkossev.commonLib, line 2975
-        logTrace "not Tuya" // library marker kkossev.commonLib, line 2976
-        return // library marker kkossev.commonLib, line 2977
+def updateAqaraVersion() { // library marker kkossev.commonLib, line 2966
+    if (!isAqara()) { // library marker kkossev.commonLib, line 2967
+        logTrace "not Aqara" // library marker kkossev.commonLib, line 2968
+        return // library marker kkossev.commonLib, line 2969
+    }     // library marker kkossev.commonLib, line 2970
+    def application = device.getDataValue("application")  // library marker kkossev.commonLib, line 2971
+    if (application != null) { // library marker kkossev.commonLib, line 2972
+        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2)))); // library marker kkossev.commonLib, line 2973
+        if (device.getDataValue("aqaraVersion") != str) { // library marker kkossev.commonLib, line 2974
+            device.updateDataValue("aqaraVersion", str) // library marker kkossev.commonLib, line 2975
+            logInfo "aqaraVersion set to $str" // library marker kkossev.commonLib, line 2976
+        } // library marker kkossev.commonLib, line 2977
     } // library marker kkossev.commonLib, line 2978
-    def application = device.getDataValue("application")  // library marker kkossev.commonLib, line 2979
-    if (application != null) { // library marker kkossev.commonLib, line 2980
-        Integer ver // library marker kkossev.commonLib, line 2981
-        try { // library marker kkossev.commonLib, line 2982
-            ver = zigbee.convertHexToInt(application) // library marker kkossev.commonLib, line 2983
-        } // library marker kkossev.commonLib, line 2984
-        catch (e) { // library marker kkossev.commonLib, line 2985
-            logWarn "exception caught while converting application version ${application} to tuyaVersion" // library marker kkossev.commonLib, line 2986
-            return // library marker kkossev.commonLib, line 2987
-        } // library marker kkossev.commonLib, line 2988
-        def str = ((ver&0xC0)>>6).toString() + "." + ((ver&0x30)>>4).toString() + "." + (ver&0x0F).toString() // library marker kkossev.commonLib, line 2989
-        if (device.getDataValue("tuyaVersion") != str) { // library marker kkossev.commonLib, line 2990
-            device.updateDataValue("tuyaVersion", str) // library marker kkossev.commonLib, line 2991
-            logInfo "tuyaVersion set to $str" // library marker kkossev.commonLib, line 2992
-        } // library marker kkossev.commonLib, line 2993
-    } // library marker kkossev.commonLib, line 2994
-} // library marker kkossev.commonLib, line 2995
+    else { // library marker kkossev.commonLib, line 2979
+        return null // library marker kkossev.commonLib, line 2980
+    } // library marker kkossev.commonLib, line 2981
+} // library marker kkossev.commonLib, line 2982
 
-boolean isAqara() { // library marker kkossev.commonLib, line 2997
-    def model = device.getDataValue("model")  // library marker kkossev.commonLib, line 2998
-    def manufacturer = device.getDataValue("manufacturer")  // library marker kkossev.commonLib, line 2999
-    if (model?.startsWith("lumi")) { // library marker kkossev.commonLib, line 3000
-        return true // library marker kkossev.commonLib, line 3001
-    } // library marker kkossev.commonLib, line 3002
-    return false // library marker kkossev.commonLib, line 3003
-} // library marker kkossev.commonLib, line 3004
+def test(par) { // library marker kkossev.commonLib, line 2984
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 2985
+    log.warn "test... ${par}" // library marker kkossev.commonLib, line 2986
 
-def updateAqaraVersion() { // library marker kkossev.commonLib, line 3006
-    if (!isAqara()) { // library marker kkossev.commonLib, line 3007
-        logTrace "not Aqara" // library marker kkossev.commonLib, line 3008
-        return // library marker kkossev.commonLib, line 3009
-    }     // library marker kkossev.commonLib, line 3010
-    def application = device.getDataValue("application")  // library marker kkossev.commonLib, line 3011
-    if (application != null) { // library marker kkossev.commonLib, line 3012
-        def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2)))); // library marker kkossev.commonLib, line 3013
-        if (device.getDataValue("aqaraVersion") != str) { // library marker kkossev.commonLib, line 3014
-            device.updateDataValue("aqaraVersion", str) // library marker kkossev.commonLib, line 3015
-            logInfo "aqaraVersion set to $str" // library marker kkossev.commonLib, line 3016
-        } // library marker kkossev.commonLib, line 3017
-    } // library marker kkossev.commonLib, line 3018
-    else { // library marker kkossev.commonLib, line 3019
-        return null // library marker kkossev.commonLib, line 3020
-    } // library marker kkossev.commonLib, line 3021
-} // library marker kkossev.commonLib, line 3022
+    parse(par) // library marker kkossev.commonLib, line 2988
 
-def test(par) { // library marker kkossev.commonLib, line 3024
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 3025
-    log.warn "test... ${par}" // library marker kkossev.commonLib, line 3026
-
-    parse(par) // library marker kkossev.commonLib, line 3028
-
-   // sendZigbeeCommands(cmds)     // library marker kkossev.commonLib, line 3030
-} // library marker kkossev.commonLib, line 3031
-
-// /////////////////////////////////////////////////////////////////// Libraries ////////////////////////////////////////////////////////////////////// // library marker kkossev.commonLib, line 3033
-
-
+   // sendZigbeeCommands(cmds)     // library marker kkossev.commonLib, line 2990
+} // library marker kkossev.commonLib, line 2991
 
 // ~~~~~ end include (144) kkossev.commonLib ~~~~~
 
@@ -4831,34 +4508,34 @@ library ( // library marker kkossev.deviceProfileLib, line 1
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver) // library marker kkossev.deviceProfileLib, line 24
  * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method;  // library marker kkossev.deviceProfileLib, line 25
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate // library marker kkossev.deviceProfileLib, line 26
- * // library marker kkossev.deviceProfileLib, line 27
- *                                   TODO: refactor sendAttribute ! // library marker kkossev.deviceProfileLib, line 28
-*/ // library marker kkossev.deviceProfileLib, line 29
+ * ver. 3.0.2  2023-12-05 kkossev  - (dev. branch) inputIt moved to the preferences section; // library marker kkossev.deviceProfileLib, line 27
+ * // library marker kkossev.deviceProfileLib, line 28
+ *                                   TODO: refactor sendAttribute ! // library marker kkossev.deviceProfileLib, line 29
+*/ // library marker kkossev.deviceProfileLib, line 30
 
-def deviceProfileLibVersion()   {"3.0.1"} // library marker kkossev.deviceProfileLib, line 31
-def deviceProfileLibtamp() {"2023/12/02 10:48 AM"} // library marker kkossev.deviceProfileLib, line 32
+def deviceProfileLibVersion()   {"3.0.2"} // library marker kkossev.deviceProfileLib, line 32
+def deviceProfileLibtamp() {"2023/12/05 8:39 PM"} // library marker kkossev.deviceProfileLib, line 33
 
-metadata { // library marker kkossev.deviceProfileLib, line 34
-    // no capabilities // library marker kkossev.deviceProfileLib, line 35
-    // no attributes // library marker kkossev.deviceProfileLib, line 36
-    command "sendCommand", [ // library marker kkossev.deviceProfileLib, line 37
-        [name:"command", type: "STRING", description: "command name", constraints: ["STRING"]], // library marker kkossev.deviceProfileLib, line 38
-        [name:"val",     type: "STRING", description: "command parameter value", constraints: ["STRING"]] // library marker kkossev.deviceProfileLib, line 39
-    ] // library marker kkossev.deviceProfileLib, line 40
-    command "setPar", [ // library marker kkossev.deviceProfileLib, line 41
-            [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]], // library marker kkossev.deviceProfileLib, line 42
-            [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]] // library marker kkossev.deviceProfileLib, line 43
-    ]     // library marker kkossev.deviceProfileLib, line 44
-    // // library marker kkossev.deviceProfileLib, line 45
-    // itterate over DEVICE.preferences map and inputIt all! // library marker kkossev.deviceProfileLib, line 46
-    if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) { // library marker kkossev.deviceProfileLib, line 47
-        (DEVICE.preferences).each { key, value -> // library marker kkossev.deviceProfileLib, line 48
-            if (inputIt(key) != null) { // library marker kkossev.deviceProfileLib, line 49
-                input inputIt(key) // library marker kkossev.deviceProfileLib, line 50
-            } // library marker kkossev.deviceProfileLib, line 51
-        }     // library marker kkossev.deviceProfileLib, line 52
-    } // library marker kkossev.deviceProfileLib, line 53
-    preferences { // library marker kkossev.deviceProfileLib, line 54
+metadata { // library marker kkossev.deviceProfileLib, line 35
+    // no capabilities // library marker kkossev.deviceProfileLib, line 36
+    // no attributes // library marker kkossev.deviceProfileLib, line 37
+    command "sendCommand", [ // library marker kkossev.deviceProfileLib, line 38
+        [name:"command", type: "STRING", description: "command name", constraints: ["STRING"]], // library marker kkossev.deviceProfileLib, line 39
+        [name:"val",     type: "STRING", description: "command parameter value", constraints: ["STRING"]] // library marker kkossev.deviceProfileLib, line 40
+    ] // library marker kkossev.deviceProfileLib, line 41
+    command "setPar", [ // library marker kkossev.deviceProfileLib, line 42
+            [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]], // library marker kkossev.deviceProfileLib, line 43
+            [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]] // library marker kkossev.deviceProfileLib, line 44
+    ]     // library marker kkossev.deviceProfileLib, line 45
+    preferences { // library marker kkossev.deviceProfileLib, line 46
+        // itterate over DEVICE.preferences map and inputIt all // library marker kkossev.deviceProfileLib, line 47
+        if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) { // library marker kkossev.deviceProfileLib, line 48
+            (DEVICE.preferences).each { key, value -> // library marker kkossev.deviceProfileLib, line 49
+                if (inputIt(key) != null) { // library marker kkossev.deviceProfileLib, line 50
+                    input inputIt(key) // library marker kkossev.deviceProfileLib, line 51
+                } // library marker kkossev.deviceProfileLib, line 52
+            }     // library marker kkossev.deviceProfileLib, line 53
+        } // library marker kkossev.deviceProfileLib, line 54
         if (advancedOptions == true) { // library marker kkossev.deviceProfileLib, line 55
             input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfilesMap()) // library marker kkossev.deviceProfileLib, line 56
         } // library marker kkossev.deviceProfileLib, line 57
@@ -6018,91 +5695,96 @@ def processFoundItem (foundItem, value) { // library marker kkossev.deviceProfil
     return true     // library marker kkossev.deviceProfileLib, line 1211
 } // library marker kkossev.deviceProfileLib, line 1212
 
+def validateAndFixPreferences(debug=false) { // library marker kkossev.deviceProfileLib, line 1214
+    if (debug) logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}" // library marker kkossev.deviceProfileLib, line 1215
+    if (DEVICE.preferences == null || DEVICE.preferences == [:]) { // library marker kkossev.deviceProfileLib, line 1216
+        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}" // library marker kkossev.deviceProfileLib, line 1217
+        return null // library marker kkossev.deviceProfileLib, line 1218
+    } // library marker kkossev.deviceProfileLib, line 1219
+    def validationFailures = 0 // library marker kkossev.deviceProfileLib, line 1220
+    def validationFixes = 0 // library marker kkossev.deviceProfileLib, line 1221
+    def total = 0 // library marker kkossev.deviceProfileLib, line 1222
+    def oldSettingValue  // library marker kkossev.deviceProfileLib, line 1223
+    def newValue // library marker kkossev.deviceProfileLib, line 1224
+    String settingType  // library marker kkossev.deviceProfileLib, line 1225
+    DEVICE.preferences.each { // library marker kkossev.deviceProfileLib, line 1226
+        Map foundMap = getPreferencesMapByName(it.key) // library marker kkossev.deviceProfileLib, line 1227
+        if (foundMap == null) { // library marker kkossev.deviceProfileLib, line 1228
+            logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug // library marker kkossev.deviceProfileLib, line 1229
+            return null // library marker kkossev.deviceProfileLib, line 1230
+        } // library marker kkossev.deviceProfileLib, line 1231
+        settingType = device.getSettingType(it.key) // library marker kkossev.deviceProfileLib, line 1232
+        oldSettingValue = device.getSetting(it.key) // library marker kkossev.deviceProfileLib, line 1233
+        if (settingType == null) { // library marker kkossev.deviceProfileLib, line 1234
+            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}" // library marker kkossev.deviceProfileLib, line 1235
+            return null // library marker kkossev.deviceProfileLib, line 1236
+        } // library marker kkossev.deviceProfileLib, line 1237
+        if (debug) logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}" // library marker kkossev.deviceProfileLib, line 1238
+        if (foundMap.type != settingType) { // library marker kkossev.deviceProfileLib, line 1239
+            logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) " // library marker kkossev.deviceProfileLib, line 1240
+            validationFailures ++ // library marker kkossev.deviceProfileLib, line 1241
+            // remove the setting and create a new one using the foundMap.type // library marker kkossev.deviceProfileLib, line 1242
+            try { // library marker kkossev.deviceProfileLib, line 1243
+                device.removeSetting(it.key) // library marker kkossev.deviceProfileLib, line 1244
+                logDebug "validateAndFixPreferences: removing setting ${it.key}" // library marker kkossev.deviceProfileLib, line 1245
+            } // library marker kkossev.deviceProfileLib, line 1246
+            catch (e) { // library marker kkossev.deviceProfileLib, line 1247
+                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}" // library marker kkossev.deviceProfileLib, line 1248
+                return null // library marker kkossev.deviceProfileLib, line 1249
+            } // library marker kkossev.deviceProfileLib, line 1250
+            // first, try to use the old setting value // library marker kkossev.deviceProfileLib, line 1251
+            try { // library marker kkossev.deviceProfileLib, line 1252
+                // correct the oldSettingValue type // library marker kkossev.deviceProfileLib, line 1253
+                if (foundMap.type == "decimal")     { newValue = oldSettingValue.toDouble() } // library marker kkossev.deviceProfileLib, line 1254
+                else if (foundMap.type == "number") { newValue = oldSettingValue.toInteger() } // library marker kkossev.deviceProfileLib, line 1255
+                else if (foundMap.type == "bool")   { newValue = oldSettingValue == "true" ? 1 : 0 } // library marker kkossev.deviceProfileLib, line 1256
+                else if (foundMap.type == "enum") { // library marker kkossev.deviceProfileLib, line 1257
+                    // check if the old settingValue was 'true' or 'false' and convert it to 1 or 0 // library marker kkossev.deviceProfileLib, line 1258
+                    if (oldSettingValue == "true" || oldSettingValue == "false" || oldSettingValue == true || oldSettingValue == false) { // library marker kkossev.deviceProfileLib, line 1259
+                        newValue = (oldSettingValue == "true" || oldSettingValue == true) ? "1" : "0" // library marker kkossev.deviceProfileLib, line 1260
+                    } // library marker kkossev.deviceProfileLib, line 1261
+                    // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals // library marker kkossev.deviceProfileLib, line 1262
+                    else if (foundMap.map.keySet().toString().any { it.contains(".") }) { // library marker kkossev.deviceProfileLib, line 1263
+                        newValue = String.format("%.2f", oldSettingValue) // library marker kkossev.deviceProfileLib, line 1264
+                    } // library marker kkossev.deviceProfileLib, line 1265
+                    else { // library marker kkossev.deviceProfileLib, line 1266
+                        // format the settingValue as a string of the integer value // library marker kkossev.deviceProfileLib, line 1267
+                        newValue = String.format("%d", oldSettingValue) // library marker kkossev.deviceProfileLib, line 1268
+                    } // library marker kkossev.deviceProfileLib, line 1269
+                } // library marker kkossev.deviceProfileLib, line 1270
+                // // library marker kkossev.deviceProfileLib, line 1271
+                device.updateSetting(it.key, [value:newValue, type:foundMap.type]) // library marker kkossev.deviceProfileLib, line 1272
+                logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}" // library marker kkossev.deviceProfileLib, line 1273
+                validationFixes ++ // library marker kkossev.deviceProfileLib, line 1274
+            } // library marker kkossev.deviceProfileLib, line 1275
+            catch (e) { // library marker kkossev.deviceProfileLib, line 1276
+                logWarn "validateAndFixPreferences: exception '${e}' caught while creating setting ${it.key} with type ${foundMap.type} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}" // library marker kkossev.deviceProfileLib, line 1277
+                // change the settingValue to the foundMap default value // library marker kkossev.deviceProfileLib, line 1278
+                try { // library marker kkossev.deviceProfileLib, line 1279
+                    settingValue = foundMap.defaultValue // library marker kkossev.deviceProfileLib, line 1280
+                    device.updateSetting(it.key, [value:settingValue, type:foundMap.type]) // library marker kkossev.deviceProfileLib, line 1281
+                    logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} " // library marker kkossev.deviceProfileLib, line 1282
+                    validationFixes ++ // library marker kkossev.deviceProfileLib, line 1283
+                } // library marker kkossev.deviceProfileLib, line 1284
+                catch (e2) { // library marker kkossev.deviceProfileLib, line 1285
+                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>" // library marker kkossev.deviceProfileLib, line 1286
+                    return null // library marker kkossev.deviceProfileLib, line 1287
+                }             // library marker kkossev.deviceProfileLib, line 1288
+            } // library marker kkossev.deviceProfileLib, line 1289
+        } // library marker kkossev.deviceProfileLib, line 1290
+        total ++ // library marker kkossev.deviceProfileLib, line 1291
+    } // library marker kkossev.deviceProfileLib, line 1292
+    logDebug "validateAndFixPreferences: total = ${total} validationFailures = ${validationFailures} validationFixes = ${validationFixes}" // library marker kkossev.deviceProfileLib, line 1293
+} // library marker kkossev.deviceProfileLib, line 1294
 
-
-
-def validateAndFixPreferences(debug=false) { // library marker kkossev.deviceProfileLib, line 1217
-    if (debug) logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}" // library marker kkossev.deviceProfileLib, line 1218
-    if (DEVICE.preferences == null || DEVICE.preferences == [:]) { // library marker kkossev.deviceProfileLib, line 1219
-        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}" // library marker kkossev.deviceProfileLib, line 1220
-        return null // library marker kkossev.deviceProfileLib, line 1221
-    } // library marker kkossev.deviceProfileLib, line 1222
-    def validationFailures = 0 // library marker kkossev.deviceProfileLib, line 1223
-    def validationFixes = 0 // library marker kkossev.deviceProfileLib, line 1224
-    def total = 0 // library marker kkossev.deviceProfileLib, line 1225
-    def oldSettingValue  // library marker kkossev.deviceProfileLib, line 1226
-    def newValue // library marker kkossev.deviceProfileLib, line 1227
-    String settingType  // library marker kkossev.deviceProfileLib, line 1228
-    DEVICE.preferences.each { // library marker kkossev.deviceProfileLib, line 1229
-        Map foundMap = getPreferencesMapByName(it.key) // library marker kkossev.deviceProfileLib, line 1230
-        if (foundMap == null) { // library marker kkossev.deviceProfileLib, line 1231
-            logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug // library marker kkossev.deviceProfileLib, line 1232
-            return null // library marker kkossev.deviceProfileLib, line 1233
-        } // library marker kkossev.deviceProfileLib, line 1234
-        settingType = device.getSettingType(it.key) // library marker kkossev.deviceProfileLib, line 1235
-        oldSettingValue = device.getSetting(it.key) // library marker kkossev.deviceProfileLib, line 1236
-        if (settingType == null) { // library marker kkossev.deviceProfileLib, line 1237
-            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}" // library marker kkossev.deviceProfileLib, line 1238
-            return null // library marker kkossev.deviceProfileLib, line 1239
-        } // library marker kkossev.deviceProfileLib, line 1240
-        if (debug) logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}" // library marker kkossev.deviceProfileLib, line 1241
-        if (foundMap.type != settingType) { // library marker kkossev.deviceProfileLib, line 1242
-            logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) " // library marker kkossev.deviceProfileLib, line 1243
-            validationFailures ++ // library marker kkossev.deviceProfileLib, line 1244
-            // remove the setting and create a new one using the foundMap.type // library marker kkossev.deviceProfileLib, line 1245
-            try { // library marker kkossev.deviceProfileLib, line 1246
-                device.removeSetting(it.key) // library marker kkossev.deviceProfileLib, line 1247
-                logDebug "validateAndFixPreferences: removing setting ${it.key}" // library marker kkossev.deviceProfileLib, line 1248
-            } // library marker kkossev.deviceProfileLib, line 1249
-            catch (e) { // library marker kkossev.deviceProfileLib, line 1250
-                logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}" // library marker kkossev.deviceProfileLib, line 1251
-                return null // library marker kkossev.deviceProfileLib, line 1252
-            } // library marker kkossev.deviceProfileLib, line 1253
-            // first, try to use the old setting value // library marker kkossev.deviceProfileLib, line 1254
-            try { // library marker kkossev.deviceProfileLib, line 1255
-                // correct the oldSettingValue type // library marker kkossev.deviceProfileLib, line 1256
-                if (foundMap.type == "decimal")     { newValue = oldSettingValue.toDouble() } // library marker kkossev.deviceProfileLib, line 1257
-                else if (foundMap.type == "number") { newValue = oldSettingValue.toInteger() } // library marker kkossev.deviceProfileLib, line 1258
-                else if (foundMap.type == "bool")   { newValue = oldSettingValue == "true" ? 1 : 0 } // library marker kkossev.deviceProfileLib, line 1259
-                else if (foundMap.type == "enum") { // library marker kkossev.deviceProfileLib, line 1260
-                    // check if the old settingValue was 'true' or 'false' and convert it to 1 or 0 // library marker kkossev.deviceProfileLib, line 1261
-                    if (oldSettingValue == "true" || oldSettingValue == "false" || oldSettingValue == true || oldSettingValue == false) { // library marker kkossev.deviceProfileLib, line 1262
-                        newValue = (oldSettingValue == "true" || oldSettingValue == true) ? "1" : "0" // library marker kkossev.deviceProfileLib, line 1263
-                    } // library marker kkossev.deviceProfileLib, line 1264
-                    // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals // library marker kkossev.deviceProfileLib, line 1265
-                    else if (foundMap.map.keySet().toString().any { it.contains(".") }) { // library marker kkossev.deviceProfileLib, line 1266
-                        newValue = String.format("%.2f", oldSettingValue) // library marker kkossev.deviceProfileLib, line 1267
-                    } // library marker kkossev.deviceProfileLib, line 1268
-                    else { // library marker kkossev.deviceProfileLib, line 1269
-                        // format the settingValue as a string of the integer value // library marker kkossev.deviceProfileLib, line 1270
-                        newValue = String.format("%d", oldSettingValue) // library marker kkossev.deviceProfileLib, line 1271
-                    } // library marker kkossev.deviceProfileLib, line 1272
-                } // library marker kkossev.deviceProfileLib, line 1273
-                // // library marker kkossev.deviceProfileLib, line 1274
-                device.updateSetting(it.key, [value:newValue, type:foundMap.type]) // library marker kkossev.deviceProfileLib, line 1275
-                logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}" // library marker kkossev.deviceProfileLib, line 1276
-                validationFixes ++ // library marker kkossev.deviceProfileLib, line 1277
-            } // library marker kkossev.deviceProfileLib, line 1278
-            catch (e) { // library marker kkossev.deviceProfileLib, line 1279
-                logWarn "validateAndFixPreferences: exception '${e}' caught while creating setting ${it.key} with type ${foundMap.type} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}" // library marker kkossev.deviceProfileLib, line 1280
-                // change the settingValue to the foundMap default value // library marker kkossev.deviceProfileLib, line 1281
-                try { // library marker kkossev.deviceProfileLib, line 1282
-                    settingValue = foundMap.defaultValue // library marker kkossev.deviceProfileLib, line 1283
-                    device.updateSetting(it.key, [value:settingValue, type:foundMap.type]) // library marker kkossev.deviceProfileLib, line 1284
-                    logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} " // library marker kkossev.deviceProfileLib, line 1285
-                    validationFixes ++ // library marker kkossev.deviceProfileLib, line 1286
-                } // library marker kkossev.deviceProfileLib, line 1287
-                catch (e2) { // library marker kkossev.deviceProfileLib, line 1288
-                    logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>" // library marker kkossev.deviceProfileLib, line 1289
-                    return null // library marker kkossev.deviceProfileLib, line 1290
-                }             // library marker kkossev.deviceProfileLib, line 1291
-            } // library marker kkossev.deviceProfileLib, line 1292
-        } // library marker kkossev.deviceProfileLib, line 1293
-        total ++ // library marker kkossev.deviceProfileLib, line 1294
-    } // library marker kkossev.deviceProfileLib, line 1295
-    logDebug "validateAndFixPreferences: total = ${total} validationFailures = ${validationFailures} validationFixes = ${validationFixes}" // library marker kkossev.deviceProfileLib, line 1296
-} // library marker kkossev.deviceProfileLib, line 1297
-
-
+void printFingerprints() { // library marker kkossev.deviceProfileLib, line 1296
+    deviceProfilesV2.each { profileName, profileMap -> // library marker kkossev.deviceProfileLib, line 1297
+        if (profileMap.fingerprints != null) { // library marker kkossev.deviceProfileLib, line 1298
+            profileMap.fingerprints.each {  // library marker kkossev.deviceProfileLib, line 1299
+                logInfo it // library marker kkossev.deviceProfileLib, line 1300
+            } // library marker kkossev.deviceProfileLib, line 1301
+        } // library marker kkossev.deviceProfileLib, line 1302
+    }    // library marker kkossev.deviceProfileLib, line 1303
+} // library marker kkossev.deviceProfileLib, line 1304
 
 // ~~~~~ end include (142) kkossev.deviceProfileLib ~~~~~
