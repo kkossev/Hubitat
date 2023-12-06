@@ -377,7 +377,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
                 String key = dpMap.map.find { it.value == val }?.key
                 logTrace "validateAndScaleParameterValue: enum parameter <b>${val}</b>. key=${key}"
                 if (key == null) {
-                    logInfo "invalid enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
+                    logInfo "invalid enum parameter <b>${val}</b>. value must be one of <b>${dpMap.map}</b>"
                     return null
                 }
                 value = scaledValue = key as Integer
@@ -453,6 +453,32 @@ def setPar( par=null, val=null )
             // continue with the default processing
         }
     }
+    if (isVirtual) {
+        // set a virtual attribute
+        def valMiscType
+        logDebug "setPar: found virtual attribute ${par} value ${val}"
+        if (dpMap.type == "enum") {
+            // find the key for the value
+            String key = dpMap.map.find { it.value == val }?.key
+            logTrace "setPar: enum parameter <b>${val}</b>. key=${key}"
+            if (key == null) {
+                logInfo "setPar: invalid virtual enum parameter <b>${val}</b>. value must be one of <b>${dpMap.map}</b>"
+                return
+            }
+            valMiscType = dpMap.map[key as int]
+            logTrace "setPar: enum parameter <b>${val}</b>. key=${key} valMiscType=${valMiscType} dpMap.map=${dpMap.map}"
+            device.updateSetting("$par", [value:key as String, type:dpMap.type])        
+        }
+        else {
+            valMiscType = val
+            device.updateSetting("$par", [value:valMiscType, type:dpMap.type])        
+        }   
+        String descriptionText = "${par} set to ${valMiscType} [virtual]"
+        sendEvent(name:par, value:valMiscType, isDigital: true)
+        logInfo descriptionText
+        return true
+    }
+
     // check whether this is a tuya DP or a cluster:attribute parameter
     boolean isTuyaDP
 
@@ -585,7 +611,15 @@ def sendAttribute( par=null, val=null )
             // continue with the default processing
         }
     }
-    // check whether this is a tuya DP or a cluster:attribute parameter
+    // check whether this is a tuya DP or a cluster:attribute parameter or a virtual device
+    if (isVirtual) {
+        // send a virtual attribute
+        logDebug "sendAttribute: found virtual attribute ${par} value ${val}"
+        String descriptionText = "${par} is ${val} [virtual]"
+        sendEvent(name:par, value:val, isDigital: true)
+        logInfo descriptionText
+        return true
+    }
     boolean isTuyaDP
     def preference = dpMap.dp
     try {
@@ -607,6 +641,10 @@ def sendAttribute( par=null, val=null )
             sendZigbeeCommands( cmds )
             return true
         }
+    }
+    else if (dpMap.at != null && dpMap.at == "virtual") {
+        // send a virtual attribute
+
     }
     else if (dpMap.at != null) {
         // cluster:attribute

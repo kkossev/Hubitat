@@ -20,8 +20,9 @@
  * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
- * ver. 3.0.4  2023-12-04 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default;
+ * ver. 3.0.4  2023-12-06 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! setTemperature OK;
  *
+ *                                   WIP : adding VIRTUAL thermostat : setHeatingSetpoint 
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
  *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
@@ -56,7 +57,6 @@
  *                                   TODO: HomeKit - min and max temperature limits?
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
- *                                   TODO: add VIRTUAL thermostat
  *                                   TODO: Aqara TRV refactoring : 'cool' and 'emergency heat' and 'eco' modes to return meaningfull error message (check in the device profile if this mode is supported)
  *                                   TODO: Aqara TRV refactoring : simulate the 'emergency heat' mode by setting maxTemp and when off - restore the previous temperature 
  *                                   TODO: Aqara TRV refactoring : calibration as a command ! 
@@ -65,7 +65,7 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/04 9:40 PM"}
+static String timeStamp() {"2023/12/06 3:20 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -114,6 +114,7 @@ metadata {
         attribute 'emergencyHeating', "enum", ["off", "on"]         // BRT-100
         attribute 'emergencyHeatingTime', "number"                  // BRT-100
         attribute 'frostProtectionTemperature', "number"            // Sonoff
+        attribute "hysteresis", "NUMBER"                            // Virtual thermostat
         attribute 'level', "number"                                 // BRT-100          
         attribute 'minHeatingSetpoint', "number"                    // BRT-100, Sonoff
         attribute 'maxHeatingSetpoint', "number"                    // BRT-100, Sonoff
@@ -131,6 +132,7 @@ metadata {
         attribute "awayPresetTemperature", 'number'
 
         command "setThermostatMode", [[name: "thermostat mode (not all are available!)", type: "ENUM", constraints: ["--- select ---"]+AllPossibleThermostatModesOpts.options.values() as List<String>]]
+        command "setTemperature", ["NUMBER"]                        // Virtual thermostat
         if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
 
         // itterate through all the figerprints and add them on the fly
@@ -337,7 +339,7 @@ metadata {
     ],
 
     "NAMRON"   : [
-            description   : "NAMRON Thermostat",
+            description   : "NAMRON Thermostat`(not working yet)",
             models        : ["*"],
             device        : [type: "TRV", powerSource: "mains", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
@@ -376,6 +378,31 @@ metadata {
             ],
             refresh: ["pollThermostatCluster"],
             deviceJoinName: "NAMRON Thermostat",
+            configuration : [:]
+    ],
+
+
+    "VIRTUAL"   : [        // https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/virtualThermostat.groovy
+            description   : "VIRTUAL thermostat",
+            models        : ["*"],
+            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
+            preferences   : ["hysteresis":"hysteresis"],
+            //fingerprints  : [],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            //tuyaDPs       : [:],
+            attributes    : [
+                [at:"hysteresis",      name:'hysteresis',       type:"enum",    dt:"virtual", rw:"rw",  min:0,   max:4,    defaultValue:"3",  step:1,  scale:1,  map:[0:"0.1", 1:"0.25", 2:"0.5", 3:"1", 4:"2"],   unit:"", title:"<b>Hysteresis</b>",  description:'<i>hysteresis</i>'], 
+                [at:"thermostatMode",  name:'thermostatMode',   type:"enum",    dt:"virtual", rw:"rw",  min:0,    max:5,    defaultValue:"0",  step:1,  scale:1,  map:[0: "heat", 1: "auto", 2: "eco", 3:"emergency heat", 4:"off", 5:"cool"],            unit:"", title: "<b>Thermostat Mode</b>",           description:'<i>Thermostat Mode</i>'],
+                [at:"heatingSetpoint", name:'heatingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
+                [at:"coolingSetpoint", name:'coolingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Cooling Setpoint</b>",      description:'<i>Current cooling setpoint</i>'],
+                [at:"thermostatOperatingState",  name:'thermostatOperatingState', type:"enum", dt:"virtual", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heating"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],   // read only!
+               
+
+            ],
+            refresh: [],
+            supportedThermostatModes: ["auto", "heat", "emergency heat", "eco", "off", "cool"],
+            deviceJoinName: "Virtual thermostat",
             configuration : [:]
     ],
 
@@ -708,8 +735,7 @@ void sendHeatingSetpointEvent(temperature) {
     updateDataValue("lastRunningMode", "heat")
 }
 
-// thermostat capability standard command
-// do nothing in TRV - just send an event
+/*
 def setCoolingSetpoint(temperature){
     logTrace "setCoolingSetpoint(${temperature}) called!"
     if (temperature != (temperature as int)) {
@@ -718,9 +744,21 @@ def setCoolingSetpoint(temperature){
     }
     sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
 }
+*/
+
+// thermostat capability standard command
+// do nothing in TRV - just send an event
+def setCoolingSetpoint(temperature) {
+    logDebug "setCoolingSetpoint(${temperature}) called!"
+    temperature = Math.round(temperature * 2) / 2
+    String descText = "coolingSetpoint is set to ${temperature} \u00B0C"
+    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C", descriptionText: descText, isDigital:true)
+    logInfo "${descText}"
+}
 
 
-def setThermostatMode( mode ) {
+def setThermostatMode(requestedMode) {
+    String mode = requestedMode
     List<String> cmds = []
     Boolean result = false
     logDebug "setThermostatMode: sending setThermostatMode(${mode})"
@@ -728,6 +766,11 @@ def setThermostatMode( mode ) {
     // some TRVs require some checks and additional commands to be sent before setting the mode
     def currentMode = device.currentValue('thermostatMode')
     logDebug "setThermostatMode: currentMode = ${currentMode}, switching to ${mode} ..."
+    /*
+    if (isVirtual()) {
+        sendAttribute("thermostatMode", mode)
+        return
+    } */
     switch(mode) {
         case "heat":
         case "auto":
@@ -741,18 +784,45 @@ def setThermostatMode( mode ) {
             }
             break
         case "cool":        // TODO !!!!!!!!!!
-            // BRT-100 does not have an explicit off command, so we use the  mode (16 degrees)      // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
-            logInfo "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
-            sendAttribute("ecoMode", 1)
+            if (!("cool" in DEVICE.supportedThermostatModes)) {
+                // replace cool with 'eco' mode, if supported by the device
+                if ("eco" in DEVICE.supportedThermostatModes) {
+                    logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
+                    mode = "eco"
+                    break
+                }
+                else if ("off" in DEVICE.supportedThermostatModes) {
+                    logInfo "setThermostatMode: pre-processing: switching to off mode instead"
+                    mode = "off"
+                    break
+                }
+                else if (device.currentValue('ecoMode') != null) {
+                    // BRT-100 has a dediceted 'ecoMode' command   // TODO - check how to switch BRT-100 low temp protection mode (5 degrees) ?
+                    logInfo "setThermostatMode: pre-processing: setting eco mode on (${settings.ecoTemp} &degC)"
+                    sendAttribute("ecoMode", 1)
+                }
+                else {
+                    logWarn "setThermostatMode: pre-processing: switching to 'cool' mode is not supported by this device!"
+                    return
+                }
+            
+            }
             break
-        case "emergency heat":  // TODO !!!!!!!!!!!!
-            logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
-            sendAttribute("emergencyHeating", 1)
-            return
+        case "emergency heat":
+            if (device.currentValue('emergencyHeating') != null)  {
+                // BRT-100 has a dedicated 'emergencyHeating' command
+                logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
+                sendAttribute("emergencyHeating", 1)
+                return
+            }
+            break
         case 'eco':
-            logDebug "setThermostatMode: pre-processing: switching the eco mode on"
-            sendAttribute("ecoMode", 1)
-            return
+            if (device.currentValue('ecoMode') != null)  {
+                logDebug "setThermostatMode: pre-processing: switching the eco mode on"
+                sendAttribute("ecoMode", 1)
+                return
+            }
+            break
         case 'off':     // TODO 
             // if systemMode attribute exists, set it to 'off'  (Aqara E1)
             def sysMode = device.currentValue('systemMode')     // off or on
@@ -1136,6 +1206,26 @@ def factoryResetThermostat() {
     if (cmds == []) { cmds = ["delay 299"] }
     return cmds
 }
+
+// ========================================= Virtual thermostat functions  =========================================
+
+
+def setTemperature(temperature) {
+    logDebug "setTemperature(${temperature}) called!"
+    if (isVirtual()) {
+        temperature = Math.round(temperature * 2) / 2
+        String descText = "temperature is set to ${temperature} \u00B0C"
+        sendEvent(name: "temperature", value: temperature, unit: "\u00B0"+"C", descriptionText: descText, isDigital:true)
+        logInfo "${descText}"
+    }
+    else {
+        logWarn "setTemperature: not a virtual thermostat!"
+    }
+}
+
+
+
+// ========================================= end of the Virtual thermostat functions  =========================================
 
 
 def testT(par) {

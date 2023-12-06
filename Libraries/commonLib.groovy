@@ -32,10 +32,12 @@ library (
   * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
+  *                                   TODO: battery voltage low/high limits configuration
   *                                   TODO: add GetInof (endpoints list) command
   *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
   *                                   TODO: move zigbeeGroups : {} to dedicated lib
   *                                   TODO: disableDefaultResponse for Tuya commands
+  *                                   TODO: ping() for a virtual device (runIn 1 milissecond a callback nethod)
  *
 */
 
@@ -230,7 +232,7 @@ metadata {
     "*** LOAD ALL DEFAULTS ***"  : [key:0, function: 'loadAllDefaults']
 ]
 
-
+def isVirtual() { device.controllerType == null }
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
 //def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
@@ -2331,7 +2333,12 @@ def ping() {
         if (state.states == nill ) state.states = [:] 
         state.states["isPing"] = true
         scheduleCommandTimeoutCheck()
-        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+        if (!isVirtual()) {
+            sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+        }
+        else {
+            runInMillis(10, virtualPong)
+        }
         logDebug 'ping...'
     }
     else {
@@ -2339,6 +2346,24 @@ def ping() {
         logInfo "ping() command is not available for this sleepy device."
         sendRttEvent("n/a")
     }
+}
+
+def virtualPong() {
+    logDebug 'virtualPing: pong!'
+    def now = new Date().getTime()
+    def timeRunning = now.toInteger() - (state.lastTx["pingTime"] ?: '0').toInteger()
+    if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+        state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+        if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+        if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
+        state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']),safeToDouble(timeRunning)) as int
+        sendRttEvent()
+    }
+    else {
+        logWarn "unexpected ping timeRunning=${timeRunning} "
+    }
+    state.states["isPing"] = false
+    unschedule('deviceCommandTimeout')
 }
 
 /**
