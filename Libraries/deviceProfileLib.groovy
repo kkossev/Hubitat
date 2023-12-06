@@ -30,7 +30,7 @@ library (
 */
 
 def deviceProfileLibVersion()   {"3.0.2"}
-def deviceProfileLibtamp() {"2023/12/05 8:39 PM"}
+def deviceProfileLibtamp() {"2023/12/06 9:45 PM"}
 
 metadata {
     // no capabilities
@@ -149,7 +149,7 @@ def getAttributesMap( String attribName, boolean debug=false ) {
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
  */
-def resetPreferencesToDefaults(/*boolean*/ debug=false ) {
+def resetPreferencesToDefaults( debug=false ) {
     logDebug "resetPreferencesToDefaults...(debug=${debug})"
     if (DEVICE == null) {
         if (debug) { logWarn "DEVICE not found!" }
@@ -189,7 +189,7 @@ def resetPreferencesToDefaults(/*boolean*/ debug=false ) {
         if (debug) log.trace "parMap.name ${parMap.name} parMap.defaultValue = ${parMap.defaultValue} type=${parMap.type}"
         device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
     }
-    logInfo "Preferences reset to default values"
+    logInfo "Preferences reset to the default values"
 }
 
 
@@ -453,7 +453,7 @@ def setPar( par=null, val=null )
             // continue with the default processing
         }
     }
-    if (isVirtual) {
+    if (isVirtual()) {
         // set a virtual attribute
         def valMiscType
         logDebug "setPar: found virtual attribute ${par} value ${val}"
@@ -612,7 +612,7 @@ def sendAttribute( par=null, val=null )
         }
     }
     // check whether this is a tuya DP or a cluster:attribute parameter or a virtual device
-    if (isVirtual) {
+    if (isVirtual()) {
         // send a virtual attribute
         logDebug "sendAttribute: found virtual attribute ${par} value ${val}"
         String descriptionText = "${par} is ${val} [virtual]"
@@ -696,6 +696,9 @@ def sendAttribute( par=null, val=null )
 def sendCommand( command=null, val=null)
 {
     //logDebug "sending command ${command}(${val}))"
+    // strip the leading and trailing spaces from command and val
+    command = command?.trim()
+    val = val?.trim()
     ArrayList<String> cmds = []
     def supportedCommandsMap = DEVICE.commands 
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
@@ -842,7 +845,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
         }
     }
     if (deviceProfile == UNKNOWN) {
-        logWarn "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logWarn "getDeviceNameAndProfile: <b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
     }
     return [deviceName, deviceProfile]
 }

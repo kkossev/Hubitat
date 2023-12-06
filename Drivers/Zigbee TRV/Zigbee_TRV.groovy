@@ -20,19 +20,21 @@
  * ver. 3.0.2  2023-12-02 kkossev  - (dev. branch) importUrl correction; BRT-100: auto OK, heat OK, eco OK, supportedThermostatModes is defined in the device profile; refresh OK; autPoll OK (both BRT-100 and Sonoff);
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
- * ver. 3.0.4  2023-12-06 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! setTemperature OK;
+ * ver. 3.0.4  2023-12-06 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
+ *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK
  *
- *                                   WIP : adding VIRTUAL thermostat : setHeatingSetpoint 
+ *                                   WIP : adding VIRTUAL thermostat - 
+ *                                   TODO: option to simualate the thermostatOperatingState  
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
+ *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
  *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
  *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
  *                                   TODO: remove (raw:) when debug is off
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
  *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.989debugBRT-100 TRV DEV compareAndConvertTuyaToHubitatPreferenceValue: preference = [1] type=enum foundItem=ecoMode isEqual=false tuyaValueScaled=1 (scale=1) fncmd=1
  *                                   TODO: BRT-100 - after emergency heat, the mode was set to 'auto' (not 'heat') !
- *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. 
+ *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
- *                                   TODO: cleanup trace and debug logs  invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]
  *                                   TODO: hide the maxTimeBetweenReport preferences (not used here)
  *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
@@ -65,7 +67,7 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/06 3:20 PM"}
+static String timeStamp() {"2023/12/06 9:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -181,8 +183,7 @@ metadata {
     // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351
     "AQARA_E1_TRV"   : [
             description   : "Aqara E1 Thermostat model SRTS-A01",
-            models        : ["LUMI"],
-            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            device        : [manufacturers: ["LUMI"], type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
             preferences   : ["windowOpenDetection":"0xFCC0:0x0273", "valveDetection":"0xFCC0:0x0274",, "childLock":"0xFCC0:0x0277", "awayPresetTemperature":"0xFCC0:0x0279"],
@@ -242,8 +243,7 @@ metadata {
     //
     "SONOFF_TRV"   : [
             description   : "Sonoff TRVZB",
-            models        : ["SONOFF"],
-            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            device        : [manufacturers: ["SONOFF"], type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
 
             preferences   : ["childLock":"0xFC11:0x0000", "windowOpenDetection":"0xFC11:0x6000", "frostProtectionTemperature":"0xFC11:0x6002", "minHeatingSetpoint":"0x0201:0x0015", "maxHeatingSetpoint":"0x0201:0x0016", "calibrationTemp":"0x0201:0x0010" ],
@@ -303,8 +303,8 @@ metadata {
 //              https://github.com/Koenkk/zigbee-herdsman-converters/blob/47f56c19a3fdec5f23e74f805ff640a931721099/src/devices/moes.ts#L282
     "MOES_BRT-100"   : [
             description   : "MOES BRT-100 TRV",
-            models        : ["TS0601"],
-            device        : [type: "TRV", powerSource: "battery", isSleepy:false],
+            
+            device        : [models: ["TS0601"], type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
             fingerprints  : [
@@ -330,7 +330,6 @@ metadata {
                 [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
                 [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
                 [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
-
             ],
             supportedThermostatModes: ["auto", "heat", "emergency heat", "eco"],
             refresh: ["tuyaBlackMagic"],
@@ -340,8 +339,7 @@ metadata {
 
     "NAMRON"   : [
             description   : "NAMRON Thermostat`(not working yet)",
-            models        : ["*"],
-            device        : [type: "TRV", powerSource: "mains", isSleepy:false],
+            device        : [manufacturers: ["NAMRON AS"], type: "TRV", powerSource: "mains", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : [],
             fingerprints  : [
@@ -381,16 +379,18 @@ metadata {
             configuration : [:]
     ],
 
+    "---"   : [
+            description   : "--------------------------------------",
+//            models        : [],
+//            fingerprints  : [],
+    ],           
 
     "VIRTUAL"   : [        // https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/virtualThermostat.groovy
-            description   : "VIRTUAL thermostat",
-            models        : ["*"],
+            description   : "Virtual thermostat",
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : ["hysteresis":"hysteresis"],
-            //fingerprints  : [],
-            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
-            //tuyaDPs       : [:],
+            commands      : ["printFingerprints":"printFingerprints", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             attributes    : [
                 [at:"hysteresis",      name:'hysteresis',       type:"enum",    dt:"virtual", rw:"rw",  min:0,   max:4,    defaultValue:"3",  step:1,  scale:1,  map:[0:"0.1", 1:"0.25", 2:"0.5", 3:"1", 4:"2"],   unit:"", title:"<b>Hysteresis</b>",  description:'<i>hysteresis</i>'], 
                 [at:"thermostatMode",  name:'thermostatMode',   type:"enum",    dt:"virtual", rw:"rw",  min:0,    max:5,    defaultValue:"0",  step:1,  scale:1,  map:[0: "heat", 1: "auto", 2: "eco", 3:"emergency heat", 4:"off", 5:"cool"],            unit:"", title: "<b>Thermostat Mode</b>",           description:'<i>Thermostat Mode</i>'],
@@ -400,7 +400,7 @@ metadata {
                
 
             ],
-            refresh: [],
+            refresh: ["dummy","dummy"],
             supportedThermostatModes: ["auto", "heat", "emergency heat", "eco", "off", "cool"],
             deviceJoinName: "Virtual thermostat",
             configuration : [:]
@@ -409,7 +409,6 @@ metadata {
                 // TODO = check constants! https://github.com/Koenkk/zigbee-herdsman-converters/blob/master/src/lib/constants.ts#L17 
     "UNKNOWN"   : [
             description   : "GENERIC TRV",
-            models        : ["*"],
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
             preferences   : [],
@@ -735,17 +734,6 @@ void sendHeatingSetpointEvent(temperature) {
     updateDataValue("lastRunningMode", "heat")
 }
 
-/*
-def setCoolingSetpoint(temperature){
-    logTrace "setCoolingSetpoint(${temperature}) called!"
-    if (temperature != (temperature as int)) {
-        temperature = (temperature + 0.5 ) as int
-        logDebug "corrected temperature: ${temperature}"
-    }
-    sendEvent(name: "coolingSetpoint", value: temperature, unit: "\u00B0"+"C")
-}
-*/
-
 // thermostat capability standard command
 // do nothing in TRV - just send an event
 def setCoolingSetpoint(temperature) {
@@ -766,11 +754,7 @@ def setThermostatMode(requestedMode) {
     // some TRVs require some checks and additional commands to be sent before setting the mode
     def currentMode = device.currentValue('thermostatMode')
     logDebug "setThermostatMode: currentMode = ${currentMode}, switching to ${mode} ..."
-    /*
-    if (isVirtual()) {
-        sendAttribute("thermostatMode", mode)
-        return
-    } */
+
     switch(mode) {
         case "heat":
         case "auto":
@@ -916,6 +900,11 @@ private void scheduleThermostatPolling(final int intervalSecs) {
 
 private void unScheduleThermostatPolling() {
     unschedule('autoPollThermostat')
+}
+
+def dummy() {
+    logDebug "dummy() called!"
+    return []
 }
 
 // TODO - configure in the deviceProfile 

@@ -29,7 +29,7 @@ library (
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-12-02 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
+  * ver. 3.0.1  2023-12-06 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: battery voltage low/high limits configuration
@@ -42,7 +42,7 @@ library (
 */
 
 def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/12/03 11:33 PM"}
+def thermostatLibStamp() {"2023/12/06 9:46 PM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -2726,11 +2726,8 @@ def resetStatistics() {
     sendInfoEvent("Statistics are reset. Refresh the web page")
 }
 
-/**
- * called from TODO
- * 
- */
-def resetStats() {
+// called from initializeVars(true) and resetStatistics()
+void resetStats() {
     logDebug "resetStats..."
     state.stats = [:]
     state.states = [:]
