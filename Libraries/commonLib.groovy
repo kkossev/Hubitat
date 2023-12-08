@@ -232,7 +232,7 @@ metadata {
     "*** LOAD ALL DEFAULTS ***"  : [key:0, function: 'loadAllDefaults']
 ]
 
-def isVirtual() { device.controllerType == null }
+def isVirtual() { device.controllerType == null || device.controllerType == ""}
 def isChattyDeviceReport(description)  {return false /*(description?.contains("cluster: FC7E")) */}
 //def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }

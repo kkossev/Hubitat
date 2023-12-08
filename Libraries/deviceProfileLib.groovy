@@ -24,13 +24,13 @@ library (
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
  * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method; 
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
- * ver. 3.0.2  2023-12-05 kkossev  - (dev. branch) inputIt moved to the preferences section;
+ * ver. 3.0.2  2023-12-08 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction;
  *
- *                                   TODO: refactor sendAttribute !
+ *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices
 */
 
 def deviceProfileLibVersion()   {"3.0.2"}
-def deviceProfileLibtamp() {"2023/12/06 9:45 PM"}
+def deviceProfileLibtamp() {"2023/12/08 8:22 AM"}
 
 metadata {
     // no capabilities
@@ -431,25 +431,25 @@ def setPar( par=null, val=null )
     //logDebug "setPar: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
-    String setFunction = "set${capitalizedFirstChar}"
-    if (this.respondsTo(setFunction)) {
-        logDebug "setPar: found setFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
-        // execute the setFunction
+    String customSetFunction = "customSet${capitalizedFirstChar}"
+    if (this.respondsTo(customSetFunction)) {
+        logDebug "setPar: found customSetFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
+        // execute the customSetFunction
         try {
-            cmds = "$setFunction"(scaledValue)
+            cmds = "$customSetFunction"(scaledValue)
         }
         catch (e) {
-            logWarn "setPar: Exception '${e}'caught while processing <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+            logWarn "setPar: Exception '${e}'caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return
         }
-        logDebug "setFunction result is ${cmds}"       
+        logDebug "customSetFunction result is ${cmds}"       
         if (cmds != null && cmds != []) {
-            logInfo "setPar: (1) successfluly executed setPar <b>$setFunction</b>(<b>$scaledValue</b>)"
+            logInfo "setPar: (1) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
             return
         }            
         else {
-            logWarn "setPar: setFunction <b>$setFunction</b>(<b>$scaledValue</b>) returned null or empty list"
+            logWarn "setPar: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list"
             // continue with the default processing
         }
     }
@@ -499,7 +499,7 @@ def setPar( par=null, val=null )
             return
         }
         else {
-            logInfo "setPar: (2) successfluly executed setPar <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
+            logInfo "setPar: (2) successfluly executed setPar <b>$customSetFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands( cmds )
             return
         }
@@ -521,7 +521,7 @@ def setPar( par=null, val=null )
             //log.trace "mfgCode = ${dpMap.mfgCode}"
         }
         catch (e) {
-            logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+            logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return
         }
         Map mapMfCode = ["mfgCode":mfgCode]
@@ -537,7 +537,7 @@ def setPar( par=null, val=null )
         logWarn "setPar: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
         return
     }
-    logInfo "setPar: (3) successfluly executed setPar <b>$setFunction</b>(<b>$scaledValue</b>)"
+    logInfo "setPar: (3) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
     return
 }
@@ -589,36 +589,48 @@ def sendAttribute( par=null, val=null )
     logDebug "sendAttribute: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
     // if there is a dedicated set function, use it
     String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
-    String setFunction = "set${capitalizedFirstChar}"
-    if (this.respondsTo(setFunction) && !(setFunction in ["setHeatingSetpoint", "setCoolingSetpoint", "setThermostatMode"])) {
-        logDebug "sendAttribute: found setFunction=${setFunction}, scaledValue=${scaledValue}  (val=${val})"
-        // execute the setFunction
+    String customSetFunction = "customSet${capitalizedFirstChar}"
+    if (this.respondsTo(customSetFunction) /*&& !(customSetFunction in ["setHeatingSetpoint", "setCoolingSetpoint", "setThermostatMode"])*/) {
+        logDebug "sendAttribute: found customSetFunction=${customSetFunction}, scaledValue=${scaledValue}  (val=${val})"
+        // execute the customSetFunction
         try {
-            cmds = "$setFunction"(scaledValue)
+            cmds = "$customSetFunction"(scaledValue)
         }
         catch (e) {
-            logWarn "sendAttribute: Exception '${e}'caught while processing <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+            logWarn "sendAttribute: Exception '${e}'caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
         }
-        logDebug "setFunction result is ${cmds}"       
+        logDebug "customSetFunction result is ${cmds}"       
         if (cmds != null && cmds != []) {
-            logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+            logDebug "sendAttribute: successfluly executed sendAttribute <b>$customSetFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
             return true
         }            
         else {
-            logWarn "sendAttribute: setFunction <b>$setFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
+            logWarn "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
             // continue with the default processing
         }
+    }
+    else {
+        logDebug "sendAttribute: SKIPPED customSetFunction ${customSetFunction}, continue with the default processing"
     }
     // check whether this is a tuya DP or a cluster:attribute parameter or a virtual device
     if (isVirtual()) {
         // send a virtual attribute
         logDebug "sendAttribute: found virtual attribute ${par} value ${val}"
-        String descriptionText = "${par} is ${val} [virtual]"
-        sendEvent(name:par, value:val, isDigital: true)
-        logInfo descriptionText
+        // patch !!
+        if (par == "heatingSetpoint") {
+            sendHeatingSetpointEvent(val)
+        }
+        else {
+            String descriptionText = "${par} is ${val} [virtual]"
+            sendEvent(name:par, value:val, isDigital: true)
+            logInfo descriptionText
+        }
         return true
+    }
+    else {
+        logDebug "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
     }
     boolean isTuyaDP
     def preference = dpMap.dp
@@ -637,7 +649,7 @@ def sendAttribute( par=null, val=null )
             return false
         }
         else {
-            logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
+            logDebug "sendAttribute: successfluly executed sendAttribute <b>$customSetFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands( cmds )
             return true
         }
@@ -652,7 +664,7 @@ def sendAttribute( par=null, val=null )
         int attribute
         int dt
        // int mfgCode
-   //     try {
+        try {
             cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[0])
             //log.trace "cluster = ${cluster}"
             attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[1])
@@ -662,11 +674,11 @@ def sendAttribute( par=null, val=null )
             //log.trace "mfgCode = ${dpMap.mfgCode}"
           //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
           //  log.trace "mfgCode = ${mfgCode}"
-  //      }
-  /*      catch (e) {
-            logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$setFunction</b>(<b>$scaledValue</b>) (val=${val}))"
+        }
+        catch (e) {
+            logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
-        }*/
+        }
        
         logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (dpMap.mfgCode != null) {
@@ -681,7 +693,7 @@ def sendAttribute( par=null, val=null )
         logWarn "sendAttribute: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
         return false
     }
-    logDebug "sendAttribute: successfluly executed sendAttribute <b>$setFunction</b>(<b>$scaledValue</b>)"
+    logDebug "sendAttribute: successfluly executed sendAttribute <b>$customSetFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
     return true
 }
@@ -1052,7 +1064,7 @@ def preProc(foundItem, fncmd_orig) {
         logWarn "preProc: Exception '${e}'caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd}))"
         return fncmd_orig
     }
-    //logDebug "setFunction result is ${fncmd}"
+    //logDebug "customSetFunction result is ${fncmd}"
     return fncmd
 }
 

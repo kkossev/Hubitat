@@ -128,7 +128,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_fllyghyj", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_yd2e749y", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_6uzkisv2", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_dowj6gyi", deviceJoinName: "Tuya Temperature Humidity sensor"                // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_dowj6gyi", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/79?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_8ybe88nf", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/262?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0003,0402,0405,0000", outClusters:"0003,0019,000A", model:"TS0201", manufacturer:"_TZ3000_rdhukkmi", deviceJoinName: "Tuya Temperature Humidity sensor"                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/55?u=kkossev
         //        
@@ -245,7 +245,7 @@ metadata {
     '_TZ3000_fllyghyj'  : 'TS0201',
     '_TZ3000_yd2e749y'  : 'TS0201',
     '_TZ3000_6uzkisv2'  : 'TS0201',
-    '_TZ3000_dowj6gyi'  : 'TS0201',
+    '_TZ3000_dowj6gyi'  : 'TS0201_TH',
     '_TZ3000_8ybe88nf'  : 'TS0201',
     '_TZ3000_rdhukkmi'  : 'TS0201',
     'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
@@ -1524,3 +1524,4 @@ def test( String description) {
     log.warn "parising : ${description}"
     parse( description)
 }
+// https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5483
