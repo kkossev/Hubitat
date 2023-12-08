@@ -21,10 +21,10 @@
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
  * ver. 3.0.4  2023-12-08 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
- *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK
+ *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility
  *
- *                                   WIP : adding VIRTUAL thermostat - option to simualate the thermostatOperatingState  
- *                                   WIP : Google Home exceptions bug fix; update thermostatSetpoint for Google Home compatibility
+ *                                   TODO: BRT-100: add off mode (substitutue with eco mode) for Google Home compatibility
+ *                                   TODO : adding VIRTUAL thermostat - option to simualate the thermostatOperatingState  
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
  *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
@@ -67,7 +67,7 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/08 8:24 AM"}
+static String timeStamp() {"2023/12/08 6:07 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -301,6 +301,7 @@ metadata {
 
 // BRT-100-B0
 //              https://github.com/Koenkk/zigbee-herdsman-converters/blob/47f56c19a3fdec5f23e74f805ff640a931721099/src/devices/moes.ts#L282
+//              TODO - what is the difference between 'holidays' mode and 'ecoMode' ?  Which one to use to substitute the 'off' mode ?
     "MOES_BRT-100"   : [
             description   : "MOES BRT-100 TRV",
             
@@ -389,13 +390,15 @@ metadata {
             description   : "Virtual thermostat",
             device        : [type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["hysteresis":"hysteresis", "simulateThermostatOperatingState":"simulateThermostatOperatingState"],
-            commands      : ["printFingerprints":"printFingerprints", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            preferences   : ["hysteresis":"hysteresis", "minHeatingSetpoint":"minHeatingSetpoint", "maxHeatingSetpoint":"maxHeatingSetpoint", "simulateThermostatOperatingState":"simulateThermostatOperatingState"],
+            commands      : ["printFingerprints":"printFingerprints", "sendSupportedThermostatModes":"sendSupportedThermostatModes", "autoPollThermostat":"autoPollThermostat", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             attributes    : [
-                [at:"hysteresis",      name:'hysteresis',       type:"enum",    dt:"virtual", rw:"rw",  min:0,   max:4,    defaultValue:"3",  step:1,  scale:1,  map:[0:"0.1", 1:"0.25", 2:"0.5", 3:"1", 4:"2"],   unit:"", title:"<b>Hysteresis</b>",  description:'<i>hysteresis</i>'], 
-                [at:"thermostatMode",  name:'thermostatMode',   type:"enum",    dt:"virtual", rw:"rw",  min:0,    max:5,    defaultValue:"0",  step:1,  scale:1,  map:[0: "heat", 1: "auto", 2: "eco", 3:"emergency heat", 4:"off", 5:"cool"],            unit:"", title: "<b>Thermostat Mode</b>",           description:'<i>Thermostat Mode</i>'],
-                [at:"heatingSetpoint", name:'heatingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
-                [at:"coolingSetpoint", name:'coolingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Cooling Setpoint</b>",      description:'<i>Current cooling setpoint</i>'],
+                [at:"hysteresis",          name:'hysteresis',       type:"enum",    dt:"virtual", rw:"rw",  min:0,   max:4,    defaultValue:"3",  step:1,  scale:1,  map:[0:"0.1", 1:"0.25", 2:"0.5", 3:"1", 4:"2"],   unit:"", title:"<b>Hysteresis</b>",  description:'<i>hysteresis</i>'], 
+                [at:"minHeatingSetpoint",  name:'minHeatingSetpoint',    type:"decimal", dt:"virtual", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Min Heating Setpoint</b>", description:'<i>Min Heating Setpoint Limit</i>'],
+                [at:"maxHeatingSetpoint",  name:'maxHeatingSetpoint',    type:"decimal", dt:"virtual", rw:"rw", min:4.0,  max:35.0, step:0.5, scale:100,  unit:"°C", title: "<b>Max Heating Setpoint</b>", description:'<i>Max Heating Setpoint Limit</i>'],
+                [at:"thermostatMode",      name:'thermostatMode',   type:"enum",    dt:"virtual", rw:"rw",  min:0,    max:5,    defaultValue:"0",  step:1,  scale:1,  map:[0: "heat", 1: "auto", 2: "eco", 3:"emergency heat", 4:"off", 5:"cool"],            unit:"", title: "<b>Thermostat Mode</b>",           description:'<i>Thermostat Mode</i>'],
+                [at:"heatingSetpoint",     name:'heatingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
+                [at:"coolingSetpoint",     name:'coolingSetpoint',  type:"decimal", dt:"virtual", rw: "rw", min:5.0, max:45.0, defaultValue:20.0, step:0.5, scale:1,  unit:"°C",  title: "<b>Current Cooling Setpoint</b>",      description:'<i>Current cooling setpoint</i>'],
                 [at:"thermostatOperatingState",  name:'thermostatOperatingState', type:"enum", dt:"virtual", rw:"ro", min:0,    max:1,    step:1,  scale:1,    map:[0: "idle", 1: "heating"], unit:"",  description:'<i>termostatRunningState (relay on/off status)</i>'],   // read only!
                 [at:"simulateThermostatOperatingState",  name:'simulateThermostatOperatingState', type:"enum",    dt: "virtual", rw: "rw", min:0,    max:1,   defaultValue:"0",  step:1,  scale:1,    map:[0: "off", 1: "on"], unit:"",         title: "<b>Simulate Thermostat Operating State</b>",      \
                              description:'<i>Simulate the thermostat operating state<br>* idle - when the temperature is less than the heatingSetpoint<br>* heat - when the temperature is above tha heatingSetpoint</i>'],
@@ -827,7 +830,22 @@ def setThermostatMode(requestedMode) {
                 }
                 return
             }
-            logDebug "setThermostatMode: pre-processing: no pre-processing for mode ${mode}"
+            // TODO - if the 'off' mode is not supported, try substituting it with 'eco' mode
+            else if (!("off" in DEVICE.supportedThermostatModes)) {
+                logDebug "setThermostatMode: 'off' mode is not supprted by this thermostat!"
+                if ('eco' in DEVICE.supportedThermostatModes) {
+                    logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
+                    mode = "eco"
+                    break
+                }
+                else {
+                    logWarn "setThermostatMode: pre-processing: switching to 'off' mode is not supported by this device!"
+                    return
+                }
+            }
+            else {
+                logDebug "setThermostatMode: pre-processing: no pre-processing for mode ${mode}"
+            }
             break
         default:
             logWarn "setThermostatMode: pre-processing: unknown mode ${mode}"
@@ -1123,6 +1141,9 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
             break
         case "humidity" :
             handleHumidityEvent(valueScaled)
+            break
+        case "heatingSetpoint" :
+            sendHeatingSetpointEvent(valueScaled)
             break
         case "systemMode" : // Aqara E1 
             sendEvent(eventMap)

@@ -473,8 +473,8 @@ def setPar( par=null, val=null )
             valMiscType = val
             device.updateSetting("$par", [value:valMiscType, type:dpMap.type])        
         }   
-        String descriptionText = "${par} set to ${valMiscType} [virtual]"
-        sendEvent(name:par, value:valMiscType, isDigital: true)
+        String descriptionText = "${par} set to ${valMiscType}${dpMap.unit ?: ''} [virtual]"
+        sendEvent(name:par, value:valMiscType, unit:dpMap.unit ?: '', isDigital: true)
         logInfo descriptionText
         return true
     }
