@@ -21,7 +21,7 @@
  *                                   removed isBRT100TRV() ; removed isSonoffTRV(), removed 'off' mode for BRT-100; heatingSetPoint 12.3 bug fixed; 
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
  * ver. 3.0.4  2023-12-08 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
- *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility
+ *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
  *
  *                                   TODO: BRT-100: add off mode (substitutue with eco mode) for Google Home compatibility
  *                                   TODO : adding VIRTUAL thermostat - option to simualate the thermostatOperatingState  
@@ -67,7 +67,7 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/08 6:07 PM"}
+static String timeStamp() {"2023/12/08 9:54 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -332,7 +332,7 @@ metadata {
                 [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
                 [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
             ],
-            supportedThermostatModes: ["auto", "heat", "emergency heat", "eco"],
+            supportedThermostatModes: ["off", "heat", "auto", "emergency heat" /* "eco"*/],
             refresh: ["tuyaBlackMagic"],
             deviceJoinName: "MOES BRT-100 TRV",
             configuration : [:]
@@ -1105,7 +1105,7 @@ void initEventsThermostat(boolean fullInit=false) {
     if (fullInit==true) {
         String descText = "inital attribute setting"
         sendSupportedThermostatModes()
-        sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["on", "auto"]), isStateChange: true)    
+        sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto", "circulate", "on"]), isStateChange: true)    
         sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: descText)
         state.lastThermostatMode = "heat"
         sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: descText)
