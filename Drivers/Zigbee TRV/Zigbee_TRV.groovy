@@ -22,8 +22,10 @@
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
  * ver. 3.0.4  2023-12-08 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
  *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
+ * ver. 3.0.5  2023-12-08 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode) 
  *
- *                                   TODO: BRT-100: add off mode (substitutue with eco mode) for Google Home compatibility
+ *                                   TODO: BRT-100: add emergency heat mode for Google Home compatibility
+ *                                   TODO: BRT-100: set level to 0 on initialize (not available for LTS)
  *                                   TODO : adding VIRTUAL thermostat - option to simualate the thermostatOperatingState  
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
@@ -66,8 +68,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/08 9:54 PM"}
+static String version() { "3.0.8" }
+static String timeStamp() {"2023/12/09 1:41 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -328,11 +330,11 @@ metadata {
                 [dp:104, name:'level',              type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Valve level</i>'],
                 [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
                 [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
-                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
+                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:7.0,  step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
                 [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
                 [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
             ],
-            supportedThermostatModes: ["off", "heat", "auto", "emergency heat" /* "eco"*/],
+            supportedThermostatModes: ["off", "heat", "auto", "emergency heat", "eco"],
             refresh: ["tuyaBlackMagic"],
             deviceJoinName: "MOES BRT-100 TRV",
             configuration : [:]
@@ -753,11 +755,18 @@ def setCoolingSetpoint(temperature) {
 }
 
 
+/**
+ * Sets the thermostat mode based on the requested mode.
+ * 
+ * if the requestedMode is supported directly in the thermostatMode attribute, it is set directly.
+ * @param requestedMode The mode to set the thermostat to.
+ */
 def setThermostatMode(requestedMode) {
     String mode = requestedMode
     List<String> cmds = []
     Boolean result = false
-    logDebug "setThermostatMode: sending setThermostatMode(${mode})"
+    def nativelySupportedModes = getAttributesMap("thermostatMode")?.map?.values() ?: []
+    logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModes}"
 
     // some TRVs require some checks and additional commands to be sent before setting the mode
     def currentMode = device.currentValue('thermostatMode')
@@ -815,36 +824,30 @@ def setThermostatMode(requestedMode) {
                 return
             }
             break
-        case 'off':     // TODO 
-            // if systemMode attribute exists, set it to 'off'  (Aqara E1)
-            def sysMode = device.currentValue('systemMode')     // off or on
-            if (sysMode != null) {  // !!!!!!!!!!! Patch for Aqara E1 !
-                if ( true /*sysMode != 'off'*/) {
-                    logInfo "setThermostatMode: pre-processing: setting systemMode to 'off'"
-                    // get the key of the 'off' value
-                    def key = SystemModeOpts.options.find { key, value -> value == 'off' }.key
-                    sendAttribute("systemMode", key)
-                }
-                else {
-                    logInfo "setThermostatMode: pre-processing: systemMode is already 'off'"
-                }
+        case 'off':     // WIP 
+            if ('off' in nativelySupportedModes) {
+                break
+            }
+            logDebug "setThermostatMode: pre-processing: switching to 'off' mode"
+            // if the 'off' mode is not directly supported, try substituting it with 'eco' mode
+            if ('eco' in nativelySupportedModes) {
+                logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
+                mode = "eco"
+                break
+            }
+            // look for a dedicated 'ecoMode' deviceProfile attribute       (BRT-100)
+            def ecoModes = getAttributesMap("ecoMode")?.map?.values() ?: []
+            if ('on' in ecoModes)  {
+                logInfo "setThermostatMode: pre-processing: switching the eco mode on"
+                sendAttribute("ecoMode", "on")
                 return
             }
-            // TODO - if the 'off' mode is not supported, try substituting it with 'eco' mode
-            else if (!("off" in DEVICE.supportedThermostatModes)) {
-                logDebug "setThermostatMode: 'off' mode is not supprted by this thermostat!"
-                if ('eco' in DEVICE.supportedThermostatModes) {
-                    logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
-                    mode = "eco"
-                    break
-                }
-                else {
-                    logWarn "setThermostatMode: pre-processing: switching to 'off' mode is not supported by this device!"
-                    return
-                }
-            }
-            else {
-                logDebug "setThermostatMode: pre-processing: no pre-processing for mode ${mode}"
+            // look for a dedicated 'systemMode' attribute with map 'off' (Aqara E1)
+            def systemModes = getAttributesMap("systemMode")?.map?.values() ?: []
+            if ('off' in systemModes)  {
+                logInfo "setThermostatMode: pre-processing: switching the systemMode off"
+                sendAttribute("systemMode", "off")
+                return
             }
             break
         default:

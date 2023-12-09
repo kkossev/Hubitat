@@ -370,3 +370,19 @@ Bindings Table
 
 
 
+==============================================================================================================================================================
+
+dev:42172023-12-03 22:48:53.164errorjava.lang.NumberFormatException: For input string: "032819052101000A2168750D231E0A000011230100000065200066297E0967292E096823000000006920646A2000" on line 436 (method parse)
+dev:42172023-12-03 22:48:53.110debugAqara E1 Thermostat parse: descMap = [raw:048801FCC064F700412E032819052101000A2168750D231E0A000011230100000065200066297E0967292E096823000000006920646A2000, dni:0488, endpoint:01, cluster:FCC0, size:64, attrId:00F7, encoding:41, command:0A, value:032819052101000A2168750D231E0A000011230100000065200066297E0967292E096823000000006920646A2000, clusterInt:64704, attrInt:247] description=read attr - raw: 048801FCC064F700412E032819052101000A2168750D231E0A000011230100000065200066297E0967292E096823000000006920646A2000, dni: 0488, endpoint: 01, cluster: FCC0, size: 64, attrId: 00F7, encoding: 41, command: 0A, value: 2E032819052101000A2168750D231E0A000011230100000065200066297E0967292E096823000000006920646A2000
+
+TODO - add in the Features : 
+
+Aqara - battery voltage reporting
+    - battery percentage reporting
+
+BRT-100 : force temperature update on refresh : send off/heat command ?         https://github.com/Koenkk/zigbee2mqtt/discussions/5748#discussioncomment-5166153 
+                                                                                https://github.com/Koenkk/zigbee2mqtt/discussions/5748#discussioncomment-5308620 
+
+HA Better Thermostat :  https://github.com/KartoffelToby/better_thermostat   
+
+Danfoss Ally - https://www.zigbee2mqtt.io/devices/014G2461.html 

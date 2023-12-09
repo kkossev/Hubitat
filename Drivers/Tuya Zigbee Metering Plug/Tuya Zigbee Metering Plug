@@ -56,7 +56,7 @@
  *  ver. 1.7.7 2023-06-10 kkossev - isTuyaE00xCluster procesing of known attributes; Tongou SY2 over/under V/A/P protection parameters decoding and encoding; moved TS011F non-power-reporting plugs to Zemismart driver
  *  ver. 1.7.8 2023-07-29 kkossev - added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
  *  ver. 1.8.0 2023-09-03 kkossev - added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
- *  ver. 1.8.1 2023-10-04 kkossev - (dev. branch)
+ *  ver. 1.8.1 2023-12-09 kkossev - (dev. branch) added comments only
  *
  *
  *                                 TODO: 'all' attribute
@@ -103,7 +103,7 @@ metadata {
         
         attribute "powerFactor", "NUMBER"
         attribute "energyCost", "NUMBER"
-		attribute "energyDuration", "string"
+        attribute "energyDuration", "string"
         attribute "html", "string"
         attribute "all", "string"
         attribute "hourlyEnergy", "NUMBER"
@@ -1214,7 +1214,7 @@ def parseZHAcommand(Map descMap) {
                                     thValue = zigbee.convertHexToInt(descMap.data[17]) + zigbee.convertHexToInt(descMap.data[16]) * 256
                                     if (settings.logEnable) { logInfo "${thName} is ${thValue} enabled:${thState}" }
                                 }
-                                else {
+                                else {      // including _TZE204_cjbofhxw
                                     amperageEvent(value/getCurrentDiv())
                                 }
                                 break
@@ -1222,7 +1222,7 @@ def parseZHAcommand(Map descMap) {
                                 if (isRTXCircuitBreaker()) {    // breaker id
                                     if (settings.logEnable) { logInfo "RTX(19) breaker id = ${getAttributeString(descMap.data)})" }
                                 }
-                                else {
+                                else {  // including _TZE204_cjbofhxw
                                     powerEvent(value/getPowerDiv())
                                 }
                                 break
@@ -1230,7 +1230,7 @@ def parseZHAcommand(Map descMap) {
                                 if (isRTXCircuitBreaker()) {    // IMEI IMSI
                                     logInfo "IMEI IMSI = ${value}"
                                 }
-                                else {
+                                else {  // including _TZE204_cjbofhxw
                                     voltageEvent(value/getVoltageDiv())    // voltage divider is 10 for EF00 cluster!
                                 }
                                 break
@@ -2139,7 +2139,7 @@ private sendTuyaCommand(dp, dp_type, fncmd, delay=200) {
 
 void sendZigbeeCommands(List<String> cmds) {
     if (logEnable) {log.trace "${device.displayName} sendZigbeeCommands : ${cmds}"}
-	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+    sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
 }
 
@@ -2356,30 +2356,30 @@ private getIDENTIFY_CMD_QUERY() { 0x01 }
 private getIDENTIFY_CMD_TRIGGER() { 0x40 }
 
 def intTo16bitUnsignedHex(value) {
-	def hexStr = zigbee.convertToHexString(value.toInteger(),4)
-	return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
+    def hexStr = zigbee.convertToHexString(value.toInteger(),4)
+    return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
 }
 
 def intTo8bitUnsignedHex(value) {
-	return zigbee.convertToHexString(value.toInteger(), 2)
+    return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
 Integer safeToInt(val, Integer defaultVal=0) {
-	return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+    return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
 Double safeToDouble(val, Double defaultVal=0.0) {
-	return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
+    return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
 def identify() {
-	List<String> cmds = []
-	cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_IDENTIFY} { 0x${intTo16bitUnsignedHex(30)} }"    // Identify for 30 seconds
-	//cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_TRIGGER} { 0x${intTo8bitUnsignedHex(EFFECT_BREATHE)} 0x${intTo8bitUnsignedHex(0)} }"    // Trigger Effect
+    List<String> cmds = []
+    cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_IDENTIFY} { 0x${intTo16bitUnsignedHex(30)} }"    // Identify for 30 seconds
+    //cmds += "he cmd 0x${device.deviceNetworkId} 0x${device.endpointId} 0x0003 ${IDENTIFY_CMD_TRIGGER} { 0x${intTo8bitUnsignedHex(EFFECT_BREATHE)} 0x${intTo8bitUnsignedHex(0)} }"    // Trigger Effect
     if (txtEnable==true) log.info "${device.displayName} sending Identify to ${device.getDataValue('manufacturer')}"
     //cmds += zigbee.command(0x0003, 0x00, "0500")        // 5 seconds?
     if (state.txCounter != null) state.txCounter = state.txCounter + 1
-	return cmds;
+    return cmds;
 }
 
 def disableReporting(String measurement, Boolean sendNow=true) {
@@ -2526,32 +2526,32 @@ def afterResetEvents() {
 }
 
 def calculateEnergyDuration() {
-	def energyTimeMS = unixFromFormattedDateTime( state.lastResetDate )
-	if (!energyTimeMS) {
-		return "Unknown"
-	}
+    def energyTimeMS = unixFromFormattedDateTime( state.lastResetDate )
+    if (!energyTimeMS) {
+        return "Unknown"
+    }
     def duration = roundTwoPlaces((new Date().time - energyTimeMS) / 60000)
-		
-		if (duration >= (24 * 60)) {
-			return getFormattedDuration(duration, (24 * 60), "Day")
-		}
-		else if (duration >= 60) {
-			return getFormattedDuration(duration, 60, "Hour")
-		}
-		else {
-			return getFormattedDuration(duration, 0, "Min")    // was "Minute"
-		}
+        
+        if (duration >= (24 * 60)) {
+            return getFormattedDuration(duration, (24 * 60), "Day")
+        }
+        else if (duration >= 60) {
+            return getFormattedDuration(duration, 60, "Hour")
+        }
+        else {
+            return getFormattedDuration(duration, 0, "Min")    // was "Minute"
+        }
 }
 
 def getFormattedDuration(duration, divisor, name) {
-	if (divisor) {
-		duration = roundTwoPlaces(duration / divisor)
-	}	
-	return "${duration} ${name}${duration == 1 ? '' : 's'}"
+    if (divisor) {
+        duration = roundTwoPlaces(duration / divisor)
+    }    
+    return "${duration} ${name}${duration == 1 ? '' : 's'}"
 }
 
 def roundTwoPlaces(val) {
-	return Math.round(safeToDouble(val) * 100) / 100
+    return Math.round(safeToDouble(val) * 100) / 100
 }
 
  
@@ -2671,7 +2671,7 @@ String addToAttr(String name, String key, String convert = "none", Boolean isTex
 }
 
 String getUnitFromState(String attrName){
-   	return device.currentState(attrName)?.unit
+       return device.currentState(attrName)?.unit
 }
 
 void updateAttr(String aKey, aValue, String aUnit = "") {
