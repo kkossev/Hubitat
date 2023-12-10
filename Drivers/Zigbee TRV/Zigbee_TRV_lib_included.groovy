@@ -22,52 +22,49 @@
  * ver. 3.0.3  2023-12-03 kkossev  - (dev. branch) Aqara E1 thermostat refactoring : removed isAqaraTRV(); heatingSetpoint OK; off mode OK, auto OK heat OK; driverVersion state is updated on healthCheck and on preferences saving;
  * ver. 3.0.4  2023-12-08 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
  *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
+ * ver. 3.0.5  2023-12-08 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh()
  *
- *                                   TODO: BRT-100: add off mode (substitutue with eco mode) for Google Home compatibility
- *                                   TODO : adding VIRTUAL thermostat - option to simualate the thermostatOperatingState  
+ *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?  BRT-100: workingState open/closed to be replaced with thermostatOperatingState ?
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
- *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
- *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown'
  *                                   TODO: remove (raw:) when debug is off
- *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.995debugBRT-100 TRV DEV preference 'ecoMode' value [1] differs from the new scaled value 1 (clusterAttribute raw value 1)
- *                                   TODO: BRT-100 dev:32912023-12-02 14:10:56.989debugBRT-100 TRV DEV compareAndConvertTuyaToHubitatPreferenceValue: preference = [1] type=enum foundItem=ecoMode isEqual=false tuyaValueScaled=1 (scale=1) fncmd=1
- *                                   TODO: BRT-100 - after emergency heat, the mode was set to 'auto' (not 'heat') !
  *                                   TODO: prevent from showing "invalid enum parameter emergency heat. value must be one of [0, 1, 2, 3, 4]"; also for  invalid enum parameter cool. *                                   
  *                                   TODO: add [refresh] for battery heatingSetpoint thermostatOperatingState events and logs
  *                                   TODO: hide the maxTimeBetweenReport preferences (not used here)
- *                                   TODO: option to disale the Auto mode ! (like in the wall thermostat driver)
+ *                                   TODO: option to disable the Auto mode ! (like in the wall thermostat driver)
  *                                   TODO: allow NULL parameters default values in the device profiles
  *                                   TODO: autoPollThermostat: no polling for device profile UNKNOWN
- *                                   TODO: // TODO - configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
+ *                                   TODO: configure the reporting for the 0x0201:0x0000 temperature !  (300..3600)
  *                                   TODO: Ping the device on initialize
  *                                   TODO: add factoryReset command Basic -0x0000 (Server); command 0x00
- *                                   TODO: handle UNKNOWN TRV
  *                                   TODO: initializeThermostat() 
- *                                   TODO: Healthcheck to be every hour (not 4 hours)
- *                                   TODO: add option 'Cool similation'
+ *                                   TODO: Healthcheck to be every hour (not 4 hours) for thermostats
  *                                   TODO: add option 'Simple TRV' (no additinal attributes)
- *                                   TODO: add state.trv for stroring attributes
- *                                   TODO: add 'force manual mode' preference
+ *                                   TODO: add state.thermostat for stroring last attributes
+ *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
  *                                   TODO: move debug and info logging preferences from the common library to the driver, so that they are the first preferences in the list
  *                                   TODO: add Info dummy preference to the driver with a hyperlink 
  *                                   TODO: change deviceProfilesV2 to deviceProfilesV3 in the lib
- *                                   TODO: add test command to list the fingerprints generated by the deviceProfileLib
  *                                   TODO: add _DEBUG command (for temporary switching the debug logs on/off)
  *                                   TODO: make a driver template for new drivers
  *                                   TODO: Versions of the main module + included libraries 
  *                                   TODO: HomeKit - min and max temperature limits?
  *                                   TODO: add receiveCheck() methods for heatingSetpint and mode (option)
  *                                   TODO: separate the autoPoll commands from the refresh commands (lite)
- *                                   TODO: Aqara TRV refactoring : 'cool' and 'emergency heat' and 'eco' modes to return meaningfull error message (check in the device profile if this mode is supported)
- *                                   TODO: Aqara TRV refactoring : simulate the 'emergency heat' mode by setting maxTemp and when off - restore the previous temperature 
+ *                                   TODO: All TRVs - after emergency heat, restpre the last mode and heatingSetpoint
+ *                                   TODO: VIRTUAL thermostat - option to simualate the thermostatOperatingState  
+ *                                   TODO: UNKNOWN TRV - update the deviceProfile - separate 'Unknown Tuya' and 'Unknown ZCL' 
+ *                                   TODO: Sonoff - add 'emergency heat' simulation ?  ( +timer ?)
+ *                                   TODO: Aqara TRV refactoring : add 'defaults' in the device profile to set up the systemMode initial value as 'unknown' ?
+ *                                   TODO: Aqara TRV refactoring : eco mode simualtion
+ *                                   TODO: Aqara TRV refactoring : emergency heat mode similation by setting maxTemp and when off - restore the previous temperature 
  *                                   TODO: Aqara TRV refactoring : calibration as a command ! 
  *                                   TODO: Aqara TRV refactoring : physical vs digital events ?
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { "3.0.4" }
-static String timeStamp() {"2023/12/08 9:54 PM"}
+static String version() { "3.0.5" }
+static String timeStamp() {"2023/12/09 9:39 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -126,7 +123,7 @@ metadata {
         attribute 'weeklyProgram', "number"                         // BRT-100
         attribute 'windowOpenDetection', "enum", ["off", "on"]      // BRT-100, Aqara E1, Sonoff
         attribute 'windowsState', "enum", ["open", "closed"]        // BRT-100, Aqara E1
-        attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
+        //attribute 'workingState', "enum", ["open", "closed"]        // BRT-100 
 
         // Aqaura E1 attributes     TODO - consolidate a common set of attributes
         attribute "systemMode", 'enum', SystemModeOpts.options.values() as List<String>            // 'off','on'    - used!
@@ -307,18 +304,18 @@ metadata {
             
             device        : [models: ["TS0601"], type: "TRV", powerSource: "battery", isSleepy:false],
             capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
-            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoMode":"106", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
+            preferences   : ["windowOpenDetection":"8", "childLock":"13", "boostTime":"103", "calibrationTemp":"105", "ecoTemp":"107", "minHeatingSetpoint":"109", "maxHeatingSetpoint":"108"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0004,0005,EF00", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_b6wax7g0", deviceJoinName: "MOES BRT-100 TRV"] 
             ],
-            commands      : ["autoPollThermostat":"autoPollThermostat", "sendSupportedThermostatModes":"sendSupportedThermostatModes", "setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : [/*"pollTuya":"pollTuya","autoPollThermostat":"autoPollThermostat",*/ "sendSupportedThermostatModes":"sendSupportedThermostatModes", "setHeatingSetpoint":"setHeatingSetpoint", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [
                 [dp:1,   name:'thermostatMode',     type:"enum",            rw: "rw", min:0,     max:3,    defaultValue:"1",  step:1,   scale:1,  map:[0: "auto", 1: "heat", 2: "TempHold", 3: "holidays"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'], 
                 [dp:2,   name:'heatingSetpoint',    type:"decimal",         rw: "rw", min:5.0,   max:45.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],
                 [dp:3,   name:'temperature',        type:"decimal",         rw: "ro", min:-10.0, max:50.0, defaultValue:20.0, step:0.5, scale:10, unit:"°C",  description:'<i>Temperature</i>'],
                 [dp:4,   name:'emergencyHeating',   type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Emergency Heating</b>",  description:'<i>Emergency heating</i>'], 
                 [dp:5,   name:'emergencyHeatingTime',   type:"number",      rw: "rw", min:0,     max:720 , defaultValue:15,   step:15,  scale:1,  unit:"minutes", title:"<b>Emergency Heating Timer</b>",  description:'<i>Emergency heating timer</i>'], 
-                [dp:7,   name:'workingState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWorking State</b>",  description:'<i>working state</i>'], 
+                [dp:7,   name:'thermostatOperatingState',  type:"enum",     rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"heating", 1:"idle"] ,  unit:"", description:'<i>Thermostat Operating State(working state)</i>'], 
                 [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Window detection</i>'], 
                 [dp:9,   name:'windowsState',       type:"enum",            rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"open", 1:"closed"] ,   unit:"", title:"<bWindow State</b>",  description:'<i>Window state</i>'], 
                 [dp:13,  name:'childLock',          type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Child Lock</b>",  description:'<i>Child lock</i>'], 
@@ -328,12 +325,12 @@ metadata {
                 [dp:104, name:'level',              type:"number",          rw: "ro", min:0,     max:100,  defaultValue:100,  step:1,   scale:1,  unit:"%",          description:'<i>Valve level</i>'],
                 [dp:105, name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],
                 [dp:106, name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'], 
-                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
+                [dp:107, name:'ecoTemp',            type:"decimal",         rw: "rw", min:5.0,   max:35.0, defaultValue:7.0,  step:1.0, scale:1,  unit:"°C",  title: "<b>Eco Temperature</b>",      description:'<i>Eco temperature</i>'],
                 [dp:108, name:'maxHeatingSetpoint', type:"decimal",         rw: "rw", min:15.0,  max:45.0, defaultValue:35.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Maximum Temperature</b>",      description:'<i>Maximum temperature</i>'],
                 [dp:109, name:'minHeatingSetpoint', type:"decimal",         rw: "rw", min:5.0,   max:15.0, defaultValue:10.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Minimum Temperature</b>",      description:'<i>Minimum temperature</i>'],
             ],
-            supportedThermostatModes: ["off", "heat", "auto", "emergency heat" /* "eco"*/],
-            refresh: ["tuyaBlackMagic"],
+            supportedThermostatModes: ["off", "heat", "auto", "emergency heat", "eco"],
+            refresh: ["pollTuya"],
             deviceJoinName: "MOES BRT-100 TRV",
             configuration : [:]
     ],
@@ -405,7 +402,7 @@ metadata {
                
 
             ],
-            refresh: ["dummy","dummy"],
+            refresh: ["pollTuya","pollTuya"],
             supportedThermostatModes: ["auto", "heat", "emergency heat", "eco", "off", "cool"],
             deviceJoinName: "Virtual thermostat",
             configuration : [:]
@@ -438,9 +435,9 @@ metadata {
 ]
 
 // TODO - use for all events sent by this driver !!
-void thermostatEvent(eventName, value, raw) {
+void sendThermostatEvent(eventName, value, raw, isDigital = false) {
     def descriptionText = "${eventName} is ${value}"
-    Map eventMap = [name: eventName, value: value, descriptionText: descriptionText, type: "physical"]
+    Map eventMap = [name: eventName, value: value, descriptionText: descriptionText, type: isDigital ? "digital" : "physical"]
     if (state.states["isRefresh"] == true) {
         eventMap.descriptionText += " [refresh]"
         eventMap.isStateChange = true   // force event to be sent
@@ -449,6 +446,24 @@ void thermostatEvent(eventName, value, raw) {
     sendEvent(eventMap)
     logInfo "${eventMap.descriptionText}"
 }
+
+void sendEventMap( Map event, isDigital = false) {
+    if (event.descriptionText == null) {
+        event.descriptionText = "${event.name} is ${event.value} ${event.unit ?: ""}"
+    }
+    if (state.states["isRefresh"] == true) {
+        event.descriptionText += " [refresh]"
+        event.isStateChange = true   // force event to be sent
+    }
+    event.type = event.type != null ? event.type : isDigital == true ? "digital" : "physical"
+    if (event.type == "digital") {
+        event.isStateChange = true   // force event to be sent
+        event.descriptionText += " [digital]"
+    }
+    sendEvent(event)
+    logInfo "${event.descriptionText}"
+}
+
 
 // called from parseXiaomiClusterLib in xiaomiLib.groovy (xiaomi cluster 0xFCC0 )
 //
@@ -753,11 +768,24 @@ def setCoolingSetpoint(temperature) {
 }
 
 
+/**
+ * Sets the thermostat mode based on the requested mode.
+ * 
+ * if the requestedMode is supported directly in the thermostatMode attribute, it is set directly.
+ * Otherwise, the thermostatMode is substituted with another command, if supported by the device.
+ *
+ * @param requestedMode The mode to set the thermostat to.
+ */
 def setThermostatMode(requestedMode) {
     String mode = requestedMode
     List<String> cmds = []
     Boolean result = false
-    logDebug "setThermostatMode: sending setThermostatMode(${mode})"
+    def nativelySupportedModes = getAttributesMap("thermostatMode")?.map?.values() ?: []
+    def systemModes = getAttributesMap("systemMode")?.map?.values() ?: []
+    def ecoModes = getAttributesMap("ecoMode")?.map?.values() ?: []
+    def emergencyHeatingModes = getAttributesMap("emergencyHeating")?.map?.values() ?: []
+
+    logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModes}"
 
     // some TRVs require some checks and additional commands to be sent before setting the mode
     def currentMode = device.currentValue('thermostatMode')
@@ -800,13 +828,16 @@ def setThermostatMode(requestedMode) {
             
             }
             break
-        case "emergency heat":
-            if (device.currentValue('emergencyHeating') != null)  {
-                // BRT-100 has a dedicated 'emergencyHeating' command
-                logInfo "setThermostatMode: setting emergency heat mode on (${settings.emergencyHeatingTime} minutes)"
-                sendAttribute("emergencyHeating", 1)
-                return
+        case "emergency heat":     // TODO for Aqara and Sonoff TRVs
+            if ('emergency heat' in nativelySupportedModes) {
+                break
             }
+            // look for a dedicated 'emergencyMode' deviceProfile attribute       (BRT-100)
+            if ('on' in emergencyHeatingModes)  {
+                logInfo "setThermostatMode: pre-processing: switching the emergencyMode mode on for (${settings.emergencyHeatingTime} seconds )"
+                sendAttribute("emergencyHeating", "on")
+                return
+            }            
             break
         case 'eco':
             if (device.currentValue('ecoMode') != null)  {
@@ -815,36 +846,28 @@ def setThermostatMode(requestedMode) {
                 return
             }
             break
-        case 'off':     // TODO 
-            // if systemMode attribute exists, set it to 'off'  (Aqara E1)
-            def sysMode = device.currentValue('systemMode')     // off or on
-            if (sysMode != null) {  // !!!!!!!!!!! Patch for Aqara E1 !
-                if ( true /*sysMode != 'off'*/) {
-                    logInfo "setThermostatMode: pre-processing: setting systemMode to 'off'"
-                    // get the key of the 'off' value
-                    def key = SystemModeOpts.options.find { key, value -> value == 'off' }.key
-                    sendAttribute("systemMode", key)
-                }
-                else {
-                    logInfo "setThermostatMode: pre-processing: systemMode is already 'off'"
-                }
+        case 'off':     // OK!
+            if ('off' in nativelySupportedModes) {
+                break
+            }
+            logDebug "setThermostatMode: pre-processing: switching to 'off' mode"
+            // if the 'off' mode is not directly supported, try substituting it with 'eco' mode
+            if ('eco' in nativelySupportedModes) {
+                logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
+                mode = "eco"
+                break
+            }
+            // look for a dedicated 'ecoMode' deviceProfile attribute       (BRT-100)
+            if ('on' in ecoModes)  {
+                logInfo "setThermostatMode: pre-processing: switching the eco mode on"
+                sendAttribute("ecoMode", "on")
                 return
             }
-            // TODO - if the 'off' mode is not supported, try substituting it with 'eco' mode
-            else if (!("off" in DEVICE.supportedThermostatModes)) {
-                logDebug "setThermostatMode: 'off' mode is not supprted by this thermostat!"
-                if ('eco' in DEVICE.supportedThermostatModes) {
-                    logInfo "setThermostatMode: pre-processing: switching to eco mode instead"
-                    mode = "eco"
-                    break
-                }
-                else {
-                    logWarn "setThermostatMode: pre-processing: switching to 'off' mode is not supported by this device!"
-                    return
-                }
-            }
-            else {
-                logDebug "setThermostatMode: pre-processing: no pre-processing for mode ${mode}"
+            // look for a dedicated 'systemMode' attribute with map 'off' (Aqara E1)
+            if ('off' in systemModes)  {
+                logInfo "setThermostatMode: pre-processing: switching the systemMode off"
+                sendAttribute("systemMode", "off")
+                return
             }
             break
         default:
@@ -925,8 +948,53 @@ private void unScheduleThermostatPolling() {
     unschedule('autoPollThermostat')
 }
 
-def dummy() {
-    logDebug "dummy() called!"
+def timeToHMS(time) {
+    def hours = (time / 3600) as int
+    def minutes = ((time % 3600) / 60) as int
+    def seconds = time % 60
+    return "${hours}h ${minutes}m ${seconds}s"
+}
+
+def getElapsedTimeFromEventInSeconds(eventName) {
+    def now = new Date().time
+    def lastEventState = device.currentState(eventName)
+    logDebug "getElapsedTimeFromEventInSeconds: eventName = ${eventName} lastEventState = ${lastEventState}"
+    if (lastEventState == null) {
+        logTrace "getElapsedTimeFromEventInSeconds: lastEventState is null, returning 0"
+        return 0
+    }
+    def lastEventStateTime = lastEventState.date.time
+    def lastEventStateValue = lastEventState.value
+    def diff = ((now - lastEventStateTime) / 1000) as int
+    // convert diff to minutes and seconds
+    logTrace "getElapsedTimeFromEventInSeconds: lastEventStateTime = ${lastEventStateTime} diff = ${diff} seconds"
+    return diff
+}
+
+def sendDigitalEventIfNeeded(eventName){
+    def lastEventState = device.currentState(eventName)
+    def diff = getElapsedTimeFromEventInSeconds(eventName)
+    def diffStr = timeToHMS(diff)
+    if (diff >= (settings.temperaturePollingInterval as int)) {
+        logDebug "pollTuya: %{eventName} was sent more than ${settings.temperaturePollingInterval} seconds ago (${diffStr}), sending digital event"
+        sendEventMap([name: lastEventState.name, value: lastEventState.value, unit: lastEventState.unit, type: "digital"])
+    }
+    else {
+        logDebug "pollTuya: ${eventName} was sent less than ${settings.temperaturePollingInterval} seconds ago, skipping"
+    }    
+}
+
+def pollTuya() {
+    logDebug "pollTuya() called!"
+    // check if the device is online
+    if (device.currentState("healthStatus")?.value != "online") {
+        logWarn "pollTuya: device is offline, skipping pollTuya()"
+        return []
+    }
+    sendDigitalEventIfNeeded("temperature")
+    sendDigitalEventIfNeeded("heatingSetpoint")
+    sendDigitalEventIfNeeded("level")
+    ping()
     return []
 }
 
@@ -1188,7 +1256,8 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
                 sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 valve is open %{valueScaled} %")
             }
             break
-        case "workingState" :      // BRT-100
+            /*
+        case "workingState" :      // BRT-100   replaced with thermostatOperatingState
             sendEvent(eventMap)
             logInfo "${descText}"
             if (valueScaled == "closed") {  // the valve is closed
@@ -1198,6 +1267,7 @@ def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
                 sendEvent(name: "thermostatOperatingState", value: "heating", isStateChange: true, description: "BRT-100 workingState is open")
             }
             break
+            */
         default :
             sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
             //if (!doNotTrace) {
@@ -4278,14 +4348,36 @@ def updateAqaraVersion() { // library marker kkossev.commonLib, line 2988
     } // library marker kkossev.commonLib, line 3003
 } // library marker kkossev.commonLib, line 3004
 
-def test(par) { // library marker kkossev.commonLib, line 3006
-    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 3007
-    log.warn "test... ${par}" // library marker kkossev.commonLib, line 3008
+String unix2formattedDate( unixTime ) { // library marker kkossev.commonLib, line 3006
+    try { // library marker kkossev.commonLib, line 3007
+        if (unixTime == null) return null // library marker kkossev.commonLib, line 3008
+        def date = new Date(unixTime.toLong()) // library marker kkossev.commonLib, line 3009
+        return date.format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone) // library marker kkossev.commonLib, line 3010
+    } catch (Exception e) { // library marker kkossev.commonLib, line 3011
+        logDebug "Error formatting date: ${e.message}. Returning current time instead." // library marker kkossev.commonLib, line 3012
+        return new Date().format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone) // library marker kkossev.commonLib, line 3013
+    } // library marker kkossev.commonLib, line 3014
+} // library marker kkossev.commonLib, line 3015
 
-    parse(par) // library marker kkossev.commonLib, line 3010
+def formattedDate2unix( formattedDate ) { // library marker kkossev.commonLib, line 3017
+    try { // library marker kkossev.commonLib, line 3018
+        if (formattedDate == null) return null // library marker kkossev.commonLib, line 3019
+        def date = Date.parse("yyyy-MM-dd HH:mm:ss.SSS", formattedDate) // library marker kkossev.commonLib, line 3020
+        return date.getTime() // library marker kkossev.commonLib, line 3021
+    } catch (Exception e) { // library marker kkossev.commonLib, line 3022
+        logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead." // library marker kkossev.commonLib, line 3023
+        return now() // library marker kkossev.commonLib, line 3024
+    } // library marker kkossev.commonLib, line 3025
+} // library marker kkossev.commonLib, line 3026
 
-   // sendZigbeeCommands(cmds)     // library marker kkossev.commonLib, line 3012
-} // library marker kkossev.commonLib, line 3013
+def test(par) { // library marker kkossev.commonLib, line 3028
+    ArrayList<String> cmds = [] // library marker kkossev.commonLib, line 3029
+    log.warn "test... ${par}" // library marker kkossev.commonLib, line 3030
+
+    parse(par) // library marker kkossev.commonLib, line 3032
+
+   // sendZigbeeCommands(cmds)     // library marker kkossev.commonLib, line 3034
+} // library marker kkossev.commonLib, line 3035
 
 // ~~~~~ end include (144) kkossev.commonLib ~~~~~
 
@@ -5336,7 +5428,7 @@ def sendCommand( command=null, val=null) // library marker kkossev.deviceProfile
         return false // library marker kkossev.deviceProfileLib, line 725
     } // library marker kkossev.deviceProfileLib, line 726
     def func // library marker kkossev.deviceProfileLib, line 727
-    try { // library marker kkossev.deviceProfileLib, line 728
+ //   try { // library marker kkossev.deviceProfileLib, line 728
         func = DEVICE.commands.find { it.key == command }.value // library marker kkossev.deviceProfileLib, line 729
         if (val != null) { // library marker kkossev.deviceProfileLib, line 730
             cmds = "${func}"(val) // library marker kkossev.deviceProfileLib, line 731
@@ -5346,11 +5438,11 @@ def sendCommand( command=null, val=null) // library marker kkossev.deviceProfile
             cmds = "${func}"() // library marker kkossev.deviceProfileLib, line 735
             logInfo "executed <b>$func</b>()" // library marker kkossev.deviceProfileLib, line 736
         } // library marker kkossev.deviceProfileLib, line 737
-    } // library marker kkossev.deviceProfileLib, line 738
-    catch (e) { // library marker kkossev.deviceProfileLib, line 739
-        logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})" // library marker kkossev.deviceProfileLib, line 740
-        return false // library marker kkossev.deviceProfileLib, line 741
-    } // library marker kkossev.deviceProfileLib, line 742
+ //   } // library marker kkossev.deviceProfileLib, line 738
+ //   catch (e) { // library marker kkossev.deviceProfileLib, line 739
+ //       logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})" // library marker kkossev.deviceProfileLib, line 740
+ //       return false // library marker kkossev.deviceProfileLib, line 741
+ //   } // library marker kkossev.deviceProfileLib, line 742
     if (cmds != null && cmds != []) { // library marker kkossev.deviceProfileLib, line 743
         sendZigbeeCommands( cmds ) // library marker kkossev.deviceProfileLib, line 744
     } // library marker kkossev.deviceProfileLib, line 745

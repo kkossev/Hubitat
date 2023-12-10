@@ -725,7 +725,7 @@ def sendCommand( command=null, val=null)
         return false
     }
     def func
-    try {
+ //   try {
         func = DEVICE.commands.find { it.key == command }.value
         if (val != null) {
             cmds = "${func}"(val)
@@ -735,11 +735,11 @@ def sendCommand( command=null, val=null)
             cmds = "${func}"()
             logInfo "executed <b>$func</b>()"
         }
-    }
-    catch (e) {
-        logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
-        return false
-    }
+ //   }
+ //   catch (e) {
+ //       logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
+ //       return false
+ //   }
     if (cmds != null && cmds != []) {
         sendZigbeeCommands( cmds )
     }

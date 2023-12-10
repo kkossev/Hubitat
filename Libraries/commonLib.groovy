@@ -3003,6 +3003,28 @@ def updateAqaraVersion() {
     }
 }
 
+String unix2formattedDate( unixTime ) {
+    try {
+        if (unixTime == null) return null
+        def date = new Date(unixTime.toLong())
+        return date.format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
+    } catch (Exception e) {
+        logDebug "Error formatting date: ${e.message}. Returning current time instead."
+        return new Date().format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
+    }
+}
+
+def formattedDate2unix( formattedDate ) {
+    try {
+        if (formattedDate == null) return null
+        def date = Date.parse("yyyy-MM-dd HH:mm:ss.SSS", formattedDate)
+        return date.getTime()
+    } catch (Exception e) {
+        logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
+        return now()
+    }
+}
+
 def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
