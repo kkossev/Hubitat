@@ -3029,7 +3029,8 @@ def test(par) {
     ArrayList<String> cmds = []
     log.warn "test... ${par}"
     
-    parse(par)
+    cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
+    //parse(par)
     
-   // sendZigbeeCommands(cmds)    
+    sendZigbeeCommands(cmds)    
 }

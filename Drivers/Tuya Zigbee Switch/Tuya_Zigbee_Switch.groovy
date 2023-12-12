@@ -20,15 +20,16 @@
  * ver. 2.1.3  2023-08-12 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version;
  * ver. 3.0.0  2023-11-24 kkossev  - (dev. branch) use commonLib; added AlwaysOn option; added ignore duplcated on/off events option;
  * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices; 
+ * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
  *
- *                                   TODO: 
+ *                                   TODO: add toggle() command; initialize 'switch' to unknown
  *                                   TODO: add power-on behavior option
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { "3.0.1" }
-static String timeStamp() {"2023/11/25 11:57 PM"}
+static String version() { "3.0.2" }
+static String timeStamp() {"2023/12/12 10:57 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -104,7 +105,7 @@ metadata {
 @Field static final String FREQUENCY = "Frequency"
 @Field static final String POWER_FACTOR = "PowerFactor"
 
-def isZBMINIL2()   { (device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
+def isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
 def refreshSwitch() {
     List<String> cmds = []
@@ -129,10 +130,14 @@ void initEventsSwitch(boolean fullInit=false) {
 def configureDeviceSwitch() {
     List<String> cmds = []
     if (isZBMINIL2()) {
-        logDebug "configureDeviceSwitch() : ZBMINIL2"
-        // Unbind genPollCtrl to prevent device from sending checkin message.
+        logDebug "configureDeviceSwitch() : unbind ZBMINIL2 poll control cluster"
+        // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message.
         // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
-        // https://github.com/Koenkk/zigbee2mqtt/issues/11676        
+        // https://github.com/Koenkk/zigbee2mqtt/issues/11676     
+        // https://github.com/Koenkk/zigbee2mqtt/issues/10282 
+        // https://github.com/zigpy/zha-device-handlers/issues/1519    
+        cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
+
     }
 /*
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ]
