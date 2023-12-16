@@ -30,6 +30,7 @@ library (
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-12-06 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
+  * ver. 3.0.2  2023-12-15 kkossev  - (dev.branch) configure() changes;
   *
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: battery voltage low/high limits configuration
@@ -41,8 +42,8 @@ library (
  *
 */
 
-def commonLibVersion()   {"3.0.1"}
-def thermostatLibStamp() {"2023/12/06 9:46 PM"}
+def commonLibVersion()   {"3.0.2"}
+def thermostatLibStamp() {"2023/12/15 7:37 AM"}
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -220,7 +221,7 @@ metadata {
 ]
 
 @Field static final Map ConfigureOpts = [
-    "Configure the device only"  : [key:2, function: 'configure'],
+    "Configure the device only"  : [key:2, function: 'configureNow'],
     "Reset Statistics"           : [key:9, function: 'resetStatistics'],
     "           --            "  : [key:3, function: 'configureHelp'],
     "Delete All Preferences"     : [key:4, function: 'deleteAllSettings'],
@@ -2253,7 +2254,7 @@ def configureDevice() {
     else if (DEVICE_TYPE in  ["Radar"])      { cmds += configureDeviceRadar() }
     else if (DEVICE_TYPE in  ["ButtonDimmer"]) { cmds += configureDeviceButtonDimmer() }
     else if (DEVICE_TYPE in  ["Bulb"])       { cmds += configureBulb() }
-    if (cmds == []) { 
+    if ( cmds == null || cmds == []) { 
         cmds = ["delay 277",]
     }
     sendZigbeeCommands(cmds)  
@@ -2591,9 +2592,13 @@ def loadAllDefaults() {
     sendInfoEvent("All Defaults Loaded! F5 to refresh")
 }
 
+def configureNow() {
+    sendZigbeeCommands( configure() )
+}
+
 /**
  * Send configuration parameters to the device
- * Invoked when device is first installed and when the user updates the configuration
+ * Invoked when device is first installed and when the user updates the configuration  TODO
  * @return sends zigbee commands
  */
 def configure() {
@@ -2606,8 +2611,9 @@ def configure() {
     }
     cmds += initializeDevice()
     cmds += configureDevice()
-    sendZigbeeCommands(cmds)
+    // commented out 12/15/2923 sendZigbeeCommands(cmds)
     sendInfoEvent("sent device configuration")
+    return cmds
 }
 
 /**

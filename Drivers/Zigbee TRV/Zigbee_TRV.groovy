@@ -23,8 +23,11 @@
  * ver. 3.0.4  2023-12-08 kkossev  - (dev. branch) code cleanup; fingerpints not generated bug fix; initializeDeviceThermostat() bug fix; debug logs are enabled by default; added VIRTUAL thermostat : ping, auto, cool, emergency heat, heat, off, eco - OK! 
  *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
  * ver. 3.0.5  2023-12-09 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState 
- * ver. 3.0.6  2023-12-10 kkossev  - (dev. branch)
+ * ver. 3.0.6  2023-12-16 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL_TRV group
  *
+ *                                   WIP: TUYA_SASWELL_TRV group ;
+ *                                   TOOD: Sonoff : decode weekly shcedule responses (command 0x00)
+ *                                   TOOD: Aqara : dev:42172023-12-14 06:48:22.925errorjava.lang.NumberFormatException: For input string: "03281A052101000A21E2CC0D231E0A00001123010000006520006629D809672940066823000000006920646A2000" on line 473 (method parse) 
  *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?  
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile ! 
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
@@ -65,7 +68,7 @@
  */
 
 static String version() { "3.0.6" }
-static String timeStamp() {"2023/12/10 9:48 AM"}
+static String timeStamp() {"2023/12/16 5:58 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -148,7 +151,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        if (advancedOptions == true) {
+        if (advancedOptions == true) { // TODO -  move it to the deviceProfile preferences
             input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates and nice looking graphs.</i>'
         }
         // the rest of the preferences are inputed from the deviceProfile maps in the deviceProfileLib
@@ -333,6 +336,49 @@ metadata {
             supportedThermostatModes: ["off", "heat", "auto", "emergency heat", "eco"],
             refresh: ["pollTuya"],
             deviceJoinName: "MOES BRT-100 TRV",
+            configuration : [:]
+    ],
+
+// TUYA_SASWELL
+//              https://github.com/jacekk015/zha_quirks/blob/main/trv_saswell.py        https://github.com/jacekk015/zha_quirks?tab=readme-ov-file#trv_saswellpy
+//              TODO - what is the difference between 'holidays' mode and 'ecoMode' ?  Which one to use to substitute the 'off' mode ?
+    "TUYA_SASWELL"   : [
+            description   : "Tuya Saswell TRV (not fully working yet!)",
+            device        : [models: ["TS0601"], type: "TRV", powerSource: "battery", isSleepy:false],
+            capabilities  : ["ThermostatHeatingSetpoint": true, "ThermostatOperatingState": true, "ThermostatSetpoint":true, "ThermostatMode":true],
+            preferences   : ["windowOpenDetection":"8", "childLock":"40", "calibrationTemp":"27"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_0dvm9mva", deviceJoinName: "TRV RTX ZB-RT1"],         // https://community.hubitat.com/t/zigbee-radiator-trv-rtx-zb-rt1/129812?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_yw7cahqs", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_c88teujp", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_azqp6ssj", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_9gvruqf5", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zuhszj9s", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_zr9c0day", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_h4cgnbzg", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_exfrnlow", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_9m4kmbfu", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3yp57tby", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested 
+                [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mz5y07w2", deviceJoinName: "Garza Smart TRV"]         // not tested              //https://github.com/zigpy/zha-device-handlers/issues/2486
+            ],
+            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            tuyaDPs       : [
+                [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Window detection</i>'],      // SASWELL_WINDOW_DETECT_ATTR
+                [dp:10,  name:'ecoMode',            type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Eco mode</b>",  description:'<i>Eco mode</i>'],                      // SASWELL_ANTI_FREEZE_ATTR 
+                [dp:27,  name:'calibrationTemp',    type:"decimal",         rw: "rw", min:-9.0,  max:9.0,  defaultValue:00.0, step:1,   scale:1,  unit:"°C",  title:"<b>Calibration Temperature</b>", description:'<i>Calibration Temperature</i>'],                // SASWELL_TEMP_CORRECTION_ATTR = 0x021B  # uint32 - temp correction 539 (27 dec)
+                [dp:40,  name:'childLock',          type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Child Lock</b>",  description:'<i>Child lock</i>'],                  // SASWELL_CHILD_LOCK_ATTR
+                [dp:101, name:'thermostatMode',     type:"enum",            rw: "rw", min:0,     max:3,    defaultValue:"1",  step:1,   scale:1,  map:[0: "off", 1: "heat"] ,   unit:"", title:"<b>Thermostat Mode</b>",  description:'<i>Thermostat mode</i>'],    // SASWELL_ONOFF_ATTR = 0x0165  # [0/1] on/off 357                     (101 dec)
+                [dp:102, name:'temperature',        type:"decimal",         rw: "ro", min:-10.0, max:50.0, defaultValue:20.0, step:0.5, scale:10, unit:"°C",  description:'<i>Temperature</i>'],                                                                    // SASWELL_ROOM_TEMP_ATTR = 0x0266  # uint32 - current room temp 614   (102 dec)
+                [dp:103, name:'heatingSetpoint',    type:"decimal",         rw: "rw", min:5.0,   max:45.0, defaultValue:20.0, step:1.0, scale:1,  unit:"°C",  title: "<b>Current Heating Setpoint</b>",      description:'<i>Current heating setpoint</i>'],        // SASWELL_TARGET_TEMP_ATTR = 0x0267  # uint32 - target temp 615       (103 dec)
+                [dp:105, name:'batteryLowAlarm',    type:"enum",  dt: "01", rw: "r0", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"",  description:'<i>Battery low</i>'],                                            // SASWELL_BATTERY_ALARM_ATTR = 0x569  # [0/1] on/off - battery low 1385   (105 dec)
+                [dp:106, name:'awayMode',           type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Away Mode</b>",  description:'<i>Away mode</i>'],                    // SASWELL_AWAY_MODE_ATTR = 0x016A  # [0/1] on/off 362                 (106 dec)
+                [dp:108, name:'scheduleMode',       type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Schedule Mode</b>",  description:'<i>Schedule mode</i>'],            // SASWELL_SCHEDULE_MODE_ATTR = 0x016C  # [0/1] on/off 364             (108 dec)
+                [dp:130, name:'limescaleProtect',   type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Limescale Protect</b>",  description:'<i>limescale protect</i>'],    // SASWELL_LIMESCALE_PROTECT_ATTR
+                // missing !                 [dp:7,   name:'thermostatOperatingState',  type:"enum",     rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"heating", 1:"idle"] ,  unit:"", description:'<i>Thermostat Operating State(working state)</i>'], 
+            ],
+            supportedThermostatModes: ["off", "heat"],
+            refresh: ["pollTuya"],
+            deviceJoinName: "TUYA_SASWELL TRV",
             configuration : [:]
     ],
 
@@ -929,9 +975,11 @@ void sendSupportedThermostatModes() {
     }
     else {
         logWarn "sendSupportedThermostatModes: DEVICE.supportedThermostatModes is not set!"
+        supportedThermostatModes =  ["off","auto", "heat"]
     }
     logInfo "supportedThermostatModes: ${supportedThermostatModes}"
     sendEvent(name: "supportedThermostatModes", value:  JsonOutput.toJson(supportedThermostatModes), isStateChange: true)
+    sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto", "circulate", "on"]), isStateChange: true)    
 }
 
 
@@ -977,7 +1025,7 @@ def sendDigitalEventIfNeeded(eventName){
     def diff = getElapsedTimeFromEventInSeconds(eventName)
     def diffStr = timeToHMS(diff)
     if (diff >= (settings.temperaturePollingInterval as int)) {
-        logDebug "pollTuya: %{eventName} was sent more than ${settings.temperaturePollingInterval} seconds ago (${diffStr}), sending digital event"
+        logDebug "pollTuya: ${eventName} was sent more than ${settings.temperaturePollingInterval} seconds ago (${diffStr}), sending digital event"
         sendEventMap([name: lastEventState.name, value: lastEventState.value, unit: lastEventState.unit, type: "digital"])
     }
     else {
@@ -1131,21 +1179,78 @@ def initializeDeviceThermostat()
     List<String> cmds = []
     int intMinTime = 300
     int intMaxTime = 600    // report temperature every 10 minutes !
+    logDebug "initializeDeviceThermostat() ..."
 
-    logDebug "configuring cluster 0x0201 ..."
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", "delay 251", ]
-    //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541)
-    //cmds += zigbee.configureReporting(0x0201, 0x0000, 0x29, 20, 120, 0x01, [:], delay=542)
+    if ( getDeviceGroup() == "SONOFF_TRV") {
+        //cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
+        //cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
 
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 551", ]
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 20 300 {}", "delay 551", ]
-    cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 551", ]
-    
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't wor
-    cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor
+        cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0005, 0x4000], [:], delay=2711)
+
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0020 {${device.zigbeeId}} {}", "delay 612", ]     // Poll Control Cluster    112
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 613", ]     // Power Configuration Cluster     113
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0001 0x0021 0x20 3600 7200 {02}", "delay 314", ]          // battery reporting   114
+        cmds += zigbee.readAttribute(0x0019, 0x0002, [:], delay=315)                                                 // current file version    115
+        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay=116)                                     // unknown 1  116 
+        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay=317)                                     // unknown 1  117
+        cmds += zigbee.writeAttribute(0xFC11, 0x6008, 0x20, 0x7F, [:], delay=118)                                     // unknown 1``  118
+        logDebug "configuring cluster 0x0201 ..."
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x00 0x0201 {${device.zigbeeId}} {}", "delay 619", ]     // Thermostat Cluster  119 // TODO : check source EP - 0 or 1 ?
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 1800 3540 {0x32}", "delay 600", ]        // local temperature   120
+        cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay=1210)                                                 // battery 121 
+        cmds += zigbee.command(0xEF00, 0x03, "00")        //, "00 00", "00")                               // sequence 123
+
+        cmds +=   zigbee.writeAttribute(0xFC11, 0x0000, 0x10, 0x01, [:], delay=140)                                    // 140
+        cmds +=   zigbee.writeAttribute(0xFC11, 0x0000, 0x10, 0x00, [:], delay=141)                                    // 141
+        cmds +=   zigbee.writeAttribute(0xFC11, 0x6000, 0x10, 0x01, [:], delay=142)                                    // 142
+        cmds +=   zigbee.writeAttribute(0xFC11, 0x6000, 0x10, 0x00, [:], delay=143)                                    // 143
+        cmds +=   zigbee.writeAttribute(0xFC11, 0x6002, 0x29, 0750, [:], delay=144)                                    // 144
+        cmds +=   zigbee.writeAttribute(0x0201, 0x001C, 0x30, 0x01, [:], delay=145)                                    // 145
 
 
+
+    /*
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 252", ]   // heating setpoint
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 253", ]   // thermostat mode
+    */ 
+        
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't work
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 553)    // read it back - doesn't work
+        
+        
+        cmds += zigbee.readAttribute(0x0201, 0x0010, [:], delay=254)      // calibration
+        cmds += zigbee.readAttribute(0xFC11, [0x0000, 0x6000, 0x6002], [:], delay=255)
+
+    /*
+        configure: async (device, coordinatorEndpoint, logger) => {
+                const endpoint = device.getEndpoint(1);
+                await reporting.bind(endpoint, coordinatorEndpoint, ['hvacThermostat']);    x 250
+                await reporting.thermostatTemperature(endpoint);                            x 251
+                await reporting.thermostatOccupiedHeatingSetpoint(endpoint);                x 252
+                await reporting.thermostatSystemMode(endpoint);                             x 253
+                await endpoint.read('hvacThermostat', ['localTemperatureCalibration']);     x 254
+                await endpoint.read(0xFC11, [0x0000, 0x6000, 0x6002]);
+            },
+    */
+    }
+    else if (getDeviceGroup == "AQARA_E1_TRV" ) {
+        logDebug "configuring cluster 0x0201 ..."
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", "delay 251", ]
+        //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541)
+        //cmds += zigbee.configureReporting(0x0201, 0x0000, 0x29, 20, 120, 0x01, [:], delay=542)
+
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0012 0x29 1 600 {}", "delay 551", ]
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x0000 0x29 20 300 {}", "delay 551", ]
+        cmds += ["he cr 0x${device.deviceNetworkId} 0x01 0x0201 0x001C 0x30 1 600 {}", "delay 551", ]
+        
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0012, [:], 551)    // read it back - doesn't work
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x0000, [:], 552)    // read it back - doesn't wor
+        cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor
+    }
+    else {
+        logDebug"initializeDeviceThermostat: nothing to initialize for device group ${getDeviceGroup()}"
+    }
     logDebug "initializeThermostat() : ${cmds}"
     if (cmds == []) { cmds = ["delay 299",] }
     return cmds        
@@ -1174,7 +1279,6 @@ void initEventsThermostat(boolean fullInit=false) {
     if (fullInit==true) {
         String descText = "inital attribute setting"
         sendSupportedThermostatModes()
-        sendEvent(name: "supportedThermostatFanModes", value: JsonOutput.toJson(["auto", "circulate", "on"]), isStateChange: true)    
         sendEvent(name: "thermostatMode", value: "heat", isStateChange: true, description: descText)
         state.lastThermostatMode = "heat"
         sendEvent(name: "thermostatFanMode", value: "auto", isStateChange: true, description: descText)
