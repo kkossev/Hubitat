@@ -16,3 +16,6 @@ Drivers/Tuya Zigbee Metering Plug/new 55.txt
 Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
 Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json
 Drivers/Tuya Temperature Humidity Illuminance LCD Display with a Clock/.hubitat/metadata.json
+Drivers/Zigbee TRV/logback.log
+Drivers/Misc/Third Reality Matter Multi-Function Night Light.groovy
+Drivers/Misc/Matter Test.groovy

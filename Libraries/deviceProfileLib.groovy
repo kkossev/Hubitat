@@ -1,13 +1,13 @@
 library (
-    base: "driver",
-    author: "Krassimir Kossev",
-    category: "zigbee",
-    description: "Device Profile Library",
-    name: "deviceProfileLib",
-    namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy",
-    version: "3.0.0",
-    documentationLink: ""
+    base: 'driver',
+    author: 'Krassimir Kossev',
+    category: 'zigbee',
+    description: 'Device Profile Library',
+    name: 'deviceProfileLib',
+    namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
+    version: '3.0.0',
+    documentationLink: ''
 )
 /*
  *  Device Profile Library
@@ -22,27 +22,27 @@ library (
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2023-11-04 kkossev  - added deviceProfileLib (based on Tuya 4 In 1 driver)
- * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method; 
+ * ver. 3.0.0  2023-11-27 kkossev  - (dev. branch) fixes for use with commonLib; added processClusterAttributeFromDeviceProfile() method; added validateAndFixPreferences() method;  inputIt bug fix; signedInt Preproc method;
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
- * ver. 3.0.2  2023-12-08 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction;
+ * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  *
- *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices
+ *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
-def deviceProfileLibVersion()   {"3.0.2"}
-def deviceProfileLibtamp() {"2023/12/08 8:22 AM"}
+def deviceProfileLibVersion()   { '3.0.2' }
+def deviceProfileLibtamp() { '2023/12/08 10:14 PM' }
 
 metadata {
     // no capabilities
     // no attributes
-    command "sendCommand", [
-        [name:"command", type: "STRING", description: "command name", constraints: ["STRING"]],
-        [name:"val",     type: "STRING", description: "command parameter value", constraints: ["STRING"]]
+    command 'sendCommand', [
+        [name:'command', type: 'STRING', description: 'command name', constraints: ['STRING']],
+        [name:'val',     type: 'STRING', description: 'command parameter value', constraints: ['STRING']]
     ]
-    command "setPar", [
-            [name:"par", type: "STRING", description: "preference parameter name", constraints: ["STRING"]],
-            [name:"val", type: "STRING", description: "preference parameter value", constraints: ["STRING"]]
-    ]    
+    command 'setPar', [
+            [name:'par', type: 'STRING', description: 'preference parameter name', constraints: ['STRING']],
+            [name:'val', type: 'STRING', description: 'preference parameter value', constraints: ['STRING']]
+    ]
     preferences {
         // itterate over DEVICE.preferences map and inputIt all
         if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
@@ -50,19 +50,18 @@ metadata {
                 if (inputIt(key) != null) {
                     input inputIt(key)
                 }
-            }    
+            }
         }
         if (advancedOptions == true) {
-            input (name: "forcedProfile", type: "enum", title: "<b>Device Profile</b>", description: "<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>",  options: getDeviceProfilesMap())
+            input (name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfilesMap())
         }
     }
 }
 
-def getDeviceGroup()     { state.deviceProfile ?: "UNKNOWN" }
+def getDeviceGroup()     { state.deviceProfile ?: 'UNKNOWN' }
 def getDEVICE()          { deviceProfilesV2[getDeviceGroup()] }
 def getDeviceProfiles()      { deviceProfilesV2.keySet() }
-def getDeviceProfilesMap()   {deviceProfilesV2.values().description as List<String>}
-
+def getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
 
 /**
  * Returns the profile key for a given profile description.
@@ -92,31 +91,31 @@ def getPreferencesMapByName( String param, boolean debug=false ) {
         if (debug) { logWarn "getPreferencesMapByName: preference ${param} not defined for this device!" }
         return null
     }
-    def preference 
+    def preference
     try {
         preference = DEVICE.preferences["$param"]
-        if (debug) log.debug "getPreferencesMapByName: param ${param} found. preference is ${preference}"
+        if (debug) { log.debug "getPreferencesMapByName: param ${param} found. preference is ${preference}" }
         if (preference in [true, false]) {      // find the preference in the tuyaDPs map
             if (debug) { logDebug "getPreferencesMapByName: preference ${param} is boolean" }
             return null     // no maps for predefined preferences !
         }
-        if (safeToInt(preference, -1) >0) {             //if (preference instanceof Number) {
+        if (safeToInt(preference, -1) > 0) {             //if (preference instanceof Number) {
             int dp = safeToInt(preference)
             //if (debug) log.trace "getPreferencesMapByName: param ${param} preference ${preference} is number (${dp})"
             foundMap = DEVICE.tuyaDPs.find { it.dp == dp }
         }
         else { // cluster:attribute
             //if (debug) log.trace "getPreferencesMapByName:  ${DEVICE.attributes}"
-            def dpMaps   =  DEVICE.tuyaDPs 
+            //def dpMaps   =  DEVICE.tuyaDPs
             foundMap = DEVICE.attributes.find { it.at == preference }
         }
-        // TODO - could be also 'true' or 'false' ...
+    // TODO - could be also 'true' or 'false' ...
     } catch (Exception e) {
-        if (debug) log.warn "getPreferencesMapByName: exception ${e} caught when getting preference ${param} !"
+        if (debug) { log.warn "getPreferencesMapByName: exception ${e} caught when getting preference ${param} !" }
         return null
     }
     if (debug) { logDebug "getPreferencesMapByName: param=${param} foundMap = ${foundMap}" }
-    return foundMap     
+    return foundMap
 }
 
 def getAttributesMap( String attribName, boolean debug=false ) {
@@ -124,7 +123,7 @@ def getAttributesMap( String attribName, boolean debug=false ) {
     def searchMap
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
     if (DEVICE.tuyaDPs != null) {
-        searchMap =  DEVICE.tuyaDPs 
+        searchMap =  DEVICE.tuyaDPs
         foundMap = searchMap.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
@@ -133,7 +132,7 @@ def getAttributesMap( String attribName, boolean debug=false ) {
     }
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in attributes" }
     if (DEVICE.attributes != null) {
-        searchMap  =  DEVICE.attributes 
+        searchMap  =  DEVICE.attributes
         foundMap = searchMap.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
@@ -144,7 +143,6 @@ def getAttributesMap( String attribName, boolean debug=false ) {
     return null
 }
 
-
 /**
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
@@ -152,26 +150,26 @@ def getAttributesMap( String attribName, boolean debug=false ) {
 def resetPreferencesToDefaults( debug=false ) {
     logDebug "resetPreferencesToDefaults...(debug=${debug})"
     if (DEVICE == null) {
-        if (debug) { logWarn "DEVICE not found!" }
+        if (debug) { logWarn 'DEVICE not found!' }
         return
     }
     def preferences = DEVICE?.preferences
-    logTrace "preferences = ${preferences}"    
+    logTrace "preferences = ${preferences}"
     if (preferences == null) {
-        if (debug) { logWarn "Preferences not found!" }
+        if (debug) { logWarn 'Preferences not found!' }
         return
     }
     def parMap = [:]
-    preferences.each{ parName, mapValue -> 
-        if (debug) log.trace "$parName $mapValue"
+    preferences.each { parName, mapValue ->
+        if (debug) { log.trace "$parName $mapValue" }
         // TODO - could be also 'true' or 'false' ...
         if (mapValue in [true, false]) {
             if (debug) { logDebug "Preference ${parName} is predefined -> (${mapValue})" }
             // TODO - set the predefined value
             /*
             if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
-            device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])     
-            */       
+            device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
+            */
             return // continue
         }
         // find the individual preference map
@@ -179,21 +177,18 @@ def resetPreferencesToDefaults( debug=false ) {
         if (parMap == null) {
             if (debug) { logWarn "Preference ${parName} not found in tuyaDPs or attributes map!" }
             return // continue
-        }   
+        }
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
             if (debug) { logWarn "no default value for preference ${parName} !" }
             return // continue
         }
-        if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
-        if (debug) log.trace "parMap.name ${parMap.name} parMap.defaultValue = ${parMap.defaultValue} type=${parMap.type}"
-        device.updateSetting("${parMap.name}",[value:parMap.defaultValue, type:parMap.type])
+        if (debug) { log.info "par ${parName} defaultValue = ${parMap.defaultValue}" }
+        if (debug) { log.trace "parMap.name ${parMap.name} parMap.defaultValue = ${parMap.defaultValue} type=${parMap.type}" }
+        device.updateSetting("${parMap.name}", [value:parMap.defaultValue, type:parMap.type])
     }
-    logInfo "Preferences reset to the default values"
+    logInfo 'Preferences reset to the default values'
 }
-
-
-
 
 /**
  * Returns a list of valid parameters per model based on the device preferences.
@@ -209,7 +204,6 @@ def getValidParsPerModel() {
     return validPars
 }
 
-
 /**
  * Returns the scaled value of a preference based on its type and scale.
  * @param preference The name of the preference to retrieve.
@@ -223,35 +217,35 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
         logDebug "getScaledPreferenceValue: preference ${preference} not found!"
         return null
     }
-    switch(dpMap.type) {
-        case "number" :
+    switch (dpMap.type) {
+        case 'number' :
             scaledValue = safeToInt(value)
             break
-        case "decimal" :
+        case 'decimal' :
             scaledValue = safeToDouble(value)
             if (dpMap.scale != null && dpMap.scale != 1) {
                 scaledValue = Math.round(scaledValue * dpMap.scale)
             }
             break
-        case "bool" :
-            scaledValue = value == "true" ? 1 : 0
+        case 'bool' :
+            scaledValue = value == 'true' ? 1 : 0
             break
-        case "enum" :
+        case 'enum' :
             //logWarn "getScaledPreferenceValue: <b>ENUM</b> preference ${preference} type:${dpMap.type} value = ${value} dpMap.scale=${dpMap.scale}"
             if (dpMap.map == null) {
                 logDebug "getScaledPreferenceValue: preference ${preference} has no map defined!"
                 return null
             }
-            scaledValue = value 
+            scaledValue = value
             if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {
                 scaledValue = Math.round(safeToDouble(scaledValue ) * safeToInt(dpMap.scale))
-            }            
+            }
             break
         default :
             logDebug "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
             return null
     }
-    //logDebug "getScaledPreferenceValue: preference ${preference} value = ${value} scaledValue = ${scaledValue} (scale=${dpMap.scale})" 
+    //logDebug "getScaledPreferenceValue: preference ${preference} value = ${value} scaledValue = ${scaledValue} (scale=${dpMap.scale})"
     return scaledValue
 }
 
@@ -263,18 +257,18 @@ void updateAllPreferences() {
         logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceGroup()}"
         return
     }
-    Integer dpInt = 0
+    //Integer dpInt = 0
     def scaledValue    // int or String for enums
     // itterate over the preferences map and update the device settings
-    (DEVICE.preferences).each { name, dp -> 
+    (DEVICE.preferences).each { name, dp ->
         /*
         dpInt = safeToInt(dp, -1)
         if (dpInt <= 0) {
-            // this is the IAS and other non-Tuya DPs preferences .... 
+            // this is the IAS and other non-Tuya DPs preferences ....
             logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
-            return 
+            return
         }
-        def dpMaps   =  DEVICE.tuyaDPs 
+        def dpMaps   =  DEVICE.tuyaDPs
         */
         Map foundMap
         foundMap = getPreferencesMapByName(name, false)
@@ -283,26 +277,26 @@ void updateAllPreferences() {
         if (foundMap != null) {
             // scaledValue = getScaledPreferenceValue(name, foundMap)
             scaledValue = settings."${name}"
-            logTrace"scaledValue = ${scaledValue}"                                          // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+            logTrace"scaledValue = ${scaledValue}"                                          // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             if (scaledValue != null) {
                 setPar(name, scaledValue)
             }
             else {
                 logDebug "updateAllPreferences: preference ${name} is not set (scaledValue was null)"
-                return 
+                return
             }
         }
         else {
             logDebug "warning: couldn't find map for preference ${name}"
-            return 
+            return
         }
-    }    
+    }
     return
 }
 
 def divideBy100( val ) { return (val as int) / 100 }
 def multiplyBy100( val ) { return (val as int) * 100 }
-def divideBy10( val ) { 
+def divideBy10( val ) {
     if (val > 10) { return (val as int) / 10 }
     else { return (val as int) }
 }
@@ -311,13 +305,12 @@ def divideBy1( val ) { return (val as int) / 1 }    //tests
 def signedInt( val ) {
     if (val > 127) { return (val as int) - 256 }
     else { return (val as int) }
-
 }
 
 /**
  * Called from setPar() method only!
  * Validates the parameter value based on the given dpMap type and scales it if needed.
- * 
+ *
  * @param dpMap The map containing the parameter type, minimum and maximum values.
  * @param val The value to be validated and scaled.
  * @return The validated and scaled value if it is within the specified range, null otherwise.
@@ -327,7 +320,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
     def scaledValue = null
     //logDebug "validateAndScaleParameterValue: dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
-        case "number" :
+        case 'number' :
             value = safeToInt(val, -1)
             //scaledValue = value
             // scale the value - added 10/26/2023 also for integer values !
@@ -338,8 +331,8 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
                 scaledValue = value
             }
             break
-            
-        case "decimal" :
+
+        case 'decimal' :
             value = safeToDouble(val, -1.0)
             // scale the value
             if (dpMap.scale != null) {
@@ -350,7 +343,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             }
             break
 
-        case "bool" :
+        case 'bool' :
             if (val == '0' || val == 'false')     { value = scaledValue = 0 }
             else if (val == '1' || val == 'true') { value = scaledValue = 1 }
             else {
@@ -358,8 +351,8 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
                 return null
             }
             break
-        case "enum" :
-            // val could be both integer or float value ... check if the scaling is different than 1 in dpMap 
+        case 'enum' :
+            // val could be both integer or float value ... check if the scaling is different than 1 in dpMap
             logTrace "validateAndScaleParameterValue: enum parameter <b>${val}</b>. dpMap=${dpMap}"
             if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {   // TODO - check this !!!
                 // we have a float parameter input - convert it to int
@@ -371,7 +364,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             }
             if (scaledValue == null || scaledValue < 0) {
                 // get the keys of dpMap.map as a List
-                List<String> keys = dpMap.map.keySet().toList()
+                //List<String> keys = dpMap.map.keySet().toList()
                 //logDebug "${device.displayName} validateAndScaleParameterValue: enum parameter <b>${val}</b>. value must be one of <b>${keys}</b>"
                 // find the key for the value
                 String key = dpMap.map.find { it.value == val }?.key
@@ -381,7 +374,7 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
                     return null
                 }
                 value = scaledValue = key as Integer
-                //return null
+            //return null
             }
             break
         default :
@@ -398,26 +391,25 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
     return scaledValue
 }
 
+
 /**
- * Sets the parameter value for the device.
- * @param par The name of the parameter to set.
- * @param val The value to set the parameter to.
- * @return Nothing.
- *
- * TODO: refactor it !!!
+ * Sets the value of a parameter for a device.
+ * 
+ * @param par The parameter name.
+ * @param val The parameter value.
+ * @return true if the parameter was successfully set, false otherwise.
  */
-def setPar( par=null, val=null )
-{
+def setPar( par=null, val=null ) {
     ArrayList<String> cmds = []
-    Boolean validated = false
+    //Boolean validated = false
     logDebug "setPar(${par}, ${val})"
-    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return }
-    if (par == null /*|| !(par in getValidParsPerModel())*/) { logInfo "setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return }        
+    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false }
+    if (par == null /*|| !(par in getValidParsPerModel())*/) { logInfo "setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return false }
     Map dpMap = getPreferencesMapByName(par, false)                                   // get the map for the parameter
-    if ( dpMap == null ) { logInfo "setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return }
-    if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return }
+    if ( dpMap == null ) { logInfo "setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return false }
+    if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
-    if (scaledValue == null) { logInfo "setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return }
+    if (scaledValue == null) { logInfo "setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /*
     // update the device setting // TODO: decide whether the setting must be updated here, or after it is echeod back from the device
     try {
@@ -425,7 +417,7 @@ def setPar( par=null, val=null )
     }
     catch (e) {
         logWarn "setPar: Exception '${e}'caught while updateSetting <b>$par</b>(<b>$val</b>) type=${dpMap.type}"
-        return
+        return false
     }
     */
     //logDebug "setPar: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
@@ -440,39 +432,39 @@ def setPar( par=null, val=null )
         }
         catch (e) {
             logWarn "setPar: Exception '${e}'caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
-            return
+            return false
         }
-        logDebug "customSetFunction result is ${cmds}"       
+        logDebug "customSetFunction result is ${cmds}"
         if (cmds != null && cmds != []) {
             logInfo "setPar: (1) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
-            return
-        }            
+            return false
+        }
         else {
             logWarn "setPar: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list"
-            // continue with the default processing
+        // continue with the default processing
         }
     }
     if (isVirtual()) {
         // set a virtual attribute
         def valMiscType
         logDebug "setPar: found virtual attribute ${par} value ${val}"
-        if (dpMap.type == "enum") {
+        if (dpMap.type == 'enum') {
             // find the key for the value
             String key = dpMap.map.find { it.value == val }?.key
             logTrace "setPar: enum parameter <b>${val}</b>. key=${key}"
             if (key == null) {
                 logInfo "setPar: invalid virtual enum parameter <b>${val}</b>. value must be one of <b>${dpMap.map}</b>"
-                return
+                return false
             }
             valMiscType = dpMap.map[key as int]
             logTrace "setPar: enum parameter <b>${val}</b>. key=${key} valMiscType=${valMiscType} dpMap.map=${dpMap.map}"
-            device.updateSetting("$par", [value:key as String, type:dpMap.type])        
+            device.updateSetting("$par", [value:key as String, type:dpMap.type])
         }
         else {
             valMiscType = val
-            device.updateSetting("$par", [value:valMiscType, type:dpMap.type])        
-        }   
+            device.updateSetting("$par", [value:valMiscType, type:dpMap.type])
+        }
         String descriptionText = "${par} set to ${valMiscType}${dpMap.unit ?: ''} [virtual]"
         sendEvent(name:par, value:valMiscType, unit:dpMap.unit ?: '', isDigital: true)
         logInfo descriptionText
@@ -489,19 +481,19 @@ def setPar( par=null, val=null )
     catch (e) {
         logWarn"setPar: (1) exception ${e} caught while checking isNumber() preference ${preference}"
         isTuyaDP = false
-        //return null
-    }     
+    //return false 
+    }
     if (dpMap.dp != null && isTuyaDP) {
         // Tuya DP
-        cmds = sendTuyaParameter(dpMap,  par, scaledValue) 
+        cmds = sendTuyaParameter(dpMap,  par, scaledValue)
         if (cmds == null || cmds == []) {
             logWarn "setPar: sendTuyaParameter par ${par} scaledValue ${scaledValue} returned null or empty list"
-            return
+            return false
         }
         else {
             logInfo "setPar: (2) successfluly executed setPar <b>$customSetFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
             sendZigbeeCommands( cmds )
-            return
+            return false
         }
     }
     else if (dpMap.at != null) {
@@ -511,35 +503,35 @@ def setPar( par=null, val=null )
         int dt
         def mfgCode
         try {
-            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[0])
+            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
             //log.trace "cluster = ${cluster}"
-            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[1])
+            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[1])
             //log.trace "attribute = ${attribute}"
             dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
             //log.trace "dt = ${dt}"
             mfgCode = dpMap.mfgCode
-            //log.trace "mfgCode = ${dpMap.mfgCode}"
+        //log.trace "mfgCode = ${dpMap.mfgCode}"
         }
         catch (e) {
             logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
-            return
+            return false
         }
-        Map mapMfCode = ["mfgCode":mfgCode]
+        Map mapMfCode = ['mfgCode':mfgCode]
         logDebug "setPar: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (mfgCode != null) {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay=200)
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
         else {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay=200)
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay = 200)
         }
     }
     else {
         logWarn "setPar: invalid dp or at value <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
-        return
+        return false
     }
     logInfo "setPar: (3) successfluly executed setPar <b>$customSetFunction</b>(<b>$scaledValue</b>)"
     sendZigbeeCommands( cmds )
-    return
+    return true
 }
 
 // function to send a Tuya command to data point taken from dpMap with value tuyaValue and type taken from dpMap
@@ -554,32 +546,31 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     String dp = zigbee.convertToHexString(dpMap.dp, 2)
     if (dpMap.dp <= 0 || dpMap.dp >= 256) {
         logWarn "sendTuyaParameter: invalid dp <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
-        return null 
+        return null
     }
     String dpType
     if (dpMap.dt == null) {
-        dpType = dpMap.type == "bool" ? DP_TYPE_BOOL : dpMap.type == "enum" ? DP_TYPE_ENUM : (dpMap.type in ["value", "number", "decimal"]) ? DP_TYPE_VALUE: null
+        dpType = dpMap.type == 'bool' ? DP_TYPE_BOOL : dpMap.type == 'enum' ? DP_TYPE_ENUM : (dpMap.type in ['value', 'number', 'decimal']) ? DP_TYPE_VALUE : null
     }
     else {
         dpType = dpMap.dt // "01" - bool, "02" - enum, "03" - value
     }
     if (dpType == null) {
         logWarn "sendTuyaParameter: invalid dpType <b>${dpMap.type}</b> for parameter <b>${par}</b>"
-        return null 
+        return null
     }
     // sendTuyaCommand
-    def dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2) 
+    def dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2)
     logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp} dpType=${dpType} "
     cmds = sendTuyaCommand( dp, dpType, dpValHex)
     return cmds
 }
 
-def sendAttribute( par=null, val=null )
-{
+def sendAttribute( par=null, val=null ) {
     ArrayList<String> cmds = []
-    Boolean validated = false
+    //Boolean validated = false
     logDebug "sendAttribute(${par}, ${val})"
-    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false}
+    if (par == null || DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false }
 
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
     if ( dpMap == null ) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
@@ -600,15 +591,15 @@ def sendAttribute( par=null, val=null )
             logWarn "sendAttribute: Exception '${e}'caught while processing <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
         }
-        logDebug "customSetFunction result is ${cmds}"       
+        logDebug "customSetFunction result is ${cmds}"
         if (cmds != null && cmds != []) {
             logDebug "sendAttribute: successfluly executed sendAttribute <b>$customSetFunction</b>(<b>$scaledValue</b>)"
             sendZigbeeCommands( cmds )
             return true
-        }            
+        }
         else {
             logWarn "sendAttribute: customSetFunction <b>$customSetFunction</b>(<b>$scaledValue</b>) returned null or empty list, continue with the default processing"
-            // continue with the default processing
+        // continue with the default processing
         }
     }
     else {
@@ -619,7 +610,7 @@ def sendAttribute( par=null, val=null )
         // send a virtual attribute
         logDebug "sendAttribute: found virtual attribute ${par} value ${val}"
         // patch !!
-        if (par == "heatingSetpoint") {
+        if (par == 'heatingSetpoint') {
             sendHeatingSetpointEvent(val)
         }
         else {
@@ -640,10 +631,10 @@ def sendAttribute( par=null, val=null )
     catch (e) {
         if (debug) log.warn "sendAttribute: exception ${e} caught while checking isNumber() preference ${preference}"
         return false
-    }     
+    }
     if (dpMap.dp != null && isTuyaDP) {
         // Tuya DP
-        cmds = sendTuyaParameter(dpMap,  par, scaledValue) 
+        cmds = sendTuyaParameter(dpMap,  par, scaledValue)
         if (cmds == null || cmds == []) {
             logWarn "sendAttribute: sendTuyaParameter par ${par} scaledValue ${scaledValue} returned null or empty list"
             return false
@@ -654,39 +645,38 @@ def sendAttribute( par=null, val=null )
             return true
         }
     }
-    else if (dpMap.at != null && dpMap.at == "virtual") {
-        // send a virtual attribute
-
+    else if (dpMap.at != null && dpMap.at == 'virtual') {
+    // send a virtual attribute
     }
     else if (dpMap.at != null) {
         // cluster:attribute
         int cluster
         int attribute
         int dt
-       // int mfgCode
+        // int mfgCode
         try {
-            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[0])
+            cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
             //log.trace "cluster = ${cluster}"
-            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(":")[1])
+            attribute = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[1])
             //log.trace "attribute = ${attribute}"
             dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
-            //log.trace "dt = ${dt}"
-            //log.trace "mfgCode = ${dpMap.mfgCode}"
-          //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
-          //  log.trace "mfgCode = ${mfgCode}"
+        //log.trace "dt = ${dt}"
+        //log.trace "mfgCode = ${dpMap.mfgCode}"
+        //  mfgCode = dpMap.mfgCode != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.mfgCode) : null
+        //  log.trace "mfgCode = ${mfgCode}"
         }
         catch (e) {
             logWarn "sendAttribute: Exception '${e}'caught while splitting cluster and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
         }
-       
+
         logDebug "sendAttribute: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (dpMap.mfgCode != null) {
-            Map mapMfCode = ["mfgCode":dpMap.mfgCode]
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay=200)
+            Map mapMfCode = ['mfgCode':dpMap.mfgCode]
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
         else {
-            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay=200)
+            cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, [:], delay = 200)
         }
     }
     else {
@@ -698,48 +688,59 @@ def sendAttribute( par=null, val=null )
     return true
 }
 
-
 /**
  * Sends a command to the device.
  * @param command - The command to send. Must be one of the commands defined in the DEVICE.commands map.
  * @param val     - The value to send with the command, can be null.
  * @return true on success, false otherwise.
  */
-def sendCommand( command=null, val=null)
-{
+def sendCommand( command_orig=null, val_orig=null) {
     //logDebug "sending command ${command}(${val}))"
     // strip the leading and trailing spaces from command and val
-    command = command?.trim()
-    val = val?.trim()
+    def command = command_orig?.trim()
+    def val = val_orig?.trim()
     ArrayList<String> cmds = []
-    def supportedCommandsMap = DEVICE.commands 
+    def supportedCommandsMap = DEVICE.commands
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
         logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return false
     }
     // TODO: compare ignoring the upper/lower case of the command.
-    def supportedCommandsList =  DEVICE.commands.keySet() as List 
+    def supportedCommandsList =  DEVICE.commands.keySet() as List
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
         logInfo "sendCommand: the command <b>${(command ?: '')}</b> for device profile '${DEVICE.description}' must be one of these : ${supportedCommandsList}"
         return false
     }
     def func
- //   try {
+    def funcResult
+    try {
         func = DEVICE.commands.find { it.key == command }.value
         if (val != null) {
-            cmds = "${func}"(val)
+            funcResult = "${func}"(val)
             logInfo "executed <b>$func</b>($val)"
         }
         else {
-            cmds = "${func}"()
+            funcResult = "${func}"()
             logInfo "executed <b>$func</b>()"
         }
- //   }
- //   catch (e) {
- //       logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
- //       return false
- //   }
+    }
+    catch (e) {
+        logWarn "sendCommand: Exception '${e}' caught while processing <b>$func</b>(${val})"
+        return false
+    }
+    // funcResult is expected to be list of commands to be sent to the device, but can also return boolean or null
+    // check if the result is a list of commands
+    if (funcResult instanceof List) {
+        cmds = funcResult
+        if (cmds != null && cmds != []) {
+            sendZigbeeCommands( cmds )
+        }
+    } else {
+        logDebug "sendCommand: <b>$func</b>(${val}) returned <b>${funcResult}</b> instead of a list of commands!"
+        return false
+    }
+    cmds = funcResult
     if (cmds != null && cmds != []) {
         sendZigbeeCommands( cmds )
     }
@@ -766,14 +767,14 @@ def inputIt( String param, boolean debug=false ) {
         return null
     }
     def preference
-    boolean isTuyaDP 
+    //boolean isTuyaDP
     try {
         preference = DEVICE.preferences["$param"]
     }
     catch (e) {
         if (debug) logWarn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}"
         return null
-    }   
+    }
     //  check for boolean values
     try {
         if (preference in [true, false]) {
@@ -784,7 +785,7 @@ def inputIt( String param, boolean debug=false ) {
     catch (e) {
         if (debug) logWarn "inputIt: exception ${e} caught while checking for boolean values preference ${param} value ${preference}"
         return null
-    } 
+    }
 
     try {
         isTuyaDP = preference instanceof Number
@@ -792,33 +793,33 @@ def inputIt( String param, boolean debug=false ) {
     catch (e) {
         if (debug) logWarn "inputIt: exception ${e} caught while checking isNumber() preference ${param} value ${preference}"
         return null
-    } 
+    }
 
     foundMap = getPreferencesMapByName(param)
     if (foundMap == null) {
         if (debug) logWarn "inputIt: map not found for param '${param}'!"
         return null
     }
-    if (foundMap.rw != "rw") {
+    if (foundMap.rw != 'rw') {
         if (debug) logWarn "inputIt: param '${param}' is read only!"
         return null
-    }        
+    }
     input.name = foundMap.name
     input.type = foundMap.type    // bool, enum, number, decimal
     input.title = foundMap.title
     input.description = foundMap.description
-    if (input.type in ["number", "decimal"]) {
+    if (input.type in ['number', 'decimal']) {
         if (foundMap.min != null && foundMap.max != null) {
             input.range = "${foundMap.min}..${foundMap.max}"
         }
-        if (input.range != null && input.description !=null) {
+        if (input.range != null && input.description != null) {
             input.description += "<br><i>Range: ${input.range}</i>"
-            if (foundMap.unit != null && foundMap.unit != "") {
+            if (foundMap.unit != null && foundMap.unit != '') {
                 input.description += " <i>(${foundMap.unit})</i>"
             }
         }
     }
-    else if (input.type == "enum") {
+    else if (input.type == 'enum') {
         input.options = foundMap.map
     }/*
     else if (input.type == "bool") {
@@ -827,13 +828,12 @@ def inputIt( String param, boolean debug=false ) {
     else {
         if (debug) logWarn "inputIt: unsupported type ${input.type} for param '${param}'!"
         return null
-    }   
+    }
     if (input.defaultValue != null) {
         input.defaultValue = foundMap.defaultValue
     }
     return input
 }
-
 
 /**
  * Returns the device name and profile based on the device model and manufacturer.
@@ -875,17 +875,17 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
     if (deviceName != NULL && deviceName != UNKNOWN  ) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
-        device.updateSetting("forcedProfile", [value:deviceProfilesV2[deviceProfile].description, type:"enum"])
+        device.updateSetting('forcedProfile', [value:deviceProfilesV2[deviceProfile].description, type:'enum'])
         //logDebug "after : forcedProfile = ${settings.forcedProfile}"
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
         logWarn "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
-    }    
+    }
 }
 
 def refreshDeviceProfile() {
     List<String> cmds = []
-    if (cmds == []) { cmds = ["delay 299"] }
+    if (cmds == []) { cmds = ['delay 299'] }
     logDebug "refreshDeviceProfile() : ${cmds}"
     return cmds
 }
@@ -893,23 +893,22 @@ def refreshDeviceProfile() {
 def configureDeviceProfile() {
     List<String> cmds = []
     logDebug "configureDeviceProfile() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299"] }    // no , 
-    return cmds    
+    if (cmds == []) { cmds = ['delay 299'] }    // no ,
+    return cmds
 }
 
-def initializeDeviceProfile()
-{
+def initializeDeviceProfile() {
     List<String> cmds = []
     logDebug "initializeDeviceProfile() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299",] }
-    return cmds        
+    if (cmds == []) { cmds = ['delay 299',] }
+    return cmds
 }
 
 void initVarsDeviceProfile(boolean fullInit=false) {
     logDebug "initVarsDeviceProfile(${fullInit})"
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()
-    }    
+    }
 }
 
 void initEventsDeviceProfile(boolean fullInit=false) {
@@ -918,14 +917,13 @@ void initEventsDeviceProfile(boolean fullInit=false) {
 
 ///////////////////////////// Tuya DPs /////////////////////////////////
 
-
 //
 // called from parse()
 // returns: true  - do not process this message if the spammy DP is defined in the spammyDPsToIgnore element of the active Device Profule
 //          false - the processing can continue
 //
 boolean isSpammyDPsToIgnore(descMap) {
-    if (!(descMap?.clusterId == "EF00" && (descMap?.command in ["01", "02"]))) { return false }
+    if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     Integer dp =  zigbee.convertHexToInt(descMap.data[2])
     def spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToIgnore
@@ -938,9 +936,9 @@ boolean isSpammyDPsToIgnore(descMap) {
 //          false - debug logs can be generated
 //
 boolean isSpammyDPsToNotTrace(descMap) {
-    if (!(descMap?.clusterId == "EF00" && (descMap?.command in ["01", "02"]))) { return false }
+    if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
-    Integer dp = zigbee.convertHexToInt(descMap.data[2]) 
+    Integer dp = zigbee.convertHexToInt(descMap.data[2])
     def spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToNotTrace
     return (spammyList != null && (dp in spammyList))
 }
@@ -954,7 +952,7 @@ def compareAndConvertStrings(foundItem, tuyaValue, hubitatValue) {
 def compareAndConvertNumbers(foundItem, tuyaValue, hubitatValue) {
     Integer convertedValue
     if (foundItem.scale == null || foundItem.scale == 0 || foundItem.scale == 1) {    // compare as integer
-        convertedValue = tuyaValue as int                
+        convertedValue = tuyaValue as int
     }
     else {
         convertedValue  = ((tuyaValue as double) / (foundItem.scale as double)) as int
@@ -969,36 +967,35 @@ def compareAndConvertDecimals(foundItem, tuyaValue, hubitatValue) {
         convertedValue = tuyaValue as double
     }
     else {
-        convertedValue = (tuyaValue as double) / (foundItem.scale as double) 
+        convertedValue = (tuyaValue as double) / (foundItem.scale as double)
     }
-    isEqual = Math.abs((convertedValue as double) - (hubitatValue as double)) < 0.001 
+    isEqual = Math.abs((convertedValue as double) - (hubitatValue as double)) < 0.001
     return [isEqual, convertedValue]
 }
 
-
 def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) {
-    if (foundItem == null || fncmd == null || preference == null) { return [true, "none"] }
-    if (foundItem.type == null) { return [true, "none"] }
+    if (foundItem == null || fncmd == null || preference == null) { return [true, 'none'] }
+    if (foundItem.type == null) { return [true, 'none'] }
     boolean isEqual
     def tuyaValueScaled     // could be integer or float
     switch (foundItem.type) {
-        case "bool" :       // [0:"OFF", 1:"ON"] 
-        case "enum" :       // [0:"inactive", 1:"active"]
+        case 'bool' :       // [0:"OFF", 1:"ON"]
+        case 'enum' :       // [0:"inactive", 1:"active"]
             (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
             //logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
             break
-        case "value" :      // depends on foundItem.scale
-        case "number" :
+        case 'value' :      // depends on foundItem.scale
+        case 'number' :
             (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
             //logWarn "tuyaValue=${tuyaValue} tuyaValueScaled=${tuyaValueScaled} preferenceValue = ${preference} isEqual=${isEqual}"
-            break 
-       case "decimal" :
-            (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference)) 
+            break
+       case 'decimal' :
+            (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference))
             //logDebug "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
             break
         default :
-            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
-            return [true, "none"]   // fallback - assume equal
+            logDebug 'compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}'
+            return [true, 'none']   // fallback - assume equal
     }
     if (isEqual == false) {
         logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b> foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> tuyaValueScaled=${tuyaValueScaled} (scale=${foundItem.scale}) fncmd=${fncmd}"
@@ -1014,36 +1011,35 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
 //    isEqual : true  - if the Tuya DP value equals to the DP calculated value (no need to update the preference)
 //            : true  - if a preference with the same name does not exist (no preference value to update)
 //    isEqual : false - the reported DP value is different than the corresponding preference (the preference needs to be updated!)
-// 
+//
 //    hubitatEventValue - the converted DP value, scaled (divided by the scale factor) to match the corresponding preference type value
 //
 //  TODO: refactor!
 //
 def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false) {
-    if (foundItem == null) { return [true, "none"] }
-    if (foundItem.type == null) { return [true, "none"] }
+    if (foundItem == null) { return [true, 'none'] }
+    if (foundItem.type == null) { return [true, 'none'] }
     def hubitatEventValue   // could be integer or float or string
     boolean isEqual
     switch (foundItem.type) {
-        case "bool" :       // [0:"OFF", 1:"ON"] 
-        case "enum" :       // [0:"inactive", 1:"active"]
-            (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: "unknown", device.currentValue(foundItem.name) ?: "unknown")
+        case 'bool' :       // [0:"OFF", 1:"ON"]
+        case 'enum' :       // [0:"inactive", 1:"active"]
+            (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
             break
-        case "value" :      // depends on foundItem.scale
-        case "number" :
+        case 'value' :      // depends on foundItem.scale
+        case 'number' :
             (isEqual, hubitatEventValue) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(device.currentValue(foundItem.name)))
-            break        
-        case "decimal" :
-            (isEqual, hubitatEventValue) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(device.currentValue(foundItem.name)))            
+            break
+        case 'decimal' :
+            (isEqual, hubitatEventValue) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(device.currentValue(foundItem.name)))
             break
         default :
-            logDebug "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
-            return [true, "none"]   // fallback - assume equal
+            logDebug 'compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}'
+            return [true, 'none']   // fallback - assume equal
     }
     //if (!doNotTrace)  logTrace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
     return [isEqual, hubitatEventValue]
 }
-
 
 def preProc(foundItem, fncmd_orig) {
     def fncmd = fncmd_orig
@@ -1068,40 +1064,38 @@ def preProc(foundItem, fncmd_orig) {
     return fncmd
 }
 
-
 /**
  * Processes a Tuya DP (Data Point) received from the device, based on the device profile and its defined Tuya DPs.
  * If a preference exists for the DP, it updates the preference value and sends an event if the DP is declared as an attribute.
  * If no preference exists for the DP, it logs the DP value as an info message.
  * If the DP is spammy (not needed for anything), it does not perform any further processing.
- * 
+ *
  * @return true if the DP was processed successfully, false otherwise.
  */
 boolean processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd_orig, dp_len=0) {
-    def fncmd = fncmd_orig
+    //def fncmd = fncmd_orig
     if (state.deviceProfile == null)  { return false }
-    //if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status) 
+    //if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
     def tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == []) { return false }    // no any Tuya DPs defined in the Device Profile
-    
+
     def foundItem = null
     tuyaDPsMap.each { item ->
-         if (item['dp'] == (dp as int)) {
+        if (item['dp'] == (dp as int)) {
             foundItem = item
             return
         }
     }
-    if (foundItem == null) { 
+    if (foundItem == null) {
         // DP was not found into the tuyaDPs list for this particular deviceProfile
         //updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
         // continue processing the DP report in the old code ...
-        return false 
+        return false
     }
 
-    return processFoundItem(foundItem, fncmd_orig)     
+    return processFoundItem(foundItem, fncmd_orig)
 }
-
 
 boolean processClusterAttributeFromDeviceProfile(descMap) {
     logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
@@ -1109,28 +1103,26 @@ boolean processClusterAttributeFromDeviceProfile(descMap) {
 
     def attribMap = deviceProfilesV2[state.deviceProfile].attributes
     if (attribMap == null || attribMap == []) { return false }    // no any attributes are defined in the Device Profile
-    
+
     def foundItem = null
     def clusterAttribute = "0x${descMap.cluster}:0x${descMap.attrId}"
     def value = hexStrToUnsignedInt(descMap.value)
     //logTrace "clusterAttribute = ${clusterAttribute}"
     attribMap.each { item ->
-         if (item['at'] == clusterAttribute) {
+        if (item['at'] == clusterAttribute) {
             foundItem = item
             return
         }
     }
-    if (foundItem == null) { 
+    if (foundItem == null) {
         // clusterAttribute was not found into the attributes list for this particular deviceProfile
         // updateStateUnknownclusterAttribute(descMap)
         // continue processing the descMap report in the old code ...
-        return false 
+        return false
     }
 
-    return processFoundItem(foundItem, value) 
+    return processFoundItem(foundItem, value)
 }
-
-
 
 def processFoundItem (foundItem, value) {
     if (foundItem == null) { return false }
@@ -1146,7 +1138,7 @@ def processFoundItem (foundItem, value) {
     def name = foundItem.name                                    // preference name as in the attributes map
     def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
     def perfValue = null   // preference value
-    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this clusterAttribute  
+    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this clusterAttribute
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
@@ -1156,137 +1148,137 @@ def processFoundItem (foundItem, value) {
     }
     // check if the clusterAttribute has the same value as the last one, or the value has changed
     // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
-    String unitText     = foundItem.unit != null ? "$foundItem.unit" : ""
+    String unitText     = foundItem.unit != null ? "$foundItem.unit" : ''
     def valueScaled    // can be number or decimal or string
     String descText = descText  = "${name} is ${value} ${unitText}"    // the default description text for log events
-    
+
     // TODO - check if clusterAttribute is in the list of the received state.attributes - then we have something to compare !
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
             (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
-            descText  = "${name} is ${valueScaled} ${unitText}"        
-            if (settings.logEnable) { logInfo "${descText}"}
+            descText  = "${name} is ${valueScaled} ${unitText}"
+            if (settings.logEnable) { logInfo "${descText }" }
         }
         // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
         return true
     }
-    
+
     // first, check if there is a preference defined to be updated
     if (preferenceExists) {
         // preference exists and its's value is extracted
-        def oldPerfValue = device.getSetting(name)
-        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)    
+        //def oldPerfValue = device.getSetting(name)
+        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
         if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
             logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (clusterAttribute raw value ${value})"
         }
         else {
             logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (clusterAttribute raw value ${value})"
-            if (debug) logInfo "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" 
+            if (debug) logInfo "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}"
             try {
-                device.updateSetting("${name}",[value:perfValue, type:foundItem.type])
+                device.updateSetting("${name}", [value:perfValue, type:foundItem.type])
                 wasChanged = true
             }
             catch (e) {
-                logWarn "exception ${e} caught while updating preference ${name} to ${value}, type ${foundItem.type}" 
+                logWarn "exception ${e} caught while updating preference ${name} to ${value}, type ${foundItem.type}"
             }
         }
     }
     else {    // no preference exists for this clusterAttribute
         // if not in the spammy list - log it!
-        unitText = foundItem.unit != null ? "$foundItem.unit" : ""
-        //logInfo "${name} is ${value} ${unitText}"
-    }    
-    
+        unitText = foundItem.unit != null ? "$foundItem.unit" : ''
+    //logInfo "${name} is ${value} ${unitText}"
+    }
+
     // second, send an event if this is declared as an attribute!
     if (isAttribute) {                                         // this clusterAttribute has an attribute that must be sent in an Event
         (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${value})" }
-        
+
         if (isEqual && !wasChanged) {                        // this DP report has the same value as the last one - just send a debug log and move along!
             if (!doNotTrace) {
-                if (settings.logEnable) { logInfo "${descText} (no change)"}
+                if (settings.logEnable) { logInfo "${descText } (no change)" }
             }
             // patch for inverted motion sensor 2-in-1
-            if (name == "motion" && is2in1()) {
-                logDebug "patch for inverted motion sensor 2-in-1"
-                // continue ... 
+            if (name == 'motion' && is2in1()) {
+                logDebug 'patch for inverted motion sensor 2-in-1'
+            // continue ...
             }
             else {
-                if (state.states != null && state.states["isRefresh"] == true) {
-                    logTrace "isRefresh = true - continue and send an event, although there was no change..."
+                if (state.states != null && state.states['isRefresh'] == true) {
+                    logTrace 'isRefresh = true - continue and send an event, although there was no change...'
                 }
                 else {
                     return true       // we are done (if there was potentially a preference, it should be already set to the same value)
                 }
             }
         }
-        
+
         // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an event!
 
         def divider = safeToInt(foundItem.scale ?: 1) ?: 1
         def valueCorrected = value / divider
         if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
         // process the events in the device specific driver..
-        if (DEVICE_TYPE in ["Thermostat"])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
+        if (DEVICE_TYPE in ['Thermostat'])  { processDeviceEventThermostat(name, valueScaled, unitText, descText) }
         else {
             switch (name) {
-                case "motion" :
+                case 'motion' :
                     handleMotion(motionActive = value)  // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     break
-                case "temperature" :
+                case 'temperature' :
                     //temperatureEvent(value / getTemperatureDiv())
                     handleTemperatureEvent(valueScaled as Float)
                     break
-                case "humidity" :
+                case 'humidity' :
                     handleHumidityEvent(valueScaled)
                     break
-                case "illuminance" :
-                case "illuminance_lux" :
-                    handleIlluminanceEvent(valueCorrected)       
+                case 'illuminance' :
+                case 'illuminance_lux' :
+                    handleIlluminanceEvent(valueCorrected)
                     break
-                case "pushed" :
+                case 'pushed' :
                     logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
                     buttonEvent(valueScaled)
                     break
                 default :
-                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: "physical", isStateChange: true)    // attribute value is changed - send an event !
+                    sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
                         logDebug "event ${name} sent w/ value ${valueScaled}"
-                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy clusterAttribute ?                               
+                        logInfo "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
                     }
                     break
             }
-            //logTrace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
+        //logTrace "attrValue=${attrValue} valueScaled=${valueScaled} equal=${isEqual}"
         }
     }
     // all processing was done here!
-    return true    
+    return true
 }
 
-def validateAndFixPreferences(debug=false) {
-    if (debug) logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}"
+boolean validateAndFixPreferences(debug=false) {
+    if (debug) { logTrace "validateAndFixPreferences: preferences=${DEVICE.preferences}" }
     if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
         logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}"
-        return null
+        return false
     }
     def validationFailures = 0
     def validationFixes = 0
     def total = 0
-    def oldSettingValue 
+    def oldSettingValue
     def newValue
-    String settingType 
+    String settingType
     DEVICE.preferences.each {
         Map foundMap = getPreferencesMapByName(it.key)
         if (foundMap == null) {
             logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
-            return null
+            return false
         }
         settingType = device.getSettingType(it.key)
         oldSettingValue = device.getSetting(it.key)
         if (settingType == null) {
             logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
-            return null
+            return false
         }
         if (debug) logTrace "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
@@ -1296,32 +1288,29 @@ def validateAndFixPreferences(debug=false) {
             try {
                 device.removeSetting(it.key)
                 logDebug "validateAndFixPreferences: removing setting ${it.key}"
-            }
-            catch (e) {
+            } catch (e) {
                 logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
-                return null
+                return false
             }
             // first, try to use the old setting value
             try {
                 // correct the oldSettingValue type
-                if (foundMap.type == "decimal")     { newValue = oldSettingValue.toDouble() }
-                else if (foundMap.type == "number") { newValue = oldSettingValue.toInteger() }
-                else if (foundMap.type == "bool")   { newValue = oldSettingValue == "true" ? 1 : 0 }
-                else if (foundMap.type == "enum") {
+                if (foundMap.type == 'decimal')     { newValue = oldSettingValue.toDouble() }
+                else if (foundMap.type == 'number') { newValue = oldSettingValue.toInteger() }
+                else if (foundMap.type == 'bool')   { newValue = oldSettingValue == 'true' ? 1 : 0 }
+                else if (foundMap.type == 'enum') {
                     // check if the old settingValue was 'true' or 'false' and convert it to 1 or 0
-                    if (oldSettingValue == "true" || oldSettingValue == "false" || oldSettingValue == true || oldSettingValue == false) {
-                        newValue = (oldSettingValue == "true" || oldSettingValue == true) ? "1" : "0"
+                    if (oldSettingValue == 'true' || oldSettingValue == 'false' || oldSettingValue == true || oldSettingValue == false) {
+                        newValue = (oldSettingValue == 'true' || oldSettingValue == true) ? '1' : '0'
                     }
                     // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals
-                    else if (foundMap.map.keySet().toString().any { it.contains(".") }) {
-                        newValue = String.format("%.2f", oldSettingValue)
-                    }
-                    else {
+                    else if (foundMap.map.keySet().toString().any { it.contains('.') }) {
+                        newValue = String.format('%.2f', oldSettingValue)
+                    } else {
                         // format the settingValue as a string of the integer value
-                        newValue = String.format("%d", oldSettingValue)
+                        newValue = String.format('%d', oldSettingValue)
                     }
                 }
-                //
                 device.updateSetting(it.key, [value:newValue, type:foundMap.type])
                 logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 validationFixes ++
@@ -1334,11 +1323,10 @@ def validateAndFixPreferences(debug=false) {
                     device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
                     logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
-                }
-                catch (e2) {
+                } catch (e2) {
                     logWarn "<b>validateAndFixPreferences: exception '${e2}' caught while setting default value ... Giving up!</b>"
-                    return null
-                }            
+                    return false
+                }
             }
         }
         total ++
@@ -1348,10 +1336,8 @@ def validateAndFixPreferences(debug=false) {
 
 void printFingerprints() {
     deviceProfilesV2.each { profileName, profileMap ->
-        if (profileMap.fingerprints != null) {
-            profileMap.fingerprints.each { 
-                logInfo it
-            }
+        profileMap.fingerprints?.each { fingerprint ->
+            logInfo fingerprint
         }
-    }   
+    }
 }

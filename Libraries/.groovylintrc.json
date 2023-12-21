@@ -1,0 +1,39 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "CompileStatic": {
+            "enabled": false
+        },
+        "DuplicateListLiteral": {
+            "enabled": false
+        },
+        "DuplicateMapLiteral": {
+            "enabled": false
+        },
+        "DuplicateNumberLiteral": {
+            "enabled": false
+        },
+        "DuplicateStringLiteral": {
+            "enabled": false
+        },
+        "ImplementationAsType": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "MethodCount": {
+            "enabled": false
+        },
+        "MethodReturnTypeRequired": {
+            "enabled": false
+        },
+        "SpaceAfterMethodCallName": {
+            "enabled": false
+        },
+        "UnusedPrivateMethod": {
+            "enabled": false
+        }
+    },
+    "ignore": ["Zigbee_TRV_lib_included.groovy"]
+}

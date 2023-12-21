@@ -76,7 +76,7 @@ def isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonit
 */
 void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
     def eventMap = [:]
-    if (state.stats != null) state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 else state.stats=[:]
+    if (state.stats != null) { state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 } else { state.stats = [:] }
     double pm25AsDouble = safeToDouble(pm25) + safeToDouble(settings?.pm25Offset ?: 0)
     if (pm25AsDouble <= 0.0 || pm25AsDouble > 999.0) {
         logWarn "ignored invalid pm25 ${pm25} (${pm25AsDouble})"
@@ -110,6 +110,7 @@ void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
     }
 }
 
+/* groovylint-disable-next-line UnusedPrivateMethod */
 private void sendDelayedPm25Event(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['pm25Time'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
@@ -132,7 +133,7 @@ void parseAirQualityIndexCluster(final Map descMap) {
 
 void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
     def eventMap = [:]
-    if (state.stats != null) state.stats['tVocCtr'] = (state.stats['tVocCtr'] ?: 0) + 1 else state.stats=[:]
+    if (state.stats != null) { state.stats['tVocCtr'] = (state.stats['tVocCtr'] ?: 0) + 1 } else { state.stats=[:] }
     Integer tVocCorrected= safeToDouble(tVoc) + safeToDouble(settings?.tVocOffset ?: 0)
     if (tVocCorrected < 0 || tVocCorrected > 999) {
         logWarn "ignored invalid tVoc ${tVoc} (${tVocCorrected})"
@@ -179,6 +180,7 @@ void handleAirQualityIndexEvent( Integer tVoc, Boolean isDigital=false ) {
     }
 }
 
+/* groovylint-disable-next-line UnusedPrivateMethod */
 private void sendDelayedtVocEvent(Map eventMap) {
     logInfo "${eventMap.descriptionText} (${eventMap.type})"
     state.lastRx['tVocTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
@@ -315,21 +317,20 @@ def refreshAirQuality() {
     return cmds
 }
 
-def initVarsAirQuality(boolean fullInit=false) {
+void initVarsAirQuality(boolean fullInit=false) {
     logDebug "initVarsAirQuality(${fullInit})"
-    if (fullInit || settings?.airQualityIndexCheckInterval == null) device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.TemperatureScaleOpts == null) device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.tVocUnut == null) device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.pm25Threshold == null) device.updateSetting("pm25Threshold", [value:DEFAULT_PM25_THRESHOLD, type:"number"])
-    if (fullInit || settings?.airQualityIndexThreshold == null) device.updateSetting("airQualityIndexThreshold", [value:DEFAULT_AIR_QUALITY_INDEX_THRESHOLD, type:"number"])
-
-    if (isVINDSTYRKA()) {     // 09/02/2023 removed airQualityLevel, replaced airQualityIndex w/ sensirionVOCindex
-        device.deleteCurrentState("airQualityLevel") 
-        device.deleteCurrentState("airQualityIndex") 
-    }     
-    
+    if (fullInit || settings?.airQualityIndexCheckInterval == null) { device.updateSetting('airQualityIndexCheckInterval', [value: AirQualityIndexCheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.TemperatureScaleOpts == null) { device.updateSetting('temperatureScale', [value: TemperatureScaleOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.tVocUnut == null) { device.updateSetting('tVocUnut', [value: TvocUnitOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.pm25Threshold == null) { device.updateSetting('pm25Threshold', [value: DEFAULT_PM25_THRESHOLD, type: 'number']) }
+    if (fullInit || settings?.airQualityIndexThreshold == null) { device.updateSetting('airQualityIndexThreshold', [value: DEFAULT_AIR_QUALITY_INDEX_THRESHOLD, type: 'number']) }
+    if (VINDSTYRKA()) {     // 09/02/2023 removed airQualityLevel, replaced airQualityIndex w/ sensirionVOCindex
+        device.deleteCurrentState('airQualityLevel')
+        device.deleteCurrentState('airQualityIndex')
+    }
 }
 
+/* groovylint-disable-next-line EmptyMethod */
 void initEventsAirQuality(boolean fullInit=false) {
     // nothing to do
 }

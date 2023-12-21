@@ -7,5 +7,8 @@
 			"path": "../../Libraries"
 		}
 	],
-	"settings": {}
+	"settings": {},
+	"files.exclude": {
+		"**/Zigbee_TRV_lib_included.groovy": true
+	}
 }

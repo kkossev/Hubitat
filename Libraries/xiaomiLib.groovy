@@ -1,13 +1,14 @@
+/* groovylint-disable MethodReturnTypeRequired */
 library (
-    base: "driver",
-    author: "Krassimir Kossev",
-    category: "zigbee",
-    description: "Xiaomi Library",
-    name: "xiaomiLib",
-    namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy",
-    version: "1.0.1",
-    documentationLink: ""
+    base: 'driver',
+    author: 'Krassimir Kossev',
+    category: 'zigbee',
+    description: 'Xiaomi Library',
+    name: 'xiaomiLib',
+    namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy',
+    version: '1.0.1',
+    documentationLink: ''
 )
 /*
  *  Xiaomi Library
@@ -28,8 +29,8 @@ library (
 */
 
 
-def xiaomiLibVersion()   {"1.0.1"}
-def xiaomiLibStamp() {"2023/11/07 5:23 PM"}
+def xiaomiLibVersion()   { '1.0.1' }
+def xiaomiLibStamp() { '2023/11/07 5:23 PM' }
 
 // no metadata for this library!
 
@@ -64,13 +65,13 @@ def xiaomiLibStamp() {"2023/11/07 5:23 PM"}
 //
 void parseXiaomiClusterLib(final Map descMap) {
     if (settings.logEnable) {
-        //log.trace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logTrace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-    if (DEVICE_TYPE in  ["Thermostat"]) {
+    if (DEVICE_TYPE in  ['Thermostat']) {
         parseXiaomiClusterThermostatLib(descMap)
         return
     }
-    if (DEVICE_TYPE in  ["Bulb"]) {
+    if (DEVICE_TYPE in  ['Bulb']) {
         parseXiaomiClusterRgbLib(descMap)
         return
     }
@@ -78,11 +79,11 @@ void parseXiaomiClusterLib(final Map descMap) {
     // TODO - refactor FP1 specific code
     switch (descMap.attrInt as Integer) {
         case 0x0009:                      // Aqara Cube T1 Pro
-            if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
+            if (DEVICE_TYPE in  ['AqaraCube']) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x00FC:                      // FP1
-            log.info "unknown attribute - resetting?"
+            log.info 'unknown attribute - resetting?'
             break
         case PRESENCE_ATTR_ID:            // 0x0142 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
@@ -120,11 +121,11 @@ void parseXiaomiClusterLib(final Map descMap) {
             device.updateSetting('directionMode', [value: value.toString(), type: 'enum'])
             break
         case 0x0148 :                    // Aqara Cube T1 Pro - Mode
-            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) }
+            if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5)
-            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) }
+            if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
@@ -169,7 +170,7 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
             case 0x08:            // SWBUILD_TAG_ID:
                 final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue("aqaraVersion", swBuild)
+                device.updateDataValue('aqaraVersion', swBuild)
                 break
             case 0x0a:
                 String nwk = intToHexStr(value as Integer,2)
@@ -286,14 +287,14 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
 
 def refreshXiaomi() {
     List<String> cmds = []
-    if (cmds == []) { cmds = ["delay 299"] }
+    if (cmds == []) { cmds = ['delay 299'] }
     return cmds
 }
 
 def configureXiaomi() {
     List<String> cmds = []
     logDebug "configureThermostat() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299"] }    // no , 
+    if (cmds == []) { cmds = ['delay 299'] }    // no , 
     return cmds    
 }
 
@@ -301,7 +302,7 @@ def initializeXiaomi()
 {
     List<String> cmds = []
     logDebug "initializeXiaomi() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299",] }
+    if (cmds == []) { cmds = ['delay 299',] }
     return cmds        
 }
 
