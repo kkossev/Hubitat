@@ -14,3 +14,4 @@ Drivers/SmartThings/SmartThings.iml
 .hubitat/metadata.json
 Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
 Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json
+Drivers/Misc/Third Reality Matter Multi-Function Night Light.groovy
