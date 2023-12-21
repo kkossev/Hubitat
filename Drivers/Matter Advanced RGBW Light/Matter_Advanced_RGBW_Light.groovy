@@ -15,7 +15,7 @@
  *
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
- * ver. 1.0.0  2023-12-19 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method; 
+ * ver. 1.0.0  2023-12-19 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method;
  *
  *                                   TODO: isDigital isRefresh
  *                                   TODO: add toggle()
@@ -26,7 +26,7 @@
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2023/12/21 10:59 PM' }
+static String timeStamp() { '2023/12/21 11:38 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -86,25 +86,25 @@ metadata {
 ]
 //transitionTime options
 @Field static Map ttOpts = [
-        defaultValue: '1'
-        ,defaultText: '1s'
-        , options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
+    defaultValue: '1',
+    defaultText:  '1s',
+    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
 ]
 
 @Field static Map colorRGBName = [
-        4:'Red'
-        ,13:'Orange'
-        ,21:'Yellow'
-        ,29:'Chartreuse'
-        ,38:'Green'
-        ,46:'Spring'
-        ,54:'Cyan'
-        ,63:'Azure'
-        ,71:'Blue'
-        ,79:'Violet'
-        ,88:'Magenta'
-        ,96:'Rose'
-        ,101:'Red'
+    4: 'Red',
+    13:'Orange',
+    21:'Yellow',
+    29:'Chartreuse',
+    38:'Green',
+    46:'Spring',
+    54:'Cyan',
+    63:'Azure',
+    71:'Blue',
+    79:'Violet',
+    88:'Magenta',
+    96:'Rose',
+    101:'Red'
 ]
 
 //parsers
@@ -213,22 +213,6 @@ void parse(String description) {
                 logWarn "parse: skipped color, attribute:${descMap.attrId}, value:${descMap.value}"
             }
             break
-        case '0400':
-            if (descMap.attrId == '0000') {
-                sendIlluminanceEvent(hexStrToUnsignedInt(descMap.value))
-            }
-            else {
-                logWarn "parse: skipped illuminance, attribute:${descMap.attrId}, value:${descMap.value}"
-            }
-            break
-        case '0406' :
-            if (descMap.attrId == '0000') {
-                sendMotionEvent((descMap.value == '00') ? 'inactive' : 'active')
-            }
-            else {
-                logWarn "parse: skipped motion, attribute:${descMap.attrId}, value:${descMap.value}"
-            }
-            break
         default :
                 logDebug "parse: skipped:${descMap}"
     }
@@ -285,22 +269,6 @@ private void sendRGBNameEvent(hue, sat = null) {
     String descriptionText = " color is ${genericName}"
     logInfo "${descriptionText}"
     sendEvent(name: 'colorName', value: genericName ,descriptionText: descriptionText)
-}
-
-void sendMotionEvent(value) {
-    if (device.currentValue('motion') == value) { return }
-    String descriptionText = " is ${value}"
-    logInfo "${descriptionText}"
-    sendEvent(name: 'motion', value: value, descriptionText: descriptionText)
-}
-
-void sendIlluminanceEvent(rawValue) {
-    Integer value = getLuxValue(rawValue)
-    Integer pv = device.currentValue('illuminance') ?: 0
-    if (pv == value) { return }
-    String descriptionText = " illuminance is ${value} Lux"
-    logInfo "${descriptionText}"
-    sendEvent(name: 'illuminance', value: value, descriptionText: descriptionText, unit: 'Lux')
 }
 
 //capability commands
@@ -433,9 +401,6 @@ String refreshCmd() {
     attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0007))
     attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0008))
 
-    //attributePaths.add(matter.attributePath(0x02, 0x0400, 0x0000)) //illuminance
-    //attributePaths.add(matter.attributePath(0x03, 0x0406, 0x0000)) //occupancy
-
     String cmd = matter.readAttributes(attributePaths)
     return cmd
 }
@@ -449,8 +414,6 @@ String subscribeCmd() {
     attributePaths.add(matter.attributePath(0x01, 0x0300, 0x07))
     attributePaths.add(matter.attributePath(0x01, 0x0300, 0x08))
 
-    //attributePaths.add(matter.attributePath(0x02, 0x0400, 0x0000)) //illuminance
-    //attributePaths.add(matter.attributePath(0x03, 0x0406, 0x0000)) //occupancy
     //standard 0 reporting interval is way too busy for bulbs
     String cmd = matter.subscribe(5, 0xFFFF, attributePaths)
     return cmd
@@ -599,8 +562,6 @@ void sendHealthStatusEvent(value) {
 }
 
 String getCron(timeInSeconds) {
-    //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
-    // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours
     final Random rnd = new Random()
     int minutes = (timeInSeconds / 60) as int
     int hours = (minutes / 60) as int
@@ -717,9 +678,9 @@ static Double safeToDouble(val, Double defaultVal=0.0) {
 }
 
 @Field static final int ROLLING_AVERAGE_N = 10
-double approxRollingAverage (double avg, double newSample) {
+double approxRollingAverage(double avg, double newSample) {
     Double tempAvg = avg
-    if (tempAvg == null || tempAvg == 0) { avg = newSample }
+    if (tempAvg == null || tempAvg == 0) { tempAvg = newSample }
     tempAvg -= tempAvg / ROLLING_AVERAGE_N
     tempAvg += newSample / ROLLING_AVERAGE_N
     // TODO: try Method II : New average = old average * (n-1)/n + new value /n
