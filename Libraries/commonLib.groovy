@@ -2300,11 +2300,11 @@ void sendInfoEvent(String info=null) {
     }
 }
 
-def ping() {
+void ping() {
     if (!(isAqaraTVOC_OLD())) {
-        if (state.lastTx == nill ) state.lastTx = [:]
+        if (state.lastTx == null ) state.lastTx = [:]
         state.lastTx['pingTime'] = new Date().getTime()
-        if (state.states == nill ) state.states = [:]
+        if (state.states == null ) state.states = [:]
         state.states['isPing'] = true
         scheduleCommandTimeoutCheck()
         if (!isVirtual()) {
