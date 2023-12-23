@@ -15,3 +15,4 @@ Drivers/SmartThings/SmartThings.iml
 Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
 Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json
 Drivers/Misc/Third Reality Matter Multi-Function Night Light.groovy
+Drivers/Matter Advanced Outlet/logback.log
