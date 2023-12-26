@@ -16,22 +16,18 @@
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
  * ver. 1.0.1  2023-12-23 kkossev  - Inital version; added onOff stats; added toggle(); commented out the initialize() and configure() capabilities because of duplicated subscriptions
- * ver. 1.0.2  2023-12-26 kkossev  - (dev. branch) added getInfo command; fixed the refresh() command for MATTER_OUTLET
+ * ver. 1.0.2  2023-12-26 kkossev  - (dev. branch) added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
  *
- *                                   TODO: 
- *                                   TODO: use manufacturer or model for ping()
  *                                   TODO: add initializeCtr; disable sending commands for 30 seconds after initialize() call
- *                                   TODO: store the attrId:FFFB in a state variable and use it in the next refresh() call
  *                                   TODO: add power meter handling
  *                                   TODO: add flashRate preference; add flash() command
- *                                   TODO: isDigital isRefresh
  *                                   TODO: add flashOnce()
  *                                   TODO: add powerOnBehavior
  *                                   TODO: add offlineCtr in stats
  */
 
 static String version() { '1.0.2' }
-static String timeStamp() { '2023/12/26 12:31 PM' }
+static String timeStamp() { '2023/12/26 1:57 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_OUTLET'
@@ -53,7 +49,7 @@ metadata {
         capability 'Outlet'
         capability 'Switch'
         capability 'Power Meter'
-        capability 'ContactSensor'
+        //capability 'ContactSensor'
         //capability 'Configuration'
         //capability 'Initialize'
         capability 'Refresh'
@@ -168,13 +164,12 @@ void pareseAttributeList(Map descMap) {
 }
 
 void gatherAttributesValuesInfo(Map descMap, Map knownClusterAttributes) {
-    logDebug "gatherAttributesValuesInfo: attrInt:${descMap.attrInt} knownClusterAttributes:${knownClusterAttributes}"
     Integer attrInt = descMap.attrInt as Integer
     String  attrName = knownClusterAttributes[attrInt]
     if (attrName == null) {
         attrName = GlobalElementsAttributes[attrInt]
     }
-    //logDebug "gatherAttributesValuesInfo: attrInt:${attrInt} attrName:${attrName} globalAttrName:${globalAttrName}"
+    logDebug "gatherAttributesValuesInfo: attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
     if (attrName == null) {
         logWarn "gatherAttributesValuesInfo: unknown attribute # ${attrInt}"
         return
@@ -193,6 +188,21 @@ void gatherAttributesValuesInfo(Map descMap, Map knownClusterAttributes) {
                 state.tmp = (state.tmp ?: '') + "${tmp} = ${descMap.value} " + '<br>'
             }
         }
+    }
+    else if ((state.states['isPing'] ?: false) == true && descMap.cluster == '0028' && descMap.attrId == '0000') {
+        Long now = new Date().getTime()
+        Integer timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
+        if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+            state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+            if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
+            if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
+            state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
+            sendRttEvent()
+        }
+        else {
+            logWarn "unexpected ping timeRunning=${timeRunning} "
+        }
+        state.states['isPing'] = false
     }
     else {
         //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
@@ -713,12 +723,15 @@ void ping() {
     if (state.lastTx != null) { state.lastTx['pingTime'] = new Date().getTime() } else { state.lastTx = [:] }
     if (state.states != null) { state.states['isPing'] = true } else { state.states = [:] }
     scheduleCommandTimeoutCheck()
-
-    List<Map<String, String>> attributePaths = []
-    attributePaths.add(matter.attributePath(device.endpointId, 0x0006, 0x4000))
-    String cmd = matter.readAttributes(attributePaths)
-    sendToDevice(cmd)
+    sendToDevice(pingCmd())
     logDebug 'ping...'
+}
+
+String pingCmd() {
+    List<Map<String, String>> attributePaths = []
+    attributePaths.add(matter.attributePath(0, 0x0028, 0x00))   // Basic Information Cluster : DataModelRevision
+    String cmd = matter.readAttributes(attributePaths)
+    return cmd
 }
 
 void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
@@ -974,7 +987,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0003  : 'PartsList'
 ]
 
-// 11.1.6.3. Attributes of the Basic Information Cluster 0x0028
+// 11.1.6.3. Attributes of the Basic Information Cluster 0x0028 ep=0
 @Field static final Map<Integer, String> BasicInformationClusterAttributes = [
     0x0000  : 'DataModelRevision',
     0x0001  : 'VendorName',
