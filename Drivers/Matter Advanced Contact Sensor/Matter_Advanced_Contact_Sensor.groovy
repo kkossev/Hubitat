@@ -61,8 +61,8 @@ metadata {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
         // fingerprints are commented out, because are already included in the stock driver
-        fingerprint endpointId:'01', inClusters:'0003,001D,0045', outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
-        fingerprint endpointId:'02', inClusters:'001D,002F',      outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
+        //fingerprint endpointId:'01', inClusters:'0003,001D,0045', outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
+        //fingerprint endpointId:'02', inClusters:'001D,002F',      outClusters:'', model:'Aqara Door and Window Sensor P2', manufacturer:'Aqara', controllerType:'MAT'
     }
     preferences {
         input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
