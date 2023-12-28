@@ -16,12 +16,13 @@
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
  * ver. 1.0.0  2023-12-27 kkossev  - (dev. branch) inital version (based on the RGBW bulb driver version 1.0.3); added initializeCtr and duplicatedCtr in stats; re-enabled initialize() method w/ unsubscribe() call - hopefully it works! 
+ * ver. 1.0.1  2023-12-28 kkossev  - (dev. branch) reverted back the initialize() method to the previous version (w/o unsubscribe() call); exposed unsubscribe() method
  *
  *                                   TODO: add state.battery w/ all details
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2023/12/28 11:30 AM' }
+static String timeStamp() { '2023/12/28 4:24 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_CONTACT_SENSOR'
@@ -55,7 +56,8 @@ metadata {
         
         command 'getInfo'
         //command 'identify'  // can't make it work ... :(
-        //command 'unsubscribe'
+        //command 'subscribe'
+        command 'unsubscribe'
 
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
@@ -106,7 +108,7 @@ void parse(String description) {
         return
     }
     if (descMap.attrId == 'FFFB') { // parse the AttributeList first!
-        pareseAttributeList(descMap)
+        parseAttributeList(descMap)
         return
     }
     switch (descMap.cluster) {
@@ -205,13 +207,13 @@ void parseBatteryEvent(Map descMap) {
 }
 
 // AttributeList 0xFFFB
-void pareseAttributeList(final Map descMap) {
-    logDebug "pareseAttributeList: descMap:${descMap}"
+void parseAttributeList(final Map descMap) {
+    logDebug "parseAttributeList: descMap:${descMap}"
     Integer cluster  = descMap.clusterInt  as Integer
     String stateName = '0x' + HexUtils.integerToHexString(cluster, 2)
     if (state.matter == null) { state.matter = [:] }
     state.matter[stateName] = descMap.value
-    logDebug "pareseAttributeList: state.matter[$stateName] = ${descMap.value}"
+    logDebug "parseAttributeList: state.matter[$stateName] = ${descMap.value}"
 }
 
 /*
@@ -446,29 +448,41 @@ void updated() {
 
 void initialize() {
     log.warn 'initialize()...'
+
+    Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
+    Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
+    logDebug "'isSubscribe'= ${state.states['isSubscribe']} timeSinceLastSubscribe= ${timeSinceLastSubscribe} 'isUnsubscribe' = ${state.states['isUnsubscribe']} timeSinceLastUnsubscribe= ${timeSinceLastUnsubscribe}"
+
     state.stats['initializeCtr'] = (state.stats['initializeCtr'] ?: 0) + 1
     if (state.deviceType == null) {
         log.warn 'initialize(fullInit = true))...'
         initializeVars(fullInit = true)
         sendInfoEvent('initialize()...', 'full initialization - all settings are reset to default')
     }
-    Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
-    if (state.lastTx['unsubscribeTime'] == null || timeSinceLastUnsubscribe > 30) { //  seconds
+    /*
+    if (state.lastTx['unsubscribeTime'] == null || timeSinceLastUnsubscribe > 45) { //  20 seconds for Aqara P2, 23 seconds for Onvis
         log.warn "initialize(): calling unsubscribe()! (last unsubscribe was more than ${timeSinceLastUnsubscribe} seconds ago)"
         state.lastTx['unsubscribeTime'] = now()
         state.states['isUnsubscribe'] = true
-        scheduleCommandTimeoutCheck(delay = 30)
+        scheduleCommandTimeoutCheck(delay = 45)
         unsubscribe()
     }
     else {
-        log.warn "initialize(): unsubscribe() was called in the last ${timeSinceLastUnsubscribe} seconds"
-        log.warn 'initialize(): calling subscribe()!'
-        state.lastTx['subscribeTime'] = now()
-        state.states['isUnsubscribe'] = false
-        state.states['isSubscribe'] = true  // should be set to false in the parse() method
-        scheduleCommandTimeoutCheck(delay = 30)
-        subscribe()
-    }
+        log.warn "initialize(): unsubscribe() was already called in the last ${timeSinceLastUnsubscribe} seconds ..."
+        if (timeSinceLastSubscribe > 45) {
+            */
+            log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
+            state.lastTx['subscribeTime'] = now()
+            state.states['isUnsubscribe'] = false
+            state.states['isSubscribe'] = true  // should be set to false in the parse() method
+            scheduleCommandTimeoutCheck(delay = 45)
+            subscribe()
+            /*
+        }
+        else {
+            log.warn "initialize(): subscribe() was already called in the last ${timeSinceLastSubscribe} seconds ... We are good to go!"
+        }
+    } */
 }
 
 void unsubscribe() {
@@ -513,11 +527,11 @@ String subscribeCmd() {
         cmd = matter.subscribe(0, 0xFFFF, attributePaths)
     }
     else if (state.deviceType == 'MATTER_CONTACT_SENSOR') {
-        attributePaths.add(matter.attributePath(0x01, 0x0045, 0x00))
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0C))
+        attributePaths.add(matter.attributePath(0x01, 0x0045, 0x00))    // Boolean State Cluster : PresentValue
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0C))    // BatteryPercentageRemaining is reported every 8 hours
         attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0B))    // BatteryVoltage is reported every 8 hours
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x00))
-        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0E))
+        //attributePaths.add(matter.attributePath(0x02, 0x002F, 0x00))    // Status
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0E))    // BattChargeLevel
         cmd = matter.subscribe(0, 0xFFFF, attributePaths)
     }
     return cmd
