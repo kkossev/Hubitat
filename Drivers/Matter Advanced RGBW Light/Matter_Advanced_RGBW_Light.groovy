@@ -17,22 +17,17 @@
  *
  * ver. 1.0.0  2023-12-21 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method;
  * ver. 1.0.2  2023-12-26 kkossev  - commented out the initialize() and configure() capabilities because of duplicated subscriptions; added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
- * ver. 1.0.3  2023-12-26 kkossev  - (dev. branch) added info for ColorControl and LevelControl clusters; added toggle()
+ * ver. 1.0.3  2023-12-28 kkossev  - (dev. branch) added info for ColorControl and LevelControl clusters; added toggle(); added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
  *
- *                                   TODO: add initializeCtr; disable sending commands for 30 seconds after initialize() call
- *                                   TODO: add power meter handling
  *                                   TODO: add flashRate preference; add flash() command
  *                                   TODO: add silentMode attribute
- *                                   TODO: isDigital isRefresh
  *                                   TODO: add flashOnce()
  *                                   TODO: add powerOnBehavior
- *                                   TODO: add offlineCtr in stats
- *                                   TODO: supress repetative log events like 'Nanoleaf Bulb saturation was set to 96%'
  *                                   TODO: add state.color w/ min/max Mirad values
  */
 
 static String version() { '1.0.3' }
-static String timeStamp() { '2023/12/26 4:08 PM' }
+static String timeStamp() { '2023/12/28 10:34 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -64,8 +59,12 @@ metadata {
         attribute 'Status', 'string'
         attribute 'silentMode', 'enum', ['off', 'on']   // disable all logging and events while in color animation mode
         command 'getInfo'
-        command 'identify'
-        command 'unsubscribe'
+        command 'toggle'
+        //command 'identify'  // can't make it work ... :(
+        //command 'unsubscribe'
+        //command 'subscribe'
+        command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
+        command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
 
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
@@ -97,34 +96,12 @@ metadata {
 ]
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
 
-//transitionTime options
-@Field static Map ttOpts = [
-    defaultValue: '1',
-    defaultText:  '1s',
-    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
-]
-
-@Field static Map colorRGBName = [
-    4: 'Red',
-    13:'Orange',
-    21:'Yellow',
-    29:'Chartreuse',
-    38:'Green',
-    46:'Spring',
-    54:'Cyan',
-    63:'Azure',
-    71:'Blue',
-    79:'Violet',
-    88:'Magenta',
-    96:'Rose',
-    101:'Red'
-]
-
 //parsers
 void parse(String description) {
     checkDriverVersion()
     if (state.stats  != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats =  [:] }
     if (state.lastRx != null) { state.lastRx['checkInTime'] = new Date().getTime() }     else { state.lastRx = [:] }
+    checkSubscriptionStatus()
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
 
@@ -162,6 +139,7 @@ void parse(String description) {
         case '0005' :   // Scenes
             gatherAttributesValuesInfo(descMap, ScenesClusterAttributes)
         case '0006' :   // On/Off Cluster
+            gatherAttributesValuesInfo(descMap, OnOffClusterAttributes)
             parseOnOffCluster(descMap)
             break
         case '0008' :   // LevelControl
@@ -176,15 +154,16 @@ void parse(String description) {
         case '001D' :  // Descriptor, ep:00
             gatherAttributesValuesInfo(descMap, DescriptorClusterAttributes)
             break
-        case '002F' :  // PowerConfiguration    //  parse: descMap:[endpoint:02, cluster:002F, attrId:000C, value:C8, clusterInt:47, attrInt:12] description:read attr - endpoint: 02, cluster: 002F, attrId: 000C, value: 04C8
-            gatherAttributesValuesInfo(descMap, PowerConfigurationClusterAttributes)
+        case '002F' :  // PowerSource, ep:02    //  parse: descMap:[endpoint:02, cluster:002F, attrId:000C, value:C8, clusterInt:47, attrInt:12] description:read attr - endpoint: 02, cluster: 002F, attrId: 000C, value: 04C8
+            parseBatteryEvent(descMap)
+            gatherAttributesValuesInfo(descMap, PowerSourceClusterAttributes)
             break
         case '0028' :  // BasicInformation, ep:00
             gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
             break
         case '0045' :  // BooleanState
             gatherAttributesValuesInfo(descMap, BoleanStateClusterAttributes)
-            sendContactEvent(descMap.value)
+            parseContactEvent(descMap)
             break
         case '0300' :   // ColorControl
             if (descMap.attrId == '0000') { //hue
@@ -209,7 +188,7 @@ void parse(String description) {
 }
 
 // AttributeList 0xFFFB
-void pareseAttributeList(Map descMap) {
+void pareseAttributeList(final Map descMap) {
     logDebug "pareseAttributeList: descMap:${descMap}"
     Integer cluster  = descMap.clusterInt  as Integer
     String stateName = '0x' + HexUtils.integerToHexString(cluster, 2)
@@ -218,13 +197,15 @@ void pareseAttributeList(Map descMap) {
     logDebug "pareseAttributeList: state.matter[$stateName] = ${descMap.value}"
 }
 
-void gatherAttributesValuesInfo(Map descMap, Map knownClusterAttributes) {
+void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttributes) {
     Integer attrInt = descMap.attrInt as Integer
     String  attrName = knownClusterAttributes[attrInt]
+    Integer tempIntValue
+    String  tmpStr
     if (attrName == null) {
         attrName = GlobalElementsAttributes[attrInt]
     }
-    logDebug "gatherAttributesValuesInfo: attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
+    //logDebug "gatherAttributesValuesInfo: cluster:${descMap.cluster} attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
     if (attrName == null) {
         logWarn "gatherAttributesValuesInfo: unknown attribute # ${attrInt}"
         return
@@ -232,15 +213,25 @@ void gatherAttributesValuesInfo(Map descMap, Map knownClusterAttributes) {
     if (state.states['isInfo'] == true) {
         logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} state.states['cluster'] = ${state.states['cluster']} "
         if (state.states['cluster'] == descMap.cluster) {
-            if (descMap.value != null && descMap.value != "") {
-                String tmp = "(${descMap.attrId}) ${attrName}"
-                // check if tmp is not already in the state.tmp
-                if (tmp in state.tmp) {
-                    logWarn "gatherAttributesValuesInfo: tmp:${tmp} is already in the state.tmp"
+            if (descMap.value != null && descMap.value != '') {
+                tmpStr = "[${descMap.attrId}] ${attrName}"
+                if (tmpStr in state.tmp) {
+                    logWarn "gatherAttributesValuesInfo: tmpStr:${tmpStr} is already in the state.tmp"
                     return
                 }
-                if (logEnable) { logInfo "$tmp" }
-                state.tmp = (state.tmp ?: '') + "${tmp} = ${descMap.value} " + '<br>'
+                try {
+                    tempIntValue = HexUtils.hexStringToInt(descMap.value)
+                    if (tempIntValue >= 10) {
+                        tmpStr += ' = 0x' + descMap.value + ' (' + tempIntValue + ')'
+                    }
+                    else {
+                        tmpStr += ' = ' + descMap.value
+                    }
+                } catch (e) {
+                    tmpStr += ' = ' + descMap.value
+                }
+                if (logEnable) { logInfo "$tmpStr" }
+                state.tmp = (state.tmp ?: '') + "${tmpStr} " + '<br>'
             }
         }
     }
@@ -261,53 +252,29 @@ void gatherAttributesValuesInfo(Map descMap, Map knownClusterAttributes) {
     }
     /* groovylint-disable-next-line EmptyElseBlock */
     else {
-        //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
+    //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
     }
 }
 
 void parseOnOffCluster(Map descMap) {
     logDebug "parseOnOffCluster: descMap:${descMap}"
-    Integer attrInt = Integer.parseInt(descMap.attrId, 16)
-    String attrName = OnOffClusterAttributes[attrInt]
-    String globalAttrName = GlobalElementsAttributes[attrInt]
-    if (attrName == null && globalAttrName == null) {
-        logWarn "parseOnOffCluster: unknown:${descMap}"
+    if (descMap.cluster != '0006') {
+        logWarn "parseOnOffCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
         return
     }
-    if (state.states['isInfo'] == true) {
-        if (descMap.value != null && descMap.value != "") {
-            String tmp = "${attrName} = ${descMap.value} "
-            if (logEnable) { logInfo "$tmp" }
-            state.tmp = (state.tmp ?: '') + tmp + '<br>'
-        }
-    }
+    Integer attrInt = descMap.attrInt as Integer
+    Integer value
+    String descriptionText = ''
+    Map eventMap = [:]
+    String attrName = OnOffClusterAttributes[attrInt] ?: GlobalElementsAttributes[attrInt] ?: UNKNOWN
 
-    int value
     switch (descMap.attrId) {
         case '0000' : // Switch
             sendSwitchEvent(descMap.value)
             break
-        case '4000' : // GlobalSceneControl
-            boolean isPing = state.states['isPing'] ?: false
-            if (isPing) {
-                Long now = new Date().getTime()
-                Integer timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
-                if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
-                    state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
-                    if (timeRunning < safeToInt((state.stats['pingsMin'] ?: '999'))) { state.stats['pingsMin'] = timeRunning }
-                    if (timeRunning > safeToInt((state.stats['pingsMax'] ?: '0')))   { state.stats['pingsMax'] = timeRunning }
-                    state.stats['pingsAvg'] = approxRollingAverage(safeToDouble(state.stats['pingsAvg']), safeToDouble(timeRunning)) as int
-                    sendRttEvent()
-                }
-                else {
-                    logWarn "unexpected ping timeRunning=${timeRunning} "
-                }
-                state.states['isPing'] = false
-            }
-            else {
-                if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
-                if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['GlobalSceneControl'] = descMap.value
-            }
+        case '4000' : // GlobalSceneControl            
+            if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
+            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['GlobalSceneControl'] = descMap.value
             break
         case '4001' : // OnTime
             if (logEnable) { logInfo  "parse: Switch: OnTime = ${descMap.value}" }
@@ -323,37 +290,25 @@ void parseOnOffCluster(Map descMap) {
             if (logEnable) { logInfo  "${startUpOnOffText}" }
             if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['StartUpOnOff'] = descMap.value
             break
-        case 'FFF8' : // GeneratedCommandList
-            if (logEnable) { logInfo  "parse: Switch: GeneratedCommandList = ${descMap.value}" }
-            break
-        case 'FFF9' : // AceptedCommandList
-            if (logEnable) { logInfo  "parse: Switch: AceptedCommandList = ${descMap.value}" }
-            break
-        case 'FFFA' : // EventList
-            if (logEnable) { logInfo  "parse: Switch: EventList = ${descMap.value}" }
-            break
-        case 'FFFB' : // AttributeList
-            if (logEnable) { logWarn  "parse: Switch: should be already paresed! AttributeList = ${descMap.value}" }
-            break
-        case 'FFFC' : // FeatureMap
-            value = descMap.value as int
-            String featureMapText = "parse: Switch: FeatureMap = ${descMap.value}"
-            /* groovylint-disable-next-line BitwiseOperatorInConditional */
-            if ((value & 0x01) != 0) { featureMapText += ' (Feature: Lighting)' }
-            /* groovylint-disable-next-line BitwiseOperatorInConditional */
-            if ((value & 0x02) != 0) { featureMapText += ' (Feature: DeadFrontBehaviour)' }
-            if (logEnable) { logInfo "$featureMapText" }
-            if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['featureMap'] = descMap.value
-            break
-        case 'FFFD' : // ClusterRevision
-            if (logEnable) { logInfo  "parse: Switch: ClusterRevision = ${descMap.value}" }
-            break
-        case 'FE' : // FabricIndex
-            if (logEnable) { logInfo  "parse: Switch: FabricIndex = ${descMap.value}" }
+        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
+            if (logEnable) {
+                logInfo "parse: Switch: ${attrName} = ${descMap.value}"
+            }
             break
         default :
-            logWarn "parse: skipped switch, attribute:${descMap.attrId}, value:${descMap.value}"
+            logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
+    /*
+    if (eventMap != null) {
+        eventMap.type = 'physical'
+        eventMap.isStateChange = true
+        if (state.states['isRefresh'] == true) {
+            eventMap.descriptionText += ' [refresh]'
+        }
+        sendEvent(eventMap)
+        logInfo eventMap.descriptionText
+    }
+    */
 }
 
 //events
@@ -361,7 +316,7 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
     String value = rawValue == '01' ? 'on' : 'off'
     String descriptionText = "bulb was turned ${value}"
     Map eventMap = [name: 'switch', value: value, descriptionText: descriptionText, type: isDigital ? 'digital' : 'physical']
-    if (state.states["isRefresh"] == true) {
+    if (state.states['isRefresh'] == true) {
         eventMap.descriptionText = "bulb is ${value} [refresh]"
         eventMap.isStateChange = true   // force the event to be sent
     }
@@ -369,7 +324,7 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
         logDebug "ignored duplicated switch event, value:${value}"
         return
     }
-    eventMap.descriptionText += (isDigital == true || state.states['isDigital'] == true )? ' [digital]' : ' [physical]'
+    eventMap.descriptionText += (isDigital == true || state.states['isDigital'] == true ) ? ' [digital]' : ' [physical]'
     logInfo "${eventMap.descriptionText}"
     sendEvent(eventMap)
 }
@@ -488,6 +443,7 @@ void setSaturation(Object value) {
     sendToDevice(cmds)
 }
 
+
 void setHueSat(Object hue, Object sat) {
     logDebug "setHueSat(${hue}, ${sat})"
     List<String> cmds = []
@@ -517,18 +473,13 @@ void setColor(Map colorMap) {
     }
 }
 
-void unsubscribe() {
-    logWarn 'unsubscribe() ...'
-    sendToDevice(matter.unsubscribe())
-} 
-
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true ; runInMillis( REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
+void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true ; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }                 // 3 seconds
 void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
-void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = true ; runInMillis( DIGITAL_TIMER, clearDigitalRequest, [overwrite: true]) }                 // 3 seconds
+void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = true ; runInMillis(DIGITAL_TIMER, clearDigitalRequest, [overwrite: true]) }                 // 3 seconds
 void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
 
 void logRequestedClusterAttrResult(Map data) {
-    String clusterAtttr = "Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) attributes and values list"
+    String clusterAtttr = "Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint ${HexUtils.integerToHexString(data.endpoint as Integer, 1)} attributes and values list"
     if (state.tmp != null) {
         logInfo "${clusterAtttr} : <br>${state.tmp}"
     } else {
@@ -561,9 +512,9 @@ void requestMatterClusterAttributesValues(Map data) {
     String attrListString = state.matter["$stateName"] as String
     logInfo "Requesting Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint ${HexUtils.integerToHexString(endpoint, 1)} attributes values ..."
     if (attrListString == null) {
-        logWarn "requestMatterClusterAttributesValues: attrListString is null"
+        logWarn 'requestMatterClusterAttributesValues: attrListString is null'
         return
-    }   
+    }
     attrListString = attrListString.substring(1, attrListString.length() - 1)                   // remove the [] brackets
     List<Integer> attrList = attrListString.split(',').collect { HexUtils.hexStringToInt(it) }  // convert the string to a list of integers
     logDebug "requestMatterClusterAttributesValues: attrList:${attrList}"
@@ -578,21 +529,30 @@ void requestAndCollectAttributesValues(endpoint, cluster, time) {
     runIn(time ?: 1, requestMatterClusterAttributesList,    [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
     runIn(time + 3,  requestMatterClusterAttributesValues,  [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
     runIn(time + 12,  logRequestedClusterAttrResult,        [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
-
 }
 
 void getInfo() {
     logDebug 'getInfo()'
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001D, time = 1)    // Descriptor Cluster
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0028, time = 15)   // Basic Information Cluster
-    requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0008, time = 30)    // Level Control Cluster
-    requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0300, time = 45)    // Color Control Cluster
+    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0028, time = 1)     // Basic Information Cluster
+    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001D, time = 15)    // Descriptor Cluster
+    if (state.deviceType == 'MATTER_OUTLET') {
+        requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0006, time = 30)    // On/Off Cluster
+    }
+    else if (state.deviceType == 'MATTER_BULB') {
+        requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0006, time = 30)    // On/Off Cluster
+        requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0008, time = 45)    // Level Control Cluster
+        requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0300, time = 60)    // Color Control Cluster
+    }
+    else if (state.deviceType == 'MATTER_CONTACT_SENSOR') {
+        requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0045, time = 30)    // Boolean State Cluster
+        requestAndCollectAttributesValues(endpoint = '02',              cluster = 0x002F, time = 45)    // Power Configuration Cluster
+    }
 }
 
 void configure() {
     log.warn 'configure...'
-    //sendToDevice(subscribeCmd())
-    logWarn 'subscribeCmd creates duplicate events - skipped for now!'
+    sendToDevice(subscribeCmd())
+    sendInfoEvent('configure()...', 'sent device subscribe command')
 }
 
 //lifecycle commands
@@ -620,63 +580,71 @@ void updated() {
 }
 
 void initialize() {
-    logWarn 'initialize()...'
+    log.warn 'initialize()...'
+    Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
+    Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
+    
+    logDebug "'isSubscribe'= ${state.states['isSubscribe']} timeSinceLastSubscribe= ${timeSinceLastSubscribe} 'isUnsubscribe' = ${state.states['isUnsubscribe']} timeSinceLastUnsubscribe= ${timeSinceLastUnsubscribe}"
+
+    state.stats['initializeCtr'] = (state.stats['initializeCtr'] ?: 0) + 1
     if (state.deviceType == null) {
         log.warn 'initialize(fullInit = true))...'
         initializeVars(fullInit = true)
+        sendInfoEvent('initialize()...', 'full initialization - all settings are reset to default')
     }
-    sendSubscribeCmd()
-    //runIn(1, sendSubscribeCmd)
-    //runIn(20, sendUnsubscribeCmd)
-    //logWarn 'subscribeCmd creates duplicate events - skipped for now!'
-}
-
-// creates duplicate events - do not use!
-void sendSubscribeCmd() {
-    logDebug 'sendSubscribeCmd()'
-    sendToDevice(subscribeCmd())
-}
-
-// creates endledess loop - do not use!
-void sendUnsubscribeCmd() {
-    logDebug 'sendUnsubscribeCmd()'
-    sendToDevice(unsubscribeCmd())
-}
-
-void refresh() {
-    logInfo'refresh() ...'
-    checkDriverVersion()
-    setRefreshRequest()    // 6 seconds
-    sendToDevice(refreshCmd())
-}
-
-String refreshCmd() {   //   on/off: :[FFF8, FFF9, FFFB, FFFC, FFFD, 00, 4000, 4001, 4002, 4003]
-    List<Map<String, String>> attributePaths = []
-    if (state.deviceType == 'MATTER_OUTLET') {
-        if (state.matter != null && state.matter['0x0006'] !=null) {
-            String attrListString = state.matter['0x0006'] as String
-            attrListString = attrListString.substring(1, attrListString.length() - 1)                   // remove the [] brackets
-            List<Integer> attrList = attrListString.split(',').collect { HexUtils.hexStringToInt(it) }  // convert the string to a list of integers
-            logDebug "refreshCmd: attrList:${attrList}"
-            attrList.each { attrInt ->
-                attributePaths.add(matter.attributePath(device.endpointId, 0x0006, attrInt))
-            }
+    /*
+    if (state.lastTx['unsubscribeTime'] == null || timeSinceLastUnsubscribe > 45) { //  20 seconds for Aqara P2, 23 seconds for Onvis
+        log.warn "initialize(): calling unsubscribe()! (last unsubscribe was more than ${timeSinceLastUnsubscribe} seconds ago)"
+        state.lastTx['unsubscribeTime'] = now()
+        state.states['isUnsubscribe'] = true
+        scheduleCommandTimeoutCheck(delay = 45)
+        unsubscribe()
+    }
+    else {
+        log.warn "initialize(): unsubscribe() was already called in the last ${timeSinceLastUnsubscribe} seconds ..."
+        if (timeSinceLastSubscribe > 30) {
+            */
+            log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
+            state.lastTx['subscribeTime'] = now()
+            state.states['isUnsubscribe'] = false
+            state.states['isSubscribe'] = true  // should be set to false in the parse() method
+            scheduleCommandTimeoutCheck(delay = 30)
+            subscribe()
+            /*
         }
         else {
-            logWarn "refreshCmd: state.matter['0x0006'] is null"
+            log.warn "initialize(): subscribe() was already called in the last ${timeSinceLastSubscribe} seconds ... We are good to go!"
         }
+    } */
+}
 
-    }
-    if (state.deviceType == 'MATTER_BULB') {
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0006, 0x0000))
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0008, 0x0000))
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0000))
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0001))
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0007))
-        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0008))
-    }
-    String cmd = matter.readAttributes(attributePaths)
-    return cmd
+void reSubscribe() {
+    logWarn 'reSubscribe() ...'
+    unsubscribe() 
+}
+
+void unsubscribe() {
+    sendInfoEvent('unsubscribe()...Please wait.', 'sent device unsubscribe command')
+    sendUnsubscribeCmd()
+}
+
+void sendUnsubscribeCmd() {
+    logWarn 'sendUnsubscribeCmd() ...'
+    sendToDevice(unSubscribeCmd())
+}
+
+String  unSubscribeCmd() {
+    return matter.unsubscribe()
+}
+
+void subscribe() {
+    sendInfoEvent('subscribe()...Please wait.', 'sent device subscribe command')
+    sendSubscribeCmd()
+}
+
+void sendSubscribeCmd() {
+    logWarn 'sendSubscribeCmd()...'
+    sendToDevice(subscribeCmd())
 }
 
 String subscribeCmd() {
@@ -692,6 +660,74 @@ String subscribeCmd() {
         //standard 0 reporting interval is way too busy for bulbs
         cmd = matter.subscribe(5, 0xFFFF, attributePaths)
     }
+    else if (state.deviceType == 'MATTER_OUTLET') {
+        attributePaths.add(matter.attributePath(0x01, 0x0006, 0x00))
+        cmd = matter.subscribe(0, 300, attributePaths)
+    }
+    else if (state.deviceType == 'MATTER_CONTACT_SENSOR') {
+        attributePaths.add(matter.attributePath(0x01, 0x0045, 0x00))
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0C))
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0B))    // BatteryVoltage is reported every 8 hours
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x00))
+        attributePaths.add(matter.attributePath(0x02, 0x002F, 0x0E))
+        cmd = matter.subscribe(0, 0xFFFF, attributePaths)
+    }
+    return cmd
+}
+
+void checkSubscriptionStatus() {
+    if (state.states == null) { state.states = [:] }
+    if (state.states['isUnsubscribe'] == true) {
+        logInfo 'checkSubscription(): unsubscribe() is completed.'
+        sendInfoEvent('unsubscribe() is completed', 'something was received in the parse() method')
+        state.states['isUnsubscribe'] = false
+    }
+    if (state.states['isSubscribe'] == true) {
+        logInfo 'checkSubscription(): subscribe() is completed.'
+        sendInfoEvent('completed', 'something was received in the parse() method')
+        state.states['isSubscribe'] = false
+    }
+}
+
+void refresh() {
+    logInfo'refresh() ...'
+    checkDriverVersion()
+    setRefreshRequest()    // 6 seconds
+    sendToDevice(refreshCmd())
+}
+
+String refreshCmd() {
+    List<Map<String, String>> attributePaths = []
+    if (state.deviceType == 'MATTER_OUTLET') {
+        if (state.matter != null && state.matter['0x0006'] != null) {
+            String attrListString = state.matter['0x0006'] as String
+            attrListString = attrListString.substring(1, attrListString.length() - 1)                   // remove the [] brackets
+            List<Integer> attrList = attrListString.split(',').collect { HexUtils.hexStringToInt(it) }  // convert the string to a list of integers
+            logDebug "refreshCmd: attrList:${attrList}"
+            attrList.each { attrInt ->
+                attributePaths.add(matter.attributePath(device.endpointId, 0x0006, attrInt))
+            }
+        }
+        else {
+            logWarn "refreshCmd: state.matter['0x0006'] is null"
+        }
+    }
+    else if (state.deviceType == 'MATTER_BULB') {
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0006, 0x0000))
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0008, 0x0000))
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0000))
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0001))
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0007))
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0300, 0x0008))
+    }
+    else if (state.deviceType == 'MATTER_CONTACT_SENSOR') {
+        attributePaths.add(matter.attributePath(device.endpointId, 0x0045, 0x0000))         // Boolean State Cluster : PresentValue
+        attributePaths.add(matter.attributePath(02, 0x002F, 0x000C))                        // Power Configuration Cluster : BatteryPercentageRemaining
+        attributePaths.add(matter.attributePath(02, 0x002F, 0x000B))                        // Power Configuration Cluster : BatteryVoltage
+        attributePaths.add(matter.attributePath(02, 0x002F, 0x0000))                        // Power Configuration Cluster : Status
+        attributePaths.add(matter.attributePath(02, 0x002F, 0x000E))                        // Power Configuration Cluster : BattChargeLevel
+    }
+    String cmd = matter.readAttributes(attributePaths)
     return cmd
 }
 
@@ -760,14 +796,15 @@ String getModel() {
         }
     }
 }
-void sendInfoEvent(String info=null) {
+
+void sendInfoEvent(info = null, descriptionText = null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
-        sendEvent(name: 'Status', value: 'clear', isDigital: true)
+        sendEvent(name: 'Status', value: 'clear', descriptionText: 'last info messages auto cleared', isDigital: true)
     }
     else {
         logInfo "${info}"
-        sendEvent(name: 'Status', value: info, isDigital: true)
+        sendEvent(name: 'Status', value: info, descriptionText:descriptionText ?: '', isDigital: true)
         runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
     }
 }
@@ -807,6 +844,7 @@ void deviceHealthCheck() {
     logDebug "deviceHealthCheck: checkCtr3=${ctr}"
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         if ((device.currentValue('healthStatus') ?: 'unknown') != 'offline') {
+            state.health['offlineCtr'] = (state.health['offlineCtr'] ?: 0) + 1
             logWarn 'not present!'
             sendHealthStatusEvent('offline')
         }
@@ -872,8 +910,13 @@ void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
-    sendRttEvent('timeout')
-    if (state.stats != null) { state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 } else { state.stats = [:] }
+    if (state.states['isPing'] == true) {
+        sendRttEvent('timeout')
+        state.states['isPing'] = false
+        if (state.stats != null) { state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 } else { state.stats = [:] }
+    } else {
+        sendInfoEvent('timeout!', 'no response received on the last matter command!')
+    }
 }
 
 void sendRttEvent(String value=null) {
@@ -900,19 +943,18 @@ String getDeviceInfo() {
 
 void resetStats() {
     logDebug 'resetStats...'
-    state.stats = [:]
-    state.states = [:]
-    state.lastRx = [:]
-    state.lastTx = [:]
+    state.stats  = state.states = [:]
+    state.lastRx = state.lastTx = [:]
+    state.lastTx['pingTime'] = state.lastTx['cmdTime'] = now()
+    state.lastTx['subscribeTime'] = state.lastTx['unsubscribeTime'] = now()
     state.health = [:]
-    state.onOff  = [:]  // this driver specific
-    state.matter  = [:]
-    state.stats['rxCtr'] = 0
-    state.stats['txCtr'] = 0
-    state.states['isDigital'] = false
-    state.states['isRefresh'] = false
-    state.health['offlineCtr'] = 0
-    state.health['checkCtr3'] = 0
+    state.onOff  = [:]  // driver specific
+    state.matter = [:]
+    state.stats['rxCtr'] = state.stats['txCtr'] = 0
+    state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
+    state.states['isDigital'] = state.states['isRefresh'] = state.states['isPing'] =  state.states['isInfo']  = false
+    state.states['isSubscribing'] =  state.states['isUnsubscribing']  = false
+    state.health['offlineCtr'] = state.health['checkCtr3']  = 0
 }
 
 void initializeVars(boolean fullInit = false) {
@@ -926,7 +968,7 @@ void initializeVars(boolean fullInit = false) {
         state.driverVersion = driverVersionAndTimeStamp()
         logInfo "DEVICE_TYPE = ${DEVICE_TYPE}"
         state.deviceType = DEVICE_TYPE
-        sendInfoEvent('Initialized')
+        sendInfoEvent('Initialized (fullInit = true)', 'full initialization - loaded all defaults!')
     }
 
     if (state.stats == null)  { state.stats  = [:] }
@@ -992,11 +1034,16 @@ void parseTest(par) {
 }
 
 void test(par) {
+    /*
     log.warn "test... ${par}"
     log.debug "Matter cluster names = ${matter.getClusterNames()}"    // OK
     log.debug "Matter getClusterIdByName ${matter.getClusterIdByName('Identify')}"  // OK
     log.debug "Matter getClusterName(3) = ${matter.getClusterName(3)}"  // not OK - echoes back the cluster number?
-
+    */
+    List<Map<String, String>> attributePaths = []
+    attributePaths.add(matter.attributePath(0, 0x4000, 0x00))   
+    String cmd = matter.readAttributes(attributePaths)
+    sendToDevice(cmd)
 }
 
 /*
@@ -1008,7 +1055,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x001D  : 'Descriptor',                 // The Descriptor cluster is meant to replace the support from the Zigbee Device Object (ZDO) for describing a node, its endpoints and clusters
     0x001E  : 'Binding',                    // Meant to replace the support from the Zigbee Device Object (ZDO) for supportiprefriginatng the binding table.
     0x001F  : 'AccessControl',              // Exposes a data model view of a Node’s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Node’s endpoints and their associated cluster instances.
-    0x0025  : 'Actions',                    // Provides a standardized way for a Node (typically a Bridge, but could be any Node) to expose information, commands, events ... 
+    0x0025  : 'Actions',                    // Provides a standardized way for a Node (typically a Bridge, but could be any Node) to expose information, commands, events ...
     0x0028  : 'BasicInformation',           // Provides attributes and events for determining basic information about Nodes, which supports both Commissioning and operational determination of Node characteristics, such as Vendor ID, Product ID and serial number, which apply to the whole Node.
     0x0029  : 'OTASoftwareUpdateProvider',
     0x002A  : 'OTASoftwareUpdateRequestor',
@@ -1104,7 +1151,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 @Field static final Map<Integer, String> GlobalElementsAttributes = [
     0x00FE  : 'FabricIndex',
     0xFFF8  : 'GeneratedCommandList',
-    0xFFF9  : 'AceptedCommandList',
+    0xFFF9  : 'AcceptedCommandList',
     0xFFFA  : 'EventList',
     0xFFFB  : 'AttributeList',
     0xFFFC  : 'FeatureMap',
@@ -1200,12 +1247,38 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x08    : 'MoveToClosestFrequency'
 ]
 
+// 11.7. Power Source Cluster 0x002F    // attrList:[0, 1, 2, 11, 12, 14, 15, 16, 19, 25, 65528, 65529, 65531, 65532, 65533]
+@Field static final Map<Integer, String> PowerSourceClusterAttributes = [
+    0x0000  : 'Status',
+    0x0001  : 'Order',
+    0x0002  : 'Description',
+    0x000B  : 'BatVoltage',
+    0x000C  : 'BatPercentRemaining',
+    0x000D  : 'BatTimeRemaining',
+    0x000E  : 'BatChargeLevel',
+    0x000F  : 'BatReplacementNeeded',
+    0x0010  : 'BatReplaceability',
+    0x0013  : 'BatReplacementDescription',
+    0x0019  : 'BatQuantity'
+]
+@Field static final Map<Integer, String> PowerSourceClusterStatus = [
+    0x00    : 'Unspecified',    // SHALL indicate the source status is not specified
+    0x01    : 'Active',         // SHALL indicate the source is available and currently supplying power
+    0x02    : 'Standby',        // SHALL indicate the source is available, but is not currently supplying power
+    0x03    : 'Unavailable'     // SHALL indicate the source is not currently available to supply power
+]
+@Field static final Map<Integer, String> PowerSourceClusterBatteryChargeLevel = [
+    0x00    : 'OK',             // Charge level is nominal
+    0x01    : 'Warning',        // Charge level is low, intervention may soon be required.
+    0x02    : 'Critical'        // Charge level is critical, immediate intervention is required.
+]
+
 // 1.7 Bolean State Cluster 0x0045
 @Field static final Map<Integer, String> BoleanStateClusterAttributes = [
     0x0000  : 'StateValue'
 ]
 
-// 3.2. Color Control Cluste 0x0300
+// 3.2. Color Control Cluster 0x0300
 @Field static final Map<Integer, String> ColorControlClusterAttributes = [
     0x0000  : 'CurrentHue',
     0x0001  : 'CurrentSaturation',
@@ -1250,4 +1323,27 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x47    : 'StopMoveStep',
     0x4B    : 'MoveColorTemperature',
     0x4C    : 'StepColorTemperature'
+]
+
+@Field static Map colorRGBName = [
+    4: 'Red',
+    13:'Orange',
+    21:'Yellow',
+    29:'Chartreuse',
+    38:'Green',
+    46:'Spring',
+    54:'Cyan',
+    63:'Azure',
+    71:'Blue',
+    79:'Violet',
+    88:'Magenta',
+    96:'Rose',
+    101:'Red'
+]
+
+//transitionTime options
+@Field static Map ttOpts = [
+    defaultValue: '1',
+    defaultText:  '1s',
+    options:['0':'ASAP', '1':'1s', '2':'2s', '5':'5s']
 ]
