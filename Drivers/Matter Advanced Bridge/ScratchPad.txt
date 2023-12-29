@@ -1,0 +1,134 @@
+Aqara E1 Matter Bridge Cluster BasicInformation (0x0028) endpoint 00 attributes and values list :
+[0000] DataModelRevision = 01
+[0001] VendorName = Aqara
+[0002] VendorID = 0x115F (4447)
+[0003] ProductName = Aqara Hub E1
+[0004] ProductID = 0x0802 (2050)
+[0005] NodeLabel = Aqara Hub E1
+[0006] Location = CN
+[0007] HardwareVersion = 01
+[0008] HardwareVersionString = 1
+[0009] SoftwareVersion = 0x0197 (407)
+[000A] SoftwareVersionString = 4.0.7
+[000B] ManufacturingDate = 0x20200101 (538968321)
+[000C] PartNumber = AG022
+[000D] ProductURL = https://www.aqara.com/en/products.html
+[000E] ProductLabel = Aqara Hub E1
+[000F] SerialNumber = 54ef44316f5a
+[0010] LocalConfigDisabled = 00
+[0011] Reachable = 01
+[0012] UniquieID = lumi1.54ef44316f5a
+[0013] CapabilityMinima = 152400032501FFFF18
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster Descriptor (0x001D) endpoint 00 attributes and values list :
+[0000] DeviceTypeList = [16, 1818]
+[0001] ServerList = [1D, 1F, 28, 30, 31, 33, 37, 3C, 3E, 3F]
+[0002] ClientList = [1F]
+[0003] PartsList = [01]
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster AccessControl (0x001F) endpoint 00 attributes and values list :
+[0000] ACL = [2405, 06033602, 1800, 18]
+[0001] Extension = 0x1618 (5656)
+[0002] SubjectsPerAccessControlEntry = 04
+[0003] TargetsPerAccessControlEntry = 03
+[0004] AccessControlEntriesPerFabric = 04
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster GeneralCommissioning (0x0030) endpoint 00 attributes and values list :
+[0000] Breadcrumb = 00
+[0001] BasicCommissioningInfo = 1524003C2501840318
+[0002] RegulatoryConfig = 00
+[0003] LocationCapability = 02
+[0004] SupportsConcurrentConnection = 01
+[FFF8] GeneratedCommandList = [01, 03, 05]
+[FFF9] AcceptedCommandList = [00, 02, 04]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster NetworkCommissioning (0x0031) endpoint 00 attributes and values list :
+[0000] MaxNetworks = 01
+[0001] Networks = [03, 1818]
+[0002] ScanMaxTimeSeconds = 0x0A (10)
+[0003] ConnectMaxTimeSeconds = 0x14 (20)
+[0004] InterfaceEnabled = 01
+[0005] LastNetworkingStatus = 0x14 (20)
+[0006] LastNetworkID = 0x14 (20)
+[0007] LastConnectErrorValue = 0x14 (20)
+[FFF8] GeneratedCommandList = [01, 05, 07]
+[FFF9] AcceptedCommandList = [00, 02, 04, 06, 08]
+[FFFC] FeatureMap = 01
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster GeneralDiagnostics (0x0033) endpoint 00 attributes and values list :
+[0001] RebootCount = 04
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[0008] TestEventTriggersEnabled = 00
+[FFF9] AcceptedCommandList = [00]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster EthernetNetworkDiagnostics (0x0037) endpoint 00 attributes and values list :
+[0000] PHYRate = 00
+[0001] FullDuplex = 00
+[0002] PacketRxCount = 00
+[0003] PacketTxCount = 00
+[0004] TxErrCount = 00
+[0005] CollisionCount = 00
+[0006] OverrunCount = 00
+[0007] CarrierDetect = 0x14 (20)
+[0008] TimeSinceReset = 0x0023ED47 (2354503)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00]
+[FFFC] FeatureMap = 03
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster AdministratorCommissioning (0x003C) endpoint 00 attributes and values list :
+[0000] WindowStatus = 00
+[0001] AdminFabricIndex = 0x14 (20)
+[0002] AdminVendorId = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00, 01, 02]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster OperationalCredentials (0x003E) endpoint 00 attributes and values list :
+[0000] NOCs = [15F2, 2401, 24033701, 1125, 0441093001082401, 6E953AA37D7F82EB, A7D7, 04033601, 30180104, 14, 40, 2401, 24033701, 80, 2580, 01072418, 0930, F920, 01290135, 14043060, A17F4A25, 40, 1FAEAB41, 94481054]
+[0001] Fabrics = [0441, F7, C3A0, ￆ, 0324FFF1, 0425, 24]
+[0002] SupportedFabrics = 0x0A (10)
+[0003] CommissionedFabrics = 03
+[0004] TrustedRootCertificates = [0101, 0337, 2618, 80, 2580, 2418, 0441093001082401, F7, C3A0, ￆ, 01290135, 14043060, 96B8B3A17F4A250A, BC14, A17F4A25, 40, F6, w, 2400, 27033701, 04, 3700, 3AAB1427, 2418, 0441093001082401, 2F6D06CA, 00, 01290135, 14043060, ￓ, 132F2BD2234062CE, 2400, 26033701, 37, 5B101426, 0441093001082401, CBD6CCD3, 2B, Z, 01290135, 14043060, 00, 060802AF, 07, A42EDFD0]
+[0005] CurrentFabricIndex = 04
+[FFF8] GeneratedCommandList = [01, 03, 05, 08]
+[FFF9] AcceptedCommandList = [00, 02, 04, 06, 07, 09, 0A, 0B]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Aqara E1 Matter Bridge Cluster GroupKeyManagement (0x003F) endpoint 00 attributes and values list :
+[0000] GroupKeyMap = 0x1618 (5656)
+[0001] GroupTable = 0x1618 (5656)
+[0002] MaxGroupsPerFabric = 04
+[0003] MaxGroupKeysPerFabric = 03
+[FFF8] GeneratedCommandList = [02, 05]
+[FFF9] AcceptedCommandList = [00, 01, 03, 04]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+
+Aqara E1 Matter Bridge Cluster Identify (0x0003) endpoint 01 attributes and values list :
+[0000] IdentifyTime = 00
+[0001] IdentifyType = 01
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00, 40]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 02
