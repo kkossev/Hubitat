@@ -15,13 +15,13 @@
  *
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
- * ver. 1.0.1  2023-12-23 kkossev  - Inital version;
+ * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
  *
  *                                   TODO:
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2023/12/29 1:31 PM' }
+static String timeStamp() { '2023/12/29 9:28 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -47,6 +47,8 @@ metadata {
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
         attribute 'Status', 'string'
+        attribute 'productName', 'string'
+        attribute 'bridgeSoftwareVersion', 'string'
 
         command 'getInfo'
         command 'identify'  // can't make it work ... :(
@@ -117,6 +119,7 @@ void parse(String description) {
             break
         case '001D' :  // Descriptor, ep:00
             gatherAttributesValuesInfo(descMap, DescriptorClusterAttributes)
+            parseDescriptorCluster(descMap)
             break
         case '001E' :  // Binding, ep:00
             gatherAttributesValuesInfo(descMap, BindingClusterAttributes)
@@ -126,6 +129,22 @@ void parse(String description) {
             break
         case '0028' :  // BasicInformation, ep:00
             gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
+            parseBasicInformationCluster(descMap)
+            break
+        case '0029' :  // OTSA Software Update Provider, ep:00
+            gatherAttributesValuesInfo(descMap, OTASoftwareUpdateProviderClusterAttributes)
+            break
+        case '002A' :  // OTA Software Update Requester, ep:00
+            gatherAttributesValuesInfo(descMap, OTASoftwareUpdateRequestorClusterAttributes)
+            break
+        case '002B' :  // Localization Configuration, ep:00
+            gatherAttributesValuesInfo(descMap, LocalizationConfigurationClusterAttributes)
+            break
+        case '002C' :  // TimeFormatLocalization, ep:00
+            gatherAttributesValuesInfo(descMap, TimeFormatLocalizationClusterAttributes)
+            break    
+        case '002E' :  // PowerSourceConfiguration, ep:00
+            gatherAttributesValuesInfo(descMap, PowerSourceConfigurationClusterAttributes)
             break
         case '0030' :  // GeneralCommissioning, ep:00
             gatherAttributesValuesInfo(descMap, GeneralCommissioningClusterAttributes)
@@ -133,11 +152,20 @@ void parse(String description) {
         case '0031' :  // NetworkCommissioning, ep:00
             gatherAttributesValuesInfo(descMap, NetworkCommissioningClusterAttributes)
             break
+        case '0032' :  // DiagnosticLogs , ep:00
+            gatherAttributesValuesInfo(descMap, DiagnosticLogsClusterAttributes)
+            break
         case '0033' :  // GeneralDiagnostics, ep:00
             gatherAttributesValuesInfo(descMap, GeneralDiagnosticsClusterAttributes)
             break
+        case '0034' :  // SoftwareDiagnostics, ep:00
+            gatherAttributesValuesInfo(descMap, SoftwareDiagnosticsClusterAttributes)
+            break
         case '0037' :  // EthernetNetworkDiagnostics, ep:00
             gatherAttributesValuesInfo(descMap, EthernetNetworkDiagnosticsClusterAttributes)
+            break
+        case '0039' :  // BridgedDeviceBasic, ep:00
+            gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
             break
         case '003C' :  // AdministratorCommissioning, ep:00
             gatherAttributesValuesInfo(descMap, AdministratorCommissioningClusterAttributes)
@@ -148,12 +176,12 @@ void parse(String description) {
         case '003F' :  // GroupKeyManagement, ep:00
             gatherAttributesValuesInfo(descMap, GroupKeyManagementClusterAttributes)
             break
+        case '0040' :  // FixedLabel, ep:00
+            gatherAttributesValuesInfo(descMap, FixedLabelClusterAttributes)
+            break
         case '002F' :  // PowerSource, ep:02 
             parseBatteryEvent(descMap)
             gatherAttributesValuesInfo(descMap, PowerSourceClusterAttributes)
-            break
-        case '0028' :  // BasicInformation, ep:00
-            gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
             break
         default :
             gatherAttributesValuesInfo(descMap, GlobalElementsAttributes)
@@ -234,7 +262,7 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
         return
     }
     if (state.states['isInfo'] == true) {
-        logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} state.states['cluster'] = ${state.states['cluster']} "
+        //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} state.states['cluster'] = ${state.states['cluster']} "
         if (state.states['cluster'] == descMap.cluster) {
             if (descMap.value != null && descMap.value != '') {
                 tmpStr = "[${descMap.attrId}] ${attrName}"
@@ -276,6 +304,54 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
     //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
     }
 }
+
+void parseBasicInformationCluster(final Map descMap) {
+    //logDebug "parseBasicInformationCluster: descMap:${descMap}"
+    Map eventMap = [:]
+    String attrName = BasicInformationClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
+    switch (descMap.attrId) {
+        case '0003' : // productName
+            eventMap = [name: 'productName', value:descMap.value, descriptionText: "productName is: ${descMap.value}"]
+            break
+        case '000A' : // softwareVersionString
+            eventMap = [name: 'bridgeSoftwareVersion', value:descMap.value, descriptionText: "bridgeSoftwareVersion is: ${descMap.value}"]
+            break
+        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
+            if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" }
+            break
+        default :
+            if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
+            break
+    }
+
+    if (eventMap != [:]) {
+        eventMap.type = 'physical'; eventMap.isStateChange = true
+        if (state.states['isRefresh'] == true) { eventMap.descriptionText += ' [refresh]' }
+        sendEvent(eventMap)
+        logInfo eventMap.descriptionText
+    }
+}
+
+void parseDescriptorCluster(final Map descMap) {
+    logDebug "parseBasicInformationCluster: descMap:${descMap}"
+    String attrName = DescriptorClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
+    if (state.matterDescriptor == null) { state.matterDescriptor = [:] }
+/*
+[0000] DeviceTypeList = [16, 1818]
+[0001] ServerList = [03, 1D, 1F, 28, 29, 2A, 2B, 2C, 2E, 30, 31, 32, 33, 34, 37, 39, 3C, 3E, 3F, 40]
+[0002] ClientList = [03, 1F, 29, 39]
+[0003] PartsList = [01, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11]
+*/
+    switch (descMap.attrId) {
+        case ['0000', '0001', '0002', '0003'] :
+            state.matterDescriptor[attrName] = descMap.value
+            if (logEnable) { logInfo "parse: Descriptor: ${attrName} = ${descMap.value}" }
+            break
+        default :
+            if (logEnable) { logInfo "parse: Descriptor: ${attrName} = ${descMap.value}" }
+    }
+}
+
 
 void parseOnOffCluster(Map descMap) {
     logDebug "parseOnOffCluster: descMap:${descMap}"
@@ -438,18 +514,22 @@ void requestAndCollectAttributesValues(endpoint, cluster, time) {
 
 void getInfo() {
     logDebug 'getInfo()'
+    
     requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0028, time = 1)                     // Basic Information Cluster
     requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001D, time = 15)                    // Descriptor Cluster
-    //requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001E, time = 30)                    // Binding Cluster    // generates error and initialization ... 
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001F, time = 45)                    // AccessControl Cluster
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0030, time = 60)                    // GeneralCommissioning
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0031, time = 75)                    // NetworkCommissioning
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0033, time = 90)                    // GeneralDiagnostics
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0037, time = 105)                   // EthernetNetworkDiagnostics
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x003C, time = 120)                   // AdministratorCommissioning
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x003E, time = 135)                   // OperationalCredentials
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x003F, time = 150)                   // GroupKeyManagement
-    requestAndCollectAttributesValues(endpoint = device.endpointId, cluster = 0x0003, time = 165)   // Identify
+
+    // for each ServerList element in state.matterDescriptor['ServerList'] call requestAndCollectAttributesValues(endpoint = 0, cluster = element, time = 1)
+    Integer time = 30
+    Integer clusterInt
+    Integer endpoint = 0
+    state.matterDescriptor['ServerList'].each { cluster ->
+        clusterInt = HexUtils.hexStringToInt(cluster)
+        if (clusterInt == 0x0003) { endpoint = 1 } else { endpoint = 0 }
+        logDebug "getInfo(): clusterInt:${clusterInt} endpoint:${endpoint} time:${time}"
+        requestAndCollectAttributesValues(endpoint, clusterInt, time)
+        time += 15
+    }
+    logDebug "getInfo(): jobs scheduled for total time:${time} seconds"
 }
 
 void configure() {
@@ -883,7 +963,7 @@ void test(par) {
     //String cmd = ''
     //state.deviceType == 'MATTER_BRIDGE'
     //attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x00))
-    subscribePaths.add(matter.attributePath(0, 0x001D, 0x00))
+    //subscribePaths.add(matter.attributePath(0, 0x001D, 0x00))
     cmd = matter.subscribe(2, 0xFFFF, attributePaths)
     sendToDevice(cmd)
 }
@@ -1046,6 +1126,37 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0013  : 'CapabilityMinima'
 ]
 
+// 11.19.6.5. OTA Software Update Provider Cluster 0x0029
+@Field static final Map<Integer, String> OTASoftwareUpdateProviderClusterAttributes = [
+    0x0000  : 'Dummy'
+]
+
+// 11.19.7.5 OTA Software Update Requestor Cluster 0x002A
+@Field static final Map<Integer, String> OTASoftwareUpdateRequestorClusterAttributes = [
+    0x0000  : 'DefaultOTAProviders',
+    0x0001  : 'UpdatePossible',
+    0x0002  : 'UpdateState',
+    0x0003  : 'UpdateStateProgress'
+]
+
+// 11.3.1.3 Localization Configuration Cluster 0x002B
+@Field static final Map<Integer, String> LocalizationConfigurationClusterAttributes = [
+    0x0000  : 'ActiveLocale',
+    0x0001  : 'SupportedLocales'
+]
+
+// 11.4.1.3. Time Format Localization Cluster 0x002C
+@Field static final Map<Integer, String> TimeFormatLocalizationClusterAttributes = [
+    0x0000  : 'HourFormat',
+    0x0001  : 'ActiveCalendarType',
+    0x0002  : 'SupportedCalendarTypes'
+]
+
+// 11.6.6.1 Poweer Source Configuration Cluster 0x002E
+@Field static final Map<Integer, String> PowerSourceConfigurationClusterAttributes = [
+    0x0000  : 'dummy'
+]
+
 // 11.9.6. General Commissioning Cluster 0x0030
 @Field static final Map<Integer, String> GeneralCommissioningClusterAttributes = [
     0x0000  : 'Breadcrumb',
@@ -1067,6 +1178,11 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0007  : 'LastConnectErrorValue'
 ]
 
+// 11.10.4. Diagnostic Logs Cluster 0x0032
+@Field static final Map<Integer, String> DiagnosticLogsClusterAttributes = [
+    0x0000  : 'dummy'
+]
+
 // 11.11.7. General Diagnostics Cluster 0x0033
 @Field static final Map<Integer, String> GeneralDiagnosticsClusterAttributes = [
     0x0000  : 'NetworkInterfaces',
@@ -1078,6 +1194,14 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0006  : 'ActiveRadioFault',
     0x0007  : 'ActiveNetworkFaults',
     0x0008  : 'TestEventTriggersEnabled'
+]
+
+// 11.12.4. Software Diagnostics Cluster 0x0034
+@Field static final Map<Integer, String> SoftwareDiagnosticsClusterAttributes = [
+    0x0000  : 'ThreadMetrics',
+    0x0001  : 'CurrentHeapFree',
+    0x0002  : 'CurrentHeapUsed',
+    0x0003  : 'CurrentHeapHighWatermark'
 ]
 
 // 11.15.4. Ethernet Network Diagnostics Cluster 0x0037
@@ -1092,6 +1216,33 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0007  : 'CarrierDetect',
     0x0008  : 'TimeSinceReset'
 ]
+
+/*
+// 9.13.4. Bridged Device Basic Information Cluster 0x0039  // TODO - check the IDs !!  - probably the same as Basic Information Cluster 0x0028
+@Field static final Map<Integer, String> BridgedDeviceBasicInformationClusterAttributes = [
+    0x0000  : 'DataModelRevision',
+    0x0001  : 'VendorName',
+    0x0002  : 'VendorID',
+    0x0003  : 'ProductName',
+    0x0004  : 'ProductID',
+    0x0005  : 'NodeLabel',
+    0x0006  : 'Location',
+    0x0007  : 'HardwareVersion',
+    0x0008  : 'HardwareVersionString',
+    0x0009  : 'SoftwareVersion',
+    0x000A  : 'SoftwareVersionString',
+    0x000B  : 'ManufacturingDate',
+    0x000C  : 'PartNumber',
+    0x000D  : 'ProductURL',
+    0x000E  : 'ProductLabel',
+    0x000F  : 'SerialNumber',
+    0x0010  : 'LocalConfigDisabled',
+    0x0011  : 'Reachable',
+    0x0012  : 'UniqueID',
+    0x0013  : 'CapabilityMinima'
+]
+*/
+
 
 // 11.18.4. Administrator Commissioning Cluster 0x003C
 @Field static final Map<Integer, String> AdministratorCommissioningClusterAttributes = [
@@ -1116,6 +1267,11 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0001  : 'GroupTable',
     0x0002  : 'MaxGroupsPerFabric',
     0x0003  : 'MaxGroupKeysPerFabric'
+]
+
+// 9.8.3. Fixed Label Cluster 0x0040
+@Field static final Map<Integer, String> FixedLabelClusterAttributes = [
+    0x0000  : 'LabelList'
 ]
 
 // Identify Cluster 0x0003
@@ -1162,7 +1318,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x000F  : 'Options',
     0x4000  : 'StartUpCurrentLevel'
 ]
-/* groovylint-disable-next-line UnusedVariable */
+
 @Field static final Map<Integer, String> LevelControlClusterCommands = [
     0x00    : 'MoveToLevel',
     0x01    : 'Move',
@@ -1174,6 +1330,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x07    : 'StopWithOnOff',
     0x08    : 'MoveToClosestFrequency'
 ]
+
 
 // 11.7. Power Source Cluster 0x002F    // attrList:[0, 1, 2, 11, 12, 14, 15, 16, 19, 25, 65528, 65529, 65531, 65532, 65533]
 @Field static final Map<Integer, String> PowerSourceClusterAttributes = [
@@ -1204,67 +1361,4 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 // 1.7 Bolean State Cluster 0x0045
 @Field static final Map<Integer, String> BoleanStateClusterAttributes = [
     0x0000  : 'StateValue'
-]
-
-// 3.2. Color Control Cluster 0x0300
-@Field static final Map<Integer, String> ColorControlClusterAttributes = [
-    0x0000  : 'CurrentHue',
-    0x0001  : 'CurrentSaturation',
-    0x0002  : 'RemainingTime',
-    0x0003  : 'CurrentX',
-    0x0004  : 'CurrentY',
-    0x0005  : 'DriftCompensation',
-    0x0006  : 'CompensationText',
-    0x0007  : 'ColorTemperature',
-    0x0008  : 'ColorMode',
-    0x000F  : 'Options',
-    0x4000  : 'EnhancedCurrentHue',
-    0x4001  : 'EnhancedColorMode',
-    0x4002  : 'ColorLoopActive',
-    0x4003  : 'ColorLoopDirection',
-    0x4004  : 'ColorLoopTime',
-    0x4005  : 'ColorLoopStartEnhancedHue',
-    0x4006  : 'ColorLoopStoredEnhancedHue',
-    0x400A  : 'ColorCapabilities',
-    0x400B  : 'ColorTempPhysicalMinMireds',
-    0x400C  : 'ColorTempPhysicalMaxMireds',
-    0x400D  : 'CoupleColorTempToLevelMinMireds',
-    0x4010  : 'StartUpColorTemperatureMireds'
-]
-@Field static final Map<Integer, String> ColorControlClusterCommands = [
-    0x00    : 'MoveToHue',
-    0x01    : 'MoveHue',
-    0x02    : 'StepHue',
-    0x03    : 'MoveToSaturation',
-    0x04    : 'MoveSaturation',
-    0x05    : 'StepSaturation',
-    0x06    : 'MoveToHueAndSaturation',
-    0x07    : 'MoveToColor',
-    0x08    : 'MoveColor',
-    0x09    : 'StepColor',
-    0x0A    : 'MoveToColorTemperature',
-    0x40    : 'EnhancedMoveToHue',
-    0x41    : 'EnhancedMoveHue',
-    0x42    : 'EnhancedStepHue',
-    0x43    : 'EnhancedMoveToHueAndSaturation',
-    0x44    : 'ColorLoopSet',
-    0x47    : 'StopMoveStep',
-    0x4B    : 'MoveColorTemperature',
-    0x4C    : 'StepColorTemperature'
-]
-
-@Field static Map colorRGBName = [
-    4: 'Red',
-    13:'Orange',
-    21:'Yellow',
-    29:'Chartreuse',
-    38:'Green',
-    46:'Spring',
-    54:'Cyan',
-    63:'Azure',
-    71:'Blue',
-    79:'Violet',
-    88:'Magenta',
-    96:'Rose',
-    101:'Red'
 ]
