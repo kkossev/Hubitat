@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodCount, MethodParameterTypeRequired, MethodSize, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodParameterTypeRequired, MethodSize, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
 /**
  *  Matter Advanced Bridge - Device Driver for Hubitat Elevation
  *
@@ -17,11 +17,12 @@
  *
  * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
  *
- *                                   TODO:
+ *                                   TODO: add occupancy cluster parsing
+ *                                   TODO: GeneralDiagnostics (0x0033) endpoint 0x00 [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
  */
 
 static String version() { '1.0.0' }
-static String timeStamp() { '2023/12/29 9:28 PM' }
+static String timeStamp() { '2023/12/30 7:30 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -34,6 +35,7 @@ static String timeStamp() { '2023/12/29 9:28 PM' }
 @Field static final String  UNKNOWN = 'UNKNOWN'
 
 import groovy.transform.Field
+
 import hubitat.helper.HexUtils
 
 metadata {
@@ -50,14 +52,28 @@ metadata {
         attribute 'productName', 'string'
         attribute 'bridgeSoftwareVersion', 'string'
 
-        command 'getInfo'
-        command 'identify'  // can't make it work ... :(
-        //command 'unsubscribe'
-        //command 'subscribe'
+        command 'getInfo', [
+                [name:'infoType', type: 'ENUM', description: 'Bridge Info Type', constraints: ['Basic', 'Extended']],   // if the parameter name is 'type' - shows a drop-down list of the available drivers!
+                [name:'endpoint', type: 'STRING', description: 'Endpoint', constraints: ['STRING']]
+        ]        
+        command 'getPartsList'
+        command 'identify'      // can't make it work ... :(
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
 
         if (_DEBUG) {
+            command 'readAttribute', [
+                    [name:'endpoint',   type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
+                    [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
+                    [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
+            ]        
+            command 'subscribe', [
+                    [name:'addOrRemove', type: 'ENUM', description: 'Select', constraints: ['Add', 'Remove']],
+                    [name:'endpoint',   type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
+                    [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
+                    [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
+            ]        
+            command 'unsubscribe'
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
         // fingerprints are commented out, because are already included in the stock driver
@@ -106,7 +122,7 @@ void parse(String description) {
         return
     }
     if (descMap.attrId == 'FFFB') { // parse the AttributeList first!
-        pareseAttributeList(descMap)
+        parseAttributeList(descMap)
         return
     }
     switch (descMap.cluster) {
@@ -146,6 +162,10 @@ void parse(String description) {
         case '002E' :  // PowerSourceConfiguration, ep:00
             gatherAttributesValuesInfo(descMap, PowerSourceConfigurationClusterAttributes)
             break
+        case '002F' :  // PowerSource, ep:02 
+            parseBatteryEvent(descMap)
+            gatherAttributesValuesInfo(descMap, PowerSourceClusterAttributes)
+            break
         case '0030' :  // GeneralCommissioning, ep:00
             gatherAttributesValuesInfo(descMap, GeneralCommissioningClusterAttributes)
             break
@@ -165,6 +185,7 @@ void parse(String description) {
             gatherAttributesValuesInfo(descMap, EthernetNetworkDiagnosticsClusterAttributes)
             break
         case '0039' :  // BridgedDeviceBasic, ep:00
+            parseBridgedDeviceBasic(descMap)
             gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
             break
         case '003C' :  // AdministratorCommissioning, ep:00
@@ -179,9 +200,12 @@ void parse(String description) {
         case '0040' :  // FixedLabel, ep:00
             gatherAttributesValuesInfo(descMap, FixedLabelClusterAttributes)
             break
-        case '002F' :  // PowerSource, ep:02 
-            parseBatteryEvent(descMap)
-            gatherAttributesValuesInfo(descMap, PowerSourceClusterAttributes)
+        case '0041' :  // UserLabel, ep:00
+            gatherAttributesValuesInfo(descMap, UserLabelClusterAttributes)
+            break
+        case '0406' :  // OccupancySensing
+            gatherAttributesValuesInfo(descMap, OccupancySensingClusterAttributes)
+            parseOccupancySensing(descMap)
             break
         default :
             gatherAttributesValuesInfo(descMap, GlobalElementsAttributes)
@@ -221,17 +245,20 @@ void parseBatteryEvent(Map descMap) {
             descriptionText = "Battery percentage remaining is: ${value / 2}% (raw:${descMap.value})"
             eventMap = [name: 'battery', value: value / 2, descriptionText: descriptionText]
             break
+        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
+            if (logEnable) { logInfo "parseBatteryEvent: BasicInformation: ${attrName} = ${descMap.value}" }
+            break
         default :
             logWarn "parseBatteryEvent: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
-    if (eventMap != null) {
+    if (eventMap != [:]) {
         eventMap.type = 'physical'
         eventMap.isStateChange = true
         if (state.states['isRefresh'] == true) {
             eventMap.descriptionText += ' [refresh]'
         }
         else {
-            log.debug "state.states['isRefresh'] = ${state.states['isRefresh']}"
+            //log.debug "state.states['isRefresh'] = ${state.states['isRefresh']}"
         }
         sendEvent(eventMap)
         logInfo eventMap.descriptionText
@@ -239,13 +266,23 @@ void parseBatteryEvent(Map descMap) {
 }
 
 // AttributeList 0xFFFB
-void pareseAttributeList(final Map descMap) {
-    logDebug "pareseAttributeList: descMap:${descMap}"
+void parseAttributeList(final Map descMap) {
+    logDebug "parseAttributeList: descMap:${descMap}"
     Integer cluster  = descMap.clusterInt  as Integer
     String stateName = '0x' + HexUtils.integerToHexString(cluster, 2)
-    if (state.matter == null) { state.matter = [:] }
-    state.matter[stateName] = descMap.value
-    logDebug "pareseAttributeList: state.matter[$stateName] = ${descMap.value}"
+    if (descMap.endpoint == '00') {
+        if (state.bridgeDescriptor == null) { state.bridgeDescriptor = [:] }
+        state.bridgeDescriptor[stateName] = descMap.value
+        logDebug "parseAttributeList: state.bridgeDescriptor[$stateName] = ${descMap.value}"
+    }
+    else {
+        String partName = "fingerprint${descMap.endpoint}"
+        //String attrName = GlobalElementsAttributes[descMap.attrInt]
+        if (state[partName] == null) { state[partName] = [:] }
+        state[partName][stateName] = descMap.value     
+        logDebug "stored in state[${partName}][${stateName}] = ${state[partName][stateName]}"
+    }
+    
 }
 
 void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttributes) {
@@ -332,10 +369,43 @@ void parseBasicInformationCluster(final Map descMap) {
     }
 }
 
+void parseBridgedDeviceBasic(final Map descMap) {
+    //logDebug "parseBridgedDeviceBasic: descMap:${descMap}"
+    Map eventMap = [:]
+    String attrName = BasicInformationClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
+    String endpointId = descMap.endpoint
+    String fingerprintName = "fingerprint${endpointId}"
+    if (endpointId == '00') { fingerprintName = 'bridgeDescriptor' } 
+
+    if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
+
+    switch (descMap.attrId) {
+        case ['0001', '0003'] :
+            state[fingerprintName][attrName] = descMap.value
+            if (logEnable) { logInfo "parseBridgedDeviceBasic: ${attrName} = ${descMap.value}" }
+            break
+        default :
+            if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
+            break
+    }
+
+    if (eventMap != [:]) {
+        eventMap.type = 'physical'; eventMap.isStateChange = true
+        if (state.states['isRefresh'] == true) { eventMap.descriptionText += ' [refresh]' }
+        sendEvent(eventMap)
+        logInfo eventMap.descriptionText
+    }
+}
+
+
 void parseDescriptorCluster(final Map descMap) {
-    logDebug "parseBasicInformationCluster: descMap:${descMap}"
+    logDebug "parseDescriptorCluster: descMap:${descMap}"
     String attrName = DescriptorClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
-    if (state.matterDescriptor == null) { state.matterDescriptor = [:] }
+    String endpointId = descMap.endpoint
+    String fingerprintName = "fingerprint${endpointId}"
+    if (endpointId == '00') { fingerprintName = 'bridgeDescriptor' } 
+
+    if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
 /*
 [0000] DeviceTypeList = [16, 1818]
 [0001] ServerList = [03, 1D, 1F, 28, 29, 2A, 2B, 2C, 2E, 30, 31, 32, 33, 34, 37, 39, 3C, 3E, 3F, 40]
@@ -344,14 +414,13 @@ void parseDescriptorCluster(final Map descMap) {
 */
     switch (descMap.attrId) {
         case ['0000', '0001', '0002', '0003'] :
-            state.matterDescriptor[attrName] = descMap.value
+            state[fingerprintName][attrName] = descMap.value
             if (logEnable) { logInfo "parse: Descriptor: ${attrName} = ${descMap.value}" }
             break
         default :
             if (logEnable) { logInfo "parse: Descriptor: ${attrName} = ${descMap.value}" }
     }
 }
-
 
 void parseOnOffCluster(Map descMap) {
     logDebug "parseOnOffCluster: descMap:${descMap}"
@@ -361,8 +430,8 @@ void parseOnOffCluster(Map descMap) {
     }
     Integer attrInt = descMap.attrInt as Integer
     Integer value
-    String descriptionText = ''
-    Map eventMap = [:]
+    //String descriptionText = ''
+    //Map eventMap = [:]
     String attrName = OnOffClusterAttributes[attrInt] ?: GlobalElementsAttributes[attrInt] ?: UNKNOWN
 
     switch (descMap.attrId) {
@@ -396,7 +465,7 @@ void parseOnOffCluster(Map descMap) {
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
     /*
-    if (eventMap != null) {
+    if (eventMap != [:]) {
         eventMap.type = 'physical'
         eventMap.isStateChange = true
         if (state.states['isRefresh'] == true) {
@@ -408,7 +477,36 @@ void parseOnOffCluster(Map descMap) {
     */
 }
 
+void parseOccupancySensing(Map descMap) {
+    if (descMap.cluster != '0406') {
+        logWarn "parseOccupancySensing: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
+        return
+    }
+    switch(descMap.attrId) {
+        case '0000' : // Occupancy
+            sendOccupancyEvent(descMap)
+            break
+        default :
+            logDebug "parseOccupancySensing: ${OccupancySensingClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN} = ${descMap.value}"
+    }
+}
+
 //events
+void sendOccupancyEvent(String rawValue) {
+    String value = descMap.value == '01' ? 'occupied' : 'unoccupied'
+    Map eventMap = [name: 'occupancy', value: value, descriptionText: "device #${descMap.endpoint} occupancy is ${value}", type: 'physical']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += " [refresh]"
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    if (device.currentValue('occupancy') == value && state.states['isRefresh'] != true) {
+        logDebug "ignored duplicated occupancy event, value:${value}"
+        return
+    }
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
+}
+
 
 private void sendSwitchEvent(String rawValue, isDigital = false) {
     String value = rawValue == '01' ? 'on' : 'off'
@@ -432,8 +530,8 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
 void identify() {
     String cmd
     Integer time = 10
-    List<Map<String, String>> attributePaths = []
-    List<Map<String, String>> attributeWriteRequests = []
+    //List<Map<String, String>> attributePaths = []
+    //List<Map<String, String>> attributeWriteRequests = []
 /*
     attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
     cmd = matter.writeAttributes(attributeWriteRequests)
@@ -460,7 +558,7 @@ void setDigitalRequest()   { if (state.states == null) { state.states = [:] } ; 
 void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
 
 void logRequestedClusterAttrResult(Map data) {
-    String clusterAtttr = "Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint ${HexUtils.integerToHexString(data.endpoint as Integer, 1)} attributes and values list"
+    String clusterAtttr = "Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint <b>0x${HexUtils.integerToHexString(data.endpoint as Integer, 1)}</b> attributes and values list"
     if (state.tmp != null) {
         logInfo "${clusterAtttr} : <br>${state.tmp}"
     } else {
@@ -472,65 +570,171 @@ void logRequestedClusterAttrResult(Map data) {
     state.states['cluster'] = null
 }
 
+/**
+ * Requests the list of attributes for a Matter cluster (reads the 0xFFFB attribute)
+ *
+ * @param data A map containing the cluster and the endpoint.
+ */
 void requestMatterClusterAttributesList(Map data) {
     if (state.states == null) { state.states = [:] }
     state.states['isInfo'] = true
-    state.states['cluster'] = HexUtils.integerToHexString(data.cluster, 2)
+    state.states['cluster'] = HexUtils.integerToHexString(data.cluster, 2)  // which cluster we are collecting info for
     state.tmp = null
     Integer endpoint = data.endpoint as Integer
     Integer cluster  = data.cluster  as Integer
-    logInfo "Requesting Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint ${HexUtils.integerToHexString(endpoint, 1)} attributes list ..."
+    logInfo "Requesting Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint <b>0x${HexUtils.integerToHexString(endpoint, 1)}</b> attributes list ..."
     List<Map<String, String>> attributePaths = []
     attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, 0xFFFB as Integer))
     sendToDevice(matter.readAttributes(attributePaths))
 }
 
+
+/**
+ * Requests the values of attributes for a Matter cluster.
+ * 
+ * @param data A map containing the endpoint and cluster information.
+ *             - endpoint: The endpoint of the cluster (as an Integer).
+ *             - cluster: The cluster identifier (as an Integer).
+ */
 void requestMatterClusterAttributesValues(Map data) {
     Integer endpoint = data.endpoint as Integer
     Integer cluster  = data.cluster  as Integer
-    String stateName = '0x' + HexUtils.integerToHexString(cluster, 2)
-    if (state.matter == null) { state.matter = [:] }
-    String attrListString = state.matter["$stateName"] as String
-    logInfo "Requesting Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint ${HexUtils.integerToHexString(endpoint, 1)} attributes values ..."
-    if (attrListString == null) {
+    String stateName 
+    String attrListName = 'ServerList'
+    List<Map<String, String>> serverList = []
+
+    if (endpoint == 0) { 
+        // bridgeDescriptor :  ServerList=[03, 1D, 1F, 28, 29, 2A, 2B, 2C, 2E, 30, 31, 32, 33, 34, 37, 39, 3C, 3E, 3F, 40], 
+        stateName = 'bridgeDescriptor' 
+    } 
+    else {
+        // fingerprint06 : {DeviceTypeList=[0A, 0124, 1818], ServerList=[06, 1D, 40, 41], PartsList=1618, ClientList=1618}
+        stateName = 'fingerprint' + HexUtils.integerToHexString(endpoint, 1)
+    }
+    if (state[stateName] == null) {
+        logWarn "requestMatterClusterAttributesValues: state.${stateName} is null !"
+        return
+    }
+    logInfo "Requesting Cluster <b>${MatterClusters[data.cluster]}</b> (0x${HexUtils.integerToHexString(data.cluster, 2)}) endpoint <b>0x${HexUtils.integerToHexString(endpoint, 1)}</b> attributes values ..."
+    serverList = state[stateName][attrListName]
+    if (serverList == null) {
         logWarn 'requestMatterClusterAttributesValues: attrListString is null'
         return
     }
-    attrListString = attrListString.substring(1, attrListString.length() - 1)                   // remove the [] brackets
-    List<Integer> attrList = attrListString.split(',').collect { HexUtils.hexStringToInt(it) }  // convert the string to a list of integers
-    logDebug "requestMatterClusterAttributesValues: attrList:${attrList}"
+    logDebug "requestMatterClusterAttributesValues: serverList:${serverList}"
     List<Map<String, String>> attributePaths = []
-    attrList.each { attrInt ->
-        attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrInt))
+    Integer attrInt
+    serverList.each { attr ->
+        attrInt = HexUtils.hexStringToInt(attr)
+        attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrInt as Integer))
     }
     sendToDevice(matter.readAttributes(attributePaths))
 }
 
-void requestAndCollectAttributesValues(endpoint, cluster, time) {
+void requestAndCollectAttributesValues(endpoint, cluster, time, fast=false) {
     runIn(time ?: 1, requestMatterClusterAttributesList,    [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
-    runIn(time + 3,  requestMatterClusterAttributesValues,  [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
-    runIn(time + 12,  logRequestedClusterAttrResult,        [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
+    runIn(time + (fast ? 2 : 3),  requestMatterClusterAttributesValues,  [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
+    runIn(time + (fast ? 6 :12),  logRequestedClusterAttrResult,        [overwrite: false, data: [endpoint:endpoint, cluster:cluster] ])
 }
 
-void getInfo() {
-    logDebug 'getInfo()'
-    
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x0028, time = 1)                     // Basic Information Cluster
-    requestAndCollectAttributesValues(endpoint = 0, cluster = 0x001D, time = 15)                    // Descriptor Cluster
-
-    // for each ServerList element in state.matterDescriptor['ServerList'] call requestAndCollectAttributesValues(endpoint = 0, cluster = element, time = 1)
-    Integer time = 30
-    Integer clusterInt
-    Integer endpoint = 0
-    state.matterDescriptor['ServerList'].each { cluster ->
-        clusterInt = HexUtils.hexStringToInt(cluster)
-        if (clusterInt == 0x0003) { endpoint = 1 } else { endpoint = 0 }
-        logDebug "getInfo(): clusterInt:${clusterInt} endpoint:${endpoint} time:${time}"
-        requestAndCollectAttributesValues(endpoint, clusterInt, time)
-        time += 15
+void getInfo( infoType, endpoint=0) {
+    logWarn 'getInfo(${infoType}, ${endpoint})'
+    unschedule('requestMatterClusterAttributesList')
+    unschedule('requestMatterClusterAttributesValues')
+    unschedule('logRequestedClusterAttrResult')
+    ping()
+    // ['Basic', 'Extended']
+    if (infoType == 'Basic') {
+        requestAndCollectAttributesValues(endpoint = endpoint, cluster = 0x001D, time = 2)                    // Descriptor Cluster
+        requestAndCollectAttributesValues(endpoint = endpoint, cluster = 0x0028, time = 16)                   // Basic Information Cluster
+        logWarn "getInfo():'Basic' type"
+        return
     }
-    logDebug "getInfo(): jobs scheduled for total time:${time} seconds"
+    if (infoType == 'Extended') {
+        requestAndCollectAttributesValues(endpoint = endpoint, cluster = 0x001D, time = 1)                    // Descriptor Cluster
+        requestAndCollectAttributesValues(endpoint = endpoint, cluster = 0x0028, time = 16)                   // Basic Information Cluster
+
+        // for each ServerList element in state.bridgeDescriptor['ServerList'] call requestAndCollectAttributesValues(endpoint = 0, cluster = element, time = 1)
+        Integer clusterInt
+        Integer endpointInt  = safeToInt(endpoint)
+        String  endpointStr  = HexUtils.integerToHexString(endpointInt, 1)
+        String  fingerprintName = "fingerprint${endpointStr}"
+        if (endpointInt == 0) { fingerprintName = 'bridgeDescriptor' } 
+
+        List<Map<String, String>> serverList = []
+        log.trace "getInfo(): endpointInt= ${endpointInt} fingerprintName:${fingerprintName}"
+        if (state[fingerprintName] == null) {
+            logWarn "getInfo(): state.${fingerprintName} is null !"
+            return
+        }
+        serverList = state[fingerprintName]['ServerList']
+        log.trace "getInfo(): serverList:${serverList}"
+        if (serverList == null) {
+            logWarn "getInfo(): serverList is null !"
+            return
+        }
+        //state.bridgeDescriptor['ServerList'].each { cluster ->
+        Integer time = 30
+        serverList.each { cluster ->
+            clusterInt = HexUtils.hexStringToInt(cluster)
+            //if (clusterInt == 0x0003) { endpoint = 1 } else { endpoint = 0 }
+            logDebug "getInfo(): clusterInt:${clusterInt} (0x${cluster})  endpointInt:${endpointInt} (0x${endpointStr}) time:${time}"
+            requestAndCollectAttributesValues(endpointInt, clusterInt, time)
+            time += 15
+        }
+        logDebug "getInfo(): jobs scheduled for total time:${time} seconds"
+        return
+    }
+    if (infoType == 'Individual') {
+
+    }
 }
+
+void getPartsList() {
+    logDebug 'getPartsList()'
+    if (state.bridgeDescriptor == null) {
+        logWarn 'getPartsList(): state.bridgeDescriptor is null !'
+        return
+    }
+    ping()
+    Integer time = 2
+    // for each bridged device endpoint in the state.bridgeDescriptor['PartsList'] we need to read the ServerList
+    state.bridgeDescriptor['PartsList'].each { endpointId ->
+        //String endpointId = "09"  //"0B"
+        Integer endpoint = HexUtils.hexStringToInt(endpointId)
+        logDebug "getPartsList(): endpoint:${endpoint} time:${time}"
+        // TODO - call cluster 0x001D only if the ServerList contains 0x001D !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        //requestAndCollectAttributesValues(endpoint, 0x001D, time, fast=true)       // Descriptor Cluster -> fill in the ServerList for each endpoint
+        runIn(time ?: 1, requestMatterClusterAttributesList,    [overwrite: false, data: [endpoint:endpoint, cluster:0x001D] ])
+        time += 7
+    }
+    logWarn "getPartsList():returning early!"
+    //return
+
+    // Next, for each fingerprintXX['ServerList'] we need to read the Descriptor (0x001D) attribute 0XFFFB and store the result in fingerprintXX['0x$attibuteHex']
+/*
+    // TODO - get the ServerList for each endpoint
+    // TODO - call cluster 0x0039 only if the ServerList contains 0x0039 
+    Integer time = 1
+    state.bridgeDescriptor['PartsList'].each { endpointId ->
+        Integer endpoint = HexUtils.hexStringToInt(endpointId)
+        //logDebug "getPartsList(): endpoint:${endpoint} time:${time}"
+
+        requestAndCollectAttributesValues(endpoint, 0x0039, time, fast=true)       // BridgedDeviceBasic Cluster
+        time += 5
+    }
+*/
+
+    logDebug "getPartsList(): jobs scheduled for total time:${time} seconds"
+}
+
+void readAttribute(endpoint, cluster, attrId) {
+    logDebug "readAttribute(endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
+    List<Map<String, String>> attributePaths = []
+    attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer))
+    sendToDevice(matter.readAttributes(attributePaths))
+}
+
 
 void configure() {
     log.warn 'configure...'
@@ -596,6 +800,35 @@ String  unSubscribeCmd() {
     return matter.unsubscribe()
 }
 
+void subscribe(addOrRemove, endpoint, cluster, attrId) {
+    String cmd = ''
+    logDebug "subscribe(action: ${addorRemove} endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
+    List<Map<String, String>> attributePaths = []
+    attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer))
+    // format EP_CLUSTER_ATTRID
+    List<String> newSub = [endpoint, cluster, attrId]
+    List<String> subsciptions = state.subscriptions ?: []
+    if (addOrRemove == 'Add') {
+        if (subsciptions.contains(newSub)) {
+            logWarn "subscribe(): subscription already exists: ${newSub}"
+        } else {
+            cmd = matter.subscribe(0, 0xFFFF, attributePaths)
+            sendToDevice(cmd)
+            subsciptions.add(newSub)
+            state.subscriptions = subsciptions
+        }
+    }
+    else if (addOrRemove == 'Remove') {
+        if (subsciptions.contains(newSub)) {
+            subsciptions.remove(newSub)
+            state.subscriptions = subsciptions
+        } else {
+            logWarn "subscribe(): subscription not found!: ${newSub}"
+        }
+    }
+    logDebug "subscribe(): state.subscriptions = ${state.subscriptions}"
+}
+
 void subscribe() {
     sendInfoEvent('subscribe()...Please wait.', 'sent device subscribe command')
     sendToDevice(subscribeCmd())
@@ -605,9 +838,13 @@ String subscribeCmd() {
     List<Map<String, String>> attributePaths = []
     String cmd = ''
     //state.deviceType == 'MATTER_BRIDGE'
-    //attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x00))
     attributePaths.add(matter.attributePath(0, 0x001D, 0x00))
-    cmd = matter.subscribe(2, 0xFFFF, attributePaths)
+    // get each element of state.subscriptions and add it to the attributePaths
+    List<String> subsciptions = state.subscriptions ?: []
+    subsciptions.each { sub ->
+        attributePaths.add(matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer))
+    }
+    cmd = matter.subscribe(0, 0xFFFF, attributePaths)
     return cmd
 }
 
@@ -634,22 +871,7 @@ void refresh() {
 
 String refreshCmd() {
     List<Map<String, String>> attributePaths = []
-/*    
-    if (state.deviceType == 'MATTER_OUTLET') {
-        if (state.matter != null && state.matter['0x0006'] != null) {
-            String attrListString = state.matter['0x0006'] as String
-            attrListString = attrListString.substring(1, attrListString.length() - 1)                   // remove the [] brackets
-            List<Integer> attrList = attrListString.split(',').collect { HexUtils.hexStringToInt(it) }  // convert the string to a list of integers
-            logDebug "refreshCmd: attrList:${attrList}"
-            attrList.each { attrInt ->
-                attributePaths.add(matter.attributePath(device.endpointId, 0x0006, attrInt))
-            }
-        }
-        else {
-            logWarn "refreshCmd: state.matter['0x0006'] is null"
-        }
-    }
-*/    
+
 // state.deviceType == 'MATTER_BRIDGE'
     attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x0000))         // TODO !!
     String cmd = matter.readAttributes(attributePaths)
@@ -861,8 +1083,8 @@ void resetStats() {
     state.lastTx['pingTime'] = state.lastTx['cmdTime'] = now()
     state.lastTx['subscribeTime'] = state.lastTx['unsubscribeTime'] = now()
     state.health = [:]
-    state.onOff  = [:]  // driver specific
-    state.matter = [:]
+    state.bridgeDescriptor  = [:]   // driver specific
+    state.subsciptions = []         // driver specific, format EP_CLUSTER_ATTR
     state.stats['rxCtr'] = state.stats['txCtr'] = 0
     state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
     state.states['isDigital'] = state.states['isRefresh'] = state.states['isPing'] =  state.states['isInfo']  = false
@@ -1274,6 +1496,10 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x0000  : 'LabelList'
 ]
 
+// 9.9.3. User Label Cluster 0x0041
+@Field static final Map<Integer, String> UserLabelClusterAttributes = [
+    0x0000  : 'LabelList'
+]
 // Identify Cluster 0x0003
 @Field static final Map<Integer, String> IdentifyClusterAttributes = [
     0x0000  : 'IdentifyTime',
@@ -1361,4 +1587,20 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 // 1.7 Bolean State Cluster 0x0045
 @Field static final Map<Integer, String> BoleanStateClusterAttributes = [
     0x0000  : 'StateValue'
+]
+
+// 2.7.5. Occupancy Sensing Cluster 0x0406
+@Field static final Map<Integer, String> OccupancySensingClusterAttributes = [
+    0x0000  : 'Occupancy',
+    0x0001  : 'OccupancySensorType',
+    0x0002  : 'OccupancySensorTypeBitmap',
+    0x0010  : 'PIROccupiedToUnoccupiedDelay',
+    0x0011  : 'PIRUnoccupiedToOccupiedDelay',
+    0x0012  : 'PIRUnoccupiedToOccupiedThreshold',
+    0x0020  : 'UltrasonicOccupiedToUnoccupiedDelay',
+    0x0021  : 'UltrasonicUnoccupiedToOccupiedDelay',
+    0x0022  : 'UltrasonicUnoccupiedToOccupiedThreshold',
+    0x0030  : 'PhysicalContactOccupiedToUnoccupiedDelay',
+    0x0031  : 'PhysicalContactUnoccupiedToOccupiedDelay',
+    0x0032  : 'PhysicalContactUnoccupiedToOccupiedThreshold'
 ]
