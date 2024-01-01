@@ -63,21 +63,24 @@
  * ver. 1.6.5  2023-10-23 kkossev  - (dev. branch) bugfix: setPar decimal values for enum types; added SONOFF_SNZB-06P_RADAR; added SIHAS_USM-300Z_4_IN_1; added SONOFF_MOTION_IAS; TS0202_MOTION_SWITCH _TZ3210_cwamkvua refactoring; luxThreshold hardcoded to 0 and not configurable!; do not try to input preferences of a type bool
  *                                   TS0601_2IN1 refactoring; added keepTime and sensitivity attributes for PIR sensors; added _TZE200_ppuj1vem 3-in-1; TS0601_3IN1 refactoring; added _TZ3210_0aqbrnts 4in1; 
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10 
+ * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
+ * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  *
+ *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
+ *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
+ *                                   TODO: handle preferences of a type TEXT
  *                                   TODO: add Sensitivity Levels Presets
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: when device rejoins the network, read the battry percentage again!
  *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS; 
- *                                   TODO: add SONOFF SNZB-06P; add occupancy ['occupied', 'unoccupied'] custom attribute;
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: quickRef
  *                                   TODO: command for black radar LED
  *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: do not show errors/warnings for  new settings ie breath , led etc if the preferences setsetare not set and saved - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
- *                                   TODO: handle preferences of a type TEXT
  *                                   TODO: delete all previous preferencies when changing the device profile!
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
@@ -93,8 +96,8 @@
  *                                   TODO: implement getActiveEndpoints()
 */
 
-def version() { "1.6.6" }
-def timeStamp() {"2023/11/02 11:23 AM"}
+def version() { "1.6.8" }
+def timeStamp() {"2023/11/20 1:13 PM"}
 
 import groovy.json.*
 import groovy.transform.Field
@@ -127,7 +130,7 @@ metadata {
         //capability "DoubleTapableButton"
         //capability "HoldableButton"
 
-        attribute "occupancy", "enum", ["occupied", "unoccupied"]   // https://developer.smartthings.com/docs/devices/capabilities/capabilities-reference // https://developer.smartthings.com/capabilities/occupancySensor 
+        //attribute "occupancy", "enum", ["occupied", "unoccupied"]   // https://developer.smartthings.com/docs/devices/capabilities/capabilities-reference // https://developer.smartthings.com/capabilities/occupancySensor 
         attribute "all", "string"
         attribute "batteryVoltage", "number"
         attribute "healthStatus", "enum", ["offline", "online"]
@@ -338,7 +341,7 @@ def isChattyRadarReport(descMap) {
     "TS0202_4IN1"  : [
             description   : "Tuya 4in1 (motion/temp/humi/lux) sensor",
             models        : ["TS0202"],         // model: 'ZB003-X'  vendor: 'Fantem'
-            device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:true],    // check powerSource and isSleepy!
+            device        : [type: "PIR", isIAS:true, powerSource: "dc", isSleepy:false],    // check powerSource
             capabilities  : ["MotionSensor": true, "TemperatureMeasurement": true, "RelativeHumidityMeasurement": true, "IlluminanceMeasurement": true, "tamper": true, "Battery": true],
             preferences   : ["motionReset":true, "reportingTime4in1":true, "ledEnable":true, "keepTime":true, "sensitivity":true],
             commands      : ["reportingTime4in1":"reportingTime4in1", "resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
@@ -442,10 +445,8 @@ def isChattyRadarReport(descMap) {
             models        : ["TS0202","RH3040"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],  // TODO - check sensitivity !
+            preferences   : ["motionReset":true, "keepTime":false, "sensitivity":false],
             fingerprints  : [
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr        
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0500", outClusters:"0000,0003,0001,0500", model:"TS0202", manufacturer:"_TYZB01_dl7cejts", deviceJoinName: "Tuya TS0202 Motion Sensor"],             // KK model: 'ZM-RT201'// 5 seconds (!) reset period for testing
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mmtwjmaq", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_otvn3lne", deviceJoinName: "Tuya TS0202 Motion Sensor"],
@@ -461,8 +462,6 @@ def isChattyRadarReport(descMap) {
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TYZB01_hqbdru35", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_tiwq83wk", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_ykwcwxmz", deviceJoinName: "Tuya TS0202 Motion Sensor"],
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
-                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/tuya-motion-sensor-driver/72000/54?u=kkossev
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_hgu1dlak", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_hktqahrq", deviceJoinName: "Tuya TS0202 Motion Sensor"],
                 [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_jmrgyl7o", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // not tested! //https://zigbee.blakadder.com/Luminea_ZX-5311.html
@@ -485,7 +484,31 @@ def isChattyRadarReport(descMap) {
             deviceJoinName: "Tuya TS0202 Motion Sensor",
             configuration : ["battery": false]
     ],
-    
+
+    "TS0202_MOTION_IAS_CONFIGURABLE"   : [
+            description   : "Tuya TS0202 Motion sensor (IAS) configurable",
+            models        : ["TS0202"],
+            device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
+            capabilities  : ["MotionSensor": true, "Battery": true],
+            preferences   : ["motionReset":true, "keepTime":"0x0500:0xF001", "sensitivity":"0x0500:0x0013"],
+            fingerprints  : [
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_mcxw5ehu", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: PIR sensor sensitivity and PIR keep time in seconds ['30', '60', '120']
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],    // TODO: fz.ZM35HQ_attr ['30', '60', '120']       
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_msl6wxk9", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_fwxuzcf4", deviceJoinName: "Tuya TS0202 ZM-35H-Q Motion Sensor"],
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3000_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/289?u=kkossev
+                [profileId:"0104", endpointId:"01", inClusters:"0001,0500,0003,0000", outClusters:"1000,0006,0019,000A", model:"TS0202", manufacturer:"_TZ3040_6ygjfyll", deviceJoinName: "Tuya TS0202 Motion Sensor"],            // https://community.hubitat.com/t/tuya-motion-sensor-driver/72000/54?u=kkossev
+
+                
+            ],
+            attributes:       [
+                [at:"0x0500:0x0013", name:"sensitivity", type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                [at:"0x0500:0xF001", name:"keepTime",    type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"0",  unit:"seconds",    map:[0:"30 seconds", 1:"60 seconds", 2:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
+            ],
+            deviceJoinName: "Tuya TS0202 Motion Sensor configurable",
+            configuration : ["battery": false]
+    ],
+        
     // isMotionSwitch()
     "TS0202_MOTION_SWITCH": [   
             description   : "Tuya Motion Sensor and Scene Switch",
@@ -575,9 +598,13 @@ def isChattyRadarReport(descMap) {
             models        : ["MOT003","XXX"],
             device        : [type: "PIR", isIAS:true, powerSource: "battery", isSleepy:true],
             capabilities  : ["MotionSensor": true, "Battery": true],
-            preferences   : ["motionReset":true, "keepTime":true, "sensitivity":true],
+            preferences   : ["motionReset":true, "keepTime":"0x0500:0xF001", "sensitivity":"0x0500:0x0013"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0400,0402,0500", outClusters:"0019", model:"MOT003", manufacturer:"HiveHome.com", deviceJoinName: "Hive Motion Sensor"]         // https://community.hubitat.com/t/hive-motion-sensors-can-we-get-custom-driver-sorted/108177?u=kkossev
+            ],
+            attributes:       [
+                [at:"0x0500:0x0013", name:"sensitivity", type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"2",  unit:"",           map:[0:"low", 1:"medium", 2:"high"], title:"<b>Sensitivity</b>",   description:"<i>PIR sensor sensitivity (update at the time motion is activated)</i>"],
+                [at:"0x0500:0xF001", name:"keepTime",    type:"enum",   rw: "rw", min:0, max:2,    defaultValue:"0",  unit:"seconds",    map:[0:"30 seconds", 1:"60 seconds", 2:"120 seconds"], title:"<b>Keep Time</b>",   description:"<i>PIR keep time in seconds (update at the time motion is activated)</i>"],
             ],
             deviceJoinName: "Other OEM Motion sensor (IAS)",
             configuration : ["battery": false]
@@ -789,11 +816,11 @@ def isChattyRadarReport(descMap) {
                 [dp:2, name:"unknownDp2",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"inactive", 1:"active"],          description:'unknown state dp2'],
                 [dp:104, name:'illuminance',            type:"number",  rw: "ro",                    scale:1, unit:"lx",                  description:'illuminance'],
                 [dp:105, name:"humanMotionState",       type:"enum",    rw: "ro", min:0,   max:2,    defaultValue:"0", map:[0:"none", 1:"present", 2:"moving"], description:'Presence state'],
-                [dp:106, name:'radarSensitivity',       type:"number",  rw: "rw", min:1,   max:9,    defaultValue:2 ,  scale:1,   unit:"",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:106, name:'radarSensitivity', preProc:"divideBy10",      type:"number",  rw: "rw", min:1,   max:9,    defaultValue:2 ,  scale:1,   unit:"",           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
                 [dp:107, name:'maximumDistance',        type:"decimal", rw: "rw", min:1.5, max:5.5,  defaultValue:5.5, scale:100, unit:"meters",      title:'<b>Maximum distance</b>',          description:'<i>Max detection distance</i>'],
                 [dp:109, name:'distance',               type:"decimal", rw: "ro", min:0.0, max:10.0, defaultValue:0.0, scale:100, unit:"meters",             description:'Target distance'],
                 [dp:110, name:'fadingTime',             type:"number",  rw: "rw", min:1,   max:1500, defaultValue:5,   scale:1,   unit:"seconds",   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>'],
-                [dp:111, name:'staticDetectionSensitivity', type:"number",  rw: "rw", min:1, max:9,  defaultValue:3,   scale:1,   unit:"",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:111, name:'staticDetectionSensitivity', preProc:"divideBy10", type:"number",  rw: "rw", min:1, max:9,  defaultValue:3,   scale:1,   unit:"",      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
                 [dp:112, name:'motion',                 type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0",     step:1,  scale:1,    map:[0:"inactive", 1:"active"] ,   unit:"",     title:"<b>Presence state</b>", description:'<i>Presence state</i>'], 
                 [dp:123, name:"presence",               type:"enum",    rw: "ro", min:0,   max:1,    defaultValue:"0", map:[0:"none", 1:"presence"],            description:'Presence']    // TODO -- check if used?
             ],
@@ -896,8 +923,6 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : [:]
     ],    
 
-   
-    
     // the new 5.8GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar() 
     "TS0225_2AAELWXK_RADAR"   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : "Tuya TS0225_2AAELWXK 5.8 GHz Radar",        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev 
@@ -1096,21 +1121,21 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     "SONOFF_SNZB-06P_RADAR" : [ 
             description   : "SONOFF SNZB-06P RADAR",
             models        : ["SONOFF"],
-            device        : [type: "radar", powerSource: "dc", isIAS:true, isSleepy:false],
+            device        : [type: "radar", powerSource: "dc", isIAS:false, isSleepy:false],
             capabilities  : ["MotionSensor": true],
-            preferences   : [:],                             
+            preferences   : ["fadingTime":"0x0406:0x0020", "radarSensitivity":"0x0406:0x0022"],                             
             commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             fingerprints  : [
                 [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406,0500,FC57,FC11", outClusters:"0003,0019", model:"SNZB-06P", manufacturer:"SONOFF", deviceJoinName: "SONOFF SNZB-06P RADAR"]      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
-            commands      : ["resetStats":"resetStats", 'refresh':'refresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
-            tuyaDPs       : [:],
-            attributes    : [:],
+            attributes:       [
+                [at:"0x0406:0x0022", name:"radarSensitivity", type:"enum",   rw: "rw", min:1, max:3,    defaultValue:"2",  unit:"",           map:[1:"low", 2:"medium", 3:"high"], title:"<b>Radar Sensitivity</b>",   description:"<i>Radar Sensitivity</i>"],
+                [at:"0x0406:0x0020", name:"fadingTime",       type:"enum",   rw: "rw", min:10, max:999, defaultValue:"60", unit:"seconds",    map:[10:"10 seconds", 30:"30 seconds", 60:"60 seconds", 120:"120 seconds", 300:"300 seconds"], title:"<b>Fading Time</b>",   description:"<i>Radar fading time in seconds</i>"],
+            ],
             deviceJoinName: "SONOFF SNZB-06P RADAR",
-            configuration : ["0x0406":"bind", "0x0FC57":"bind", "0xFC11":"bind"] 
+            configuration : ["0x0406":"bind", "0x0FC57":"bind"/*, "0xFC11":"bind"*/] 
     ],    
   
-    
      // isSiHAS()
     "SIHAS_USM-300Z_4_IN_1" : [ 
             description   : "SiHAS USM-300Z 4-in-1",
@@ -1229,7 +1254,7 @@ def getPreferencesMap( String param, boolean debug=false ) {
 def resetPreferencesToDefaults(boolean debug=false ) {
     Map preferences = DEVICE?.preferences
     if (preferences == null) {
-        logWarn "Preferences not found!"
+        logDebug "Preferences not found!"
         return
     }
     Map parMap = [:]
@@ -1248,12 +1273,12 @@ def resetPreferencesToDefaults(boolean debug=false ) {
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
         if (parMap == null) {
-            logWarn "Preference ${parName} not found in tuyaDPs or attributes map!"
+            logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
             return // continue
         }   
         // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, step:1, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
         if (parMap.defaultValue == null) {
-            logWarn "no default value for preference ${parName} !"
+            logDebug "no default value for preference ${parName} !"
             return // continue
         }
         if (debug) log.info "par ${parName} defaultValue = ${parMap.defaultValue}"
@@ -1348,7 +1373,7 @@ def parse(String description) {
             descMap = myParseDescriptionAsMap(description)
         }
         catch (e) {
-            logWarn "parse: exception '${e}' caught while processing description ${description}"
+            logDebug "parse: exception '${e}' caught while processing description ${description}"
             return
         }
         if ((isChattyRadarReport(descMap) || isSpammyDPsToIgnore(descMap)) && (_TRACE_ALL != true))  {
@@ -1367,7 +1392,7 @@ def parse(String description) {
                 sendBatteryVoltageEvent(Integer.parseInt(descMap.value, 16))
             }
             else {
-                logWarn "power cluster not parsed attrint $descMap.attrInt"
+                logDebug "power cluster not parsed attrint $descMap.attrInt"
             }
         }     
         else if (descMap.cluster == "0400" && descMap.attrId == "0000") {
@@ -1395,9 +1420,24 @@ def parse(String description) {
             def raw = Integer.parseInt(descMap.value,16)
             humidityEvent( raw / getHumidityDiv())
         }
-        else if (descMap.cluster == "0406" && descMap.attrId == "0000") {    // OWON
-            def raw = Integer.parseInt(descMap.value,16)
-            handleMotion( raw & 0x01 )
+        else if (descMap.cluster == "0406")  {    // OWON and SONOFF
+            if (descMap.attrId == "0000") {
+                def raw = Integer.parseInt(descMap.value,16)
+                handleMotion( raw & 0x01 )
+            }
+            else if (descMap.attrId == "0020") {
+                def value = zigbee.convertHexToInt(descMap.value) 
+                sendEvent("name": "fadingTime", "value": value, "unit": "seconds", "type": "physical", "descriptionText": "fading time is ${value} seconds")
+                logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (fadingTime) value is ${value} (0x${descMap.value} seconds)"
+            }
+            else if (descMap.attrId == "0022") {
+                def value = zigbee.convertHexToInt(descMap.value) 
+                sendEvent("name": "radarSensitivity", "value": value, "unit": "", "type": "physical", "descriptionText": "radar sensitivity is ${value}")
+                logDebug "Cluster ${descMap.cluster} Attribute ${descMap.attrId} (radarSensitivity) value is ${value} (0x${descMap.value})"
+            }
+            else {
+                logDebug "UNPROCESSED Cluster ${descMap.cluster} Attribute ${descMap.attrId} value is ${descMap.value} (0x${descMap.value})"
+            }
         }
         else if (descMap?.clusterInt == CLUSTER_TUYA) {
             processTuyaCluster( descMap )
@@ -1475,7 +1515,7 @@ def parse(String description) {
                 device.updateSetting("keepTime", [value: value.toString(), type: 'enum'])                
             }
             else {
-                logWarn "Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}" 
+                logDebug "Zone status attribute ${descMap?.attrId}: NOT PROCESSED ${descMap}" 
             }
         } // if IAS read attribute response
         else if (descMap?.clusterId == "0500" && descMap?.command == "04") {    //write attribute response (IAS)
@@ -1485,10 +1525,10 @@ def parse(String description) {
             //  descMap = [raw:0DD001FC110801202001, dni:0DD0, endpoint:01, cluster:FC11, size:08, attrId:2001, encoding:20, command:0A, value:01, clusterInt:64529, attrInt:8193]
             if (descMap?.attrId == "2001") {
                 logDebug "FC11 attribute 2001 value is ${descMap?.value}"
-                occupancyEvent( Integer.parseInt(descMap?.value, 16) )
+                //occupancyEvent( Integer.parseInt(descMap?.value, 16) )
             }
             else {
-                logWarn "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
+                logDebug "FC11 attribute ${descMap?.attrId}: NOT PROCESSED descMap=${descMap}" 
             }
         }
         else if (descMap?.command == "04") {    // write attribute response (other)
@@ -1545,7 +1585,6 @@ Map myParseDescriptionAsMap( String description )
     def descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
-        //logWarn "myParseDescriptionAsMap: parsed OK using zigbee.parseDescriptionAsMap descMap=${descMap}"
         return descMap    // all OK!
     }
     catch (e1) {
@@ -1667,7 +1706,7 @@ def processTuyaCluster( descMap ) {
             logDebug "device has received Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data}"
         }
         if (status != "00" && !(isHL0SS9OAradar() || is2AAELWXKradar())) {
-            logWarn "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
+            logDebug "ATTENTION! manufacturer = ${device.getDataValue("manufacturer")} unsupported Tuya cluster ZCL command 0x${clusterCmd} response 0x${status} data = ${descMap?.data} !!!"                
         }
     } 
     else if ((descMap?.clusterInt==CLUSTER_TUYA) && (descMap?.command == "01" || descMap?.command == "02"|| descMap?.command == "06"))
@@ -1706,7 +1745,7 @@ def processTuyaCluster( descMap ) {
         }
     }
     else {
-        logWarn "<b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+        logDebug "<b>NOT PROCESSED</b> Tuya <b>descMap?.command = ${descMap?.command}</b> cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
     }
 }
 
@@ -1837,7 +1876,7 @@ def compareAndConvertTuyaToHubitatPreferenceValue(foundItem, fncmd, preference) 
             //logDebug "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
             break
         default :
-            logWarn "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
+            logDebug "compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}"
             return [true, "none"]   // fallback - assume equal
     }
     if (isEqual == false) {
@@ -1879,7 +1918,7 @@ def compareAndConvertTuyaToHubitatEventValue(foundItem, fncmd, doNotTrace=false)
             (isEqual, hubitatEventValue) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(device.currentValue(foundItem.name)))            
             break
         default :
-            logWarn "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
+            logDebug "compareAndConvertTuyaToHubitatEventValue: unsupported dpType %{foundItem.type}"
             return [true, "none"]   // fallback - assume equal
     }
     //if (!doNotTrace)  log.trace "foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> attrValue=${attrValue} fncmd=${fncmd}  foundItem.scale=${foundItem.scale } valueScaled=${valueScaled} "
@@ -2219,7 +2258,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
                 }
                 break
             default :
-                logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
+                logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}" 
                 break
         }
 }
@@ -2480,7 +2519,7 @@ def updated() {
     if (settings?.forcedProfile != null) {
         logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
         if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
-            logWarn "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
+            logInfo "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
             state.deviceProfile = getProfileKey(settings?.forcedProfile)
             initializeVars(fullInit = false) 
             resetPreferencesToDefaults(debug=true)
@@ -2488,7 +2527,7 @@ def updated() {
         }
     }
     else {
-        logDebug "forcedProfile is not set"
+        //logDebug "forcedProfile is not set"
     }
     
     //    LED enable - TODO !
@@ -2498,19 +2537,7 @@ def updated() {
         logDebug "4-in-1: changing reportingTime4in1 to : ${settings?.reportingTime4in1} minutes"                
         cmds += sendTuyaCommand("66", DP_TYPE_VALUE, zigbee.convertToHexString(settings?.reportingTime4in1 as int, 8))
     }
-/*
-    // sensitivity - TODO! - REMOVE !!!!!
-    // settings?.sensitivity was changed in version 1.3.0
-    def sensitivityNew 
-    try {
-        sensitivityNew = settings?.sensitivity as Integer
-    }
-    catch (e) {
-        logWarn "sensitivity was reset to the default value!"
-        sensitivityNew = sensitivityOpts.defaultValue
-    }
-    //
-   */
+    // sensitivity for PIR devices
     if (settings?.sensitivity != null) {
         if ((DEVICE.device?.type == "PIR") && (("sensitivity" in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
             def val = settings?.sensitivity as int    
@@ -2530,18 +2557,14 @@ def updated() {
         logDebug "sensitivity is not set"
     }
 
-    // keep time
+    // keep time for PIR devices
     if (settings?.keepTime != null) {
         if ((DEVICE.device?.type == "PIR") && (("keepTime" in DEVICE.preferences) && (DEVICE.preferences.keepTime != false))) {
             if (isIAS() && (settings?.keepTime != null)) {
-            cmds += sendKeepTimeIAS( settings?.keepTime )
-            logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
+                cmds += sendKeepTimeIAS( settings?.keepTime )
+                logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"                
             }        
-            else {  // TODO - move to dpMap !!
-                /*
-                def val = settings?.keepTime as int
-                cmds += sendTuyaCommand("0A", DP_TYPE_ENUM, zigbee.convertToHexString(val as int, 2))    // was 8
-                */
+            else {
                 if (settings?.logEnable) { log.warn "${device.displayName} changing TS0601 Keep Time to : ${(settings?.keepTime as int )}" }           
                 setPar( "keepTime", settings?.keepTime as String)
         }
@@ -2552,12 +2575,18 @@ def updated() {
     }
     // new update method for all radars, WITHOUT Linptech - TODO !
     if (isLINPTECHradar()) {
-        
         setPar( "fadingTime", settings?.fadingTime ?: 10 )
         setPar( "motionDetectionDistance", settings?.motionDetectionDistance )
         setPar( "motionDetectionSensitivity", settings?.motionDetectionSensitivity)
         setPar( "staticDetectionSensitivity", settings?.staticDetectionSensitivity )
     }    
+    if (isSONOFF()) {
+        setPar( "fadingTime", settings?.fadingTime ?: 60 )
+        setPar( "radarSensitivity", settings?.radarSensitivity ?: 2)
+        // read backk the parameters from the device
+        cmds += zigbee.readAttribute(0x0406, 0x0020, [:], delay=201)
+        cmds += zigbee.readAttribute(0x0406, 0x0022, [:], delay=201)
+    }      
     else if (DEVICE.device?.type in ["radar", "PIR"]) {
         // Itterates through all settings
         cmds += updateAllPreferences()
@@ -2565,7 +2594,7 @@ def updated() {
     //
     if ("DistanceMeasurement" in DEVICE.capabilities) {
         if (settings?.ignoreDistance == true ) {
-                device.deleteCurrentState('distance')
+            device.deleteCurrentState('distance')
         }
     }
     //
@@ -2581,14 +2610,20 @@ def updated() {
     if (settings.allStatusTextEnable == true) {
         runIn( 1, formatAttrib, [overwrite: true])    
     }
-    //    
-    if (cmds != null && cmds.size() >= 7) {
-        logDebug "sending the changed AdvancedOptions (size=${cmds.size()}) to the device..."
+    int totalSize = 0
+    //log.warn "cmds=${cmds} length=${cmds?.size()}"
+    if (cmds != null && cmds != [null]) {
+        for (int i = 0; i < cmds?.size(); i++) {
+            if (cmds[i] != null) totalSize += cmds[i].size()
+        }
+    }
+    if (totalSize >= 7) {
+        logDebug "sending the changed AdvancedOptions (size=${cmds?.size()}, totalSize=${totalSize}) to the device..."
         sendZigbeeCommands( cmds )  
         logInfo "preferencies updates are sent to the device..."
     }
     else {
-        logDebug "no preferences are changed (size=${cmds.size()}) "
+        logDebug "no preferences are changed (totalSize=${totalSize}) cmds=${cmds}"
     }
 }
 
@@ -3045,7 +3080,7 @@ def setPresent() {
         sendHealthStatusEvent("online")
         powerSourceEvent() // sent only once now - 2023-01-31        // TODO - check!
         runIn( 1, formatAttrib, [overwrite: true])    
-        logInfo "is present"
+        logInfo "is online"
     }    
     state.notPresentCounter = 0    
 }
@@ -3056,7 +3091,7 @@ def deviceHealthCheck() {
     if (state.notPresentCounter > presenceCountTreshold) {
         if ((device.currentValue("healthStatus", true) ?: "unknown") != "offline" ) {
             sendHealthStatusEvent("offline")
-            if (settings?.txtEnable) { log.warn "${device.displayName} is not present!" }
+            if (settings?.txtEnable) { log.warn "${device.displayName} is offline!" }
             if (!(device.currentValue('motion', true) in ['inactive', '?'])) {
                 handleMotion(false, isDigital=true)
                 if (settings?.txtEnable) log.warn "${device.displayName} forced motion to '<b>inactive</b>"
@@ -3078,7 +3113,6 @@ void formatAttrib() {
     if (settings.allStatusTextEnable == false) {    // do not send empty html or text attributes
         return
     }
-    logDebug "formatAttrib - text"
     String attrStr = ""
     attrStr += addToAttr("status", "healthStatus")
     attrStr += addToAttr("motion", "motion")
@@ -3144,7 +3178,7 @@ def logInfo(msg) {
 }
 
 def logWarn(msg) {
-    if (settings?.txtEnable) {
+    if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
 }
@@ -3165,11 +3199,28 @@ def setReportingTime4in1( val ) {
 // Linptech radar exception code below
 // TODO - refactor it!
 
+def setRadarSensitivity( val ) {
+    if (isSONOFF()) {
+        def value = safeToInt(val)
+        logDebug "changing SONOFF radar sensitivity to ${val} "
+        return zigbee.writeAttribute(0x0406, 0x0022, 0x20, val as int, [:], delay=200)
+    }
+    else {
+        return null
+    }
+}
+
+
 def setFadingTime( val ) {
     if (isLINPTECHradar()) {
         def value = safeToInt(val)
         logDebug "changing LINPTECH radar fadingTime to ${value} seconds"
         return sendTuyaCommand( "65", DP_TYPE_VALUE, zigbee.convertToHexString(value, 8))   // this is the only Linptech command that used Tuya DPs ...
+    }
+    else if (isSONOFF()) {
+        def value = safeToInt(val)
+        logDebug "changing SONOFF radar fadingTime to ${val} seconds"
+        return zigbee.writeAttribute(0x0406, 0x0020, 0x21, val as int, [:], delay=200)
     }
     else {
         return null
@@ -3218,7 +3269,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
     def value = settings."${preference}"
     def scaledValue
     if (value == null) {
-        logWarn "getScaledPreferenceValue: preference ${preference} not found!"
+        logDebug "getScaledPreferenceValue: preference ${preference} not found!"
         return null
     }
     switch(dpMap.type) {
@@ -3237,7 +3288,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
         case "enum" :
             //log.warn "getScaledPreferenceValue: <b>ENUM</b> preference ${preference} type:${dpMap.type} value = ${value} dpMap.scale=${dpMap.scale}"
             if (dpMap.map == null) {
-                logWarn "getScaledPreferenceValue: preference ${preference} has no map defined!"
+                logDebug "getScaledPreferenceValue: preference ${preference} has no map defined!"
                 return null
             }
             scaledValue = value 
@@ -3246,7 +3297,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
             }            
             break
         default :
-            logWarn "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
+            logDebug "getScaledPreferenceValue: preference ${preference} has unsupported type ${dpMap.type}!"
             return null
     }
     logDebug "getScaledPreferenceValue: preference ${preference} value = ${value} scaledValue = ${scaledValue} (scale=${dpMap.scale})" 
@@ -3254,6 +3305,7 @@ def getScaledPreferenceValue(String preference, Map dpMap) {
 }
 
 // called from updated() method
+// TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
 def updateAllPreferences() {
     logDebug "updateAllPreferences: preferences=${DEVICE.preferences}"
     ArrayList<String> cmds = []
@@ -3264,7 +3316,12 @@ def updateAllPreferences() {
     Integer dpInt = 0
     def scaledValue    // int or String for enums
     (DEVICE.preferences).each { name, dp -> 
-        dpInt = safeToInt(dp)
+        dpInt = safeToInt(dp, -1)
+        if (dpInt <= 0) {
+            // this is the IAS and other non-Tuya DPs preferences .... 
+            logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
+            return null
+        }
         def dpMaps   =  DEVICE.tuyaDPs 
         Map foundMap
         foundMap = getPreferencesMap(name)
@@ -3278,14 +3335,14 @@ def updateAllPreferences() {
                 }
                 String DPType = (foundMap.type in ["number", "decimal"]) ? DP_TYPE_VALUE : foundMap.type == "bool" ? DP_TYPE_BOOL : foundMap.type == "enum" ? DP_TYPE_ENUM : "unknown"
                 if (scaledValue != null) {
-                    cmds += setRadarParameter(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int)
+                    cmds += setRadarParameterTuya(foundMap.name, zigbee.convertToHexString(dpInt, 2), DPType, scaledValue as int )
                 }
                 else {
-                    logWarn "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
+                    logDebug "updateAllPreferences: preference ${foundMap.name} type:${foundMap.type} scaledValue = ${scaledValue} " 
                 }
             }
             else {
-                logWarn "updateAllPreferences: preference ${foundMap.name} value not found!"
+                logDebug "updateAllPreferences: preference ${foundMap.name} value not found!"
                 return null
             }
         }
@@ -3300,7 +3357,10 @@ def updateAllPreferences() {
 
 def divideBy100( val ) { return (val as int) / 100 }
 def multiplyBy100( val ) { return (val as int) * 100 }
-def divideBy10( val ) { return (val as int) / 10 }
+def divideBy10( val ) { 
+    if (val > 10) { return (val as int) / 10 }
+    else { return (val as int) }
+}
 def multiplyBy10( val ) { return (val as int) * 10 }
 def divideBy1( val ) { return (val as int) / 1 }    //tests
 
@@ -3313,7 +3373,7 @@ def divideBy1( val ) { return (val as int) / 1 }    //tests
  * @return An ArrayList of commands sent to the device.
  */
  // TODO - replace this device-specific method !!!
-def setRadarParameter( String parName, String DPcommand, String DPType, DPval) {
+def setRadarParameterTuya( String parName, String DPcommand, String DPType, Integer DPval) {
     ArrayList<String> cmds = []
     def value
     switch (DPType) {
@@ -3340,6 +3400,7 @@ def moveSelfTest(val)      { return radarCommand("moveSelfTest", isHL0SS9OAradar
 def smallMoveSelfTest(val) { return radarCommand("smallMoveSelfTest", isHL0SS9OAradar() ? "6E" : "77", DP_TYPE_BOOL) }   // check!
 def breatheSelfTest(val)   { return radarCommand("breatheSelfTest", isHL0SS9OAradar() ? "6F" : "78", DP_TYPE_BOOL) }     // check!
 
+// TODO - refactor !!!
 def radarCommand( String command, String DPcommand, String DPType) {
     ArrayList<String> cmds = []
     if (!(isHL0SS9OAradar() || is2AAELWXKradar())) {
@@ -3374,14 +3435,14 @@ def sendCommand( command=null, val=null )
     ArrayList<String> cmds = []
     def supportedCommandsMap = DEVICE.commands 
     if (supportedCommandsMap == null || supportedCommandsMap == []) {
-        logWarn "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
+        logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
     def supportedCommandsList =  DEVICE.commands.keySet() as List 
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
-        logWarn "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
+        logInfo "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
         return
     }
     def func
@@ -3543,7 +3604,7 @@ def setPar( par=null, val=null )
             // try sending the parameter using the new universal method
             cmds = sendTuyaParameter(dpMap,  par, tuyaValue) 
             if (cmds == null || cmds == []) {
-                logWarn "setPar: sendTuyaParameter par ${par} tuyaValue ${tuyaValue} returned null or empty list"
+                logDebug "setPar: sendTuyaParameter par ${par} tuyaValue ${tuyaValue} returned null or empty list"
                 return
             }
             else {
@@ -3636,7 +3697,7 @@ void updateTuyaVersion() {
         }
     }
     else {
-        logWarn "application version is NULL"
+        logDebug "application version is NULL"
     }
 }
 
@@ -3662,7 +3723,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
         }
     }
     if (deviceProfile == UNKNOWN) {
-        logWarn "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "<b>NOT FOUND!</b> deviceName =${deviceName} profileName=${deviceProfile} for model ${deviceModel} manufacturer ${deviceManufacturer}"
     }
     return [deviceName, deviceProfile]
 }
@@ -3671,7 +3732,7 @@ def getDeviceNameAndProfile( model=null, manufacturer=null) {
 def setDeviceNameAndProfile( model=null, manufacturer=null) {
     def (String deviceName, String deviceProfile) = getDeviceNameAndProfile(model, manufacturer)
     if (deviceProfile == null || deviceProfile == UNKNOWN) {
-        logWarn "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
+        logInfo "unknown model ${deviceModel} manufacturer ${deviceManufacturer}"
         // don't change the device name when unknown
         state.deviceProfile = UNKNOWN
     }
@@ -3684,7 +3745,7 @@ def setDeviceNameAndProfile( model=null, manufacturer=null) {
         //logDebug "after : forcedProfile = ${settings.forcedProfile}"
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
-        logWarn "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
+        logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
     }    
 }
 
@@ -3799,7 +3860,7 @@ String unix2formattedDate( unixTime ) {
         def date = new Date(unixTime.toLong())
         return date.format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
     } catch (Exception e) {
-        logWarn "Error formatting date: ${e.message}. Returning current time instead."
+        logDebug "Error formatting date: ${e.message}. Returning current time instead."
         return new Date().format("yyyy-MM-dd HH:mm:ss.SSS", location.timeZone)
     }
 }
@@ -3810,7 +3871,7 @@ def formattedDate2unix( formattedDate ) {
         def date = Date.parse("yyyy-MM-dd HH:mm:ss.SSS", formattedDate)
         return date.getTime()
     } catch (Exception e) {
-        logWarn "Error parsing formatted date: ${formattedDate}. Returning current time instead."
+        logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
         return now()
     }
 }
@@ -3858,17 +3919,17 @@ def validateAndFixPreferences() {
         settingType = device.getSettingType(it.key)
         oldSettingValue = device.getSetting(it.key)
         if (settingType == null) {
-            logWarn "validateAndFixPreferences: settingType not found for preference ${it.key}"
+            logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
             return null
         }
         //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
-            logWarn "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
+            logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
             validationFailures ++
             // remove the setting and create a new one using the foundMap.type
             try {
                 device.removeSetting(it.key)
-                logWarn "validateAndFixPreferences: removing setting ${it.key}"
+                logDebug "validateAndFixPreferences: removing setting ${it.key}"
             }
             catch (e) {
                 logWarn "validateAndFixPreferences: exception ${e} caught while removing setting ${it.key}"
@@ -3896,7 +3957,7 @@ def validateAndFixPreferences() {
                 }
                 //
                 device.updateSetting(it.key, [value:newValue, type:foundMap.type])
-                logWarn "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
+                logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 validationFixes ++
             }
             catch (e) {
@@ -3905,7 +3966,7 @@ def validateAndFixPreferences() {
                 try {
                     settingValue = foundMap.defaultValue
                     device.updateSetting(it.key, [value:settingValue, type:foundMap.type])
-                    logWarn "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
+                    logDebug "validateAndFixPreferences: updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with <b>default</b> value ${newValue} "
                     validationFixes ++
                 }
                 catch (e2) {

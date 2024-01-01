@@ -16,3 +16,5 @@ Drivers/Tuya Multi Sensor 4 In 1/.vscode/extensions.json
 Drivers/Tuya Multi Sensor 4 In 1/.hubitat/metadata.json
 Drivers/Misc/Third Reality Matter Multi-Function Night Light.groovy
 Drivers/Matter Advanced Outlet/logback.log
+Drivers/Tuya Zigbee Metering Plug/logback.log
+Drivers/Tuya Multi Sensor 4 In 1/logback.log
