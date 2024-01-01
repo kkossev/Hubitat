@@ -1,4 +1,5 @@
-Aqara E1 Matter Bridge Cluster BasicInformation (0x0028) endpoint 00 attributes and values list :
+
+Aqara E1 Matter Bridge Cluster BasicInformation (0x0028) endpoint 0x00 attributes and values list :
 [0000] DataModelRevision = 01
 [0001] VendorName = Aqara
 [0002] VendorID = 0x115F (4447)
@@ -24,11 +25,14 @@ Aqara E1 Matter Bridge Cluster BasicInformation (0x0028) endpoint 00 attributes 
 [FFFC] FeatureMap = 00
 [FFFD] ClusterRevision = 01
 
-Aqara E1 Matter Bridge Cluster Descriptor (0x001D) endpoint 00 attributes and values list :
+
+
+
+Aqara E1 Matter Bridge Cluster Descriptor (0x001D) endpoint 0x00 attributes and values list :
 [0000] DeviceTypeList = [16, 1818]
 [0001] ServerList = [1D, 1F, 28, 30, 31, 33, 37, 3C, 3E, 3F]
 [0002] ClientList = [1F]
-[0003] PartsList = [01]
+[0003] PartsList = [01, 06, 07, 08]
 [FFF8] GeneratedCommandList = 0x1618 (5656)
 [FFF9] AcceptedCommandList = 0x1618 (5656)
 [FFFC] FeatureMap = 00
@@ -132,3 +136,360 @@ Aqara E1 Matter Bridge Cluster Identify (0x0003) endpoint 01 attributes and valu
 [FFF9] AcceptedCommandList = [00, 40]
 [FFFC] FeatureMap = 00
 [FFFD] ClusterRevision = 02
+
+
+================= Philips Hue Bridge =================
+dev:3382023-12-29 15:23:48.849infofingerprint endpointId:"1F", inClusters:"003B,001D,0040,0003", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.845infofingerprint endpointId:"1E", inClusters:"003B,001D,0040,0003", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.842infofingerprint endpointId:"1D", inClusters:"003B,001D,0040,0003", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.838infofingerprint endpointId:"1C", inClusters:"003B,001D,0040,0003", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.834infofingerprint endpointId:"1B", inClusters:"001D,0039,002F,002E", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.830infofingerprint endpointId:"1A", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.827infofingerprint endpointId:"19", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.823infofingerprint endpointId:"18", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.820infofingerprint endpointId:"17", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.816infofingerprint endpointId:"16", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.813infofingerprint endpointId:"15", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.809infofingerprint endpointId:"14", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.806infofingerprint endpointId:"13", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.803infofingerprint endpointId:"12", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.799infofingerprint endpointId:"11", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.795infofingerprint endpointId:"10", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.792infofingerprint endpointId:"0F", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.788infofingerprint endpointId:"0E", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.785infofingerprint endpointId:"0D", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.781infofingerprint endpointId:"0C", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.700infofingerprint endpointId:"0B", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.697infofingerprint endpointId:"0A", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.694infofingerprint endpointId:"09", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.690infofingerprint endpointId:"08", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.687infofingerprint endpointId:"07", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.683infofingerprint endpointId:"06", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.679infofingerprint endpointId:"05", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.675infofingerprint endpointId:"04", inClusters:"0006,001D,0039,0300,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.671infofingerprint endpointId:"03", inClusters:"0006,001D,0039,0300,0003,0004,0008", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.668infofingerprint endpointId:"02", inClusters:"0006,001D,0039,0008,0003,0004", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+dev:3382023-12-29 15:23:48.664infofingerprint endpointId:"01", inClusters:"001D,0025", outClusters:"", model:"BSB002", manufacturer:"Signify", controllerType:"MAT"
+
+
+======================= Zemismart M1 Matter Bridge =======================
+
+dev:3392023-12-29 15:58:50.854infofingerprint endpointId:"11", inClusters:"001D,0040,0041,0405", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.853infofingerprint endpointId:"10", inClusters:"001D,002F,0040,0041,0402", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.850infofingerprint endpointId:"0F", inClusters:"001D,002E,0039,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.849infofingerprint endpointId:"0E", inClusters:"001D,0040,0041,0405", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.847infofingerprint endpointId:"0D", inClusters:"001D,002F,0040,0041,0402", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.846infofingerprint endpointId:"0C", inClusters:"001D,002E,0039,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.844infofingerprint endpointId:"0B", inClusters:"001D,002E,002F,0039,0040,0041,0406", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.843infofingerprint endpointId:"0A", inClusters:"001D,002E,0039,0040,0041,0102", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.842infofingerprint endpointId:"09", inClusters:"001D,002E,002F,0039,0040,0041,0406", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.840infofingerprint endpointId:"08", inClusters:"0006,001D,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.839infofingerprint endpointId:"07", inClusters:"0006,001D,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.837infofingerprint endpointId:"06", inClusters:"0006,001D,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.836infofingerprint endpointId:"05", inClusters:"0006,001D,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.834infofingerprint endpointId:"04", inClusters:"0006,001D,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.833infofingerprint endpointId:"03", inClusters:"001D,002E,0039,0040,0041", outClusters:"", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+dev:3392023-12-29 15:58:50.753infofingerprint endpointId:"01", inClusters:"0003,001D,001E,0025,002B,002C,002D,002E,002F,0030,0031,0032,0033,0036", outClusters:"001E,002B,002C,0030", model:"Zemismart M1 Hub", manufacturer:"Zemismart Technology Limited", controllerType:"MAT"
+
+
+Zemismart M1 Matter Bridge Cluster Identify (0x0003) endpoint 01 attributes and values list :
+[0000] IdentifyTime = 00
+[0001] IdentifyType = 00
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00, 40]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 02
+
+Zemismart M1 Matter Bridge Cluster GroupKeyManagement (0x003F) endpoint 00 attributes and values list :
+[0000] GroupKeyMap = 0x1618 (5656)
+[0001] GroupTable = 0x1618 (5656)
+[0002] MaxGroupsPerFabric = 04
+[0003] MaxGroupKeysPerFabric = 03
+[FFF8] GeneratedCommandList = [02, 05]
+[FFF9] AcceptedCommandList = [00, 01, 03, 04]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster OperationalCredentials (0x003E) endpoint 00 attributes and values list :
+[0000] NOCs = [15F2, 2401, 24033701, 1125, 0441093001082401, 37CC, 01280135, 04033601, 30180104, 14, 4471, 1A14, 40, 1B28, 2401, 24033701, 80, 2580, 01072418, 0930, F920, 01290135, 14043060, A17F4A25, 40, 1FAEAB41, 94481054]
+[0001] Fabrics = [0441, F7, C3A0, ￆ, 0324FFF1, 0425, 24]
+[0002] SupportedFabrics = 0x10 (16)
+[0003] CommissionedFabrics = 04
+[0004] TrustedRootCertificates = [0109, 0337, 0000, CA, 0000, CA, 0824, 0930, ;, F1, 14043060, C4EC, 25, 0514, 25, 0101, 0337, 2618, 80, 2580, 2418, 0441093001082401, F7, C3A0, ￆ, 01290135, 14043060, 96B8B3A17F4A250A, BC14, A17F4A25, 40, F6, w, 2400, 27033701, 04, 3700, 3AAB1427, 2418, 0441093001082401, 2F6D06CA, 00, 01290135, 14043060, ￓ, 132F2BD2234062CE, 2400, 26033701, 37, 5B101426, 0441093001082401, CBD6CCD3, 2B, Z, 01290135, 14043060, 00, 060802AF, 07, A42EDFD0]
+[0005] CurrentFabricIndex = 09
+[FFF8] GeneratedCommandList = [01, 03, 05, 08]
+[FFF9] AcceptedCommandList = [00, 02, 04, 06, 07, 09, 0A, 0B]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster AdministratorCommissioning (0x003C) endpoint 00 attributes and values list :
+[0000] WindowStatus = 00
+[0001] AdminFabricIndex = 0x14 (20)
+[0002] AdminVendorId = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00, 01, 02]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster EthernetNetworkDiagnostics (0x0037) endpoint 00 attributes and values list :
+[0000] PHYRate = 01
+[0001] FullDuplex = 01
+[0002] PacketRxCount = 0x00C27A4E (12745294)
+[0003] PacketTxCount = 0x000E4E23 (937507)
+[0004] TxErrCount = 00
+[0005] CollisionCount = 00
+[0006] OverrunCount = 00
+[0007] CarrierDetect = 0x14 (20)
+[0008] TimeSinceReset = 0x000D1023 (856099)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00]
+[FFFC] FeatureMap = 03
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster GeneralDiagnostics (0x0033) endpoint 00 attributes and values list :
+[0001] RebootCount = 06
+[0002] UpTime = 0x000D1014 (856084)
+[0003] TotalOperationalHours = 0xED (237)
+[0004] BootReasons = 00
+[0005] ActiveHardwareFault = 0x1618 (5656)
+[0006] ActiveRadioFault = 0x1618 (5656)
+[0007] ActiveNetworkFaults = 0x1618 (5656)
+[0008] TestEventTriggersEnabled = 00
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = [00, 00]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster NetworkCommissioning (0x0031) endpoint 00 attributes and values list :
+[0000] MaxNetworks = 01
+[0001] Networks = [04]
+[0002] ScanMaxTimeSeconds = 00
+[0003] ConnectMaxTimeSeconds = 00
+[0004] InterfaceEnabled = 01
+[0005] LastNetworkingStatus = 0x14 (20)
+[0006] LastNetworkID = 0x14 (20)
+[0007] LastConnectErrorValue = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 04
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster GeneralCommissioning (0x0030) endpoint 00 attributes and values list :
+[0000] Breadcrumb = 00
+[0001] BasicCommissioningInfo = 1524003C2501840318
+[0002] RegulatoryConfig = 00
+[0003] LocationCapability = 00
+[0004] SupportsConcurrentConnection = 01
+[FFF8] GeneratedCommandList = [01, 03, 05]
+[FFF9] AcceptedCommandList = [00, 02, 04]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster AccessControl (0x001F) endpoint 00 attributes and values list :
+[0000] ACL = [2405, 06033602, 1800, 01]
+[0001] Extension = 0x1618 (5656)
+[0002] SubjectsPerAccessControlEntry = 0x40 (64)
+[0003] TargetsPerAccessControlEntry = 03
+[0004] AccessControlEntriesPerFabric = 04
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+
+Zemismart M1 Matter Bridge Cluster Descriptor (0x001D) endpoint 00 attributes and values list :
+[0000] DeviceTypeList = [16, 1818]
+[0001] ServerList = [03, 1D, 1F, 28, 29, 2A, 2B, 2C, 2E, 30, 31, 32, 33, 34, 37, 39, 3C, 3E, 3F, 40]
+[0002] ClientList = [03, 1F, 29, 39]
+[0003] PartsList = [01, 03, 04, 05, 06, 07, 08, 09, 0A, 0B, 0C, 0D, 0E, 0F, 10, 11]
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BasicInformation (0x0028) endpoint 00 attributes and values list :
+[0000] DataModelRevision = 01
+[0001] VendorName = Zemismart Technology Limited
+[0002] VendorID = 0x139C (5020)
+[0003] ProductName = Zemismart M1 Hub
+[0004] ProductID = 0x0387 (903)
+[0006] Location = US
+[0007] HardwareVersion = 01
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 00
+[000A] SoftwareVersionString = 2.0.0
+[000B] ManufacturingDate = 43614226200
+[000F] SerialNumber = 10011928200305
+[0010] LocalConfigDisabled = 00
+[0011] Reachable = 01
+[0012] UniquieID = E65FEDCBF2C83863
+[0013] CapabilityMinima = 152400032501FFFF18
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+
+----------------- 
+
+Zemismart M1 Matter Bridge Cluster OccupancySensing (0x0406) endpoint 0B attributes and values list :
+[0010] PIROccupiedToUnoccupiedDelay = 0x1E (30)
+[0000] Occupancy = 00
+[0001] OccupancySensorType = 00
+[0002] OccupancySensorTypeBitmap = 01
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 03
+
+Zemismart M1 Matter Bridge Cluster PowerSource (0x002F) endpoint 0B attributes and values list :
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 01
+[FFFD] ClusterRevision = 00
+
+Zemismart M1 Matter Bridge Cluster Descriptor (0x001D) endpoint 0B attributes and values list :
+[0000] DeviceTypeList = [07, 0124, 1518]
+[0001] ServerList = [1D, 2E, 2F, 39, 40, 41, 0406]
+[0002] ClientList = 0x1618 (5656)
+[0003] PartsList = 0x1618 (5656)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 01
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0B attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x125D (4701)
+[0003] ProductName = Occupancy sensor
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230417 (539165719)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 00
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = [00, 01, 02, 40, 41, 42]
+[FFF9] AcceptedCommandList = [00, 01, 02, 40, 41, 42]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+=========== 
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x0F attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x125D (4701)
+[0003] ProductName = Temperature humidity sensor
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230628 (539166248)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 01
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x0B attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x125D (4701)
+[0003] ProductName = Occupancy sensor
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230417 (539165719)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 00
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = [00, 01, 02, 40, 41, 42]
+[FFF9] AcceptedCommandList = [00, 01, 02, 40, 41, 42]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x0A attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x12D5 (4821)
+[0003] ProductName = CURTAIN
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230301 (539165441)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 01
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = [00, 01, 02, 40, 41, 42]
+[FFF9] AcceptedCommandList = [00, 01, 02, 40, 41, 42]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x09 attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x125D (4701)
+[0003] ProductName = Occupancy sensor
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230417 (539165719)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 01
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = [00, 01, 02, 40, 41, 42]
+[FFF9] AcceptedCommandList = [00, 01, 02, 40, 41, 42]
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x03 attributes and values list :
+[0001] VendorName = tuya
+[0002] VendorID = 0x12D5 (4821)
+[0003] ProductName = ON OFF PLUG
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20230301 (539165441)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 01
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 01
+
+

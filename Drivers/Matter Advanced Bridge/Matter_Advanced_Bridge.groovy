@@ -17,6 +17,7 @@
  *
  * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
  *
+ *                                   TODO: Add temperature and humidity
  *                                   TODO: Replace the scheduled jobs w/ StateMachine 
  *                                   TODO: GeneralDiagnostics (0x0033) endpoint 0x00 [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
  */
@@ -52,6 +53,9 @@ metadata {
         attribute 'productName', 'string'
         attribute 'bridgeSoftwareVersion', 'string'
 
+        command 'a1BridgeDiscovery', [[name: 'Invoked automatically during the hub reboot, do not click!']]
+        command '_1BridgeDiscovery', [[name: 'Invoked automatically during the hub reboot, do not click!']]
+        command '_2_Devices_Discovery', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'getInfo', [
                 [name:'infoType', type: 'ENUM', description: 'Bridge Info Type', constraints: ['Basic', 'Extended']],   // if the parameter name is 'type' - shows a drop-down list of the available drivers!
                 [name:'endpoint', type: 'STRING', description: 'Endpoint', constraints: ['STRING']]
@@ -203,7 +207,18 @@ void parse(String description) {
         case '0041' :  // UserLabel, ep:00
             gatherAttributesValuesInfo(descMap, UserLabelClusterAttributes)
             break
-        case '0406' :  // OccupancySensing
+        case '0400' :  // IlluminanceMeasurement
+            gatherAttributesValuesInfo(descMap, IlluminanceMeasurementClusterAttributes)
+            break
+        case '0402' :  // TemperatureMeasurement
+            parseTemperatureMeasurement(descMap)
+            gatherAttributesValuesInfo(descMap, TemperatureMeasurementClusterAttributes)
+            break
+        case '0405' :  // HumidityMeasurement
+            parseHumidityMeasurement(descMap)
+            gatherAttributesValuesInfo(descMap, RelativeHumidityMeasurementClusterAttributes)
+            break
+        case '0406' :  // OccupancySensing (motion)
             gatherAttributesValuesInfo(descMap, OccupancySensingClusterAttributes)
             parseOccupancySensing(descMap)
             break
@@ -493,7 +508,7 @@ void parseOnOffCluster(Map descMap) {
 }
 
 void parseOccupancySensing(Map descMap) {
-    String attrName = OnOffClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN
+    String attrName = OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN
     if (descMap.cluster != '0406') {
         logWarn "parseOccupancySensing: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
         return
@@ -503,7 +518,39 @@ void parseOccupancySensing(Map descMap) {
             sendOccupancyEvent(descMap)
             break
         default :
-            logDebug "parseOccupancySensing: ${(OnOffClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+            logDebug "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+            break
+    }
+}
+
+void parseTemperatureMeasurement(Map descMap) { // 0402
+    String attrName = TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN
+    if (descMap.cluster != '0402') {
+        logWarn "parseTemperatureMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
+        return
+    }
+    switch (descMap.attrId) {
+        case '0000' : // Temperature
+            sendTemperatureEvent(descMap)
+            break
+        default :
+            logDebug "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+            break
+    }
+}
+
+void parseHumidityMeasurement(Map descMap) { // 0405
+    String attrName = RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN
+    if (descMap.cluster != '0405') {
+        logWarn "parseHumidityMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
+        return
+    }
+    switch (descMap.attrId) {
+        case '0000' : // Humidity
+            sendHumidityEvent(descMap)
+            break
+        default :
+            logDebug "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
             break
     }
 }
@@ -523,6 +570,39 @@ void sendOccupancyEvent(Map descMap) {
     logInfo "${eventMap.descriptionText}"
     sendEvent(eventMap)
 }
+
+void sendTemperatureEvent(Map descMap) {
+    Double valueInt = HexUtils.hexStringToInt(descMap.value) / 100.0
+    String value = valueInt.toString()
+    Map eventMap = [name: 'temperature', value: value, descriptionText: "device #${descMap.endpoint} temperature is ${value} &degC", type: 'physical']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    if (device.currentValue('temperature') == value && state.states['isRefresh'] != true) {
+        logDebug "ignored duplicated temperature event, value:${value}"
+        return
+    }
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
+}
+
+void sendHumidityEvent(Map descMap) {
+    Double valueInt = HexUtils.hexStringToInt(descMap.value) / 100.0
+    String value = valueInt.toString()
+    Map eventMap = [name: 'humidity', value: value, descriptionText: "device #${descMap.endpoint} humidity is ${value} %", type: 'physical']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    if (device.currentValue('humidity') == value && state.states['isRefresh'] != true) {
+        logDebug "ignored duplicated humidity event, value:${value}"
+        return
+    }
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
+}
+
 
 private void sendSwitchEvent(String rawValue, isDigital = false) {
     String value = rawValue == '01' ? 'on' : 'off'
@@ -1366,7 +1446,12 @@ Map getAttributesMapByClusterId(String cluster) {
     if (cluster == '003F') { return GroupKeyManagementClusterAttributes }
     if (cluster == '0040') { return FixedLabelClusterAttributes }
     if (cluster == '0041') { return UserLabelClusterAttributes }
+    if (cluster == '0400') { return IlluminanceMeasurementClusterAttributes }   // TODO
+    if (cluster == '0402') { return TemperatureMeasurementClusterAttributes }
+    if (cluster == '0403') { return PressureMeasurementClusterAttributes }      // TODO
+    if (cluster == '0405') { return RelativeHumidityMeasurementClusterAttributes }
     if (cluster == '0406') { return OccupancySensingClusterAttributes }
+
     return null
 }
 
@@ -1664,6 +1749,22 @@ Map getAttributesMapByClusterId(String cluster) {
 // 1.7 Bolean State Cluster 0x0045
 @Field static final Map<Integer, String> BoleanStateClusterAttributes = [
     0x0000  : 'StateValue'
+]
+
+// 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
+@Field static final Map<Integer, String> TemperatureMeasurementClusterAttributes = [
+    0x0000  : 'MeasuredValue',
+    0x0001  : 'MinMeasuredValue',
+    0x0002  : 'MaxMeasuredValue',
+    0x0003  : 'Tolerance'
+]
+
+// 2.6.4. Relative Humidity Measurement Cluster 0x0405 (1029)
+@Field static final Map<Integer, String> RelativeHumidityMeasurementClusterAttributes = [
+    0x0000  : 'MeasuredValue',
+    0x0001  : 'MinMeasuredValue',
+    0x0002  : 'MaxMeasuredValue',
+    0x0003  : 'Tolerance'
 ]
 
 // 2.7.5. Occupancy Sensing Cluster 0x0406
