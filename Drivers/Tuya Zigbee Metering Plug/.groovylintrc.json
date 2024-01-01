@@ -1,0 +1,44 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "DuplicateMapLiteral": {
+            "enabled": false
+        },
+        "DuplicateNumberLiteral": {
+            "enabled": false
+        },
+        "DuplicateStringLiteral": {
+            "enabled": false
+        },
+        "ImplicitClosureParameter": {
+            "enabled": false
+        },
+        "InsecureRandom": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "MethodParameterTypeRequired": {
+            "enabled": false
+        },
+        "ParameterName": {
+            "enabled": false
+        },
+        "PublicMethodsBeforeNonPublicMethods": {
+            "enabled": false
+        },
+        "UnnecessaryGetter": {
+            "enabled": false
+        },
+        "UnusedPrivateMethod": {
+            "enabled": false
+        },
+        "VariableName": {
+            "enabled": false
+        },
+        "VariableTypeRequired": {
+            "enabled": false
+        }
+    }
+}
