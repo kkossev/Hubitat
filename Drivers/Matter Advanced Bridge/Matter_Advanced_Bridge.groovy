@@ -16,23 +16,20 @@
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
  *
  * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
- * ver. 1.0.1  2024-01-04 kkossev  - Linter; 
+ * ver. 1.0.1  2024-01-05 kkossev  - Linter; Discovery OK; published for alpha- testing.
  *
- *                                   TODO: prepare for publishing the first alpha version:(DEBUG false)
- *                                      Step 1 : A1 Bridge Discovery - OK 
- *                                      Step 2 : A2 Devices Discovery - OK
- *                                      Step 3 : A3 Capabilities Discovery
+ *                                   TODO: Convert SupportedClusters to Map that include the known attributes to be subscribed to
+ *                                   TODO: A1 Bridge Discovery - use the short version!
  *                                   TODO: add Configure() custom command - perform reSubscribe() 
- *                                   TODO: add clear State Variables button
  *                                   TODO: add cluster 0x0102 attributes
- *                                   TODO: Replace the scheduled jobs w/ StateMachine
+ *                                   TODO: Replace the scheduled jobs w/ StateMachine (store each state in a list) 
  *                                   TODO: GeneralDiagnostics (0x0033) endpoint 0x00 [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
  */
 
 static String version() { '1.0.1' }
-static String timeStamp() { '2023/04/0203 4:58 PM' }
+static String timeStamp() { '2023/01/05 7:03 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Integer DIGITAL_TIMER = 3000             // command was sent by this driver
 @Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
@@ -43,14 +40,14 @@ static String timeStamp() { '2023/04/0203 4:58 PM' }
 @Field static final String  UNKNOWN = 'UNKNOWN'
 @Field static final Integer SHORT_TIMEOUT  = 7
 @Field static final Integer LONG_TIMEOUT   = 15
-@Field static final Integer MAX_DEVICES_LIMIT = 13
+@Field static final Integer MAX_DEVICES_LIMIT = 17
 
 import groovy.transform.Field
 
 import hubitat.helper.HexUtils
 
 metadata {
-    definition(name: 'Matter Advanced Bridge', namespace: 'kkossev', author: 'Krassimir Kossev') {
+    definition(name: 'Matter Advanced Bridge', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Advanced_Bridge.groovy', singleThreaded: true ) {
         capability 'Actuator'
         capability 'Sensor'
         capability 'Initialize'
@@ -66,6 +63,7 @@ metadata {
         command 'a1BridgeDiscovery', [[name: 'First click here ...']]
         command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
         command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
+        command 'a4SubscribeKnownClustersAttributes', [[name: 'Next click here ....']]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'Clear all States and start over']]
@@ -83,7 +81,7 @@ metadata {
                     [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
             ]
             command 'subscribe', [
-                    [name:'addOrRemove', type: 'ENUM', description: 'Select', constraints: ['Add', 'Remove', 'Show']],
+                    [name:'addOrRemove', type: 'ENUM', description: 'Select', constraints: ['add', 'remove', 'show']],
                     [name:'endpoint',   type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
                     [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
                     [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
@@ -114,6 +112,9 @@ metadata {
     options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
+
+@Field static final List<Integer> SupportedClusters = [/*0x0004, 0x0005,*/ 0x0006 ,0x0008, 0x003B, 0x0045, 0x0102, 0x0400, 0x0402, 0x0403, 0x0405, 0x0406, 0x00408,  0x040C, 0x040D, 0x0413, 0x0415, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F]
+
 
 //parsers
 void parse(String description) {
@@ -300,6 +301,11 @@ String getClusterName(String cluster) {
     return MatterClusters[HexUtils.hexStringToInt(cluster)] ?: UNKNOWN
 }
 
+
+String getAttributeName(Map descMap) {
+    return getAttributeName(descMap.cluster, descMap.attrId)
+}
+
 String getAttributeName(String cluster, String attrId) {
     String attributeName = getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId))
     return attributeName ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)]
@@ -327,7 +333,7 @@ void parseGlobalElement0xFFFB(final Map descMap) {
 }
 
 void parseOtherGlobalElements(final Map descMap) {
-    if (descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE'])  {
+   if (HexUtils.hexStringToInt(descMap.cluster)  in SupportedClusters)  {
         String stateName = getStateFingerprintName(descMap)
         if (state[stateName] == null) { state[stateName] = [:] }
         String attributeName = descMap.cluster
@@ -370,7 +376,7 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
                 } catch (e) {
                     tmpStr += ' = ' + descMap.value
                 }
-                if (logEnable) { logInfo "$tmpStr" }
+                //if (logEnable) { logInfo "$tmpStr" }
                 state.tmp = (state.tmp ?: '') + "${tmpStr} " + '<br>'
             }
         }
@@ -513,12 +519,13 @@ void parseOnOffCluster(Map descMap) {
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
             if (logEnable) {
                 //logInfo "parse: Switch: ${attrName} = ${descMap.value}"
-                parseOtherGlobalElements(descMap)
             }
             break
         default :
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
+    parseOtherGlobalElements(descMap)
+
     /*
     if (eventMap != [:]) {
         eventMap.type = 'physical'
@@ -546,9 +553,9 @@ void parseOccupancySensing(Map descMap) {
             description: "device #${descMap.endpoint} motion is ${motionAttr}"
         ])
     } else {
-        logDebug "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
-        parseOtherGlobalElements(descMap)
+        //logDebug "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
+    parseOtherGlobalElements(descMap)
 }
 
 // Method for parsing temperature measurement
@@ -558,6 +565,7 @@ void parseTemperatureMeasurement(Map descMap) { // 0402
         return
     }
     if (descMap.attrId == '0000') { // Temperature
+        parseOtherGlobalElements(descMap)
         Double valueInt = HexUtils.hexStringToInt(descMap.value) / 100.0
         sendMatterEvent([
             attributeName: 'temperature',
@@ -565,10 +573,10 @@ void parseTemperatureMeasurement(Map descMap) { // 0402
             description: "device #${descMap.endpoint} temperature is ${valueInt} °C"
         ])
     } else {
-        logDebug "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
-        parseOtherGlobalElements(descMap)
-
+        //logDebug "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+        //logDebug "parseTemperatureMeasurement: ${getAttributeName(descMap)} = ${descMap.value}"
     }
+    parseOtherGlobalElements(descMap)
 }
 
 // Method for parsing humidity measurement
@@ -585,9 +593,9 @@ void parseHumidityMeasurement(Map descMap) { // 0405
             description: "device #${descMap.endpoint} humidity is ${valueInt} %"
         ])
     } else {
-        logDebug "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
-        parseOtherGlobalElements(descMap)
+        //logDebug "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
+    parseOtherGlobalElements(descMap)
 }
 
 //events
@@ -913,6 +921,7 @@ void a3CapabilitiesDiscovery() {
     sendInfoEvent("starting Capabilities discovery ...")
     Integer time = 1
     // for each finferprint in the state observe the ServerList for known clusters
+    
     state.each { fingerprintName, fingerprintMap ->
         if (fingerprintName.startsWith('fingerprint')) {
             //logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
@@ -922,7 +931,7 @@ void a3CapabilitiesDiscovery() {
                     // the endpoint is the rightmost digit of the fingerprintName in hex
                     String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
                     Integer endpointInt = HexUtils.hexStringToInt(endpointId)
-                    if (clusterInt in [/*0x0004, 0x0005,*/ 0x0006 ,0x0008, 0x003B, 0x0045, 0x0102, 0x0400, 0x0402, 0x0403, 0x0405, 0x0406, 0x00408,  0x040C, 0x040D, 0x0413, 0x0415, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F]) {
+                    if (clusterInt in SupportedClusters) {
                         logDebug "a3CapabilitiesDiscovery(): found fingerprintName:${fingerprintName} endpointInt:${endpointInt} (0x${endpointId})  clusterInt:${clusterInt} (0x${cluster}) time:${time}"
                         requestAndCollectAttributesValues(endpointInt, clusterInt, time, fast = true)
                         time += SHORT_TIMEOUT
@@ -936,14 +945,31 @@ void a3CapabilitiesDiscovery() {
             }
         }
     }
-
-
-
-
-
-
     runIn(time, 'delayedInfoEvent', [overwrite: true, data: [info: 'Devices Capabilities discovery finished', descriptionText: '']])
     logDebug "a3CapabilitiesDiscovery(): jobs scheduled for total time:${time} seconds"
+}
+
+void a4SubscribeKnownClustersAttributes() {
+    logWarn 'a4SubscribeKnownClustersAttributes()'
+    sendInfoEvent("Subscribing for known clusters attributes reporting ...")
+
+    // For each fingerprint in the state, check if the fingerprint has entries in the SupportedClusters list. Then, add these entries to the state.subscriptions map
+    Map stateCopy = state.clone()
+    stateCopy.each { fingerprintName, fingerprintMap ->
+        if (fingerprintName.startsWith('fingerprint')) {
+            //logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
+            fingerprintMap.each { entry, map  ->
+                if (safeHexToInt(entry) in SupportedClusters) {
+                    // fingerprintName:fingerprint07 entry:0402 map:[FFF8:1618, FFF9:1618, 0002:2710, 0000:092A, 0001:EC78, FFFC:00, FFFD:04]
+                    String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
+                    logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry} map:${map}"
+                    // for now, we subscribe to attribute 0x0000 of the cluster
+                    subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
+                }
+            }
+        }
+    }
+    runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
 }
 
 
@@ -1083,26 +1109,34 @@ void subscribe(addOrRemove, endpoint, cluster, attrId) {
     attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer))
     // format EP_CLUSTER_ATTRID
     List<String> newSub = [endpoint, cluster, attrId]
-    List<String> subsciptions = state.subscriptions ?: []
-    if (addOrRemove == 'Add') {
-        if (subsciptions.contains(newSub)) {
+    /*
+    state.subscriptions = null
+    state.subsciptions = null
+    return
+    */
+    // state.subscriptions is a List of Lists
+
+    List<List<String>> subscriptions = state.subscriptions ?: []
+    if (addOrRemove == 'add') {
+        if (subscriptions.contains(newSub)) {
             logWarn "subscribe(): subscription already exists: ${newSub}"
         } else {
+            logDebug "subscribe(): adding subscription: ${newSub}"
             cmd = matter.subscribe(0, 0xFFFF, attributePaths)
             sendToDevice(cmd)
-            subsciptions.add(newSub)
-            state.subscriptions = subsciptions
+            subscriptions.add(newSub)
+            state.subscriptions = subscriptions
         }
     }
-    else if (addOrRemove == 'Remove') {
-        if (subsciptions.contains(newSub)) {
-            subsciptions.remove(newSub)
-            state.subscriptions = subsciptions
+    else if (addOrRemove == 'remove') {
+        if (subscriptions.contains(newSub)) {
+            subscriptions.remove(newSub)
+            state.subscriptions = subscriptions
         } else {
             logWarn "subscribe(): subscription not found!: ${newSub}"
         }
     }
-    else if (addOrRemove == 'Show') {
+    else if (addOrRemove == 'show') {
         if (logEnable) { logInfo "subscribe(): state.subscriptions size is ${state.subscriptions?.size()}" }
     }
     else {
@@ -1122,8 +1156,8 @@ String subscribeCmd() {
     //state.deviceType == 'MATTER_BRIDGE'
     attributePaths.add(matter.attributePath(0, 0x001D, 0x00))
     // get each element of state.subscriptions and add it to the attributePaths
-    List<String> subsciptions = state.subscriptions ?: []
-    subsciptions.each { sub ->
+    List<String> subscriptions = state.subscriptions ?: []
+    subscriptions.each { sub ->
         attributePaths.add(matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer))
     }
     cmd = matter.subscribe(0, 0xFFFF, attributePaths)
@@ -1370,7 +1404,7 @@ void resetStats() {
     state.lastTx['subscribeTime'] = state.lastTx['unsubscribeTime'] = now()
     state.health = [:]
     state.bridgeDescriptor  = [:]   // driver specific
-    state.subsciptions = []         // driver specific, format EP_CLUSTER_ATTR
+    state.subscriptions = []         // driver specific, format EP_CLUSTER_ATTR
     state.stats['rxCtr'] = state.stats['txCtr'] = 0
     state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
     state.states['isDigital'] = state.states['isRefresh'] = state.states['isPing'] =  state.states['isInfo']  = false
@@ -1405,6 +1439,14 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
+}
+
+static Integer safeHexToInt(val, Integer defaultVal=0) {
+    try {
+        return HexUtils.hexStringToInt(val)
+    } catch (Exception e) {
+        return defaultVal
+    }
 }
 
 static Integer safeToInt(val, Integer defaultVal=0) {
