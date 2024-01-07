@@ -21,6 +21,10 @@
  *                                   added a test command 'setSwitch' on/off/toggle + device#; 
  *
  *                                   TODO: Philips Hue Bridge discovery is broken! :(
+ *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute [0005] NodeLabel = Hue white lamp Livingroom 1 
+ *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute[000E] ProductLabel = Hue white lamp
+ *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute [000A] SoftwareVersionString = 1.108.7
+ *                                   TODO: add getInfo(Basic) for the child devices during the discovery !
  *                                   TODO: check setSwitch() device# commandsList
  *                                   TODO: add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
  *                                   TODO: add a Parent entry in the child devices fingerprints (PartsList)
@@ -35,9 +39,9 @@
  */
 
 static String version() { '1.0.2' }
-static String timeStamp() { '2023/01/07 10:13 AM' }
+static String timeStamp() { '2023/01/07 12:18 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Integer DIGITAL_TIMER = 3000             // command was sent by this driver
 @Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
