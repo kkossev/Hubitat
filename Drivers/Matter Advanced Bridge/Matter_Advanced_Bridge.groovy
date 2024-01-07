@@ -17,11 +17,12 @@
  *
  * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
  * ver. 1.0.1  2024-01-05 kkossev  - Linter; Discovery OK; published for alpha- testing.
- * ver. 1.0.2  2024-01-06 kkossev  - Refresh() reads the subscribed attributes; added command 'Device Label'; VendorName, ProductName, Reachable for child devices; show the device label in the event logs if set;
+ * ver. 1.0.2  2024-01-07 kkossev  - Refresh() reads the subscribed attributes; added command 'Device Label'; VendorName, ProductName, Reachable for child devices; show the device label in the event logs if set;
  *                                   added a test command 'setSwitch' on/off/toggle + device#; 
  *
+ *                                   TODO: Philips Hue Bridge discovery is broken! :(
  *                                   TODO: check setSwitch() device# commandsList
- *                                   TODO: 
+ *                                   TODO: add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
  *                                   TODO: add a Parent entry in the child devices fingerprints (PartsList)
  *                                   TODO: add a temporay state to store the attributes list of the currently interviewed cluster
  *                                   TODO: add [refresh] to the descriptionText and to the eventMap
@@ -34,9 +35,9 @@
  */
 
 static String version() { '1.0.2' }
-static String timeStamp() { '2023/01/06 10:19 PM' }
+static String timeStamp() { '2023/01/07 10:13 AM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Integer DIGITAL_TIMER = 3000             // command was sent by this driver
 @Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
@@ -67,6 +68,11 @@ metadata {
         attribute 'Status', 'string'
         attribute 'productName', 'string'
         attribute 'bridgeSoftwareVersion', 'string'
+        //[0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
+        attribute 'rebootCount', 'number'
+        attribute 'upTime', 'number'
+        attribute 'totalOperationalHours', 'number'
+
 
         command 'a1BridgeDiscovery', [[name: 'First click here ...']]
         command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
@@ -217,6 +223,7 @@ void parse(final String description) {
             gatherAttributesValuesInfo(descMap, DiagnosticLogsClusterAttributes)
             break
         case '0033' :  // GeneralDiagnostics, ep:00
+            parseGeneralDiagnostics(descMap)
             gatherAttributesValuesInfo(descMap, GeneralDiagnosticsClusterAttributes)
             break
         case '0034' :  // SoftwareDiagnostics, ep:00
@@ -412,6 +419,28 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
     /* groovylint-disable-next-line EmptyElseBlock */
     else {
         //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
+    }
+}
+
+void parseGeneralDiagnostics(final Map descMap) {
+    //logDebug "parseGeneralDiagnostics: descMap:${descMap}"
+    Integer value
+    switch (descMap.attrId) {
+        case '0001' :   // RebootCount -  a best-effort count of the number of times the Node has rebooted
+            value = HexUtils.hexStringToInt(descMap.value)
+            sendMatterEvent([attributeName: 'rebootCount', value: value,  description: "${getDeviceLabel(descMap.endpoint)} RebootCount is ${value}"])        
+            break
+        case '0002' :   // UpTime -  a best-effort assessment of the length of time, in seconds,since the Node’s last reboot
+            value = HexUtils.hexStringToInt(descMap.value)
+            sendMatterEvent([attributeName: 'upTime', value:value,  description: "${getDeviceLabel(descMap.endpoint)} UpTime is ${value} seconds"])        
+            break
+        case '0003' :   // TotalOperationalHours -  a best-effort attempt at tracking the length of time, in hours, that the Node has been operational
+            value = HexUtils.hexStringToInt(descMap.value)
+            sendMatterEvent([attributeName: 'totalOperationalHours', value: value,  description: "${getDeviceLabel(descMap.endpoint)} TotalOperationalHours is ${value} hours"])        
+            break
+        default :
+           // if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: parseGeneralDiagnostics: ${attrName} = ${descMap.value}" } }
+            break
     }
 }
 
@@ -780,7 +809,7 @@ void requestBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = 
     logDebug "requestBasicInfo(): endpoint=${endpoint}, fingerprintName=${fingerprintName}, serverList=${serverList} "
 
     if (endpoint == 0) {
-        if ('28' in serverList) {
+        if (true /*'28' in serverList*/) {
             requestAndCollectAttributesValues(endpoint, cluster = 0x0028, time, fast) // Basic Information Cluster
             time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
         }
@@ -1313,6 +1342,13 @@ String refreshCmd() {
     List<Map<String, String>> attributePaths = state.subscriptions?.collect { sub ->
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     } ?: []
+    
+    //if ('33' in state.bridgeDescriptor?.ServerList) {
+        attributePaths.add(matter.attributePath(0, 0x0033, 0x01))   // rebootCount
+        // TODO - check if the attribute is within the 0033 attribute list !!
+        //attributePaths.add(matter.attributePath(0, 0x0033, 0x02))   // upTime
+        //attributePaths.add(matter.attributePath(0, 0x0033, 0x03))   // totalOperationalHours
+    //}
     return matter.readAttributes(attributePaths)
 }
 void logsOff() {
