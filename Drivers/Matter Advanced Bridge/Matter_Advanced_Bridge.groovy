@@ -1,8 +1,9 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodParameterTypeRequired, MethodSize, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodParameterTypeRequired, MethodSize, NglParseError, NoDef, NoDouble, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter */
 /**
  *  Matter Advanced Bridge - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
+ *  https://community.hubitat.com/t/project-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009
  *
  *     Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *     in compliance with the License. You may obtain a copy of the License at:
@@ -17,29 +18,63 @@
  *
  * ver. 1.0.0  2023-12-29 kkossev  - Inital version;
  * ver. 1.0.1  2024-01-05 kkossev  - Linter; Discovery OK; published for alpha- testing.
- * ver. 1.0.2  2024-01-07 kkossev  - Refresh() reads the subscribed attributes; added command 'Device Label'; VendorName, ProductName, Reachable for child devices; show the device label in the event logs if set;
- *                                   added a test command 'setSwitch' on/off/toggle + device#; 
+ * ver. 1.0.2  2024-01-07 kkossev  - Refresh() reads the subscribed attributes; added command 'Device Label'; VendorName, ProductName, Reachable for child devices; show the device label in the event logs if set; added a test command 'setSwitch' on/off/toggle + device#;
+ * ver. 1.0.3  2024-01-11 kkossev  - Child devices : deviceCount, mapTuyaCategory(d); added 'Matter_Generic_Component_Motion_Sensor.groovy', 'Matter_Generic_Component_Window_Shade.groovy' and 'matterLib.groovy'; Hubitat Bundle package;
+ *                                   A1 Bridge Discovery now uses the short version; added logTrace() and logError() methods; setSwitch and setLabel commands visible in _DEBUG mode only
  *
- *                                   TODO: Philips Hue Bridge discovery is broken! :(
- *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute [0005] NodeLabel = Hue white lamp Livingroom 1 
- *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute[000E] ProductLabel = Hue white lamp
- *                                   TODO: use the  BridgedDeviceBasicInformation (0x0039) attribute [000A] SoftwareVersionString = 1.108.7
- *                                   TODO: add getInfo(Basic) for the child devices during the discovery !
- *                                   TODO: check setSwitch() device# commandsList
- *                                   TODO: add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
- *                                   TODO: add a Parent entry in the child devices fingerprints (PartsList)
- *                                   TODO: add a temporay state to store the attributes list of the currently interviewed cluster
- *                                   TODO: add [refresh] to the descriptionText and to the eventMap
- *                                   TODO: Convert SupportedClusters to Map that include the known attributes to be subscribed to
- *                                   TODO: A1 Bridge Discovery - use the short version!
- *                                   TODO: add Configure() custom command - perform reSubscribe()
- *                                   TODO: add cluster 0x0102 attributes
- *                                   TODO: Replace the scheduled jobs w/ StateMachine (store each state in a list)
- *                                   TODO: add GeneralDiagnostics (0x0033) endpoint 0x00 :  [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
+ *                                   TODO: [====MVP====] Publish version 1.0.3 (Bundle)
+ *
+ *                                   TODO: [====MVP====] use component/ driver for the switch
+ *                                   TODO: [====MVP====] logTrace to be switched off after 30 minutes!
+ *                                   TODO: [====MVP====] Publish version 1.0.4
+ *
+ *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the refresh() command ! (add a deviceNumber parameter to the refresh() command command)
+ *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint
+ *                                   TODO: [====MVP====] add Data.Refresh for each child device
+ *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
+ *                                   TODO: [====MVP====] Publish version 1.0.5
+ *
+ *                                   TODO: [====MVP====] add cluster 08 processing
+ *                                   TODO: [====MVP====] add cluster 0300 processing
+ *                                   TODO: [====MVP====] add cluster 0102 processing
+ *                                   TODO: [====MVP====] Publish version 1.0.6
+ *
+ *                                   TODO: [====MVP====] add heathStatus to the child devices
+ *                                   TODO: [====MVP====] Publish version 1.0.7
+ *
+ *                                   TODO: [REFACTORING] move the component drivers names into a table
+ *                                   TODO: [REFACTORING] add a temporay state to store the attributes list of the currently interviewed cluster
+ *                                   TODO: [REFACTORING] Convert SupportedClusters to Map that include the known attributes to be subscribed to
+ *
+ *                                   TODO: [ENHANCEMENT] deviceCount; endpointsCount
+ *                                   TODO: [ENHANCEMENT] store subscription lists in Hex format
+ *                                   TODO: [ENHANCEMENT] Philips Hue Bridge discovery (subscription) depending on the ClusterAttributes list supported
+ *                                   TODO: [ENHANCEMENT] add getInfo(Basic) for the child devices during the discovery !
+ *                                   TODO: [ENHANCEMENT] add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
+ *                                   TODO: [ENHANCEMENT] add [refresh] to the descriptionText and to the eventMap
+ *                                   TODO: [ENHANCEMENT] implement ping() for the child devices
+ *                                   TODO: [ENHANCEMENT] add to Device#xx the Bridge name! ( add the bridge LABEL ( 'Hue Matter Bridge')
+ *                                   TODO: [ENHANCEMENT] add Configure() custom command - perform reSubscribe()
+ *                                   TODO: [ENHANCEMENT] make Identify command work
+ *                                   TODO: [ENHANCEMENT] add cluster 0x0102 attributes
+ *                                   TODO: [ENHANCEMENT] Replace the scheduled jobs w/ StateMachine (store each state in a list)
+ *                                   TODO: [ENHANCEMENT] add GeneralDiagnostics (0x0033) endpoint 0x00 :  [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
+ *                                   TODO: [ENHANCEMENT] use the  BridgedDeviceBasicInformation (0x0039) attribute [0005] NodeLabel = Hue white lamp Livingroom 1
+ *                                   TODO: [ENHANCEMENT] use the  BridgedDeviceBasicInformation (0x0039) attribute[000E] ProductLabel = Hue white lamp
+ *                                   TODO: [ENHANCEMENT] use the  BridgedDeviceBasicInformation (0x0039) attribute [000A] SoftwareVersionString = 1.108.7
+ * 
+ *                                   TODO: [ RESEARCH  ] check setSwitch() device# commandsList
+ *                                   TODO: [ RESEARCH  ] add a Parent entry in the child devices fingerprints (PartsList)
+ *                                   TODO: [ RESEARCH  ] check on pauseExecution(1000) usage in the driver code -  will never work with singleThreaded: true ???
+ *                                   TODO: [ RESEARCH  ] how to  combine 2 endpoints in one device - 'Temperature and Humidity Sensor' - 2 clusters
+ *                                   TODO: [ RESEARCH  ] why the child devices are automatically disabled when shared via Hub Mesh ?
+ *                                   TODO: [====MVP====] [REFACTORING] [RESEARCH] [ENHANCEMENT]
  */
 
-static String version() { '1.0.2' }
-static String timeStamp() { '2023/01/07 12:18 PM' }
+#include kkossev.matterLib
+
+String version() { '1.0.3' }
+String timeStamp() { '2023/01/11 10:59 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -55,8 +90,13 @@ static String timeStamp() { '2023/01/07 12:18 PM' }
 @Field static final Integer MAX_DEVICES_LIMIT = 20
 @Field static final Boolean DO_NOT_TRACE_FFF = true          // don't trace the FFFx attributes
 
+import com.hubitat.app.exception.UnknownDeviceTypeException
+import java.util.concurrent.ConcurrentHashMap
+import com.hubitat.app.ChildDeviceWrapper
+import com.hubitat.app.DeviceWrapper
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import groovy.transform.Field
-
 import hubitat.helper.HexUtils
 
 metadata {
@@ -73,28 +113,29 @@ metadata {
         attribute 'productName', 'string'
         attribute 'bridgeSoftwareVersion', 'string'
         //[0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
-        attribute 'rebootCount', 'number'
-        attribute 'upTime', 'number'
-        attribute 'totalOperationalHours', 'number'
-
+        attribute 'rebootCount', 'number'   // TODO - Bridge specific
+        attribute 'upTime', 'number'        // TODO - Bridge specific
+        attribute 'totalOperationalHours', 'number' // TODO - Bridge specific
+        attribute 'deviceCount', 'number'   // TODO
+        attribute 'state', 'enum', [
+            'not configured',
+            'error',
+            'authenticating',
+            'authenticated',
+            'connected',
+            'disconnected',
+            'ready'
+        ]
 
         command 'a1BridgeDiscovery', [[name: 'First click here ...']]
         command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
         command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
         command 'a4SubscribeKnownClustersAttributes', [[name: 'Next click here ....']]
+        command 'a5CreateChildDevices', [[name: 'Next click here ....']]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'Clear all States and start over']]
-        command 'setLabel', [
-                [name:'addOrRemove',  type: 'ENUM', description: 'Select', constraints: ['add', 'remove', 'show']],
-                [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
-                [name:'label',    type: 'STRING', description: 'label', constraints: ['STRING']]
-        ]
-        command 'setSwitch', [
-                [name:'command',      type: 'ENUM', description: 'Select', constraints: ['Off', 'On', 'Toggle']],
-                [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
-                [name:'extraPar',     type: 'STRING', description: 'Extra Parameter', constraints: ['STRING']]
-        ]
+        command 'removeDevices'
 
         if (_DEBUG) {
             command 'getInfo', [
@@ -114,6 +155,16 @@ metadata {
                     [name:'clusterPar',   type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
                     [name:'attributePar', type: 'STRING', description: 'Attribute', constraints: ['STRING']]
             ]
+            command 'setSwitch', [
+                    [name:'command',      type: 'ENUM', description: 'Select', constraints: ['Off', 'On', 'Toggle']],
+                    [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
+                    [name:'extraPar',     type: 'STRING', description: 'Extra Parameter', constraints: ['STRING']]
+            ]
+            command 'setLabel', [
+                    [name:'addOrRemove',  type: 'ENUM', description: 'Select', constraints: ['add', 'remove', 'show']],
+                    [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
+                    [name:'label',    type: 'STRING', description: 'label', constraints: ['STRING']]
+            ]
             command 'unsubscribe'
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
@@ -127,6 +178,7 @@ metadata {
         if (advancedOptions == true || advancedOptions == true) {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
             input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
+            input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
         }
     }
 }
@@ -141,7 +193,13 @@ metadata {
 ]
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
 
-@Field static final List<Integer> SupportedClusters = [/*0x0004, 0x0005,*/ 0x0006 ,0x0008, 0x003B, 0x0045, 0x0102, 0x0400, 0x0402, 0x0403, 0x0405, 0x0406, 0x00408,  0x040C, 0x040D, 0x0413, 0x0415, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F]
+//@Field static final List<Integer> SupportedClusters = [/*0x0004, 0x0005,*/ 0x0006 ,0x0008, 0x003B, 0x0045, 0x0102, 0x0400, 0x0402, 0x0403, 0x0405, 0x0406, 0x00408,  0x040C, 0x040D, 0x0413, 0x0415, 0x042A, 0x042B, 0x042C, 0x042D, 0x042E, 0x042F]
+@Field static final List<Integer> SupportedClusters = [
+    0x0006,     // parseOnOffCluster
+    0x0402,     // parseTemperatureMeasurement
+    0x0405,     // parseHumidityMeasurement
+    0x0406      // parseOccupancySensing
+]
 
 //parsers
 void parse(final String description) {
@@ -318,9 +376,8 @@ void parseBatteryEvent(final Map descMap) {
         if (state.states['isRefresh'] == true) {
             eventMap.descriptionText += ' [refresh]'
         }
-        /* groovylint-disable-next-line EmptyElseBlock */
         else {
-            //log.debug "state.states['isRefresh'] = ${state.states['isRefresh']}"
+            logTrace "state.states['isRefresh'] = ${state.states['isRefresh']}"
         }
         sendEvent(eventMap)
         logInfo eventMap.descriptionText
@@ -332,9 +389,9 @@ String getAttributeName(final Map descMap) { return getAttributeName(descMap.clu
 String getAttributeName(final String cluster, String attrId) { return getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId)) ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)] }
 String getStateFingerprintName(final Map descMap) { return descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}" }
 String getStateFingerprintName(final Integer endpoint) { return getStateFingerprintName([endpoint: HexUtils.integerToHexString(endpoint, 1)]) }
-String getStateClusterName(final Map descMap) {return "0x${descMap.cluster}" }
-String getDeviceLabel(final Integer endpoint) { return getDeviceLabel(HexUtils.integerToHexString(endpoint, 1)) }   
-String getDeviceLabel(final String endpoint) { 
+String getStateClusterName(final Map descMap) { return "0x${descMap.cluster}" }
+String getDeviceLabel(final Integer endpoint) { return getDeviceLabel(HexUtils.integerToHexString(endpoint, 1)) }
+String getDeviceLabel(final String endpoint) {
     String label = "device#${endpoint} "
     String fingerprintName = getStateFingerprintName([endpoint: endpoint])
     String vendorName  = state[fingerprintName]?.VendorName ?: ''
@@ -345,16 +402,14 @@ String getDeviceLabel(final String endpoint) {
     }
     label += customLabel
     return label
-}    
-
+}
 
 void parseGlobalElement0xFFFB(final Map descMap) {
     String stateName = getStateFingerprintName(descMap)
     if (state[stateName] == null) { state[stateName] = [:] }
     String attributeName = getAttributeName(descMap.cluster, descMap.attrId)
-    //logDebug "parseGlobalElement0xFFFB: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) stateName:${stateName} attributeName = ${attributeName}  value:${descMap.value}"
     state[stateName][attributeName] = descMap.value
-    //logDebug "parseGlobalElement0xFFFB: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} stored in state[${descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}"}][$stateName]"
+    logTrace "parseGlobalElement0xFFFB: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} stored in state[${descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}"}][$stateName]"
 }
 
 void parseOtherGlobalElements(final Map descMap) {
@@ -363,7 +418,7 @@ void parseOtherGlobalElements(final Map descMap) {
         if (state[stateName] == null) { state[stateName] = [:] }
         String attributeName = descMap.cluster
         String attributeNameElement = descMap.attrId
-        //logDebug "parseOtherGlobalElements: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} <b> to be added tostate[$stateName][$attributeName][$attributeNameElement]</b>"
+        logTrace "parseOtherGlobalElements: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} <b> to be added tostate[$stateName][$attributeName][$attributeNameElement]</b>"
         if (state[stateName][attributeName] == null) { state[stateName][attributeName] = [:] }
         state[stateName][attributeName][attributeNameElement] = descMap.value
     }
@@ -377,13 +432,13 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
     if (attrName == null) {
         attrName = GlobalElementsAttributes[attrInt]
     }
-    //logDebug "gatherAttributesValuesInfo: cluster:${descMap.cluster} attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
+    logTrace"gatherAttributesValuesInfo: cluster:${descMap.cluster} attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
     if (attrName == null) {
         logWarn "gatherAttributesValuesInfo: unknown attribute # ${attrInt}"
         return
     }
     if (state.states['isInfo'] == true) {
-        //logDebug "gatherAttributesValuesInfo: <b>isInfo:${state.states['isInfo']}</b> state.states['cluster'] = ${state.states['cluster']} "
+        logTrace "gatherAttributesValuesInfo: <b>isInfo:${state.states['isInfo']}</b> state.states['cluster'] = ${state.states['cluster']} "
         if (state.states['cluster'] == descMap.cluster) {
             if (descMap.value != null && descMap.value != '') {
                 tmpStr = "[${descMap.attrId}] ${attrName}"
@@ -401,7 +456,6 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
                 } catch (e) {
                     tmpStr += ' = ' + descMap.value
                 }
-                //if (logEnable) { logInfo "$tmpStr" }
                 state.tmp = (state.tmp ?: '') + "${tmpStr} " + '<br>'
             }
         }
@@ -420,38 +474,37 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
         }
         state.states['isPing'] = false
     }
-    /* groovylint-disable-next-line EmptyElseBlock */
     else {
-        //logDebug "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
+        logTrace "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
     }
 }
 
 void parseGeneralDiagnostics(final Map descMap) {
-    //logDebug "parseGeneralDiagnostics: descMap:${descMap}"
+    logTrace "parseGeneralDiagnostics: descMap:${descMap}"
     Integer value
     switch (descMap.attrId) {
         case '0001' :   // RebootCount -  a best-effort count of the number of times the Node has rebooted
             value = HexUtils.hexStringToInt(descMap.value)
-            sendMatterEvent([attributeName: 'rebootCount', value: value,  description: "${getDeviceLabel(descMap.endpoint)} RebootCount is ${value}"])        
+            sendMatterEvent([attributeName: 'rebootCount', value: value,  description: "${getDeviceLabel(descMap.endpoint)} RebootCount is ${value}"])
             break
         case '0002' :   // UpTime -  a best-effort assessment of the length of time, in seconds,since the Node’s last reboot
             value = HexUtils.hexStringToInt(descMap.value)
-            sendMatterEvent([attributeName: 'upTime', value:value,  description: "${getDeviceLabel(descMap.endpoint)} UpTime is ${value} seconds"])        
+            sendMatterEvent([attributeName: 'upTime', value:value,  description: "${getDeviceLabel(descMap.endpoint)} UpTime is ${value} seconds"])
             break
         case '0003' :   // TotalOperationalHours -  a best-effort attempt at tracking the length of time, in hours, that the Node has been operational
             value = HexUtils.hexStringToInt(descMap.value)
-            sendMatterEvent([attributeName: 'totalOperationalHours', value: value,  description: "${getDeviceLabel(descMap.endpoint)} TotalOperationalHours is ${value} hours"])        
+            sendMatterEvent([attributeName: 'totalOperationalHours', value: value,  description: "${getDeviceLabel(descMap.endpoint)} TotalOperationalHours is ${value} hours"])
             break
         default :
-           // if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: parseGeneralDiagnostics: ${attrName} = ${descMap.value}" } }
+            if (descMap.attrId != '0000') { if (traceEnable) { logInfo "parse: parseGeneralDiagnostics: ${attrName} = ${descMap.value}" } }
             break
     }
 }
 
 void parseBasicInformationCluster(final Map descMap) {
-    //logDebug "parseBasicInformationCluster: descMap:${descMap}"
+    logTrace "parseBasicInformationCluster: descMap:${descMap}"
     Map eventMap = [:]
-    String attrName = BasicInformationClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
+    //String attrName = BasicInformationClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
     switch (descMap.attrId) {
         case '0003' : // productName
             eventMap = [name: 'productName', value:descMap.value, descriptionText: "productName is: ${descMap.value}"]
@@ -460,10 +513,10 @@ void parseBasicInformationCluster(final Map descMap) {
             eventMap = [name: 'bridgeSoftwareVersion', value:descMap.value, descriptionText: "bridgeSoftwareVersion is: ${descMap.value}"]
             break
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
-            //if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" }
+            if (traceEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" }
             break
         default :
-           // if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
+            if (descMap.attrId != '0000') { if (traceEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
             break
     }
 
@@ -476,7 +529,7 @@ void parseBasicInformationCluster(final Map descMap) {
 }
 
 void parseBridgedDeviceBasic(final Map descMap) {
-    //logDebug "parseBridgedDeviceBasic: descMap:${descMap}"
+    logTrace "parseBridgedDeviceBasic: descMap:${descMap}"
     Map eventMap = [:]
     String attrName = BasicInformationClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
     String endpointId = descMap.endpoint
@@ -493,7 +546,7 @@ void parseBridgedDeviceBasic(final Map descMap) {
             if (logEnable) { logInfo "parseBridgedDeviceBasic: ${attrName} = ${descMap.value}" }
             break
         default :
-            if (descMap.attrId != '0000') { if (logEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
+            if (descMap.attrId != '0000') { if (traceEnable) { logInfo "parse: BasicInformation: ${attrName} = ${descMap.value}" } }
             break
     }
 
@@ -506,7 +559,7 @@ void parseBridgedDeviceBasic(final Map descMap) {
 }
 
 void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
-    //logDebug "parseDescriptorCluster: descMap:${descMap}"
+    logTrace "parseDescriptorCluster: descMap:${descMap}"
     String attrName = DescriptorClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
     String endpointId = descMap.endpoint
     String fingerprintName = "fingerprint${endpointId}"
@@ -525,17 +578,17 @@ void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
             if (logEnable) { logInfo "parse: Descriptor (${descMap.cluster}): ${attrName} = <b>-> updated state[$fingerprintName][$attrName]</b> to ${descMap.value}" }
             break
         default :
-            if (logEnable) { logInfo "parse: Descriptor: ${attrName} = ${descMap.value}" }
+            logTrace "parse: Descriptor: ${attrName} = ${descMap.value}" 
+            break
     }
 }
 
 void parseOnOffCluster(final Map descMap) {
-    //logDebug "parseOnOffCluster: descMap:${descMap}"
+    logTrace "parseOnOffCluster: descMap:${descMap}"
     if (descMap.cluster != '0006') {
         logWarn "parseOnOffCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
         return
     }
-    //Integer attrInt = descMap.attrInt as Integer
     Integer value
 
     switch (descMap.attrId) {
@@ -546,7 +599,7 @@ void parseOnOffCluster(final Map descMap) {
                 attributeName: 'switch',
                 value: switchState,
                 description: "${getDeviceLabel(descMap.endpoint)} switch is ${switchState}"
-            ])            
+            ], descMap)
             break
         case '4000' : // GlobalSceneControl
             if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
@@ -567,27 +620,12 @@ void parseOnOffCluster(final Map descMap) {
             if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['StartUpOnOff'] = descMap.value
             break
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
-            /* groovylint-disable-next-line EmptyIfStatement */
-            if (logEnable) {
-                //logInfo "parse: Switch: ${attrName} = ${descMap.value}"
-            }
+            logTrace "parse: Switch: ${attrName} = ${descMap.value}"
             break
         default :
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
     parseOtherGlobalElements(descMap)
-
-    /*
-    if (eventMap != [:]) {
-        eventMap.type = 'physical'
-        eventMap.isStateChange = true
-        if (state.states['isRefresh'] == true) {
-            eventMap.descriptionText += ' [refresh]'
-        }
-        sendEvent(eventMap)
-        logInfo eventMap.descriptionText
-    }
-    */
 }
 
 // Method for parsing occupancy sensing
@@ -602,10 +640,9 @@ void parseOccupancySensing(final Map descMap) {
             attributeName: 'motion',
             value: motionAttr,
             description: "${getDeviceLabel(descMap.endpoint)} motion is ${motionAttr}"
-        ])
-    /* groovylint-disable-next-line EmptyElseBlock */
+        ], descMap)
     } else {
-        //logDebug "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+        logTrace "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
     parseOtherGlobalElements(descMap)
 }
@@ -623,11 +660,10 @@ void parseTemperatureMeasurement(final Map descMap) { // 0402
             attributeName: 'temperature',
             value: valueInt.toString(),
             description: "device #${descMap.endpoint} temperature is ${valueInt} °C"
-        ])
-    /* groovylint-disable-next-line EmptyElseBlock */
+        ], descMap)
     } else {
-        //logDebug "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
-        //logDebug "parseTemperatureMeasurement: ${getAttributeName(descMap)} = ${descMap.value}"
+        logTrace "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+        logTrace "parseTemperatureMeasurement: ${getAttributeName(descMap)} = ${descMap.value}"
     }
     parseOtherGlobalElements(descMap)
 }
@@ -644,10 +680,9 @@ void parseHumidityMeasurement(final Map descMap) { // 0405
             attributeName: 'humidity',
             value: valueInt.toString(),
             description: "device #${descMap.endpoint} humidity is ${valueInt} %"
-        ])
-    /* groovylint-disable-next-line EmptyElseBlock */
+        ], descMap)
     } else {
-        //logDebug "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+        logTrace "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
     parseOtherGlobalElements(descMap)
 }
@@ -655,39 +690,39 @@ void parseHumidityMeasurement(final Map descMap) { // 0405
 //events
 
 // Common code method for sending events
-void sendMatterEvent(final Map<String, String> eventParams) {
+void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
     String attributeName = eventParams['attributeName']
     String value = eventParams['value']
     String description = eventParams['description']
+
+    String dni = ''
+    // get the dni from the descMap eddpoint
+    if (descMap != [:]) {
+        dni = "${device.id}-${descMap.endpoint}"
+    }
+    ChildDeviceWrapper dw = getChildDevice(dni) // null if dni is null for the parent device
+    logWarn "sendMatterEvent: dw:${dw} dni:${dni} attributeName:${attributeName} value:${value} description:${description}"
 
     Map eventMap = [name: attributeName, value: value, descriptionText: description, type: 'physical']
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force the event to be sent
     }
+    // TODO - use the child device wrapper to check the current value !!!!!!!!!!!!!!!!!!!!!
+    /*
     if (device.currentValue(attributeName) == value && state.states['isRefresh'] != true) {
         logDebug "ignored duplicated ${attributeName} event, value:${value}"
         return
     }
-    logInfo "${eventMap.descriptionText}"
-    sendEvent(eventMap)
-}
-
-private void sendSwitchEvent(final String rawValue, final boolean isDigital = false) {
-    String value = rawValue == '01' ? 'on' : 'off'
-    String descriptionText = "switch was turned ${value}"
-    Map eventMap = [name: 'switch', value: value, descriptionText: descriptionText, type: isDigital ? 'digital' : 'physical']
-    if (state.states['isRefresh'] == true) {
-        eventMap.descriptionText = "switch is ${value} [refresh]"
-        eventMap.isStateChange = true   // force the event to be sent
+    */
+    logInfo "${eventMap.descriptionText}"       // logs are always sent to the parent device, when using system drivers :(
+    if (dw != null) {
+        // send events to child for parsing
+        dw.parse([eventMap])
+    } else {
+        // send events to parent for parsing
+        sendEvent(eventMap)
     }
-    if (device.currentValue('switch') == value && state.states['isRefresh'] != true) {
-        logDebug "ignored duplicated switch event, value:${value}"
-        return
-    }
-    eventMap.descriptionText += (isDigital == true || state.states['isDigital'] == true ) ? ' [digital]' : ' [physical]'
-    logInfo "${eventMap.descriptionText}"
-    sendEvent(eventMap)
 }
 
 //capability commands
@@ -722,7 +757,7 @@ void clearDigitalRequest() { if (state.states == null) { state.states = [:] } ; 
 void logRequestedClusterAttrResult(final Map data) {
     logDebug "logRequestedClusterAttrResult: data:${data}"
     String cluster = HexUtils.integerToHexString(data.cluster, 2)
-    String endpoint = HexUtils.integerToHexString(data.endpoint as Integer, 1)  
+    String endpoint = HexUtils.integerToHexString(data.endpoint as Integer, 1)
     String clusterAttr = "Cluster <b>${MatterClusters[data.cluster]}</b> (0x${cluster}) endpoint <b>0x${endpoint}</b> attributes and values list (0xFFFB)"
     String logMessage = state.tmp != null ? "${clusterAttr} : <br>${state.tmp}" : "${clusterAttr} <b>timeout</b>! :("
 
@@ -778,7 +813,7 @@ void requestMatterClusterAttributesValues(final Map data) {
         Integer attrInt = HexUtils.hexStringToInt(attr)
         if (attrInt == 0x0040 || attrInt == 0x0041) {
             logDebug "requestMatterClusterAttributesValues: skipping attribute 0x${HexUtils.integerToHexString(attrInt, 2)} (${attrInt})"
-            return null
+            return
         }
         matter.attributePath(endpoint, cluster, attrInt)
     }.findAll()
@@ -805,20 +840,22 @@ void requestBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = 
     // collect the BasicInformation Cluster attributes
     time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
     String fingerprintName = getStateFingerprintName(endpoint)
-    if (state[fingerprintName] == null) { 
+    if (state[fingerprintName] == null) {
         logWarn "requestBasicInfo(): state.${fingerprintName} is null !"
+        state[fingerprintName]
         return
     }
     List<String> serverList = state[fingerprintName]['ServerList']
     logDebug "requestBasicInfo(): endpoint=${endpoint}, fingerprintName=${fingerprintName}, serverList=${serverList} "
 
     if (endpoint == 0) {
+        /* groovylint-disable-next-line ConstantIfExpression */
         if (true /*'28' in serverList*/) {
             requestAndCollectAttributesValues(endpoint, cluster = 0x0028, time, fast) // Basic Information Cluster
             time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
         }
         else {
-            logWarn "requestBasicInfo(): BasicInformationCluster 0x0028 is <b>not in the ServerList !</b>"
+            logWarn "requestBasicInfo(): BasicInformationCluster 0x0028 endpoint:${endpoint} is <b>not in the ServerList !</b>"
         }
     }
     else {
@@ -827,7 +864,7 @@ void requestBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = 
             time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
         }
         else {
-            logWarn "requestBasicInfo(): BridgedDeviceBasicInformationCluster 0x0039 is <b>not in the ServerList !</b>"
+            logWarn "requestBasicInfo(): BridgedDeviceBasicInformationCluster 0x0039 endpoint:${endpoint} is <b>not in the ServerList !</b>"
         }
     }
     runIn(time as int, 'delayedInfoEvent', [overwrite: true, data: [info: 'Basic Bridge Discovery finished', descriptionText: '']])
@@ -847,7 +884,7 @@ void requestExtendedInfo(Integer endpoint = 0, Integer timePar = 15, boolean fas
         logDebug "requestExtendedInfo(): endpointInt:${endpoint} (0x${HexUtils.integerToHexString(safeToInt(endpoint), 1)}),  clusterInt:${clusterInt} (0x${cluster}),  time:${time}"
         if (endpoint != 0 && (clusterInt in [0x2E, 0x41])) {
             logWarn "requestExtendedInfo(): skipping endpoint ${endpoint}, cluster:${clusterInt} (0x${cluster}) - KNOWN TO CAUSE Zemismart M1 to crash !"
-            return 
+            return
         }
         requestAndCollectAttributesValues(endpoint, clusterInt, time, fast)
         time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
@@ -858,27 +895,28 @@ void requestExtendedInfo(Integer endpoint = 0, Integer timePar = 15, boolean fas
 }
 
 void a1BridgeDiscovery() {
-    getInfo('Extended', endpointPar = '0')
+    //getInfo('Extended', endpointPar = '0')
+    getInfo('Basic', endpointPar = '00')
 }
 
-void getInfo(String infoType, String endpointPar = '0') {
+void getInfo(String infoType, String endpointPar = '00') {
     Integer endpoint = safeToInt(endpointPar)
     logDebug "getInfo(${infoType}, ${endpoint})"
     unschedule('requestMatterClusterAttributesList')
     unschedule('requestMatterClusterAttributesValues')
     unschedule('logRequestedClusterAttrResult')
 
-    sendInfoEvent("starting ${endpoint == 0 ? 'Bridge' : 'device'} discovery ...")
+    sendInfoEvent("starting ${endpoint == 0 ? 'Bridge' : 'Devices'} discovery ...")
 
     if (infoType == 'Basic') {
         logDebug "getInfo(): 'Basic' type"
-        requestBasicInfo(endpoint = endpoint, time = 1, fast = true)
+        requestBasicInfo(endpoint, time = 1, fast = true)
         return
     }
     if (infoType == 'Extended') {
         logDebug "getInfo(): 'Extended' type"
-        requestBasicInfo(endpoint = endpoint, time = 1, fast = true)  // not needed, should already have it!
-        requestExtendedInfo(endpoint = endpoint, timePar = 8, fast = true)
+        requestBasicInfo(endpoint, time = 1, fast = true)  // not needed, should already have it!
+        requestExtendedInfo(endpoint, timePar = 8, fast = true)
         return
     }
 }
@@ -909,7 +947,6 @@ void getPartsList() {
         //  list0x001D:[00, 01, 02, 03, FFF8, FFF9, FFFB, FFFC, FFFD]
         fingerprintName = getStateFingerprintName([endpoint: endpointId])
         if (state[fingerprintName] == null) {
-            logDebug "getPartsList(): skipping -> fingerprintName for endpointId ${endpointId} is null !"
             state[fingerprintName] = [:]
         }
         List<String> list0x001D = state[fingerprintName][stateClusterName]
@@ -992,7 +1029,6 @@ void getPartsList() {
         }
     }
     runIn(time, 'delayedInfoEvent', [overwrite: true, data: [info: 'Devices Discovery finished', descriptionText: '']])
-
     logDebug "getPartsList(): jobs scheduled for total time:${time} seconds"
 }
 
@@ -1004,7 +1040,7 @@ void a3CapabilitiesDiscovery() {
 
     state.each { fingerprintName, fingerprintMap ->
         if (fingerprintName.startsWith('fingerprint')) {
-            //logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
+            logTrace "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
             if (fingerprintMap['ServerList'] != null) {
                 fingerprintMap['ServerList'].each { cluster ->
                     Integer clusterInt = HexUtils.hexStringToInt(cluster)
@@ -1016,9 +1052,8 @@ void a3CapabilitiesDiscovery() {
                         requestAndCollectAttributesValues(endpointInt, clusterInt, time, fast = true)
                         time += SHORT_TIMEOUT
                     }
-                    /* groovylint-disable-next-line EmptyElseBlock */
                     else {
-                        //logDebug "a3CapabilitiesDiscovery(): skipping cluster 0x${cluster} for fingerprintName:${fingerprintName}"
+                        logTrace "a3CapabilitiesDiscovery(): skipping cluster 0x${cluster} for fingerprintName:${fingerprintName}"
                     }
                 }
             } else {
@@ -1035,10 +1070,12 @@ void a4SubscribeKnownClustersAttributes() {
     sendInfoEvent('Subscribing for known clusters attributes reporting ...')
 
     // For each fingerprint in the state, check if the fingerprint has entries in the SupportedClusters list. Then, add these entries to the state.subscriptions map
+    Integer deviceCount = 0
     Map stateCopy = state.clone()
     stateCopy.each { fingerprintName, fingerprintMap ->
         if (fingerprintName.startsWith('fingerprint')) {
-            //logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
+            logTrace "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
+            boolean knownClusterFound = false
             fingerprintMap.each { entry, map  ->
                 if (safeHexToInt(entry) in SupportedClusters) {
                     // fingerprintName:fingerprint07 entry:0402 map:[FFF8:1618, FFF9:1618, 0002:2710, 0000:092A, 0001:EC78, FFFC:00, FFFD:04]
@@ -1046,11 +1083,25 @@ void a4SubscribeKnownClustersAttributes() {
                     logDebug "a3CapabilitiesDiscovery(): fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry} map:${map}"
                     // for now, we subscribe to attribute 0x0000 of the cluster
                     subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
+                    knownClusterFound = true
                 }
+            }
+            if (knownClusterFound) {
+                deviceCount ++
             }
         }
     }
+    sendMatterEvent([attributeName: 'deviceCount', value: deviceCount.toString(), description: "number of devices exposing known clusters is ${deviceCount}"])
     runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
+}
+
+void a5CreateChildDevices() {
+    logWarn 'a5CreateChildDevices()'
+    sendInfoEvent('Creating child devices ...')
+    boolean childDevicesCreated = false
+    childDevicesCreated = createChildDevices()
+    sendInfoEvent("completed, result = ${childDevicesCreated}")
+    logWarn "a5CreateChildDevices(): completed, result = ${childDevicesCreated}"
 }
 
 void readAttribute(String endpointPar, String clusterPar, String attrIdPar) {
@@ -1080,7 +1131,7 @@ void updated() {
         // schedule the periodic timer
         final int interval = (settings.healthCheckInterval as Integer) ?: 0
         if (interval > 0) {
-            //log.trace "healthMethod=${healthMethod} interval=${interval}"
+            logTrace "healthMethod=${healthMethod} interval=${interval}"
             log.info "scheduling health check every ${interval} minutes by ${HealthcheckMethodOpts.options[healthCheckMethod as int]} method"
             scheduleDeviceHealthCheck(interval, healthMethod)
         }
@@ -1134,9 +1185,10 @@ void loadAllDefaults() {
     deleteAllScheduledJobs()
     deleteAllStates()
     deleteAllChildDevices()
+    initializeVars(fullInit = true)
     //initialize()
     //configure()
-    //updated() // calls  also   configureDevice()
+    updated()
     sendInfoEvent('All Defaults Loaded! F5 to refresh')
 }
 
@@ -1184,7 +1236,7 @@ void subscribe(String addOrRemove, String endpointPar=null, String clusterPar=nu
     Integer endpoint = safeNumberToInt(endpointPar)
     Integer cluster = safeNumberToInt(clusterPar)
     Integer attrId = safeNumberToInt(attrIdPar)
-    subscribe(addOrRemove, endpoint, cluster, attrId)    
+    subscribe(addOrRemove, endpoint, cluster, attrId)
 }
 
 void subscribe(String addOrRemove, Integer endpoint, Integer cluster, Integer attrId) {
@@ -1225,7 +1277,11 @@ void subscribe(String addOrRemove, Integer endpoint, Integer cluster, Integer at
 
 void subscribe() {
     sendInfoEvent('subscribe()...Please wait.', 'sent device subscribe command')
-    sendToDevice(subscribeCmd())
+    String cmd = subscribeCmd()
+    if (cmd != null && cmd != '') {
+        logDebug "subscribe(): cmd = ${cmd}"
+        sendToDevice(cmd)
+    }
 }
 
 String subscribeCmd() {
@@ -1234,6 +1290,10 @@ String subscribeCmd() {
     attributePaths.addAll(state.subscriptions?.collect { sub ->
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     })
+    if (attributePaths.isEmpty()) {
+        logWarn 'subscribe(): attributePaths is empty!'
+        return null
+    }
     return matter.subscribe(0, 0xFFFF, attributePaths)
 }
 
@@ -1251,13 +1311,12 @@ void checkSubscriptionStatus() {
     }
 }
 
-
 void setLabel(String addOrRemove, String deviceNumberPar, String labelPar='') {
     Integer deviceNumber
     logDebug "setLabel (action: ${addOrRemove}, deviceNumber:${deviceNumberPar}, label:${labelPar}"
     deviceNumber = deviceNumberPar.startsWith('0x') ? safeHexToInt(deviceNumberPar.substring(2)) : safeToInt(deviceNumberPar)
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) {
-        logWarn "setLabel(): deviceNumber is not valid!"
+        logWarn "setLabel(): deviceNumberPar ${deviceNumberPar} is not valid!"
         return
     }
     String fingerprintName = getStateFingerprintName(deviceNumber)
@@ -1265,7 +1324,7 @@ void setLabel(String addOrRemove, String deviceNumberPar, String labelPar='') {
         logWarn "setLabel(): fingerprintName '${fingerprintName}' is not valid! (deviceNumber:${deviceNumber})"
         return
     }
-    String label = state[fingerprintName]['Label']
+    //String label = state[fingerprintName]['Label']
     if (addOrRemove == 'add') {
         state[fingerprintName]['Label'] = labelPar.trim()
         logInfo "device${HexUtils.integerToHexString(deviceNumber, 1)} label was set to '${state[fingerprintName]['Label']}'"
@@ -1276,7 +1335,6 @@ void setLabel(String addOrRemove, String deviceNumberPar, String labelPar='') {
     }
     else { logInfo "device${HexUtils.integerToHexString(deviceNumber, 1)} Label = '${state[fingerprintName]['Label']}'" }
 }
-
 
 void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
     String command = commandPar.strip()
@@ -1293,8 +1351,8 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
         return
     }
     String cluster = '0006'
-    String OnOffClusterAttributesMap = state[fingerprintName][cluster]  
-    if (OnOffClusterAttributesMap == null) {
+    String onOffClusterAttributesMap = state[fingerprintName][cluster]
+    if (onOffClusterAttributesMap == null) {
         logWarn "setSwitch(): OnOff capability is not present for ${getDeviceLabel(deviceNumber)} !"
         return
     }
@@ -1334,7 +1392,6 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
     sendToDevice(cmd)
 }
 
-
 void refresh() {
     logInfo'refresh() ...'
     checkDriverVersion()
@@ -1346,9 +1403,9 @@ String refreshCmd() {
     List<Map<String, String>> attributePaths = state.subscriptions?.collect { sub ->
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     } ?: []
-    
+
     //if ('33' in state.bridgeDescriptor?.ServerList) {
-        attributePaths.add(matter.attributePath(0, 0x0033, 0x01))   // rebootCount
+    attributePaths.add(matter.attributePath(0, 0x0033, 0x01))   // rebootCount
         // TODO - check if the attribute is within the 0033 attribute list !!
         //attributePaths.add(matter.attributePath(0, 0x0033, 0x02))   // upTime
         //attributePaths.add(matter.attributePath(0, 0x0033, 0x03))   // totalOperationalHours
@@ -1379,7 +1436,470 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
     return delayBetween(cmds.collect { it }, delay)
 }
 
-/* =================================================================================== */
+/* ============================= Child Devices code ================================== */
+/* code segments 'borrowed' from Jonathan's 'Tuya IoT Platform (Cloud)' driver importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/Tuya/TuyaOpenCloudAPI.groovy' */
+
+// Json Parsing Cache
+@Field static final Map<String, Map> jsonCache = new ConcurrentHashMap<>()
+
+// Track for dimming operations
+@Field static final Map<String, Integer> levelChanges = new ConcurrentHashMap<>()
+
+// Random number generator
+@Field static final Random random = new Random()
+
+// Json Parser
+@Field static final JsonSlurper jsonParser = new JsonSlurper()
+
+// Tuya Function Categories  TODO - refactor or remove !!!!
+@Field static final Map<String, List<String>> tuyaFunctions = [
+    'battery'        : [ 'battery_percentage', 'va_battery' ],
+    'brightness'     : [ 'bright_value', 'bright_value_v2', 'bright_value_1', 'bright_value_2' ],
+    'co'             : [ 'co_state' ],
+    'co2'            : [ 'co2_value' ],
+    'colour'         : [ 'colour_data', 'colour_data_v2' ],
+    'contact'        : [ 'doorcontact_state' ],
+    'ct'             : [ 'temp_value', 'temp_value_v2' ],
+    'control'        : [ 'control', 'mach_operate' ],
+    'fanSpeed'       : [ 'fan_speed_enum', 'fan_speed' ],
+    'fanSwitch'      : [ 'switch_fan', 'switch' ],
+    'light'          : [ 'switch_led', 'switch_led_1', 'switch_led_2', 'light' ],
+    'humiditySet'    : [ 'dehumidify_set_value' ],                                                                                       /* Inserted by SJB */
+    'humiditySpeed'  : [ 'fan_speed_enum' ],
+    'humidity'       : [ 'temp_indoor', 'swing', 'shake', 'child_lock', 'lock', 'fan_speed_enum', 'dehumidify_set_value', 'humidity_indoor', 'humidity', 'envhumid', 'switch', 'mode', 'anion', 'pump', 'dry', 'windspeed', 'countdown', 'countdown_left', 'fault' ],
+    'meteringSwitch' : [ 'countdown_1' , 'add_ele' , 'cur_current', 'cur_power', 'cur_voltage' , 'relay_status', 'light_mode' ],
+    'omniSensor'     : [ 'bright_value', 'humidity_value', 'va_humidity', 'bright_sensitivity', 'shock_state', 'inactive_state', 'sensitivity' ],
+    'pir'            : [ 'pir' ],
+    'power'          : [ 'Power', 'power', 'power_go', 'switch', 'switch_1', 'switch_2', 'switch_3', 'switch_4', 'switch_5', 'switch_6', 'switch_usb1', 'switch_usb2', 'switch_usb3', 'switch_usb4', 'switch_usb5', 'switch_usb6', 'alarm_switch', 'start' ],
+    'percentControl' : [ 'percent_control', 'fan_speed_percent', 'position' ],
+    'push'           : [ 'manual_feed' ],
+    'sceneSwitch'    : [ 'switch1_value', 'switch2_value', 'switch3_value', 'switch4_value', 'switch_mode2', 'switch_mode3', 'switch_mode4' ],
+    'smoke'          : [ 'smoke_sensor_status' ],
+    'temperatureSet' : [ 'temp_set' ],
+    'temperature'    : [ 'temp_current', 'va_temperature' ],
+    'water'          : [ 'watersensor_state' ],
+    'workMode'       : [ 'work_mode' ],
+    'workState'      : [ 'work_state' ],
+    'situationSet'   : [ 'situation_set' ]
+].asImmutable()
+
+/**
+  *  Tuya Standard Instruction Set Category Mapping to Hubitat Drivers
+  *  https://developer.tuya.com/en/docs/iot/standarddescription?id=K9i5ql6waswzq
+  *  MATTER : https://developer.tuya.com/en/docs/iot-device-dev/Matter_Product_Feature_List?id=Kd2wjfpuhgmrw
+  */
+private static Map mapTuyaCategory(Map d) {
+    if ('06' in d.ServerList) {   // OnOff
+        return [ driver: 'Generic Component Switch', product_name: 'Switch' ]
+    }
+    if ('0402' in d.ServerList) {   // TemperatureMeasurement
+        return [ driver: 'Generic Component Contact Sensor', product_name: 'Temperature Sensor' ]
+    }
+    if ('0405' in d.ServerList) {   // HumidityMeasurement
+        return [ driver: 'Generic Component Omni Sensor', product_name: 'Humidity Sensor' ]
+    }
+    if ('0406' in d.ServerList) {   // OccupancySensing (motion)
+        //return [ driver: 'Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
+        return [ namespace: 'component', driver: 'Matter Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
+    }
+    /* groovylint-disable-next-line IfStatementCouldBeTernary */
+    if ('0102' in d.ServerList) {   // Curtain Motor (uses custom driver)
+        return [ namespace: 'component', driver: 'Matter Generic Component Window Shade', product_name: 'Curtain Motor' ]
+    }
+
+/*
+    switch (d.category) {
+        // Lighting
+        case 'dc':    // String Lights
+        case 'dd':    // Strip Lights
+        case 'dj':    // Light
+        case 'tgq':   // Dimmer Light
+        case 'tyndj': // Solar Light
+        case 'qjdcz': // Night Light
+        case 'xdd':   // Ceiling Light
+        case 'ykq':   // Remote Control
+            if (getFunctionCode(d.statusSet, tuyaFunctions.colour)) {
+                return [ driver: 'Generic Component RGBW', devices: switches ]
+            } else if (getFunctionCode(d.statusSet, tuyaFunctions.ct)) {
+                return [ driver: 'Generic Component CT', devices: switches ]
+            } else if (getFunctionCode(d.statusSet, tuyaFunctions.brightness)) {
+                return [ driver: 'Generic Component Dimmer', devices: switches ]
+            }
+            break
+        case 'fsd':  // Ceiling Fan (with Light)
+            return [
+                driver: 'Generic Component Fan Control',
+                devices: [
+                    'light': [ suffix: 'Light', driver: 'Generic Component Switch' ]
+                ]
+            ]
+
+        // Electrical
+        case 'tgkg':  // Dimmer Switch
+            return [ driver: 'Generic Component Dimmer' ]
+        case 'wxkg':  // Scene Switch (TS004F in 'Device trigger' mode only; TS0044)
+            return [ driver: 'Generic Component Central Scene Switch' ]
+        case 'cl':    // Curtain Motor (uses custom driver)
+        case 'clkg':
+            return [ namespace: 'component', driver: 'Generic Component Window Shade' ]
+        case 'bh':    // Kettle
+            return [ driver: 'Generic Component Switch' ]
+        case 'cwwsq': // Pet Feeder (https://developer.tuya.com/en/docs/iot/f?id=K9gf468bl11rj)
+            return [ driver: 'Generic Component Button Controller' ]
+        case 'cz':    // Socket (https://developer.tuya.com/en/docs/iot/s?id=K9gf7o5prgf7s)
+        case 'kg':    // Switch
+        case 'pc':    // Power Strip (https://developer.tuya.com/en/docs/iot/s?id=K9gf7o5prgf7s)
+            if (getFunctionCode(d.statusSet, tuyaFunctions.colour)) {
+                return [ driver: 'Generic Component RGBW', devices: switches ]
+            } else if (getFunctionCode(d.statusSet, tuyaFunctions.brightness)) {
+                return [ driver: 'Generic Component Dimmer', devices: switches ]
+            }
+            return [ devices: switches ]
+
+        // Security & Sensors
+        case 'ms':    // Lock
+            return [ driver: 'Generic Component Lock' ]
+        case 'ldcg':  // Brightness, temperature, humidity, CO2 sensors
+        case 'wsdcg':
+        case 'zd':    // Vibration sensor as motion
+            return [ driver: 'Generic Component Omni Sensor' ]
+        case 'mcs':   // Contact Sensor
+            return [ driver: 'Generic Component Contact Sensor' ]
+        case 'sj':    // Water Sensor
+            return [ driver: 'Generic Component Water Sensor' ]
+        case 'ywbj':  // Smoke Detector
+            return [ driver: 'Generic Component Smoke Detector' ]
+        case 'cobj':  // CO Detector
+            return [ driver: 'Generic Component Carbon Monoxide Detector' ]
+        case 'co2bj': // CO2 Sensor
+            return [ driver: 'Generic Component Carbon Dioxide Detector' ]
+        case 'pir':   // Motion Sensor
+            return [ driver: 'Generic Component Motion Sensor' ]
+
+        // Large Home Appliances
+        case 'rs':    // Heater
+            return [ namespace: 'component', driver: 'Generic Component Heating Device' ]
+
+        // Small Home Appliances
+        case 'qn':    // Heater
+            return [ namespace: 'component', driver: 'Generic Component Heating Device' ]
+        case 'cs':    // DeHumidifer
+            return [ namespace: 'component', driver: 'Generic Component DeHumidifer Device' ]
+        case 'fs':    // Fan
+            Map devices = [:]
+            if (getFunctionCode(d.statusSet, tuyaFunctions.colour)) {
+                devices['light'] = [ suffix: 'Light', driver: 'Generic Component RGBW' ]
+            } else if (getFunctionCode(d.statusSet, tuyaFunctions.brightness)) {
+                devices['bright_value'] = [ suffix: 'Dimmer', driver: 'Generic Component Dimmer' ]
+            } else {
+                devices['light'] = [ suffix: 'Light', driver: 'Generic Component Switch' ]
+            }
+
+            return [
+                driver: 'Generic Component Fan Control',
+                devices: devices
+            ]
+        case 'fskg':  // Switch Fan
+            return [ driver: 'Generic Component Fan Control' ]
+        // Kitchen Appliances
+    }
+*/
+   // logWarn "mapTuyaCategory(): Unknown category"   //  '${d.category}' for device '${d.name}'"
+    return [ driver: 'Generic Component Switch', product_name: 'Unknown' ]
+}
+
+/* --------------------------------------------------------------------------------------------------------------
+ * Implementation of component commands from child devices
+ */
+
+// Component command to refresh device      TODO: implement this
+void componentRefresh(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    logError "componentRefresh(${dw}) id=${id} (TODO: implement!)"
+}
+
+// Component command to turn on device
+void componentOn(DeviceWrapper dw) {
+    if (!dw.hasCommand('on')) {
+        logError "componentOn(${dw}) driver '${dw.typeName}' does not have command 'on' in ${dw.supportedCommands}"
+        return
+    }
+    // TODO: check if the device has cluster 0x0006 in the ServerList=[06, ....
+    // TODO: check if the device has command 'on' in the {0006={FFF8=1618, FFF9=[00, 01, 02],
+    code = 'Go agead!'
+    if (code != null) {
+        logInfo "Turning ${dw} on"
+        setSwitch('On', '0x' + dw.getDataValue('id'))
+    } else {
+        logError "Unable to determine on function code in ${functions}"
+    }
+}
+
+// Component command to turn off device
+void componentOff(DeviceWrapper dw) {
+    if (!dw.hasCommand('off')) {
+        logError "componentOff(${dw}) driver '${dw.typeName}' does not have command 'off' in ${dw.supportedCommands}"
+        return
+    }
+    // TODO: check if the device has cluster 0x0006 in the ServerList=[06, ....
+    // TODO: check if the device has command 'off' in the {0006={FFF8=1618, FFF9=[00, 01, 02],
+    code = 'Go agead!'
+    if (code != null) {
+        logInfo "Turning ${dw} off"
+        setSwitch('Off', '0x' + dw.getDataValue('id'))
+    } else {
+        logError "Unable to determine off function code in ${functions}"
+    }
+}
+
+//  '[close, open, refresh, setPosition, startPositionChange, stopPositionChange]'
+// Component command to open device
+void componentOpen(DeviceWrapper dw) {
+    if (!dw.hasCommand('open')) {
+        logError "componentOpen(${dw}) driver '${dw.typeName}' does not have command 'open' in ${dw.supportedCommands}"
+        return
+    }
+    logError "componentOpen(${dw}) (TODO: implement!)"
+}
+
+// Component command to close device
+void componentClose(DeviceWrapper dw) {
+    if (!dw.hasCommand('close')) {
+        logError "componentClose(${dw}) driver '${dw.typeName}' does not have command 'close' in ${dw.supportedCommands}"
+        return
+    }
+    logError "componentClose(${dw}) (TODO: implement!)"
+}
+
+// Component command to set position
+void componentSetPosition(DeviceWrapper dw, BigDecimal position) {
+    Map<String, Map> functions = getFunctions(dw)
+    String code = getFunctionCode(functions, tuyaFunctions.percentControl)
+
+    if (code != null) {
+        if (txtEnable) { logInfo "Setting ${dw} position to ${position}" }
+        tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': (int)position ])
+    } else {
+        logError "Unable to determine set position function code in ${functions}"
+    }
+}
+
+// Component command to set position direction
+void componentStartPositionChange(DeviceWrapper dw, String direction) {
+    switch (direction) {
+        case 'open': componentOpen(dw); break
+        case 'close': componentClose(dw); break
+        default:
+            logWarn "Unknown position change direction ${direction} for ${dw}"
+            break
+    }
+}
+
+// Component command to stop position change
+void componentStopPositionChange(DeviceWrapper dw) {
+    Map<String, Map> functions = getFunctions(dw)
+    String code = getFunctionCode(functions, tuyaFunctions.control)
+
+    if (code == 'mach_operate') {
+        if (txtEnable) { logInfo "Stopping ${dw}" }
+        tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': 'STOP' ])
+    } else if (code != null) {
+        if (txtEnable) { logInfo "Stopping ${dw}" }
+        tuyaSendDeviceCommandsAsync(dw.getDataValue('id'), [ 'code': code, 'value': 'stop' ])
+    } else {
+        logError "Unable to determine stop position change function code in ${functions}"
+    }
+}
+
+
+/*
+* Retrieves a map of functions from a cache.
+* If the map is not already in the cache, it computes the map by parsing a JSON string and adds it to the cache.
+* The JSON string is obtained from the DeviceWrapper instance.
+* If the DeviceWrapper instance is null or does not contain a 'functions' data value, the method uses an empty JSON string.
+*/
+private static Map<String, Map> getFunctions(DeviceWrapper dw) {
+    return jsonCache.computeIfAbsent(dw?.getDataValue('functions') ?: '{}') {
+        k -> jsonParser.parseText(k)
+    }
+}
+
+/*
+* Returns the value of the first key-value pair in the functions map where the key is also an element in the codes list.
+* If no such key-value pair is found, or if functions is null, the method returns null.
+*/
+/* groovylint-disable-next-line UnusedPrivateMethod */
+private static Map getFunction(Map functions, List codes) {
+    return functions?.find { f -> f.key in codes }?.value
+}
+
+/*
+* Returns the first code in the codes list that is also a key in the functions map.
+* If no such code is found, or if codes or functions is null, the method returns null.
+*/
+private static String getFunctionCode(Map functions, List codes) {
+    return codes?.find { c -> functions?.containsKey(c) }
+}
+
+/*
+* Retrieves a map of status sets from a cache. If the map is not already in the cache, it computes the map by parsing a JSON string and adds it to the cache.
+* The JSON string is obtained from the DeviceWrapper instance.
+* If the DeviceWrapper instance is null or does not contain a 'statusSet' data value, the method uses an empty JSON string.
+*/
+/* groovylint-disable-next-line UnusedPrivateMethod */
+private static Map<String, Map> getStatusSet(DeviceWrapper dw) {
+    return jsonCache.computeIfAbsent(dw?.getDataValue('statusSet') ?: '{}') {
+        k -> jsonParser.parseText(k)
+    }
+}
+
+// Command to remove all the child devices
+void removeDevices() {
+    logInfo 'Removing all child devices'
+    childDevices.each { device -> deleteChildDevice(device.deviceNetworkId) }
+    sendInfoEvent('All child devices removed')
+}
+
+/**
+ *  Driver Capabilities Implementation
+ */
+
+Map fingerprintToData(String fingerprint) {
+    Map data = [:]
+    Map fingerprintMap = state[fingerprint]
+    if (fingerprintMap != null) {
+        data['id'] = fingerprint.substring(fingerprint.length() - 2, fingerprint.length())  // Device Number
+        data['fingerprintName'] = fingerprint
+        Map productName = mapTuyaCategory([ServerList: fingerprintMap['ServerList']])
+        data['product_name'] = fingerprintMap['ProductName'] ?: productName['product_name']           // Device Name
+        data['name'] = fingerprintMap['Label'] ?: "Device#${data['id']}"          // Device Label
+        data['ServerList'] = fingerprintMap['ServerList']
+        // TODO !!
+        //data['local_key'] = fingerprintMap['local_key']
+        //data['product_id'] = fingerprintMap['product_id']
+        //data['category'] = fingerprintMap['category']
+        //data['functions'] = fingerprintMap['functions']
+        //data['statusSet'] = fingerprintMap['statusSet']
+        //data['online'] = fingerprintMap['online']
+    }
+    return data
+ }
+
+private boolean createChildDevices() {
+    logDebug 'createChildDevices(): '
+    boolean result = false
+    Map data = [:]
+    // iterate through each fingerprint in the state which has a ProductName map entry
+    state.each { fingerprintName, fingerprintMap ->
+        if (fingerprintName.startsWith('fingerprint')) {
+            //data['fingerprintName'] = fingerprintName
+            //data['ProductName'] = fingerprintMap['ProductName']
+            // TODO - use the suported clusters list !!
+            if (['06', '0402', '0405', '0406', '0102'].any { it in fingerprintMap['ServerList'] }) {
+                logDebug "createChildDevices(): fingerprintName:${fingerprintName} ProductName:${fingerprintMap['ProductName']}, data:${data}"
+                result |= createChildDevices(fingerprintToData(fingerprintName))
+            }
+            else {
+                logWarn "createChildDevices(): fingerprintName:${fingerprintName} ProductName:${fingerprintMap['ProductName']} is not supported!"
+            }
+        }
+        else {
+            logWarn "createChildDevices(): fingerprintName:${fingerprintName} SKIPPED"
+        }
+    }
+    return result
+}
+
+private boolean createChildDevices(Map d) {
+    logDebug "createChildDevices(Map d): d=${d}"
+    Map mapping = mapTuyaCategory(d)
+    logDebug "createChildDevices(Map d): Tuya category ${d.category} driver ${mapping}"
+
+    if (mapping.driver != null) {
+        logWarn "createChildDevices(Map d): mapping.driver is ${mapping.driver}, <b>device.id is ${device.id}</b> "
+        logWarn "createChildDevices(Map d): createChildDevice '${device.id}-${d.id}' ${mapping} ${d}   "
+        createChildDevice("${device.id}-${d.id}", mapping, d)
+    } else {
+        logWarn "createChildDevices(Map d): mapping.driver is ${mapping.driver} !"
+    }
+/*
+
+    if (mapping.devices == null) {
+        logWarn "mapping.devices is ${mapping.devices} !"
+        return false
+    }
+
+    // Tuya Device to Multiple Hubitat Devices
+    String baseName = d.name
+    Map baseFunctions = d.functions
+    Map baseStatusSet = d.statusSet
+    Map subdevices = mapping.devices.findAll { entry -> entry.key in baseFunctions.keySet() }
+
+    logDebug "createChildDevices(Map d): baseName:${baseName} baseFunctions:${baseFunctions} baseStatusSet:${baseStatusSet} subdevices:${subdevices}"
+    return
+
+    subdevices.each { code, submap ->
+        d.name = "${baseName} ${submap.suffix ?: code}"
+        d.functions = [ (code): baseFunctions[(code)] ]
+        d.statusSet = [ (code): baseStatusSet[(code)] ]
+        createChildDevice("${device.id}-${d.id}-${code}", [
+            namespace: submap.namespace ?: mapping.namespace,
+            driver: submap.driver ?: mapping.driver
+        ], d)
+    }
+*/
+    return true
+}
+
+private ChildDeviceWrapper createChildDevice(String dni, Map mapping, Map d) {
+    logDebug "createChildDevice(String dni, Map mapping, Map d): dni:${dni} mapping:${mapping} d:${d}"
+    ChildDeviceWrapper dw = getChildDevice(dni)
+    logDebug "createChildDevice(String dni, Map mapping, Map d): dw:${dw}"
+
+    if (dw == null) {
+        logInfo "Creating device ${d.name} using ${mapping.driver} driver (name: ${d.product_name}, label: ${d.name})"
+        try {
+            dw = addChildDevice(mapping.namespace ?: 'hubitat', mapping.driver, dni,
+                [
+                    name: d.product_name,
+                    label: d.name,
+                ]
+            )
+        } catch (UnknownDeviceTypeException e) {
+            if (mapping.namespace == 'component') {
+                logError "${d.name} driver not found, try downloading from " +
+                          "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/${mapping.driver}"
+            } else {
+                logError("${d.name} device creation failed", e)
+            }
+        }
+    }
+    /*
+    String functionJson = JsonOutput.toJson(d.functions)
+    jsonCache.put(functionJson, d.functions)
+    */
+    dw?.with {
+        label = label ?: d.name
+        updateDataValue 'id', d.id
+        updateDataValue 'fingerprintName', d.fingerprintName
+        updateDataValue 'product_name', d.product_name
+        updateDataValue 'ServerList', JsonOutput.toJson(d.ServerList)
+        // TODO !!1
+
+        /*
+        updateDataValue 'local_key', d.local_key
+        updateDataValue 'product_id', d.product_id
+        updateDataValue 'category', d.category
+        updateDataValue 'functions', functionJson
+        updateDataValue 'statusSet', JsonOutput.toJson(d.statusSet)
+        updateDataValue 'online', d.online as String
+        */
+    }
+
+    return dw
+}
+
+/* ================================================================================================================================================================================ */
 
 void clearInfoEvent()      { sendInfoEvent('clear') }
 
@@ -1554,8 +2074,10 @@ String getDeviceInfo() {
 
 void resetStats() {
     logDebug 'resetStats...'
-    state.stats  = state.states = [:]
-    state.lastRx = state.lastTx = [:]
+    state.stats  = [:]
+    state.states = [:]
+    state.lastRx = [:]
+    state.lastTx = [:]
     state.lastTx['pingTime'] = state.lastTx['cmdTime'] = now()
     state.lastTx['subscribeTime'] = state.lastTx['unsubscribeTime'] = now()
     state.health = [:]
@@ -1580,6 +2102,7 @@ void initializeVars(boolean fullInit = false) {
         logInfo "DEVICE_TYPE = ${DEVICE_TYPE}"
         state.deviceType = DEVICE_TYPE
         sendInfoEvent('Initialized (fullInit = true)', 'full initialization - loaded all defaults!')
+        sendEvent([ name: 'deviceCount', value: 0 ])
     }
 
     if (state.stats == null)  { state.stats  = [:] }
@@ -1605,7 +2128,6 @@ static Integer safeNumberToInt(val, Integer defaultVal=0) {
     }
 }
 
-
 static Integer safeHexToInt(val, Integer defaultVal=0) {
     try {
         return HexUtils.hexStringToInt(val)
@@ -1629,21 +2151,11 @@ double approxRollingAverage(double avg, double newSample) {
     return (avg * (ROLLING_AVERAGE_N - 1) + newSample) / ROLLING_AVERAGE_N
 }
 
-void logDebug(msg) {
-    if (settings.logEnable) { log.debug "${device.displayName} " + msg }
-}
-
-void logInfo(msg) {
-    if (settings.txtEnable) { log.info "${device.displayName} " + msg  }
-}
-
-void logWarn(msg) {
-    if (settings.logEnable) { log.warn "${device.displayName} " + msg  }
-}
-
-void logTrace(msg) {
-    if (settings.traceEnable) { log.trace "${device.displayName} " + msg  }
-}
+void logInfo(msg)  { if (settings.txtEnable)   { log.info  "${device.displayName} " + msg } }
+void logError(msg) { if (settings.txtEnable)   { log.error "${device.displayName} " + msg } }
+void logDebug(msg) { if (settings.logEnable)   { log.debug "${device.displayName} " + msg } }
+void logWarn(msg)  { if (settings.logEnable)   { log.warn  "${device.displayName} " + msg } }
+void logTrace(msg) { if (settings.traceEnable) { log.trace "${device.displayName} " + msg } }
 
 void parseTest(par) {
     log.warn "parseTest(${par})"
@@ -1672,475 +2184,3 @@ void test(par) {
     cmd = matter.subscribe(2, 0xFFFF, attributePaths)
     sendToDevice(cmd)
 }
-
-/*
-Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $AccountLogin, $ApplicationBasic, $ApplicationLauncher, $AudioOutput, $ContentLauncher, $KeypadInput, $LowPower, $MediaInput, $MediaPlayback, $TargetNavigator, $Channel, $WakeOnLan, $RadonConcentrationMeasurement, $TotalVolatileOrganicCompoundsConcentrationMeasurement, $Pm10ConcentrationMeasurement, $Pm1ConcentrationMeasurement, $FormaldehydeConcentrationMeasurement, $Pm25ConcentrationMeasurement, $SodiumConcentrationMeasurement, $ChloroformConcentrationMeasurement, $ChlorodibromomethaneConcentrationMeasurement, $BromoformConcentrationMeasurement, $BromodichloromethaneConcentrationMeasurement, $SulfateConcentrationMeasurement, $ManganeseConcentrationMeasurement, $LeadConcentrationMeasurement, $CopperConcentrationMeasurement, $TurbidityConcentrationMeasurement, $TotalColiformBacteriaConcentrationMeasurement, $TotalTrihalomethanesConcentrationMeasurement, $HaloaceticAcidsConcentrationMeasurement, $FluorideConcentrationMeasurement, $FecalColiformEColiConcentrationMeasurement, $ChlorineConcentrationMeasurement, $ChloraminesConcentrationMeasurement, $BromateConcentrationMeasurement, $DissolvedOxygenConcentrationMeasurement, $SulfurDioxideConcentrationMeasurement, $OzoneConcentrationMeasurement, $OxygenConcentrationMeasurement, $NitrogenDioxideConcentrationMeasurement, $NitricOxideConcentrationMeasurement, $HydrogenSulfideConcentrationMeasurement, $HydrogenConcentrationMeasurement, $EthyleneOxideConcentrationMeasurement, $EthyleneConcentrationMeasurement, $CarbonDioxideConcentrationMeasurement, $CarbonMonoxideConcentrationMeasurement, $OccupancySensing, $RelativeHumidityMeasurement, $FlowMeasurement, $PressureMeasurement, $TemperatureMeasurement, $IlluminanceMeasurement, $BallastConfiguration, $ColorControl, $ThermostatUserInterfaceConfiguration, $FanControl, $Thermostat, $PumpConfigurationAndControl, $BarrierControl, $WindowCovering, $DoorLock, $TonerCartridgeMonitoring, $InkCartridgeMonitoring, $FuelTankMonitoring, $WaterTankMonitoring, $OzoneFilterMonitoring, $ZeoliteFilterMonitoring, $IonizingFilterMonitoring, $UvFilterMonitoring, $ElectrostaticFilterMonitoring, $CeramicFilterMonitoring, $ActivatedCarbonFilterMonitoring, $HepaFilterMonitoring, $RvcOperationalState, $OperationalState, $DishwasherAlarm, $SmokeCoAlarm, $AirQuality, $DishwasherMode, $RefrigeratorAlarm, $TemperatureControl, $RvcCleanMode, $RvcRunMode, $LaundryWasherControls, $RefrigeratorAndTemperatureControlledCabinetMode, $LaundryWasherMode, $ModeSelect, $IcdManagement, $BooleanState, $ProxyValid, $ProxyDiscovery, $ProxyConfiguration, $UserLabel, $FixedLabel, $GroupKeyManagement, $OperationalCredentials, $AdministratorCommissioning, $Switch, $BridgedDeviceBasicInformation, $TimeSynchronization, $EthernetNetworkDiagnostics, $WiFiNetworkDiagnostics, $ThreadNetworkDiagnostics, $SoftwareDiagnostics, $GeneralDiagnostics, $DiagnosticLogs, $NetworkCommissioning, $GeneralCommissioning, $PowerSource, $PowerSourceConfiguration, $UnitLocalization, $TimeFormatLocalization, $LocalizationConfiguration, $OtaSoftwareUpdateRequestor, $OtaSoftwareUpdateProvider, $BasicInformation, $Actions, $AccessControl, $Binding, $Descriptor, $PulseWidthModulation, $BinaryInputBasic, $LevelControl, $OnOffSwitchConfiguration, $OnOff, $Scenes, $Groups, $Identify]
-*/
-
-// https://github.com/project-chip/connectedhomeip/tree/master/src/app/clusters
-@Field static final Map<Integer, String> MatterClusters = [
-    0x001D  : 'Descriptor',                 // The Descriptor cluster is meant to replace the support from the Zigbee Device Object (ZDO) for describing a node, its endpoints and clusters
-    0x001E  : 'Binding',                    // Meant to replace the support from the Zigbee Device Object (ZDO) for supportiprefriginatng the binding table.
-    0x001F  : 'AccessControl',              // Exposes a data model view of a Node’s Access Control List (ACL), which codifies the rules used to manage and enforce Access Control for the Node’s endpoints and their associated cluster instances.
-    0x0025  : 'Actions',                    // Provides a standardized way for a Node (typically a Bridge, but could be any Node) to expose information, commands, events ...
-    0x0028  : 'BasicInformation',           // Provides attributes and events for determining basic information about Nodes, which supports both Commissioning and operational determination of Node characteristics, such as Vendor ID, Product ID and serial number, which apply to the whole Node.
-    0x0029  : 'OTASoftwareUpdateProvider',
-    0x002A  : 'OTASoftwareUpdateRequestor',
-    0x002B  : 'LocalizationConfiguration',  // Provides attributes for determining and configuring localization information
-    0x002C  : 'TimeFormatLocalization',     // Provides attributes for determining and configuring time and date formatting information
-    0x002D  : 'UnitLocalization',           // Provides attributes for determining and configuring the units
-    0x002E  : 'PowerSourceConfiguration',   // Used to describe the configuration and capabilities of a Device’s power system
-    0x002F  : 'PowerSource',                // Used to describe the configuration and capabilities of a physical power source that provides power to the Node
-    0x0030  : 'GeneralCommissioning',       // Used to manage basic commissioning lifecycle
-    0x0031  : 'NetworkCommissioning',       // Associates a Node with or manage a Node’s one or more network interfaces
-    0x0032  : 'DiagnosticLogs',             // Provides commands for retrieving unstructured diagnostic logs from a Node that may be used to aid in diagnostics.
-    0x0033  : 'GeneralDiagnostics',         // Provides a means to acquire standardized diagnostics metrics
-    0x0034  : 'SoftwareDiagnostics',        // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
-    0x0035  : 'ThreadNetworkDiagnostics',   // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential problems
-    0x0036  : 'WiFiNetworkDiagnostics',     // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
-    0x0037  : 'EthernetNetworkDiagnostics', // Provides a means to acquire standardized diagnostics metrics that MAY be used by a Node to assist a user or Administrator in diagnosing potential
-    0x0038  : 'TimeSync',                   // Provides Attributes for reading a Node’s current time
-    0x0039  : 'BridgedDeviceBasicInformation',  // Serves two purposes towards a Node communicating with a Bridge
-    0x003C  : 'AdministratorCommissioning', // Used to trigger a Node to allow a new Administrator to commission it. It defines Attributes, Commands and Responses needed for this purpose.
-    0x003E  : 'OperationalCredentials',     // Used to add or remove Node Operational credentials on a Commissionee or Node, as well as manage the associated Fabrics.
-    0x003F  : 'GroupKeyManagement',         // Manages group keys for the node
-    0x0040  : 'FixedLabel',                 // Provides a feature for the device to tag an endpoint with zero or more read only labels
-    0x0041  : 'UserLabel',                  // Provides a feature to tag an endpoint with zero or more labels.
-    0x0042  : 'ProxyConfiguration',         // Provides a means for a proxy-capable device to be told the set of Nodes it SHALL proxy
-    0x0043  : 'ProxyDiscovery',             // Contains commands needed to do proxy discovery
-    0x0044  : 'ValidProxies',               // Provides a means for a device to be told of the valid set of possible proxies that can proxy subscriptions on its behalf
-
-    0x0003  : 'Identify',                   // Supports an endpoint identification state (e.g., flashing a light), that indicates to an observer (e.g., an installer) which of several nodes and/or endpoints it is.
-    0x0004  : 'Groups',                     // Manages, per endpoint, the content of the node-wide Group Table that is part of the underlying interaction layer.
-    0x0005  : 'Scenes',                     // Provides attributes and commands for setting up and recalling scenes.
-    0x0006  : 'OnOff',                      // Attributes and commands for turning devices on and off.
-    0x0008  : 'LevelControl',               // Provides an interface for controlling a characteristic of a device that can be set to a level, for example the brightness of a light, the degree of closure of a door, or the power output of a heater.
-    0x001C  : 'LevelControlDerived',        // Derived cluster specifications are defined elsewhere.
-    0x003B  : 'Switch',                     // Exposes interactions with a switch device, for the purpose of using those interactions by other devices
-    0x0045  : 'BooleanState',               // Provides an interface to a boolean state.
-    0x0050  : 'ModeSelect',                 // Provides an interface for controlling a characteristic of a device that can be set to one of several predefined values.
-    0x0051  : 'LaundryWasherMode',          // Commands and attributes for controlling a laundry washer
-    0x0052  : 'RefrigeratorAndTemperatureControlledCabinetMode',          // Commands and attributes for controlling a refrigerator or a temperature controlled cabinet
-    0x0053  : 'LaundryWasherControls',      // Commands and attributes for the control of options on a device that does laundry washing
-    0x0054  : 'RVCRunMode',                 // Commands and attributes for controlling the running mode of an RVC device.
-    0x0055  : 'RVCCleanMode',               // Commands and attributes for controlling the cleaning mode of an RVC device.
-    0x0056  : 'TemperatureControl',         // Commands and attributes for control of a temperature set point
-    0x0057  : 'RefrigeratorAlarm',          // Alarm definitions for Refrigerator devices
-    0x0059  : 'DishwasherMode',             // Commands and attributes for controlling a dishwasher
-    0x005B  : 'AirQuality',                 // Provides an interface to air quality classification using distinct levels with human-readable labels.
-    0x005C  : 'SmokeCOAlarm',               // Provides an interface for observing and managing the state of smoke and CO alarms
-    0x005D  : 'DishwasherAlarm',            // Alarm definitions for Dishwasher devices
-    0x0060  : 'OperationalState',           // Supports remotely monitoring and, where supported, changing the operational state of any device where a state machine is a part of the operation.
-    0x0061  : 'RVCOperationalState',        // Commands and attributes for monitoring and controlling the operational state of an RVC device.
-    0x0071  : 'HEPAFilterMonitoring',       // HEPA Filter
-    0x0072  : 'ActivatedCarbonFilterMonitoring', // Activated Carbon Filter
-    0x0101  : 'DoorLock',                   // An interface to a generic way to secure a door
-    0x0102  : 'WindowCovering',             // Commands and attributes for controlling a window covering
-    0x0200  : 'PumpConfigurationAndControl',// An interface for configuring and controlling pumps.
-    0x0201  : 'Thermostat',                 // An interface for configuring and controlling the functionalty of a thermostat
-    0x0202  : 'FanControl',                 // An interface for controlling a fan in a heating / cooling system
-    0x0204  : 'ThermostatUserInterfaceConfiguration',                 // An interface for configuring the user interface of a thermostat (which MAY be remote from the thermostat)
-    0x0300  : 'ColorControl',               // Attributes and commands for controlling the color of a color capable light.
-    0x0301  : 'BallastConfiguration',       // Attributes and commands for configuring a lighting ballast
-    0x0400  : 'IlluminanceMeasurement',     // Attributes and commands for configuring the measurement of illuminance, and reporting illuminance measurements
-    0x0402  : 'TemperatureMeasurement',     // Attributes and commands for configuring the measurement of temperature, and reporting temperature measurements
-    0x0403  : 'PressureMeasurement',        // Attributes and commands for configuring the measurement of pressure, and reporting pressure measurements
-    0x0404  : 'FlowMeasurement',            // Attributes and commands for configuring the measurement of flow, and reporting flow rates
-    0x0405  : 'RelativeHumidityMeasurement',// Supports configuring the measurement of relative humidity, and reporting relative humidity measurements of water in the air
-    0x0406  : 'OccupancySensing',           // Occupancy sensing functionality, including configuration and provision of notifications of occupancy status
-    0x0407  : 'LeafWetnessMeasurement',     // Percentage of water in the leaves of plants
-    0x0408  : 'SoilMoistureMeasurement',    // Percentage of water in the soil
-    0x040C  : 'CarbonMonoxideConcentrationMeasurement',
-    0x040D  : 'CarbonDioxideConcentrationMeasurement',
-    0x0413  : 'NitrogenDioxideConcentrationMeasurement',
-    0x0415  : 'OzoneConcentrationMeasurement',
-    0x042A  : 'PM2.5ConcentrationMeasurement',
-    0x042B  : 'FormaldehydeConcentrationMeasurement',
-    0x042C  : 'PM1ConcentrationMeasurement',
-    0x042D  : 'PM10ConcentrationMeasurement',
-    0x042E  : 'TotalVolatileOrganicCompoundsConcentrationMeasurement',
-    0x042F  : 'RadonConcentrationMeasurement',
-    0x0503  : 'WakeOnLAN',                  // interface for managing low power mode on a device that supports the Wake On LAN or Wake On Wireless LAN (WLAN) protocol
-    0x0504  : 'Channel',                    // interface for controlling the current Channel on an endpoint.
-    0x0505  : 'TargetNavigator',            // n interface for UX navigation within a set of targets on a Video Player device or Content App endpoint.
-    0x0506  : 'MediaPlayback',              // interface for controlling Media Playback (PLAY, PAUSE, etc) on a Video Player device
-    0x0507  : 'MediaInput',                 // interface for controlling the Input Selector on a Video Player device.
-    0x0508  : 'LowPower',                   // interface for managing low power mode on a device.
-    0x0509  : 'KeypadInput',                // interface for controlling a Video Player or a Content App using action commands such as UP, DOWN, and SELECT.
-    0x050A  : 'ContentLauncher',            // interface for launching content on a Video Player device or a Content App.
-    0x050B  : 'AudioOutput',                // interface for controlling the Output on a Video Player device.
-    0x050E  : 'AccountLogin',               // interface for facilitating user account login on an application or a node.
-    0x050C  : 'ApplicationLauncher',        // interface for launching content on a Video Player device.
-    0x050D  : 'ApplicationBasic'            // information about a Content App running on a Video Player device which is represented as an endpoint
-]
-
-Map getAttributesMapByClusterId(String cluster) {
-    /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
-    if (cluster == null) { return null }
-    if (cluster == '001D') { return DescriptorClusterAttributes }
-    if (cluster == '001E') { return BindingClusterAttributes }
-    if (cluster == '001F') { return AccessControlClusterAttributes }
-    if (cluster == '0028') { return BasicInformationClusterAttributes }
-    if (cluster == '0029') { return OTASoftwareUpdateProviderClusterAttributes }
-    if (cluster == '002A') { return OTASoftwareUpdateRequestorClusterAttributes }
-    if (cluster == '002B') { return LocalizationConfigurationClusterAttributes }
-    if (cluster == '002C') { return TimeFormatLocalizationClusterAttributes }
-    if (cluster == '002E') { return PowerSourceConfigurationClusterAttributes }
-    if (cluster == '002F') { return PowerSourceClusterAttributes }
-    if (cluster == '0030') { return GeneralCommissioningClusterAttributes }
-    if (cluster == '0031') { return NetworkCommissioningClusterAttributes }
-    if (cluster == '0032') { return DiagnosticLogsClusterAttributes }
-    if (cluster == '0033') { return GeneralDiagnosticsClusterAttributes }
-    if (cluster == '0034') { return SoftwareDiagnosticsClusterAttributes }
-    if (cluster == '0037') { return EthernetNetworkDiagnosticsClusterAttributes }
-    if (cluster == '0039') { return BridgedDeviceBasicClusterAttributes }
-    if (cluster == '003C') { return AdministratorCommissioningClusterAttributes }
-    if (cluster == '003E') { return OperationalCredentialsClusterAttributes }
-    if (cluster == '003F') { return GroupKeyManagementClusterAttributes }
-    if (cluster == '0040') { return FixedLabelClusterAttributes }
-    if (cluster == '0041') { return UserLabelClusterAttributes }
-    if (cluster == '0400') { return IlluminanceMeasurementClusterAttributes }   // TODO
-    if (cluster == '0402') { return TemperatureMeasurementClusterAttributes }
-    if (cluster == '0403') { return PressureMeasurementClusterAttributes }      // TODO
-    if (cluster == '0405') { return RelativeHumidityMeasurementClusterAttributes }
-    if (cluster == '0406') { return OccupancySensingClusterAttributes }
-    /* groovylint-disable-next-line ReturnsNullInsteadOfEmptyCollection */
-    return null
-}
-
-// 7.13. Global Elements
-@Field static final Map<Integer, String> GlobalElementsAttributes = [
-    0x00FE  : 'FabricIndex',
-    0xFFF8  : 'GeneratedCommandList',
-    0xFFF9  : 'AcceptedCommandList',
-    0xFFFA  : 'EventList',
-    0xFFFB  : 'AttributeList',
-    0xFFFC  : 'FeatureMap',
-    0xFFFD  : 'ClusterRevision'
-]
-
-// 9.5. Descriptor Cluser 0x001D ep=0
-@Field static final Map<Integer, String> DescriptorClusterAttributes = [
-    0x0000  : 'DeviceTypeList',
-    0x0001  : 'ServerList',
-    0x0002  : 'ClientList',
-    0x0003  : 'PartsList'
-]
-
-// 9.6. Binding Cluster 0x001E
-@Field static final Map<Integer, String> BindingClusterAttributes = [
-    0x0000  : 'Binding'
-]
-
-// 9.10.5. Access Control Cluster 0x001F
-@Field static final Map<Integer, String> AccessControlClusterAttributes = [
-    0x0000  : 'ACL',
-    0x0001  : 'Extension',
-    0x0002  : 'SubjectsPerAccessControlEntry',
-    0x0003  : 'TargetsPerAccessControlEntry',
-    0x0004  : 'AccessControlEntriesPerFabric'
-]
-
-// 11.1.6.3. Attributes of the Basic Information Cluster 0x0028 ep=0
-@Field static final Map<Integer, String> BasicInformationClusterAttributes = [
-    0x0000  : 'DataModelRevision',
-    0x0001  : 'VendorName',
-    0x0002  : 'VendorID',
-    0x0003  : 'ProductName',
-    0x0004  : 'ProductID',
-    0x0005  : 'NodeLabel',
-    0x0006  : 'Location',
-    0x0007  : 'HardwareVersion',
-    0x0008  : 'HardwareVersionString',
-    0x0009  : 'SoftwareVersion',
-    0x000A  : 'SoftwareVersionString',
-    0x000B  : 'ManufacturingDate',
-    0x000C  : 'PartNumber',
-    0x000D  : 'ProductURL',
-    0x000E  : 'ProductLabel',
-    0x000F  : 'SerialNumber',
-    0x0010  : 'LocalConfigDisabled',
-    0x0011  : 'Reachable',
-    0x0012  : 'UniquieID',
-    0x0013  : 'CapabilityMinima'
-]
-
-// 11.19.6.5. OTA Software Update Provider Cluster 0x0029
-@Field static final Map<Integer, String> OTASoftwareUpdateProviderClusterAttributes = [
-    0x0000  : 'Dummy'
-]
-
-// 11.19.7.5 OTA Software Update Requestor Cluster 0x002A
-@Field static final Map<Integer, String> OTASoftwareUpdateRequestorClusterAttributes = [
-    0x0000  : 'DefaultOTAProviders',
-    0x0001  : 'UpdatePossible',
-    0x0002  : 'UpdateState',
-    0x0003  : 'UpdateStateProgress'
-]
-
-// 11.3.1.3 Localization Configuration Cluster 0x002B
-@Field static final Map<Integer, String> LocalizationConfigurationClusterAttributes = [
-    0x0000  : 'ActiveLocale',
-    0x0001  : 'SupportedLocales'
-]
-
-// 11.4.1.3. Time Format Localization Cluster 0x002C
-@Field static final Map<Integer, String> TimeFormatLocalizationClusterAttributes = [
-    0x0000  : 'HourFormat',
-    0x0001  : 'ActiveCalendarType',
-    0x0002  : 'SupportedCalendarTypes'
-]
-
-// 11.6.6.1 Poweer Source Configuration Cluster 0x002E
-@Field static final Map<Integer, String> PowerSourceConfigurationClusterAttributes = [
-    0x0000  : 'dummy'
-]
-
-// 11.9.6. General Commissioning Cluster 0x0030
-@Field static final Map<Integer, String> GeneralCommissioningClusterAttributes = [
-    0x0000  : 'Breadcrumb',
-    0x0001  : 'BasicCommissioningInfo',
-    0x0002  : 'RegulatoryConfig',
-    0x0003  : 'LocationCapability',
-    0x0004  : 'SupportsConcurrentConnection'
-]
-
-// 11.8. Network Commissioning Cluster 0x0031
-@Field static final Map<Integer, String> NetworkCommissioningClusterAttributes = [
-    0x0000  : 'MaxNetworks',
-    0x0001  : 'Networks',
-    0x0002  : 'ScanMaxTimeSeconds',
-    0x0003  : 'ConnectMaxTimeSeconds',
-    0x0004  : 'InterfaceEnabled',
-    0x0005  : 'LastNetworkingStatus',
-    0x0006  : 'LastNetworkID',
-    0x0007  : 'LastConnectErrorValue'
-]
-
-// 11.10.4. Diagnostic Logs Cluster 0x0032
-@Field static final Map<Integer, String> DiagnosticLogsClusterAttributes = [
-    0x0000  : 'dummy'
-]
-
-// 11.11.7. General Diagnostics Cluster 0x0033
-@Field static final Map<Integer, String> GeneralDiagnosticsClusterAttributes = [
-    0x0000  : 'NetworkInterfaces',
-    0x0001  : 'RebootCount',
-    0x0002  : 'UpTime',
-    0x0003  : 'TotalOperationalHours',
-    0x0004  : 'BootReasons',
-    0x0005  : 'ActiveHardwareFault',
-    0x0006  : 'ActiveRadioFault',
-    0x0007  : 'ActiveNetworkFaults',
-    0x0008  : 'TestEventTriggersEnabled'
-]
-
-// 11.12.4. Software Diagnostics Cluster 0x0034
-@Field static final Map<Integer, String> SoftwareDiagnosticsClusterAttributes = [
-    0x0000  : 'ThreadMetrics',
-    0x0001  : 'CurrentHeapFree',
-    0x0002  : 'CurrentHeapUsed',
-    0x0003  : 'CurrentHeapHighWatermark'
-]
-
-// 11.15.4. Ethernet Network Diagnostics Cluster 0x0037
-@Field static final Map<Integer, String> EthernetNetworkDiagnosticsClusterAttributes = [
-    0x0000  : 'PHYRate',
-    0x0001  : 'FullDuplex',
-    0x0002  : 'PacketRxCount',
-    0x0003  : 'PacketTxCount',
-    0x0004  : 'TxErrCount',
-    0x0005  : 'CollisionCount',
-    0x0006  : 'OverrunCount',
-    0x0007  : 'CarrierDetect',
-    0x0008  : 'TimeSinceReset'
-]
-
-/*
-// 9.13.4. Bridged Device Basic Information Cluster 0x0039  // TODO - check the IDs !!  - probably the same as Basic Information Cluster 0x0028
-@Field static final Map<Integer, String> BridgedDeviceBasicInformationClusterAttributes = [
-    0x0000  : 'DataModelRevision',
-    0x0001  : 'VendorName',
-    0x0002  : 'VendorID',
-    0x0003  : 'ProductName',
-    0x0004  : 'ProductID',
-    0x0005  : 'NodeLabel',
-    0x0006  : 'Location',
-    0x0007  : 'HardwareVersion',
-    0x0008  : 'HardwareVersionString',
-    0x0009  : 'SoftwareVersion',
-    0x000A  : 'SoftwareVersionString',
-    0x000B  : 'ManufacturingDate',
-    0x000C  : 'PartNumber',
-    0x000D  : 'ProductURL',
-    0x000E  : 'ProductLabel',
-    0x000F  : 'SerialNumber',
-    0x0010  : 'LocalConfigDisabled',
-    0x0011  : 'Reachable',
-    0x0012  : 'UniqueID',
-    0x0013  : 'CapabilityMinima'
-]
-*/
-
-// 11.18.4. Administrator Commissioning Cluster 0x003C
-@Field static final Map<Integer, String> AdministratorCommissioningClusterAttributes = [
-    0x0000  : 'WindowStatus',
-    0x0001  : 'AdminFabricIndex',
-    0x0002  : 'AdminVendorId'
-]
-
-// 11.17.6. Operational Credentials Cluster 0x003E
-@Field static final Map<Integer, String> OperationalCredentialsClusterAttributes = [
-    0x0000  : 'NOCs',
-    0x0001  : 'Fabrics',
-    0x0002  : 'SupportedFabrics',
-    0x0003  : 'CommissionedFabrics',
-    0x0004  : 'TrustedRootCertificates',
-    0x0005  : 'CurrentFabricIndex'
-]
-
-// 11.2.7.1. Group Key Management Cluster 0x003F
-@Field static final Map<Integer, String> GroupKeyManagementClusterAttributes = [
-    0x0000  : 'GroupKeyMap',
-    0x0001  : 'GroupTable',
-    0x0002  : 'MaxGroupsPerFabric',
-    0x0003  : 'MaxGroupKeysPerFabric'
-]
-
-// 9.8.3. Fixed Label Cluster 0x0040
-@Field static final Map<Integer, String> FixedLabelClusterAttributes = [
-    0x0000  : 'LabelList'
-]
-
-// 9.9.3. User Label Cluster 0x0041
-@Field static final Map<Integer, String> UserLabelClusterAttributes = [
-    0x0000  : 'LabelList'
-]
-// Identify Cluster 0x0003
-@Field static final Map<Integer, String> IdentifyClusterAttributes = [
-    0x0000  : 'IdentifyTime',
-    0x0001  : 'IdentifyType'
-]
-
-// Groups Cluster 0x0004
-@Field static final Map<Integer, String> GroupsClusterAttributes = [
-    0x0000  : 'NameSupport'
-]
-
-// Scenes Cluster 0x0005
-@Field static final Map<Integer, String> ScenesClusterAttributes = [
-    0x0000  : 'SceneCount',
-    0x0001  : 'CurrentScene',
-    0x0002  : 'CurrentGroup',
-    0x0003  : 'SceneValid',
-    0x0004  : 'RemainingCapacity'
-]
-
-// On/Off Cluser 0x0006
-@Field static final Map<Integer, String> OnOffClusterAttributes = [
-    0x0000  : 'Switch',
-    0x4000  : 'GlobalSceneControl',
-    0x4001  : 'OnTime',
-    0x4002  : 'OffWaitTime',
-    0x4003  : 'StartUpOnOff'
-]
-
-@Field static final Map<Integer, String> OnOffClusterCommands = [
-    0x00    : 'Off',
-    0x01    : 'On',
-    0x02    : 'Toggle',
-    0x40    : 'OffWithEffect',
-    0x41    : 'OnWithRecallGlobalScene',
-    0x42    : 'OnWithTimedOff'
-]
-
-// 1.6. Level Control Cluster 0x0008
-@Field static final Map<Integer, String> LevelControlClusterAttributes = [
-    0x0000  : 'CurrentLevel',
-    0x0001  : 'RemainingTime',
-    0x0002  : 'MinLevel',
-    0x0003  : 'MaxLevel',
-    0x0004  : 'CurrentFrequency',
-    0x0005  : 'MinFrequency',
-    0x0010  : 'OnOffTransitionTime',
-    0x0011  : 'OnLevel',
-    0x0012  : 'OnTransitionTime',
-    0x0013  : 'OffTransitionTime',
-    0x000F  : 'Options',
-    0x4000  : 'StartUpCurrentLevel'
-]
-
-@Field static final Map<Integer, String> LevelControlClusterCommands = [
-    0x00    : 'MoveToLevel',
-    0x01    : 'Move',
-    0x02    : 'Step',
-    0x03    : 'Stop',
-    0x04    : 'MoveToLevelWithOnOff',
-    0x05    : 'MoveWithOnOff',
-    0x06    : 'StepWithOnOff',
-    0x07    : 'StopWithOnOff',
-    0x08    : 'MoveToClosestFrequency'
-]
-
-// 11.7. Power Source Cluster 0x002F    // attrList:[0, 1, 2, 11, 12, 14, 15, 16, 19, 25, 65528, 65529, 65531, 65532, 65533]
-@Field static final Map<Integer, String> PowerSourceClusterAttributes = [
-    0x0000  : 'Status',
-    0x0001  : 'Order',
-    0x0002  : 'Description',
-    0x000B  : 'BatVoltage',
-    0x000C  : 'BatPercentRemaining',
-    0x000D  : 'BatTimeRemaining',
-    0x000E  : 'BatChargeLevel',
-    0x000F  : 'BatReplacementNeeded',
-    0x0010  : 'BatReplaceability',
-    0x0013  : 'BatReplacementDescription',
-    0x0019  : 'BatQuantity'
-]
-@Field static final Map<Integer, String> PowerSourceClusterStatus = [
-    0x00    : 'Unspecified',    // SHALL indicate the source status is not specified
-    0x01    : 'Active',         // SHALL indicate the source is available and currently supplying power
-    0x02    : 'Standby',        // SHALL indicate the source is available, but is not currently supplying power
-    0x03    : 'Unavailable'     // SHALL indicate the source is not currently available to supply power
-]
-@Field static final Map<Integer, String> PowerSourceClusterBatteryChargeLevel = [
-    0x00    : 'OK',             // Charge level is nominal
-    0x01    : 'Warning',        // Charge level is low, intervention may soon be required.
-    0x02    : 'Critical'        // Charge level is critical, immediate intervention is required.
-]
-
-// 1.7 Bolean State Cluster 0x0045
-@Field static final Map<Integer, String> BoleanStateClusterAttributes = [
-    0x0000  : 'StateValue'
-]
-
-// 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
-@Field static final Map<Integer, String> TemperatureMeasurementClusterAttributes = [
-    0x0000  : 'MeasuredValue',
-    0x0001  : 'MinMeasuredValue',
-    0x0002  : 'MaxMeasuredValue',
-    0x0003  : 'Tolerance'
-]
-
-// 2.6.4. Relative Humidity Measurement Cluster 0x0405 (1029)
-@Field static final Map<Integer, String> RelativeHumidityMeasurementClusterAttributes = [
-    0x0000  : 'MeasuredValue',
-    0x0001  : 'MinMeasuredValue',
-    0x0002  : 'MaxMeasuredValue',
-    0x0003  : 'Tolerance'
-]
-
-// 2.7.5. Occupancy Sensing Cluster 0x0406
-@Field static final Map<Integer, String> OccupancySensingClusterAttributes = [
-    0x0000  : 'Occupancy',
-    0x0001  : 'OccupancySensorType',
-    0x0002  : 'OccupancySensorTypeBitmap',
-    0x0010  : 'PIROccupiedToUnoccupiedDelay',
-    0x0011  : 'PIRUnoccupiedToOccupiedDelay',
-    0x0012  : 'PIRUnoccupiedToOccupiedThreshold',
-    0x0020  : 'UltrasonicOccupiedToUnoccupiedDelay',
-    0x0021  : 'UltrasonicUnoccupiedToOccupiedDelay',
-    0x0022  : 'UltrasonicUnoccupiedToOccupiedThreshold',
-    0x0030  : 'PhysicalContactOccupiedToUnoccupiedDelay',
-    0x0031  : 'PhysicalContactUnoccupiedToOccupiedDelay',
-    0x0032  : 'PhysicalContactUnoccupiedToOccupiedThreshold'
-]

@@ -492,4 +492,171 @@ Zemismart M1 Matter Bridge Cluster BridgedDeviceBasicInformation (0x0039) endpoi
 [FFFC] FeatureMap = 00
 [FFFD] ClusterRevision = 01
 
+=========================================================================================== 
+
+fingerprint03 : 
+    {AttributeList=[
+        00, 
+        01, 
+        02, 
+        03, 
+        FFF8,    GeneratedCommandList = 1618
+        FFF9,    AcceptedCommandList = 1618
+        FFFB,    'AttributeList' = [00, 01, 02, 03, FFF8, FFF9, FFFB, FFFC, FFFD]
+        FFFC,    FeatureMap = 01
+        FFFD     ClusterRevision = 01
+    ], 
+    DeviceTypeList=[13, 1818], 
+    ServerList=[ 
+        1D, - ***  Descriptor Cluster 0x001D ***
+                0x0000  : 'DeviceTypeList',  [13, 1818]
+                0x0001  : 'ServerList',  [1D, 2E, 39, 40, 41]
+                0x0002  : 'ClientList', 1618
+                0x0003  : 'PartsList' [04, 05, 06, 07, 08]
+        2E, - *** Power Source Configuration Cluster 0x002E *** =>  reading attrId:FFFB -> value:[00, FFF8, FFF9, FFFB] 
+                !!!!!!!!!!!!! reading attribute 00 results in initialze() !!!!!!!!!!!!!
+        39, - *** Bridged Device Basic Information Cluster 0x0039 *** =>  reading attrId:FFFB ->  value:[01, 02, 03, 04, 05, 07, 08, 0A, 09, 0B, 0C, 0D, 0E, 0F, 11, 12, FFF8, FFF9, FFFB, FFFC, FFFD]
+            01      VendorName = tuya           <========================== !!
+            02      VendorID = 12D5
+            03      ProductName = ON OFF PLUG   <========================== !!
+            04      ProductID = 31
+            05      NodeLabel = 14
+            07      HardwareVersion = 64
+            08      HardwareVersionString = 1.0
+            0A,     SoftwareVersionString = 1.0
+            09,     SoftwareVersion = 64
+            0B,     ManufacturingDate = 20230301
+            0C,     PartNumber = 14
+            0D,     ProductURL = 14
+            0E,     ProductLabel = 14
+            0F,     SerialNumber = 14
+            11,     Reachable = 01  <========================== !! 
+            12,     UniquieID = 14
+            FFF8,   GeneratedCommandList = 1618
+            FFF9,   AcceptedCommandList = 1618
+            FFFB,   value:[01, 02, 03, 04, 05, 07, 08, 0A, 09, 0B, 0C, 0D, 0E, 0F, 11, 12, FFF8, FFF9, FFFB, FFFC, FFFD],
+            FFFC,   FeatureMap = 00
+            FFFD    ClusterRevision = 01
+        ]
+        40, - *** Fixed Label Cluster 0x0040 *** reading attrId:FFFB -> value:[00, FFF8, FFF9, FFFB, FFFC, FFFD],
+            00 - value:[04, 01, 6F, 6F4E, 05, 3201, 01, 18187075
+        41 - *** User Label Cluster 0x0041 *** reading attrId:FFFB -> value:[00, FFF8, FFF9, FFFB, FFFC, FFFD],
+             !!!!!!!!!!!!! reading attribute 00 results in initialze() !!!!!!!!!!!!!
+            
+    ], 
+    PartsList=[04, 05, 06, 07, 08], 
+    ClientList=1618}
+
+
+
+
+===================================  DeviceWrapper dw Properties ===================================
+
+
+dev:3392024-01-07 21:19:40.126debugZemismart M1 Matter Bridge Property Name: displayName, Property Value: FingerBot
+dev:3392024-01-07 21:19:40.124debugZemismart M1 Matter Bridge Property Name: parentDeviceId, Property Value: 339
+dev:3392024-01-07 21:19:40.123debugZemismart M1 Matter Bridge Property Name: roomId, Property Value: null
+dev:3392024-01-07 21:19:40.121debugZemismart M1 Matter Bridge Property Name: lastActivity, Property Value: null
+dev:3392024-01-07 21:19:40.119debugZemismart M1 Matter Bridge Property Name: deviceNetworkId, Property Value: 339-12
+dev:3392024-01-07 21:19:40.117debugZemismart M1 Matter Bridge Property Name: supportedAttributes, Property Value: [switch]
+dev:3392024-01-07 21:19:40.112debugZemismart M1 Matter Bridge Property Name: data, Property Value: [name:1 Gang Switch, id:12, label:FingerBot]
+dev:3392024-01-07 21:19:40.110debugZemismart M1 Matter Bridge Property Name: label, Property Value: FingerBot
+dev:3392024-01-07 21:19:40.108debugZemismart M1 Matter Bridge Property Name: driverType, Property Value: sys
+dev:3392024-01-07 21:19:40.106debugZemismart M1 Matter Bridge Property Name: linkedDevice, Property Value: false
+dev:3392024-01-07 21:19:40.104debugZemismart M1 Matter Bridge Property Name: typeName, Property Value: Generic Component Switch
+dev:3392024-01-07 21:19:40.102debugZemismart M1 Matter Bridge Property Name: status, Property Value: UNKNOWN
+dev:3392024-01-07 21:19:40.100debugZemismart M1 Matter Bridge Property Name: disabled, Property Value: false
+dev:3392024-01-07 21:19:40.098debugZemismart M1 Matter Bridge Property Name: class, Property Value: class com.hubitat.app.DeviceWrapper
+dev:3392024-01-07 21:19:40.096debugZemismart M1 Matter Bridge Property Name: parentAppId, Property Value: null
+dev:3392024-01-07 21:19:40.094debugZemismart M1 Matter Bridge Property Name: idAsLong, Property Value: 346
+dev:3392024-01-07 21:19:40.092debugZemismart M1 Matter Bridge Property Name: device, Property Value: [id: 346, name: 1 Gang Switch, label: FingerBot, deviceNetworkId: 339-12, hubId: 1, parentDeviceId: 339, isComponent: null, displayAsChild: null, locationId: 1, deviceTypeId: 379, zigbeeId: null, lanId: null, driverType: sys, linkedDevice: false]
+dev:3392024-01-07 21:19:40.090debugZemismart M1 Matter Bridge Property Name: capabilities, Property Value: [Actuator, Switch, Refresh]
+dev:3392024-01-07 21:19:40.088debugZemismart M1 Matter Bridge Property Name: name, Property Value: 1 Gang Switch
+dev:3392024-01-07 21:19:40.086debugZemismart M1 Matter Bridge Property Name: controllerMatter, Property Value: false
+dev:3392024-01-07 21:19:40.084debugZemismart M1 Matter Bridge Property Name: displayAsChild, Property Value: null
+dev:3392024-01-07 21:19:40.082debugZemismart M1 Matter Bridge Property Name: controllerType, Property Value: null
+dev:3392024-01-07 21:19:40.080debugZemismart M1 Matter Bridge Property Name: singleThreaded, Property Value: false
+dev:3392024-01-07 21:19:40.078debugZemismart M1 Matter Bridge Property Name: controllerZWave, Property Value: false
+dev:3392024-01-07 21:19:40.076debugZemismart M1 Matter Bridge Property Name: endpointId, Property Value: null
+dev:3392024-01-07 21:19:40.074debugZemismart M1 Matter Bridge Property Name: lanId, Property Value: null
+dev:3392024-01-07 21:19:40.073debugZemismart M1 Matter Bridge Property Name: supportedCommands, Property Value: [off, on, refresh]
+dev:3392024-01-07 21:19:40.070debugZemismart M1 Matter Bridge Property Name: unwrappedDevice, Property Value: [id: 346, name: 1 Gang Switch, label: FingerBot, deviceNetworkId: 339-12, hubId: 1, parentDeviceId: 339, isComponent: null, displayAsChild: null, locationId: 1, deviceTypeId: 379, zigbeeId: null, lanId: null, driverType: sys, linkedDevice: false]
+dev:3392024-01-07 21:19:40.068debugZemismart M1 Matter Bridge Property Name: controllerZigbee, Property Value: false
+dev:3392024-01-07 21:19:40.066debugZemismart M1 Matter Bridge Property Name: id, Property Value: 346
+dev:3392024-01-07 21:19:40.065debugZemismart M1 Matter Bridge Property Name: hub, Property Value: Home-C-8
+dev:3392024-01-07 21:19:40.063debugZemismart M1 Matter Bridge Property Name: roomName, Property Value: null
+dev:3392024-01-07 21:19:40.061debugZemismart M1 Matter Bridge Property Name: zigbeeId, Property Value: null
+dev:3392024-01-07 21:19:40.059debugZemismart M1 Matter Bridge Property Name: isComponent, Property Value: false
+dev:3392024-01-07 21:19:40.057debugZemismart M1 Matter Bridge Property Name: driverId, Property Value: 379
+dev:3392024-01-07 21:19:40.055debugZemismart M1 Matter Bridge Property Name: currentStates, Property Value: []
+dev:3392024-01-07 21:19:40.033debugZemismart M1 Matter Bridge componentOn(FingerBot) code=null functions=[:]
+
+
+==== Tuya Cloud =====
+
+category: kg
+functions: {"switch_1":{"type":"Boolean"}}
+id: bf8017d94515419f12bokr
+label: Fingerbot 3 Socket 1
+local_key: 7?iJAQgSA<rZ?8Ys
+name: ADAPROX 手指机器人- Zigbee
+online: true
+product_id: dse8ogfy
+statusSet: {"switch_1":{"type":"Boolean"}}
+
+
+-------
+category: pc
+functions: {"switch_1":{"type":"Boolean"}}
+id: bfaeeb2ee22355e6bf6usb
+label: Xenon 4+1 Zigbee Socket 1
+local_key:
+name: 排插4+1 Zigbee
+online: true
+product_id: cfnprab5
+statusSet: {"switch_1":{"type":"Boolean"}}
+
+------- 
+category: wsdcg
+functions: {"temp_unit_convert":{"range":["c","f"],"type":"Enum"},"maxtemp_set":{"unit":"\u2103","min":-10,"max":60,"scale":0,"step":1,"type":"Integer"},"minitemp_set":{"unit":"\u2103","min":-10,"max":60,"scale":0,"step":1,"type":"Integer"},"maxhum_set":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"minihum_set":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"switch":{"type":"Boolean"}}
+id: bf68dc71ef497dc06dech7
+label: Temperature Humidity Sensor 2
+local_key: 7?iJAQgSA<rZ?8Ys
+name: Zigbee温湿度 NEO
+online: false
+product_id: qaaysllp
+statusSet: {"temp_current":{"unit":"\u2103","min":-100,"max":600,"scale":1,"step":1,"type":"Integer"},"humidity_value":{"unit":"%","min":0,"max":1000,"scale":1,"step":1,"type":"Integer"},"battery_percentage":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"temp_unit_convert":{"range":["c","f"],"type":"Enum"},"maxtemp_set":{"unit":"\u2103","min":-10,"max":60,"scale":0,"step":1,"type":"Integer"},"minitemp_set":{"unit":"\u2103","min":-10,"max":60,"scale":0,"step":1,"type":"Integer"},"maxhum_set":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"minihum_set":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"temp_alarm":{"range":["loweralarm","upperalarm","cancel"],"type":"Enum"},"hum_alarm":{"range":["loweralarm","upperalarm","cancel"],"type":"Enum"},"bright_value":{"unit":"lux","min":0,"max":1000000,"scale":0,"step":1,"type":"Integer"},"switch":{"type":"Boolean"}}
+-------
+
+category: pir
+functions: {}
+id: bf9c613b07dfa6b870mwwu
+label: Motion Sensor and button
+local_key:
+name: 人体传感器Pro (Zigbee)
+online: true
+product_id: cwamkvua
+statusSet: {"pir":{"range":["pir","none"],"type":"Enum"},"battery_percentage":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"}}
+-------
+category: hps
+functions: {"far_detection":{"unit":"cm","min":75,"max":600,"scale":0,"step":75,"type":"Integer"},"presence_time":{"unit":"Min","min":0,"max":65535,"scale":0,"step":1,"type":"Integer"},"motion_sensitivity_value":{"unit":"","min":1,"max":5,"scale":0,"step":1,"type":"Integer"},"motionless_sensitivity":{"unit":"","min":1,"max":5,"scale":0,"step":1,"type":"Integer"},"indicator":{"type":"Boolean"},"no_one_time":{"unit":"\u79d2","min":10,"max":10000,"scale":0,"step":1,"type":"Integer"}}
+id: bf211fbfa60b43930blyjm
+label: Human presence sensor (ZigBee) 2
+local_key: a0702d62e8b8b3f6
+name: 人体存在传感器（Zigbee）
+online: false
+product_id: awarhusb
+statusSet: {"presence_state":{"range":["none","presence"],"type":"Enum"},"far_detection":{"unit":"cm","min":75,"max":600,"scale":0,"step":75,"type":"Integer"},"presence_time":{"unit":"Min","min":0,"max":65535,"scale":0,"step":1,"type":"Integer"},"motion_sensitivity_value":{"unit":"","min":1,"max":5,"scale":0,"step":1,"type":"Integer"},"motionless_sensitivity":{"unit":"","min":1,"max":5,"scale":0,"step":1,"type":"Integer"},"dis_current":{"unit":"cm","min":0,"max":600,"scale":0,"step":1,"type":"Integer"},"illuminance_value":{"unit":"lux","min":0,"max":10000,"scale":0,"step":1,"type":"Integer"},"indicator":{"type":"Boolean"},"no_one_time":{"unit":"\u79d2","min":10,"max":10000,"scale":0,"step":1,"type":"Integer"}}
+-------
+
+category: cl
+functions: {"control":{"range":["open","stop","close","continue"],"type":"Enum"},"percent_control":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"mode":{"range":["morning","night"],"type":"Enum"},"control_back_mode":{"range":["forward","back"],"type":"Enum"},"border":{"range":["up","down","up_delete","down_delete","remove_top_bottom"],"type":"Enum"},"position_best":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"click_control":{"range":["up","down"],"type":"Enum"}}
+id: bf0e85229419cd1ee0kruu
+label: zemismart zigbee curtain motor 3
+local_key: 7?iJAQgSA<rZ?8Ys
+name: zemismart zigbee curtain motor
+online: true
+product_id: cf1sl3tj
+statusSet: {"control":{"range":["open","stop","close","continue"],"type":"Enum"},"percent_control":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"percent_state":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"mode":{"range":["morning","night"],"type":"Enum"},"control_back_mode":{"range":["forward","back"],"type":"Enum"},"work_state":{"range":["opening","closing"],"type":"Enum"},"situation_set":{"range":["fully_open","fully_close"],"type":"Enum"},"fault":{"label":["motor_fault"],"type":"Bitmap"},"battery_percentage":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"border":{"range":["up","down","up_delete","down_delete","remove_top_bottom"],"type":"Enum"},"position_best":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"click_control":{"range":["up","down"],"type":"Enum"}}
+-------
 

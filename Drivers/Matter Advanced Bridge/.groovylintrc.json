@@ -1,0 +1,26 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "CompileStatic": {
+            "enabled": false
+        },
+        "DuplicateMapLiteral": {
+            "enabled": false
+        },
+        "DuplicateStringLiteral": {
+            "enabled": false
+        },
+        "FactoryMethodName": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "NglParseError": {
+            "enabled": false
+        },
+        "PublicMethodsBeforeNonPublicMethods": {
+            "enabled": false
+        }
+    }
+}
