@@ -22,7 +22,7 @@
  * ver. 1.0.3  2024-01-11 kkossev  - Child devices : deviceCount, mapTuyaCategory(d); added 'Matter_Generic_Component_Motion_Sensor.groovy', 'Matter_Generic_Component_Window_Shade.groovy' and 'matterLib.groovy'; Hubitat Bundle package;
  *                                   A1 Bridge Discovery now uses the short version; added logTrace() and logError() methods; setSwitch and setLabel commands visible in _DEBUG mode only
  *
- *                                   TODO: [====MVP====] Publish version 1.0.3 (Bundle)
+ *                                   TODO:
  *
  *                                   TODO: [====MVP====] use component/ driver for the switch
  *                                   TODO: [====MVP====] logTrace to be switched off after 30 minutes!
@@ -47,6 +47,7 @@
  *                                   TODO: [REFACTORING] Convert SupportedClusters to Map that include the known attributes to be subscribed to
  *
  *                                   TODO: [ENHANCEMENT] deviceCount; endpointsCount
+ *                                   TODO: [ENHANCEMENT] DeleteDevices() to take device# parameter to delete a single device (0=all)
  *                                   TODO: [ENHANCEMENT] store subscription lists in Hex format
  *                                   TODO: [ENHANCEMENT] Philips Hue Bridge discovery (subscription) depending on the ClusterAttributes list supported
  *                                   TODO: [ENHANCEMENT] add getInfo(Basic) for the child devices during the discovery !
@@ -74,10 +75,12 @@
 #include kkossev.matterLib
 
 String version() { '1.0.3' }
-String timeStamp() { '2023/01/11 10:59 AM' }
+String timeStamp() { '2023/01/11 10:07 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
+@Field static final Boolean STATE_CACHING = true             // enable/disable state caching
+@Field static final Integer CACHING_TIMER = 60               // state caching time in seconds 
 @Field static final Integer DIGITAL_TIMER = 3000             // command was sent by this driver
 @Field static final Integer REFRESH_TIMER = 6000             // refresh time in miliseconds
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
@@ -168,7 +171,7 @@ metadata {
             command 'unsubscribe'
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
-        // fingerprints are commented out, because are already included in the stock driver
+        // do not expose the fingerprints for now ... Let the stock driver be assigned automatically.
         // fingerprint endpointId:"01", inClusters:"0003,001D", outClusters:"001E", model:"Aqara Hub E1", manufacturer:"Aqara", controllerType:"MAT"
     }
     preferences {
@@ -201,11 +204,21 @@ metadata {
     0x0406      // parseOccupancySensing
 ]
 
+// Json Parsing Cache
+@Field static final Map<String, Map> jsonCache = new ConcurrentHashMap<>()
+
+// Track for dimming operations
+@Field static final Map<String, Integer> levelChanges = new ConcurrentHashMap<>()
+
+// Json Parser
+@Field static final JsonSlurper jsonParser = new JsonSlurper()
+
+// Random number generator
+@Field static final Random random = new Random()
+
 //parsers
 void parse(final String description) {
     checkDriverVersion()
-    if (state.stats  != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats =  [:] }
-    if (state.lastRx != null) { state.lastRx['checkInTime'] = new Date().getTime() }     else { state.lastRx = [:] }
     checkSubscriptionStatus()
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
@@ -221,6 +234,7 @@ void parse(final String description) {
         logWarn "parse: descMap is null description:${description}"
         return
     }
+    updateStateStats(descMap)
     if (!(descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE']) || !DO_NOT_TRACE_FFF) {
         logDebug "parse: descMap:${descMap}  description:${description}"
     }
@@ -1440,16 +1454,6 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
 /* code segments 'borrowed' from Jonathan's 'Tuya IoT Platform (Cloud)' driver importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/Tuya/TuyaOpenCloudAPI.groovy' */
 
 // Json Parsing Cache
-@Field static final Map<String, Map> jsonCache = new ConcurrentHashMap<>()
-
-// Track for dimming operations
-@Field static final Map<String, Integer> levelChanges = new ConcurrentHashMap<>()
-
-// Random number generator
-@Field static final Random random = new Random()
-
-// Json Parser
-@Field static final JsonSlurper jsonParser = new JsonSlurper()
 
 // Tuya Function Categories  TODO - refactor or remove !!!!
 @Field static final Map<String, List<String>> tuyaFunctions = [
@@ -1500,11 +1504,11 @@ private static Map mapTuyaCategory(Map d) {
     }
     if ('0406' in d.ServerList) {   // OccupancySensing (motion)
         //return [ driver: 'Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
-        return [ namespace: 'component', driver: 'Matter Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
+        return [ namespace: 'kkossev', driver: 'Matter Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
     }
     /* groovylint-disable-next-line IfStatementCouldBeTernary */
     if ('0102' in d.ServerList) {   // Curtain Motor (uses custom driver)
-        return [ namespace: 'component', driver: 'Matter Generic Component Window Shade', product_name: 'Curtain Motor' ]
+        return [ namespace: 'kkossev', driver: 'Matter Generic Component Window Shade', product_name: 'Curtain Motor' ]
     }
 
 /*
@@ -1670,6 +1674,43 @@ void componentClose(DeviceWrapper dw) {
     }
     logError "componentClose(${dw}) (TODO: implement!)"
 }
+
+// Component command to start level change (up or down)
+void componentStartLevelChange(DeviceWrapper dw, String direction) {
+    levelChanges[dw.deviceNetworkId] = (direction == 'down') ? -10 : 10
+    if (txtEnable) { LOG.info "Starting level change ${direction} for ${dw}" }
+    runInMillis(1000, 'doLevelChange')
+}
+
+// Component command to stop level change
+void componentStopLevelChange(DeviceWrapper dw) {
+    if (txtEnable) { LOG.info "Stopping level change for ${dw}" }
+    levelChanges.remove(dw.deviceNetworkId)
+}
+
+// Utility function to handle multiple level changes
+void doLevelChange() {
+    List active = levelChanges.collect() // copy list locally
+    active.each { kv ->
+        ChildDeviceWrapper dw = getChildDevice(kv.key)
+        if (dw != null) {
+            int newLevel = (int)dw.currentValue('level') + kv.value
+            if (newLevel < 0) { newLevel = 0 }
+            if (newLevel > 100) { newLevel = 100 }
+            componentSetLevel(dw, newLevel)
+            if (newLevel <= 0 && newLevel >= 100) {
+                componentStopLevelChange(device)
+            }
+        } else {
+            levelChanges.remove(kv.key)
+        }
+    }
+
+    if (!levelChanges.isEmpty()) {
+        runInMillis(1000, 'doLevelChange')
+    }
+}
+
 
 // Component command to set position
 void componentSetPosition(DeviceWrapper dw, BigDecimal position) {
@@ -2162,25 +2203,26 @@ void parseTest(par) {
     parse(par)
 }
 
+void updateStateStats(Map descMap) {
+    if (state.stats  != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats =  [:] }
+    if (state.lastRx != null) { state.lastRx['checkInTime'] = new Date().getTime() }     else { state.lastRx = [:] }
+/*    
+    String dni = device.getId() + '_' + descMap['endpoint'] ?: 'XX' 
+    if (stateCache[dni] == null) { stateCache[dni] = [:] }
+    if (stateCache[dni][stats] == null) { stateCache[dni][stats]  = [:] }
+    if (stateCache[dni][lastRx] == null) { stateCache[dni][lastRx]  = [:] }
+    stateCache[dni][lastRx]['checkInTime'] = new Date().getTime()
+    stateCache[dni][lastRx]['rxCtr'] = (stateCache[dni]['rxCtr'] ?: 0) + 1
+*/    
+}
+
+
+@Field static final Map<String, Map> stateCache = new ConcurrentHashMap<>()
+
+@Field volatile static Map<String,Long> TimeStamps = [:]
+
 /* groovylint-disable-next-line UnusedMethodParameter */
 void test(par) {
-    /*
-    log.warn "test... ${par}"
-    log.debug "Matter cluster names = ${matter.getClusterNames()}"    // OK
-    log.debug "Matter getClusterIdByName ${matter.getClusterIdByName('Identify')}"  // OK
-    log.debug "Matter getClusterName(3) :  ${matter.getClusterName(3)}"  // not OK - echoes back the cluster number?
-    */
-    List<Map<String, String>> attributePaths = []
-    attributePaths.add(matter.attributePath(0x01, 0x001D, 0x00))
-    attributePaths.add(matter.attributePath(0x1F, 0x0003, 0x00))
-    String cmd = matter.readAttributes(attributePaths)
-    sendToDevice(cmd)
-
-    //List<Map<String, String>> subscribePaths = []
-    //String cmd = ''
-    //state.deviceType == 'MATTER_BRIDGE'
-    //attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x00))
-    //subscribePaths.add(matter.attributePath(0, 0x001D, 0x00))
-    cmd = matter.subscribe(2, 0xFFFF, attributePaths)
-    sendToDevice(cmd)
+    log.warn "test(${par})"
+    log.warn "test(${par}) stateCache=${stateCache}"  
 }
