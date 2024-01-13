@@ -79,9 +79,9 @@
 #include kkossev.matterLib
 
 String version() { '1.0.4' }
-String timeStamp() { '2023/01/14 1:29 AM' }
+String timeStamp() { '2023/01/14 1:35 AM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
