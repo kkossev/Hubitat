@@ -4,6 +4,9 @@
         "CompileStatic": {
             "enabled": false
         },
+        "DuplicateListLiteral": {
+            "enabled": false
+        },
         "DuplicateMapLiteral": {
             "enabled": false
         },

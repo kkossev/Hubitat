@@ -6,7 +6,7 @@ library(
     name: 'matterLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/MatterLib.groovy',
-    version: '3.0.0',
+    version: '1.0.1',
     documentationLink: ''
 )
 /*
@@ -24,11 +24,8 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * This library is inspired by @w35l3y work on Tuya device driver (Edge project).
-  * For a big portions of code all credits go to Jonathan Bradshaw.
-  *
-  *
   * ver. 1.0.0  2024-01-10 kkossev  - first version
+  * ver. 1.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102
   *
   *                                   TODO:
   *
@@ -37,8 +34,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterLibVersion = '1.0.0'
-@Field static final String matterLibStamp   = '2024/01/10 5:00 PM'
+@Field static final String matterLibVersion = '1.0.1'
+@Field static final String matterLibStamp   = '2024/01/11 11:59 PM'
 
 // no metadata section for matterLib
 
@@ -482,6 +479,48 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0000  : 'StateValue'
 ]
 
+// 5.3.3 Window Covering Cluster 0x0102 (258)
+@Field static final Map<Integer, String> WindowCoveringClusterAttributes = [
+    0x0000  : 'Type',                           // Tuya - 00
+    0x0001  : 'PhysicalClosedLimitLift',
+    0x0002  : 'PhysicalClosedLimitTilt',
+    0x0003  : 'CurrentPositionLift',            // Tuya - 00
+    0x0004  : 'CurrentPositionTilt',
+    0x0005  : 'NumberOfActuationsLift',
+    0x0006  : 'NumberOfActuationsTilt',
+    0x0007  : 'ConfigStatus',                   // Tuya - 04
+    0x0008  : 'CurrentPositionLiftPercentage',  // Tuya - 00
+    0x0009  : 'CurrentPositionTiltPercentage',
+    0x000A  : 'OperationalStatus',              // Tuya - 00
+    0x000B  : 'TargetPositionLiftPercent100ths',    // Tuya - 1170 (must be subtracted from 100 ?)
+    0x000C  : 'TargetPositionTiltPercent100ths',
+    0x000D  : 'EndProductType',                 // Tuya - 00
+    0x000E  : 'CurrentPositionLiftPercent100ths',   // Tuya - 1A2C (must be subtracted from 100 ?)
+    0x000F  : 'CurrentPositionTiltPercent100ths',
+    0x0010  : 'InstalledOpenLimitLift',         // Tuya - 00
+    0x0011  : 'InstalledClosedLimitLift',       // Tuya - FFFF
+    0x0012  : 'InstalledOpenLimitTilt',
+    0x0013  : 'InstalledClosedLimitTilt',
+    0x0014  : 'VelocityLift',
+    0x0015  : 'AccelerationTimeLift',
+    0x0016  : 'DecelerationTimeLift',
+    0x0017  : 'Mode',                           // Tuya - 00
+    0x0018  : 'IntermediateSetpointsLift',
+    0x0019  : 'IntermediateSetpointsTilt',
+    0x001A  : 'SafetyStatus'
+]
+
+// 5.3.7 Window Covering Controller Cluster Commands
+@Field static final  Map<Integer, String> WindowCoveringClusterCommands = [
+    0x00    : 'UpOrOpen',
+    0x01    : 'DownOrClose',
+    0x02    : 'StopMotion',
+    0x04    : 'GoToLiftValue',
+    0x05    : 'GoToLiftPercentage',
+    0x07    : 'GoToTiltValue',
+    0x08    : 'GoToTiltPercentage'
+]
+
 // 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
 @Field static final Map<Integer, String> TemperatureMeasurementClusterAttributes = [
     0x0000  : 'MeasuredValue',
@@ -514,7 +553,7 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0032  : 'PhysicalContactUnoccupiedToOccupiedThreshold'
 ]
 
-@Field static final Map<Integer, String> matterDeviceTypes = [
+@Field static final Map<Integer, String> MatterDeviceTypes = [
     0x000A: 'Door Lock',
     0x000B: 'Door Lock Controller',
     0x000E: 'Aggregator',
@@ -561,7 +600,7 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0850: 'On/Off Sensor'
 ]
 
-@Field static final Map<String, Map<String, String>> matterDeviceTypeMappings = [
+@Field static final Map<String, Map<String, String>> MatterDeviceTypeMappingsTuya = [
     'On/Off Light':             ['clusters': ['On/Off', 'Level Control'],   'tuyaType': 'Switch'],
     'Dimmable Light':           ['clusters': ['On/Off', 'Level Control'],   'tuyaType': 'Light'],
     'Color Temperature Light':  ['clusters': ['On/Off', 'Level Control', 'Color Control'], 'tuyaType': 'Light'],
