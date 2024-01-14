@@ -660,3 +660,52 @@ product_id: cf1sl3tj
 statusSet: {"control":{"range":["open","stop","close","continue"],"type":"Enum"},"percent_control":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"percent_state":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"mode":{"range":["morning","night"],"type":"Enum"},"control_back_mode":{"range":["forward","back"],"type":"Enum"},"work_state":{"range":["opening","closing"],"type":"Enum"},"situation_set":{"range":["fully_open","fully_close"],"type":"Enum"},"fault":{"label":["motor_fault"],"type":"Bitmap"},"battery_percentage":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"border":{"range":["up","down","up_delete","down_delete","remove_top_bottom"],"type":"Enum"},"position_best":{"unit":"%","min":0,"max":100,"scale":0,"step":1,"type":"Integer"},"click_control":{"range":["up","down"],"type":"Enum"}}
 -------
 
+dev:42662024-01-12 23:07:57.365infoZemismart M1 Cluster BridgedDeviceBasicInformation (0x0039) endpoint 0x19 attributes and values list (0xFFFB) :
+[0001] VendorName = tuya
+[0002] VendorID = 0x12D5 (4821)
+[0003] ProductName = KA Extended Color Light
+[0004] ProductID = 0x31 (49)
+[0005] NodeLabel = 0x14 (20)
+[0007] HardwareVersion = 0x64 (100)
+[0008] HardwareVersionString = 1.0
+[0009] SoftwareVersion = 0x64 (100)
+[000A] SoftwareVersionString = 1.0
+[000B] ManufacturingDate = 0x20221103 (539103491)
+[000C] PartNumber = 0x14 (20)
+[000D] ProductURL = 0x14 (20)
+[000E] ProductLabel = 0x14 (20)
+[000F] SerialNumber = 0x14 (20)
+[0011] Reachable = 01
+[0012] UniquieID = 0x14 (20)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 00
+[FFFD] ClusterRevision = 00
+
+============================ Zemismart Blinds ============================
+
+dev:42662024-01-12 11:24:22.536infoZemismart M1 Cluster Descriptor (0x001D) endpoint 0x0A attributes and values list (0xFFFB) :
+[0000] DeviceTypeList = [02, 18010124, 13, 1818]
+[0001] ServerList = [1D, 2E, 39, 40, 41, 0102]
+[0002] ClientList = 0x1618 (5656)
+[0003] PartsList = 0x1618 (5656)
+[FFF8] GeneratedCommandList = 0x1618 (5656)
+[FFF9] AcceptedCommandList = 0x1618 (5656)
+[FFFC] FeatureMap = 01
+[FFFD] ClusterRevision = 01
+
+dev:42662024-01-12 11:24:25.714debugZemismart M1 sendToDevice (String): (he rattrs [{"ep":"0x0A","cluster":"0x001D","attr":"0x0000"},{"ep":"0x0A","cluster":"0x001D","attr":"0x0001"},{"ep":"0x0A","cluster":"0x001D","attr":"0x0002"},{"ep":"0x0A","cluster":"0x001D","attr":"0x0003"},{"ep":"0x0A","cluster":"0x001D","attr":"0xFFF8"},{"ep":"0x0A","cluster":"0x001D","attr":"0xFFF9"},{"ep":"0x0A","cluster":"0x001D","attr":"0xFFFB"},{"ep":"0x0A","cluster":"0x001D","attr":"0xFFFC"},{"ep":"0x0A","cluster":"0x001D","attr":"0xFFFD"}])
+dev:42662024-01-12 11:24:25.709debugZemismart M1 requestMatterClusterAttributesValues: serverList:[00, 01, 02, 03, FFF8, FFF9, FFFB, FFFC, FFFD]
+
+
+!!!!!!!!!!!!
+dev:42662024-01-12 11:33:33.942debugZemismart M1 sendToDevice (String): (he rattrs [{"ep":"0x0A","cluster":"0x001D","attr":"0xFFF8"}])
+dev:42662024-01-12 11:33:33.935debugZemismart M1 readAttribute(endpoint:10, cluster:29, attrId:65528)
+!!!!!!!!!!!!                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   FFF8, FFF9 time-outs?
+
+
+----- 
+
+dev:42662024-01-12 12:45:28.018debugZemismart M1 parse: descMap:[endpoint:0A, cluster:0039, attrId:FFFB, value:[01, 02, 03, 04, 05, 07, 08, 0A, 09, 0B, 0C, 0D, 0E, 0F, 11, 12, FFF8, FFF9, FFFB, FFFC, FFFD], clusterInt:57, attrInt:65531] description:read attr - endpoint: 0A, cluster: 0039, attrId: FFFB, value: 160401040204030404040504070408040A0409040B040C040D040E040F0411041205F8FF05F9FF05FBFF05FCFF05FDFF18
+dev:42662024-01-12 12:45:27.934debugZemismart M1 sendToDevice (String): (he rattrs [{"ep":"0x0A","cluster":"0x0039","attr":"0xFFFB"}])
+dev:42662024-01-12 12:45:27.930debugZemismart M1 readAttribute(endpoint:10, cluster:57, attrId:65531)

@@ -66,7 +66,7 @@
  * ver. 1.6.6  2023-11-02 kkossev  - _TZE204_ijxvkhd0 staticDetectionSensitivity bug fix; SONOFF radar clusters binding; assign profile UNKNOWN for unknown devices; SONOFF radar cluster FC11 attr 2001 processing as occupancy; TS0601_IJXVKHD0_RADAR sensitivity as number; number type pars are scalled also!; _TZE204_ijxvkhd0 sensitivity settings changes; added preProc function; TS0601_IJXVKHD0_RADAR - removed multiplying by 10
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
- * ver. 1.7.0  2024-01-02 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests
+ * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  *
  *                                   TODO:   https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/926?u=kkossev
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
@@ -100,7 +100,7 @@
 */
 
 def version() { '1.7.0' }
-def timeStamp() { '2024/01/02 1:54 PM' }
+def timeStamp() { '2024/01/14 10:55 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -420,6 +420,7 @@ def isChattyRadarReport(descMap) {
             commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://www.aliexpress.com/item/1005004095233195.html
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0500,0001,0400', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_3towulqd', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/934?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bh3n6gk8', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL'],          // https://community.hubitat.com/t/tze200-bh3n6gk8-motion-sensor-not-working/123213?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_1ibpyhdc', deviceJoinName: 'Tuya 2 in 1 Zigbee Mini PIR Motion Detector + Bright Lux ZG-204ZL']          //
             ],
@@ -1118,9 +1119,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             //spammyDPsToNotTrace : [182],
             deviceJoinName: 'Aubess Human Presence Detector O7OE4N9A',
             configuration : [:]
-    ],    
-
-    //
+    ],
 
     'OWON_OCP305_RADAR'   : [
             description   : 'OWON OCP305 Radar',
@@ -2126,158 +2125,157 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len) {
         return
     }
     switch (dp) {
-            case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence state for almost of the radars
+        case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence state for almost of the radars
             logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
             handleMotion(motionActive = fncmd)
             break
-            case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
+        case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
             logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
             handleTuyaBatteryLevel(fncmd)
             break
-            case 0x05 :     // tamper alarm for TS0202 4-in-1
+        case 0x05 :     // tamper alarm for TS0202 4-in-1
             def value = fncmd == 0 ? 'clear' : 'detected'
             logInfo "${device.displayName} tamper alarm is ${value} (dp=05,fncmd=${fncmd})"
             sendEvent(name : 'tamper',    value : value, isStateChange : true)
             break
-            case 0x07 : // temperature for 4-in-1 (no data)
+        case 0x07 : // temperature for 4-in-1 (no data)
             logDebug "4-in-1 temperature (dp=07) is ${fncmd / 10.0 } ${fncmd}"
             temperatureEvent(fncmd / getTemperatureDiv())
             break
-            case 0x08 : // humidity for 4-in-1 (no data)
+        case 0x08 : // humidity for 4-in-1 (no data)
             logDebug "4-in-1 humidity (dp=08) is ${fncmd} ${fncmd}"
             humidityEvent(fncmd / getHumidityDiv())
             break
-            case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
+        case 0x09 : // sensitivity for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
             logInfo "received sensitivity : ${sensitivityOpts.options[fncmd]} (${fncmd})"
             device.updateSetting('sensitivity', [value:fncmd.toString(), type:'enum'])
             break
-            case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
+        case 0x0A : // (10) keep time for TS0202 4-in-1 and 2in1 _TZE200_3towulqd
             logInfo "Keep Time (dp=0x0A) is ${keepTimeIASOpts.options[fncmd]} (${fncmd})"
             device.updateSetting('keepTime', [value:fncmd.toString(), type:'enum'])
             break
-            case 0x19 : // (25)
+        case 0x19 : // (25)
             logDebug "Motion Switch battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
             handleTuyaBatteryLevel(fncmd)
             break
-            case 0x65 :    // (101)
+        case 0x65 :    // (101)
             //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
             logDebug "motion event 0x65 fncmd = ${fncmd}"
             handleMotion(motionActive = fncmd)
             break
-            case 0x66 :     // (102)
+        case 0x66 :     // (102)
             if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1
                 logInfo "4-in-1 reporting time interval is ${fncmd} minutes"
                 device.updateSetting('reportingTime4in1', [value:fncmd as int , type:'number'])
             }
-                else if (is3in1()) {     // battery level for 3 in 1;
+            else if (is3in1()) {     // battery level for 3 in 1;
                 logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 handleTuyaBatteryLevel(fncmd)
-                }
-                else {
+            }
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x68 :     // (104)
+        case 0x68 :     // (104)
             if (isYXZBRB58radar()) {    // [0x68, 'radar_scene', tuya.valueConverterBasic.lookup({ 'default': tuya.enum(0), 'bathroom': tuya.enum(1), 'bedroom': tuya.enum(2), 'sleeping': tuya.enum(3), })],
                 logInfo "YXZBRB58 radar reported radar_scene dp=${dp} value=${fncmd}"
-    }
-                else if (is4in1()) {    // case 104: // 0x68 temperature compensation
+            }
+            else if (is4in1()) {    // case 104: // 0x68 temperature compensation
                 def val = fncmd
                 // for negative values produce complimentary hex (equivalent to negative values)
-                if (val > 4294967295) val = val - 4294967295
+                if (val > 4294967295) { val = val - 4294967295 }
                 logInfo "4-in-1 temperature calibration is ${val / 10.0}"
-                }
-                else {
+            }
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x69 :    // (105)
+        case 0x69 :    // (105)
             if (is4in1()) {    // case 105:// 0x69 humidity calibration (compensation)
                 def val = fncmd
                 if (val > 4294967295) val = val - 4294967295
                 logInfo "4-in-1 humidity calibration is ${val}"
             }
-                else {
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x6A : // (106)
+        case 0x6A : // (106)
             if (is4in1()) {    // case 106: // 0x6a lux calibration (compensation)
                 def val = fncmd
-                if (val > 4294967295) val = val - 4294967295
+                if (val > 4294967295) { val = val - 4294967295 }
                 logInfo "4-in-1 lux calibration is ${val}"
             }
-                else {
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x6B : // (107)
+        case 0x6B : // (107)
             if (is4in1()) {    //  Tuya 4 in 1 (107) -> temperature in ?C
                 temperatureEvent(fncmd / getTemperatureDiv())
             }
-                else {
+            else {
                 logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6B)"
-                }
+            }
             break
-            case 0x6C : //  (108) Tuya 4 in 1 -> humidity in %
+        case 0x6C : //  (108) Tuya 4 in 1 -> humidity in %
             if (is4in1()) {
                 humidityEvent(fncmd / getHumidityDiv())
             }
-                else {
+            else {
                 logDebug "(UNEXPECTED) : ${fncmd} (DP=0x6C)"
-                }
+            }
             break
-            case 0x6D :    // (109)
+        case 0x6D :    // (109)
             if (is4in1()) {   // case 109: 0x6d PIR enable (PIR power)
                 logInfo "4-in-1 enable is ${fncmd}"
             }
-                else {
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x6E : // (110) Tuya 4 in 1
+        case 0x6E : // (110) Tuya 4 in 1
             if (is4in1()) {
                 logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
                 handleTuyaBatteryLevel(fncmd)
             }
-                else {
+            else {
                 logDebug "reported unknown parameter dp=${dp} value=${fncmd}"
-                }
+            }
             break
-            case 0x6F : // (111) Tuya 4 in 1: // 0x6f led enable
+        case 0x6F : // (111) Tuya 4 in 1: // 0x6f led enable
             if (is4in1()) {
                 logInfo "4-in-1 LED is: ${fncmd == 1 ? 'enabled' : 'disabled'}"
                 device.updateSetting('ledEnable', [value:fncmd as boolean, type:'boolean'])
             }
-                else { // 3in1 - temperature alarm switch
+            else { // 3in1 - temperature alarm switch
                 if (settings?.logEnable) log.info "${device.displayName} Temperature alarm switch is: ${fncmd} (DP=0x6F)"
-                }
+            }
             break
-            case 0x70 : // (112)
+        case 0x70 : // (112)
             if (is4in1()) {   // case 112: 0x70 reporting enable (Alarm type)
                 if (settings?.txtEnable) log.info "${device.displayName} reporting enable is ${fncmd}"
             }
-                else {
+            else {
                 if (settings?.logEnable) log.info "${device.displayName} Humidity alarm switch is: ${fncmd} (DP=0x6F)"
-                }
+            }
             break
-            case 0x71 : // (113)
+        case 0x71 : // (113)
             if (is4in1()) {   // case 113: 0x71 unknown  ( ENUM)
                 if (settings?.logEnable) log.info "${device.displayName} <b>UNKNOWN</b> (0x71 reporting enable?) DP=0x71 fncmd = ${fncmd}"
             }
-                else {    // 3in1 - Alarm Type
+            else {    // 3in1 - Alarm Type
                 if (settings?.txtEnable) log.info "${device.displayName} Alarm type is: ${fncmd}"
-                }
+            }
             break
-            default :
+        default :
                 logDebug "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
             break
-}
+    }
 }
 
 private int getTuyaAttributeValue(ArrayList _data) {
     int retValue = 0
-
     if (_data.size() >= 6) {
         int dataLength = _data[5] as Integer
         int power = 1
@@ -2293,9 +2291,9 @@ def handleTuyaBatteryLevel(fncmd) {
     def rawValue = fncmd
     switch (fncmd) {
         case 0: rawValue = 100; break // Battery Full
-        case 1: rawValue = 75; break // Battery High
-        case 2: rawValue = 50; break // Battery Medium
-        case 3: rawValue = 25; break // Battery Low
+        case 1: rawValue = 75;  break // Battery High
+        case 2: rawValue = 50;  break // Battery Medium
+        case 3: rawValue = 25;  break // Battery Low
         case 4: rawValue = 100; break // Tuya 3 in 1 -> USB powered
     }
     getBatteryPercentageResult(rawValue * 2)
@@ -3924,17 +3922,17 @@ def validateAndFixPreferences() {
                     // check if there are any period chars in the foundMap.map string keys as String and format the settingValue as string with 2 decimals
                     else if (foundMap.map.keySet().toString().any { it.contains('.') }) {
                         newValue = String.format('%.2f', oldSettingValue)
-                }
+                    }
                     else {
                         // format the settingValue as a string of the integer value
                         newValue = String.format('%d', oldSettingValue)
                     }
-            }
+                }
                 //
                 device.updateSetting(it.key, [value:newValue, type:foundMap.type])
                 logDebug "validateAndFixPreferences: removed and updated setting ${it.key} from old type ${settingType} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 validationFixes ++
-        }
+            }
             catch (e) {
                 logWarn "validateAndFixPreferences: exception '${e}' caught while creating setting ${it.key} with type ${foundMap.type} to new type ${foundMap.type} with the old value ${oldSettingValue} to new value ${newValue}"
                 // change the settingValue to the foundMap default value
@@ -3949,8 +3947,8 @@ def validateAndFixPreferences() {
                     return null
                 }
             }
+        }
     }
-}
     logDebug "validateAndFixPreferences: validationFailures = ${validationFailures} validationFixes = ${validationFixes}"
 }
 
