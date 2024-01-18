@@ -39,11 +39,11 @@
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
- * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 grup;
+ * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
  * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
- * ver. 1.5.0  2024-01-18 kkossev - (dev. branch) Groovy lint'
+ * ver. 1.5.0  2024-01-18 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction;
  *
- *                                  TODO: add TS0601 _TZE200_vvmbj46n https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev 
+ *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
  *                                  TODO: _TZ3000_qaaysllp frequent illuminance reports - check configuration; add minimum time between lux reports parameter!
  *                                  TODO:  TS0201 - bindings are sent, even if nothing to configure?
@@ -51,7 +51,7 @@
 */
 
 def version() { '1.5.0' }
-def timeStamp() { '2024/01/18 12:07 PM' }
+def timeStamp() { '2024/01/18 7:06 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -109,7 +109,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0004,0005,0402,0405,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bjawzodf', deviceJoinName: 'Tuya like Temperature Humidity LCD Display' // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bjawzodf', deviceJoinName: 'Tuya like Temperature Humidity LCD Display'                // https://de.aliexpress.com/item/4000739457722.html?gatewayAdapt=glo2deu
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_zl1kmjqx', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_qyflbnbj', deviceJoinName: 'Tuya Temperature Humidity sensor MIR-TE100-TY'            // https://www.aliexpress.com/item/1005002836127648.html
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_myd45weu', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ga1maeof', deviceJoinName: 'Tuya Temperature Humidity Soil Monitoring Sensor'          // https://www.aliexpress.com/item/1005004979025740.html
@@ -144,6 +144,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,0402,0405,FC57,FC11', outClusters:'0019', model:'SNZB-02P', manufacturer:'SONOFF', deviceJoinName: 'Sonoff Temperature and Humidity Sensor SNZB-02P'
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0400,0402,0405,0B05,FCC0', outClusters:'0019', model:'TS0222', manufacturer:'_TYZB01_fi5yftwv', deviceJoinName: 'Konke THI Sensor KK-ES-J01W'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_vvmbj46n', deviceJoinName: 'Tuya Zigbee Temperature Humidity Sensor With Backlight'
     }
     preferences {
         //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
@@ -176,11 +177,11 @@ metadata {
         1: [input: [name: 'humidityOffset', type: 'decimal', title: 'Humidity offset', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0',
                    limit:['ALL']]],
 
-        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: 'Temperature Sensitivity', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..50.0',
+        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: 'Temperature Sensitivity', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..5.0',
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
-        3: [input: [name: 'humiditySensitivity', type: 'number', title: 'Humidity Sensitivity', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..50',
-                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya']]],
+        3: [input: [name: 'humiditySensitivity', type: 'number', title: 'Humidity Sensitivity', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
+                   limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
         4: [input: [name: 'illuminanceSensitivity', type: 'number', title: 'Illuminance Sensitivity', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
@@ -225,10 +226,10 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
-    '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',         // https://www.aliexpress.com/item/1005005198387789.html
-    //'_TZE200_yjjdcqsq'  : 'TS0601_Tuya',         // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/389?u=kkossev
+    '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
     '_TZE200_9yapgbuv'  : 'TS0601_Tuya_2',       // not tested
+    '_TZE200_vvmbj46n'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
     '_TZE200_nnrfa68v'  : 'TS0601_Haozee',       // not tested NOUS E6 https://noussmart.pl/product/e6.html
@@ -565,7 +566,7 @@ def processTuyaCluster( descMap ) {
         }
         def cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
         // TODO : send raw command without 'need confirmation' frame control !
-        if (settings?.logEnable) { log.trace "${device.displayName} now is: ${now()}" }  // KK TODO - convert to Date/Time string!
+        //if (settings?.logEnable) { log.trace "${device.displayName} now is: ${now()}" }  // KK TODO - convert to Date/Time string!
         if (settings?.logEnable) { log.debug "${device.displayName} sending time data : ${cmds}" }
         cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
     //if (state.txCounter != null) state.txCounter = state.txCounter + 1
@@ -726,7 +727,7 @@ def processTuyaDP( descMap, dp, dp_id, fncmdPar) {
         case 0x10 : // (16) Current Luminance _TZ3000_qaaysllp
             illuminanceEvent(fncmd)
             break
-            case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
+        case 0x11 : // (17) temperature max reporting interval, default 120 min (Haozee only) // maxReportingTimeTemp
             if (settings?.maxReportingTimeTemp == ((fncmd * 60 / 2.5) as int)) {
                 if (settings?.logEnable) { log.info "${device.displayName} reported temperature max reporting interval ${((fncmd * 60 / 2.5) as int)} seconds" }
             }
