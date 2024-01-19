@@ -1,0 +1,26 @@
+{
+    "extends": "recommended",
+    "rules": {
+        "DuplicateListLiteral": {
+            "enabled": false
+        },
+        "ImplicitClosureParameter": {
+            "enabled": false
+        },
+        "InsecureRandom": {
+            "enabled": false
+        },
+        "LineLength": {
+            "enabled": false
+        },
+        "MethodReturnTypeRequired": {
+            "enabled": false
+        },
+        "PublicMethodsBeforeNonPublicMethods": {
+            "enabled": false
+        },
+        "UnnecessaryGetter": {
+            "enabled": false
+        }
+    }
+}
