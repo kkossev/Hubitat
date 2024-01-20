@@ -16,6 +16,7 @@
   *
   * ver. 1.0.0  2024-01-11 kkossev  - first version
   * ver. 1.0.1  2024-01-12 kkossev  - ignoring switch events if no change
+  * ver. 1.0.2  2024-01-20 kkossev  - debug logs
   *
   *                                   TODO:
   *
@@ -23,8 +24,8 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '1.0.1'
-@Field static final String matterComponentMotionStamp   = '2024/01/12 11:58 PM'
+@Field static final String matterComponentMotionVersion = '1.0.2'
+@Field static final String matterComponentMotionStamp   = '2024/01/20 2:42 PM'
 
 metadata {
     definition(name: 'Matter Generic Component Switch', namespace: 'kkossev', author: 'Krassimir Kossev') {
@@ -78,11 +79,13 @@ void parse(List<Map> description) {
 
 // Component command to turn device on
 void on() {
+    if (logEnable) { log.debug "${device} turning on ..." }
     parent?.componentOn(device)
 }
 
 // Component command to turn device off
 void off() {
+    if (logEnable) { log.debug "${device} turning off ..." }
     parent?.componentOff(device)
 }
 

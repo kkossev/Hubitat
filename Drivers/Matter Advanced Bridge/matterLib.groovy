@@ -25,7 +25,8 @@ library(
   *  for the specific language governing permissions and limitations under the License.
   *
   * ver. 1.0.0  2024-01-10 kkossev  - first version
-  * ver. 1.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102
+  * ver. 1.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
+  * ver. 1.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
   *
   *                                   TODO:
   *
@@ -34,8 +35,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterLibVersion = '1.0.1'
-@Field static final String matterLibStamp   = '2024/01/11 11:59 PM'
+@Field static final String matterLibVersion = '1.0.2'
+@Field static final String matterLibStamp   = '2024/01/19 8:43 PM'
 
 // no metadata section for matterLib
 
@@ -185,7 +186,7 @@ Map getAttributesMapByClusterId(String cluster) {
     0xFFFD  : 'ClusterRevision'
 ]
 
-// 9.5. Descriptor Cluser 0x001D ep=0
+// 9.5. Descriptor Cluster 0x001D ep=0
 @Field static final Map<Integer, String> DescriptorClusterAttributes = [
     0x0000  : 'DeviceTypeList',
     0x0001  : 'ServerList',
@@ -322,9 +323,8 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0008  : 'TimeSinceReset'
 ]
 
-/*
 // 9.13.4. Bridged Device Basic Information Cluster 0x0039  // TODO - check the IDs !!  - probably the same as Basic Information Cluster 0x0028
-@Field static final Map<Integer, String> BridgedDeviceBasicInformationClusterAttributes = [
+@Field static final Map<Integer, String> BridgedDeviceBasicClusterAttributes = [
     0x0000  : 'DataModelRevision',
     0x0001  : 'VendorName',
     0x0002  : 'VendorID',
@@ -346,7 +346,6 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0012  : 'UniqueID',
     0x0013  : 'CapabilityMinima'
 ]
-*/
 
 // 11.18.4. Administrator Commissioning Cluster 0x003C
 @Field static final Map<Integer, String> AdministratorCommissioningClusterAttributes = [
@@ -472,6 +471,35 @@ Map getAttributesMapByClusterId(String cluster) {
     0x00    : 'OK',             // Charge level is nominal
     0x01    : 'Warning',        // Charge level is low, intervention may soon be required.
     0x02    : 'Critical'        // Charge level is critical, immediate intervention is required.
+]
+
+// 1.12. Switch Cluster 0x003B Two types of switch devices are supported: latching switch (e.g. rocker switch) and momentary switch (e.g. push button), distinguished with their feature flags.
+// Interactions with the switch device are exposed as attributes (for the latching switch) and as events (for both types of switches)
+
+// 1.12.4. Features 0x003B
+@Field static final Map<Integer, String> SwitchClusterFeatures = [
+    0x00    : 'LatchingSwitch',             // Switch that maintains its position after being pressed (or turned).
+    0x01    : 'MomentarySwitch',            // Switch that does not maintain its position after being pressed (or turned). After releasing, it goes back to its idle position
+    0x02    : 'MomentarySwitchRelease',     // Momentary switch that can distinguish and report release events. When this feature flag MSR is present, MS SHALL be present as well
+    0x03    : 'MomentarySwitchLongPress',   // Momentary switch that can distinguish and report long presses from short presses. When this feature flag MSL is present, MS and MSR SHALL be present as well.
+    0x04    : 'MomentarySwitchMultiPress'   // Momentary switch that can distinguish and report double press and potentially multiple presses with more events, such as triple press, etc. When this feature flag MSM is present, MS and MSR SHALL be present as well
+]
+// 1.12.5. Switch Cluster 0x003B attributes
+@Field static final Map<Integer, String> SwitchClusterAttributes = [
+    0x0000  : 'NumberOfPositions',
+    0x0001  : 'CurrentPosition',
+    0x0002  : 'MultiPressMax'
+]
+
+// 1.12.6. Switch Events Cluster 0x003B
+@Field static final Map<Integer, String> SwitchClusterEvents = [
+    0x00    : 'SwitchLatched',
+    0x01    : 'InitialPress',
+    0x02    : 'LongPress',
+    0x03    : 'ShortRelease',
+    0x04    : 'LongRelease',
+    0x05    : 'MultiPressOngoing',
+    0x06    : 'MultiPressComplete'
 ]
 
 // 1.7 Bolean State Cluster 0x0045
@@ -611,4 +639,3 @@ Map getAttributesMapByClusterId(String cluster) {
     'Occupancy Sensor':         ['clusters': ['Occupancy Sensing'],         'tuyaType': 'PIR'],
     'Window Covering':          ['clusters': ['Window Covering'],           'tuyaType': 'Curtain']
 ]
-
