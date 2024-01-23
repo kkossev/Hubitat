@@ -313,7 +313,9 @@ void disoverGlobalElementsStateMachine(Map data) {
                 // here we have bridgeDescriptor/fingerprintNN : {AttributeList=[00, 01, 02, 03, FFF8, FFF9, FFFB, FFFC, FFFD]}
                 // read all the attributes from the ['AttributeList']
                 List<Map<String, String>> attributePaths = []
-                List<Integer> attributeList = state.bridgeDescriptor['AttributeList'].collect { HexUtils.hexStringToInt(it) }
+                String fingerprintName = getFingerprintName(data.endpoint)
+                String stateClusterName = getStateClusterName([cluster: HexUtils.integerToHexString(data.cluster,2), attrId: 'FFFB'])
+                List<Integer> attributeList = state[fingerprintName][stateClusterName].collect { HexUtils.hexStringToInt(it) }
                 attributeList.each { attrId ->
                     attributePaths.add(matter.attributePath(data.endpoint, data.cluster, attrId))
                 }
@@ -397,6 +399,10 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT   = 9
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT = 10
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT = 11
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_IDENTIFY                      = 12
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT                 = 13
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS           = 14
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT      = 15
 
 @Field static final Integer DISCOVER_ALL_STATE_GET_PARTS_LIST_START                 = 20
 
@@ -448,6 +454,7 @@ void discoverAllStateMachine(Map data = null) {
             sendInfoEvent("Starting Matter Bridge and Devices discovery ...")
             if (state.bridgeDescriptor == null) { state.bridgeDescriptor = [] } // or state['bridgeDescriptor'] = [:] ?
             state.states['isInfo'] = true
+            state['stateMachines']['discoverAllResult'] = RUNNING
             // TODO
             //st = DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST
             st = DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS
@@ -459,7 +466,6 @@ void discoverAllStateMachine(Map data = null) {
         case DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT:
             if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
                 logDebug "discoverAllStateMachine: st:${st} - received discoverGlobalElementsResult confirmation!"
-                state['stateMachines']['discoverAllResult'] = SUCCESS
                 st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST
             }
             else {
@@ -467,7 +473,6 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
-                    state['stateMachines']['discoverAllResult'] = ERROR
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -478,11 +483,9 @@ void discoverAllStateMachine(Map data = null) {
             state['stateMachines']['toBeConfirmed'] = [0, 0x0028, 0xFFFB];  state['stateMachines']['Confirmation'] = false
             retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST_WAIT
             break
-            break
         case DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST_WAIT :
             if (state['stateMachines']['Confirmation'] == true) {
                 logTrace "discoverAllStateMachine: st:${st} - received reading confirmation!"
-                state['stateMachines']['discoverAllResult'] = SUCCESS
                 st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES
             }
             else {
@@ -490,7 +493,6 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
-                    state['stateMachines']['discoverAllResult'] = ERROR
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -513,12 +515,76 @@ void discoverAllStateMachine(Map data = null) {
             break
         case DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT :
             if (state['stateMachines']['Confirmation'] == true) {
-                logTrace "discoverAllStateMachine: st:${st} - received ${attributeName} reading confirmation!"
-                state['stateMachines']['discoverAllResult'] = SUCCESS
+                logTrace "discoverAllStateMachine: st:${st} - received bridgeDescriptor Basic Info reading confirmation!"
 
                 logRequestedClusterAttrResult([cluster:0x28, endpoint:0])
 
                 sendInfoEvent("(A1) Matter Bridge discovery completed")
+                
+                // check if the Indentify cluster 03 is in the ServerList
+                List<String> serverList = state.bridgeDescriptor['ServerList']
+                if (serverList?.contains("03")) {
+                    
+                    state.states['isInfo'] = true
+                    state.states['cluster'] = "0003"
+                    state.tmp = null
+                    state['stateMachines']['Confirmation'] = false
+                    state['stateMachines']['toBeConfirmed'] = [0, 0x0003, serverList.last()]
+                    
+                    disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0003, debug: false])
+                    retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT
+                }
+                else {
+                    st = DISCOVER_ALL_STATE_END
+                }
+            }
+            else {
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                retry++
+                if (retry > STATE_MACHINE_MAX_RETRIES) {
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    st = DISCOVER_ALL_STATE_ERROR
+                }
+            }
+            break
+        case DISCOVER_ALL_STATE_BRIDGE_IDENTIFY :
+        case DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT :
+            if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
+                logDebug "discoverAllStateMachine: st:${st} - received Indentify cluster confirmation!"
+                logRequestedClusterAttrResult([cluster: 0x0003, endpoint: 0])
+
+                // check if the General Diagnostics cluster 0x0033 is in the ServerList
+                List<String> serverList = state.bridgeDescriptor['ServerList']
+                if (serverList?.contains("33")) {
+                    
+                    state.states['isInfo'] = true
+                    state.tmp = null
+                    state['stateMachines']['Confirmation'] = false
+                    state['stateMachines']['toBeConfirmed'] = [0, 0x0033, serverList.last()]
+                    state.states['cluster'] = "0033"
+                    
+                    disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0033, debug: false])
+                    retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT
+                }
+                else {
+                    st = DISCOVER_ALL_STATE_END
+                }
+                st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT
+            }
+            else {
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                retry++
+                if (retry > STATE_MACHINE_MAX_RETRIES) {
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    st = DISCOVER_ALL_STATE_ERROR
+                }
+            }
+            break
+        case DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS :
+        case DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT :
+            if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
+                logDebug "discoverAllStateMachine: st:${st} - received General Diagnostics confirmation!"
+                logRequestedClusterAttrResult([cluster: 0x0033, endpoint: 0])
                 st = DISCOVER_ALL_STATE_END
             }
             else {
@@ -526,12 +592,13 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
-                    state['stateMachines']['discoverAllResult'] = ERROR
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
             break
-        // next - explore the Bridge Extended Info
+
+
+        // TODO (optional) - explore the Bridge Extended Info
         case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT :
             // TODO 
             st = DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT
@@ -560,12 +627,14 @@ void discoverAllStateMachine(Map data = null) {
             logDebug "discoverAllStateMachine: st:${st} - error"
             sendInfoEvent("ERROR during the Matter Bridge and Devices discovery")
             state.states['isInfo'] = false
+            state['stateMachines']['discoverAllResult'] = ERROR
             st = 0
             break
         case DISCOVER_ALL_STATE_END : // 99 - end
             state.states['isInfo'] = false
             logDebug "discoverAllStateMachine: st:${st} - THE END"
             sendInfoEvent("*** END of the Matter Bridge and Devices discovery ***")
+            state['stateMachines']['discoverAllResult'] = SUCCESS
             st = 0
             break
         default :    // error

@@ -24,7 +24,7 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 1.0.6  2024-01-22 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine; 
+ * ver. 1.0.6  2024-01-23 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine; 
  *
  *                                   TODO: [== W.I.P.==] discoverAllStateMachine
  *                                   TODO: [== W.I.P.==] remove setSwitch command ?
@@ -88,7 +88,7 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.6' }
-String timeStamp() { '2023/01/22 8:11 PM' }
+String timeStamp() { '2023/01/23 2:42 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = true
@@ -686,7 +686,7 @@ void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
         case ['0000', '0001', '0002', '0003'] :
             state[fingerprintName][attrName] = descMap.value
             logTrace "parse: Descriptor (${descMap.cluster}): ${attrName} = <b>-> updated state[$fingerprintName][$attrName]</b> to ${descMap.value}"
-            if (endpointId == '00') {
+            if (endpointId == '00' && descMap.cluster == '001D') {
                 if (attrName == 'PartsList') {
                     List partsList = descMap.value as List
                     int partsListCount = partsList.size()   // the number of the elements in the partsList
