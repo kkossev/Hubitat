@@ -24,8 +24,10 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
+ * ver. 1.0.6  2024-01-22 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine; 
  *
- *                                   TODO: [====MVP====] Publish version 1.0.5
+ *                                   TODO: [== W.I.P.==] discoverAllStateMachine
+ *                                   TODO: [== W.I.P.==] remove setSwitch command ?
  *
  *                                   TODO: [ RESEARCH  ] check on pauseExecution(1000) usage in the driver code -  will never work with singleThreaded: true ???
  *                                   TODO: [REFACTORING] Replace the scheduled jobs w/ StateMachine (store each discovery step in a list)
@@ -83,12 +85,14 @@
 
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.matterLib
+#include kkossev.matterStateMachinesLib
 
-String version() { '1.0.5' }
-String timeStamp() { '2023/01/20 5:37 PM' }
+String version() { '1.0.6' }
+String timeStamp() { '2023/01/22 8:11 PM' }
 
-@Field static final Boolean _DEBUG = false
-@Field static final Boolean DO_NOT_TRACE_FFF = true         // don't trace the FFFx global attributes
+@Field static final Boolean _DEBUG = true
+@Field static final Boolean DEFAULT_LOG_ENABLE = true
+@Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
@@ -103,17 +107,21 @@ String timeStamp() { '2023/01/20 5:37 PM' }
 @Field static final Integer LONG_TIMEOUT   = 15
 @Field static final Integer MAX_DEVICES_LIMIT = 20
 
-import com.hubitat.app.exception.UnknownDeviceTypeException
-import java.util.concurrent.ConcurrentHashMap
 import com.hubitat.app.ChildDeviceWrapper
 import com.hubitat.app.DeviceWrapper
+import com.hubitat.app.exception.UnknownDeviceTypeException
+
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.Field
+
 import hubitat.helper.HexUtils
 
+import java.util.concurrent.ConcurrentHashMap
+
 metadata {
-    definition(name: 'Matter Advanced Bridge', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Advanced_Bridge.groovy', singleThreaded: true ) {
+    definition(name: 'Matter Advanced Bridge', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Advanced_Bridge.groovy', 
+                                singleThreaded: true ) {
         capability 'Actuator'
         capability 'Sensor'
         capability 'Initialize'
@@ -143,6 +151,7 @@ metadata {
             'ready'
         ]
 
+        command 'a0DiscoverAll', [[name: 'Auto Discover All ...']]
         command 'a1BridgeDiscovery', [[name: 'First click here ...']]
         command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
         command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
@@ -159,7 +168,7 @@ metadata {
                     [name:'infoType', type: 'ENUM', description: 'Bridge Info Type', constraints: ['Basic', 'Extended']],   // if the parameter name is 'type' - shows a drop-down list of the available drivers!
                     [name:'endpoint', type: 'STRING', description: 'Endpoint', constraints: ['STRING']]
             ]
-            command 'requestAndCollectServerListAttributesList', [
+            command 'testDiscoveryAll', [
                     [name:'endpoint', type: 'STRING', description: 'Endpoint', constraints: ['STRING']]
             ]
 
@@ -186,11 +195,6 @@ metadata {
                     [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
                     [name:'extraPar',     type: 'STRING', description: 'Extra Parameter', constraints: ['STRING']]
             ]
-            command 'setLabel', [
-                    [name:'addOrRemove',  type: 'ENUM', description: 'Select', constraints: ['add', 'remove', 'show']],
-                    [name:'deviceNumber', type: 'STRING', description: 'Device Number',   constraints: ['STRING']],
-                    [name:'label',    type: 'STRING', description: 'label', constraints: ['STRING']]
-            ]
             command 'unsubscribe'
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
@@ -199,7 +203,7 @@ metadata {
     }
     preferences {
         input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
-        input(name:'logEnable', type:'bool', title:'Enable debug logging', defaultValue:false)
+        input(name:'logEnable', type:'bool', title:'Enable debug logging', defaultValue:DEFAULT_LOG_ENABLE)
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
         if (advancedOptions == true || advancedOptions == true) {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
@@ -258,13 +262,16 @@ void parse(final String description) {
         logWarn "parse: descMap is null description:${description}"
         return
     }
+
     updateStateStats(descMap)
+    checkStateMachineConfirmation(descMap)
+
     if (isDeviceDisabled(descMap)) {
         if (traceEnable) { logWarn "parse: device is disabled: ${descMap}" }
         return
     }
 
-    if (!(descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE']) || !DO_NOT_TRACE_FFF) {
+    if (!(descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE']) || !DO_NOT_TRACE_FFFX) {
         logDebug "parse: descMap:${descMap}  description:${description}"
     }
 
@@ -391,6 +398,22 @@ boolean isDeviceDisabled(final Map descMap) {
     return false
 }
 
+void checkStateMachineConfirmation(final Map descMap) {
+    if (state['stateMachines'] == null || state['stateMachines']['toBeConfirmed'] == null) {
+        return
+    }
+    List toBeConfirmedList = state['stateMachines']['toBeConfirmed']
+    //logTrace "checkStateMachineConfirmation: toBeConfirmedList:${toBeConfirmedList} (endpoint:${descMap.endpoint} clusterInt:${descMap.clusterInt} attrInt:${descMap.attrInt})"
+    if (toBeConfirmedList == null || toBeConfirmedList.size() == 0) {
+        return
+    }
+    // toBeConfirmedList first element is endpoint, second is clusterInt, third is attrInt
+    if (HexUtils.hexStringToInt(descMap.endpoint) == toBeConfirmedList[0] && descMap.clusterInt == toBeConfirmedList[1] && descMap.attrInt == toBeConfirmedList[2]) {
+        logDebug "checkStateMachineConfirmation: endpoint:${descMap.endpoint} clusterInt:${descMap.clusterInt} attrInt:${descMap.attrInt} - <b>CONFIRMED!</b>"
+        state['stateMachines']['Confirmation'] = true
+    }
+}
+
 void parseBatteryEvent(final Map descMap) {
     logDebug "parseBatteryEvent: descMap:${descMap}"
     if (descMap.cluster != '002F') {
@@ -493,8 +516,10 @@ void parseGlobalElements(final Map descMap) {
                 state[fingerprintName][attributeName] = [:]
                 action = 'created in'
             }
-            logTrace "parseGlobalElements: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} <b>-> ${action}</b> [$fingerprintName][$attributeName]"
+            //state[fingerprintName][attributeName] = descMap.value
             state[fingerprintName][attributeName] = descMap.value
+            logTrace "parseGlobalElements: cluster: <b>${getClusterName(descMap.cluster)}</b> (0x${descMap.cluster}) attr: <b>${attributeName}</b> (0x${descMap.attrId})  value:${descMap.value} <b>-> ${action}</b> [$fingerprintName][$attributeName]"
+            //logTrace "parseGlobalElements: state[${fingerprintName}][${attributeName}] = ${state[fingerprintName][attributeName]}"
             break
         default :
             break   // not a global element
@@ -553,7 +578,7 @@ void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttribu
         state.states['isPing'] = false
     }
     else {
-        //logTrace "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
+        logTrace "gatherAttributesValuesInfo: isInfo:${state.states['isInfo']} descMap:${descMap}"
     }
 }
 
@@ -580,7 +605,7 @@ void parseGeneralDiagnostics(final Map descMap) {
 }
 
 void parseBasicInformationCluster(final Map descMap) {
-    logDebug "parseBasicInformationCluster: descMap:${descMap}"
+    logTrace "parseBasicInformationCluster: descMap:${descMap}"
     Map eventMap = [:]
     String attrName = getAttributeName(descMap)
     String fingerprintName = getFingerprintName(descMap)
@@ -995,6 +1020,30 @@ void requestAndCollectServerListAttributesList(Map data)
     }
 }
 
+
+void readAttributeSafe(String endpointPar, String clusterPar, String attrIdPar) {
+    Integer endpointInt = safeNumberToInt(endpointPar)
+    Integer clusterInt  = safeNumberToInt(clusterPar)
+    Integer attrInt     = safeNumberToInt(attrIdPar)
+    String  endpointId  = HexUtils.integerToHexString(endpointInt, 1)
+    String  clusterId   = HexUtils.integerToHexString(clusterInt, 2)
+    String  attrId      = HexUtils.integerToHexString(attrInt, 2)
+    logDebug "readAttributeSafe(endpoint:${endpointId}, cluster:${clusterId}, attribute:${attrId}) -> starting readSingeAttrStateMachine!"
+
+    readSingeAttrStateMachine([action: START, endpoint: endpointInt, cluster: clusterInt, attribute: attrInt])
+
+}
+
+/* 
+ *  Discover all the endpoints and clusters for the Bridge and all the Bridged Devices
+ */
+void a0DiscoverAll() {
+    logWarn "a0DiscoverAll()"
+    state.stateMachines = [:]
+    discoverAllStateMachine([action: START])
+    logWarn "a0DiscoverAll(): started!"
+}
+
 void collectBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = false) {
     Integer time = timePar
     // first thing to do is to read the Bridge (ep=0) Descriptor Cluster (0x001D) attribute 0XFFFB and store the ServerList in state.bridgeDescriptor['ServerList']
@@ -1273,6 +1322,11 @@ void a4CreateChildDevices() {
     sendInfoEvent(info)
 }
 
+void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
+    List<Map<String, String>> attributePaths = [matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer)]
+    sendToDevice(matter.readAttributes(attributePaths))
+}
+
 void readAttribute(String endpointPar, String clusterPar, String attrIdPar) {
     Integer endpoint = safeNumberToInt(endpointPar)
     Integer cluster = safeNumberToInt(clusterPar)
@@ -1281,81 +1335,6 @@ void readAttribute(String endpointPar, String clusterPar, String attrIdPar) {
     readAttribute(endpoint, cluster, attrId)
 }
 
-void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
-    //logTrace "readAttribute(endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
-    List<Map<String, String>> attributePaths = [matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer)]
-    sendToDevice(matter.readAttributes(attributePaths))
-}
-
-void readAttributeSafe(String endpointPar, String clusterPar, String attrIdPar) {
-    Integer endpoint = safeNumberToInt(endpointPar)
-    Integer cluster = safeNumberToInt(clusterPar)
-    Integer attribute = safeNumberToInt(attrIdPar)
-    String endpointId = HexUtils.integerToHexString(endpoint, 1)
-    String clusterId = HexUtils.integerToHexString(cluster, 2)
-    String attributeId = HexUtils.integerToHexString(attribute, 2)
-
-    logDebug "readAttributeSafe(endpoint:${endpointId}, cluster:${clusterId}, attribute:${attributeId})"
-    // first check if the endpoint and cluster are in the fingerprint
-    String fingerprintName = getFingerprintName(endpoint)
-    if (state[fingerprintName] == null) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}] is null !"
-        logWarn "run steps A1 and A2 !"
-        return
-    }
-    // check whether the cluster is in the fingerprint ServerList
-    String serverList = state[fingerprintName]['ServerList']
-    if (serverList == null) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}]['ServerList'] is null !"
-        logWarn "run steps A1 and A2 !"
-        return
-    }
-    if (!serverList.contains(HexUtils.integerToHexString(cluster, 1))) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}]['ServerList'] does not contain cluster ${cluster} (0x${HexUtils.integerToHexString(cluster, 2)}) !"
-        logWarn "valid clusters are: ${serverList}"
-        return
-    }
-    // next check whether the fingerprint has a map entry for the cluster
-    String clusterMapName
-    // descriptor cluster is a special case
-    /*
-    if (cluster == 0x001D) {
-        clusterMapName = getAttributeName([cluster: clusterId, attrId: attributeId])
-    }
-    else {
-        clusterMapName = getStateClusterName([cluster: clusterId]) + '_' + endpointId
-    }
-    */
-    clusterMapName = getStateClusterName([cluster: clusterId])
-    logDebug "readAttributeSafe(): fingerprintName=${fingerprintName} clusterMapName=${clusterMapName}"
-
-    if (state[fingerprintName][clusterMapName] == null) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}][${clusterMapName}] is null !"
-        logWarn "reading the cluster ${cluster} (0x${HexUtils.integerToHexString(cluster, 2)}) attributes list instead ..."
-        readAttribute(endpointId, clusterId, '0xFFFB')
-        return
-    }
-
-    // now check if the attribute is in the clusterMapName
-    List attributeList = state[fingerprintName][clusterMapName]
-    if (attributeList == null) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}][${clusterMapName}] is null !"
-        logWarn "reading the cluster ${cluster} (0x${HexUtils.integerToHexString(cluster, 2)}) attributes list instead ..."
-        readAttribute(endpointId, clusterId, '0xFFFB')
-        return
-    }
-    if (!attributeList.contains(HexUtils.integerToHexString(attribute, 2))) {
-        logWarn "readAttributeSafe(): state[${fingerprintName}][${clusterMapName}] does not contain attribute ${attribute} (0x${HexUtils.integerToHexString(attribute, 2)}) !"
-        logWarn "valid attributes are: ${attributeList}"
-        return
-    }
-    logInfo "found!!"
-
-    return
-    List<Map<String, String>> attributePaths = [matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer)]
-    sendToDevice(matter.readAttributes(attributePaths))
-
-}
 
 void configure() {
     log.warn 'configure...'
@@ -1563,31 +1542,6 @@ void checkSubscriptionStatus() {
         sendInfoEvent('completed', 'something was received in the parse() method')
         state.states['isSubscribe'] = false
     }
-}
-
-void setLabel(String addOrRemove, String deviceNumberPar, String labelPar='') {
-    Integer deviceNumber
-    logDebug "setLabel (action: ${addOrRemove}, deviceNumber:${deviceNumberPar}, label:${labelPar}"
-    deviceNumber = deviceNumberPar.startsWith('0x') ? safeHexToInt(deviceNumberPar.substring(2)) : safeToInt(deviceNumberPar)
-    if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) {
-        logWarn "setLabel(): deviceNumberPar ${deviceNumberPar} is not valid!"
-        return
-    }
-    String fingerprintName = getFingerprintName(deviceNumber)
-    if (fingerprintName == null || state[fingerprintName] == null) {
-        logWarn "setLabel(): fingerprintName '${fingerprintName}' is not valid! (deviceNumber:${deviceNumber})"
-        return
-    }
-    //String label = state[fingerprintName]['Label']
-    if (addOrRemove == 'add') {
-        state[fingerprintName]['Label'] = labelPar.trim()
-        logInfo "device${HexUtils.integerToHexString(deviceNumber, 1)} label was set to '${state[fingerprintName]['Label']}'"
-    }
-    else if (addOrRemove == 'remove') {
-        state[fingerprintName]['Label'] = null
-        logInfo "device${HexUtils.integerToHexString(deviceNumber, 1)} label was removed!"
-    }
-    else { logInfo "device${HexUtils.integerToHexString(deviceNumber, 1)} Label = '${state[fingerprintName]['Label']}'" }
 }
 
 void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
@@ -2409,6 +2363,7 @@ void resetStats() {
     state.health = [:]
     state.bridgeDescriptor  = [:]   // driver specific
     state.subscriptions = []        // driver specific, format EP_CLUSTER_ATTR
+    state.stateMachines = [:]     // driver specific
     state.stats['rxCtr'] = state.stats['txCtr'] = 0
     state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
     state.states['isDigital'] = state.states['isRefresh'] = state.states['isPing'] =  state.states['isInfo']  = false
@@ -2439,7 +2394,7 @@ void initializeVars(boolean fullInit = false) {
     if (state.health == null) { state.health = [:] }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
-    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', false) }
+    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_LOG_ENABLE) }
     if (fullInit || settings?.traceEnable == null) { device.updateSetting('traceEnable', false) }
     if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
     if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
