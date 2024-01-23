@@ -17,8 +17,10 @@
  *
  * ver. 1.0.0  2023-12-21 kkossev  - Inital version: added healthCheck attribute; added refresh(); added stats; added RTT attribute; added periodicPolling healthCheck method;
  * ver. 1.0.2  2023-12-26 kkossev  - commented out the initialize() and configure() capabilities because of duplicated subscriptions; added getInfo command; fixed the refresh() command for MATTER_OUTLET; added isDigital isRefresh; use the Basic cluster attr. 0 for ping()
- * ver. 1.0.3  2023-12-28 kkossev  - (dev. branch) added info for ColorControl and LevelControl clusters; added toggle(); added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
+ * ver. 1.0.3  2023-12-28 kkossev  - added info for ColorControl and LevelControl clusters; added toggle(); added initializeCtr and duplicatedCtr in stats; added reSubscribe() method
+ * ver. 1.0.4  2024-01-23 kkossev  - (dev. branch) added spammyReportsFilter preference; 
  *
+ *                                   TODO: 
  *                                   TODO: add flashRate preference; add flash() command
  *                                   TODO: add silentMode attribute
  *                                   TODO: add flashOnce()
@@ -26,8 +28,8 @@
  *                                   TODO: add state.color w/ min/max Mirad values
  */
 
-static String version() { '1.0.3' }
-static String timeStamp() { '2023/12/28 10:34 PM' }
+static String version() { '1.0.4' }
+static String timeStamp() { '2024/01/23 10:54 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String   DEVICE_TYPE = 'MATTER_BULB'
@@ -43,7 +45,7 @@ import groovy.transform.Field
 import hubitat.helper.HexUtils
 
 metadata {
-    definition(name: 'Matter Advanced RGBW Light', namespace: 'kkossev', author: 'Krassimir Kossev') {
+    definition(name: 'Matter Advanced RGBW Light', namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true) {
         capability 'Actuator'
         capability 'Switch'
         capability 'SwitchLevel'
@@ -69,9 +71,9 @@ metadata {
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
-        // fingerprints are commented out, because are already included in the stock driver
-        // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL67', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Essentials A19 Bulb
-        // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL68', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Strip 5E8
+    // fingerprints are commented out, because are already included in the stock driver
+    // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL67', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Essentials A19 Bulb
+    // fingerprint endpointId:'01', inClusters:'0003,0004,0005,0006,0008,001D,001E,0300', outClusters:'', model:'NL68', manufacturer:'Nanoleaf', controllerType:'MAT'                      // Nanoleaf Strip 5E8
     }
     preferences {
         input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
@@ -80,6 +82,7 @@ metadata {
         input(name:'rgbTransitionTime', type:'enum', title:"RGB transition time (default:${ttOpts.defaultText})", options:ttOpts.options, defaultValue:ttOpts.defaultValue)
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
         if (advancedOptions == true || advancedOptions == true) {
+            input name: 'spammyReportsFilter', type: 'enum', title: '<b>Spammy Reports Filtering</b>', options: SpammyReportsFilterOpts.options, defaultValue: SpammyReportsFilterOpts.defaultValue, required: true, description: '<i>Filtering spammy reports.</i>'
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
             input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
         }
@@ -95,6 +98,11 @@ metadata {
     options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
+
+@Field static final Map SpammyReportsFilterOpts = [               // delay spammy reports
+    defaultValue: 500,
+    options     : [0: 'none', 250: '250 ms', 500: '500 ms', 750: '750 ms', 1000: '1000 ms', 1500: '1500 ms', 2000: '2000 ms', 3000: '3000 ms', 5000: '5000 ms']
+]
 
 //parsers
 void parse(String description) {
@@ -264,15 +272,15 @@ void parseOnOffCluster(Map descMap) {
     }
     Integer attrInt = descMap.attrInt as Integer
     Integer value
-    String descriptionText = ''
-    Map eventMap = [:]
+    //String descriptionText = ''
+    //Map eventMap = [:]
     String attrName = OnOffClusterAttributes[attrInt] ?: GlobalElementsAttributes[attrInt] ?: UNKNOWN
 
     switch (descMap.attrId) {
         case '0000' : // Switch
             sendSwitchEvent(descMap.value)
             break
-        case '4000' : // GlobalSceneControl            
+        case '4000' : // GlobalSceneControl
             if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
             if (state.onOff  == null) { state.onOff =  [:] } ; state.onOff['GlobalSceneControl'] = descMap.value
             break
@@ -332,9 +340,33 @@ private void sendSwitchEvent(String rawValue, isDigital = false) {
 private void sendLevelEvent(String rawValue) {
     Integer value = Math.round(hexStrToUnsignedInt(rawValue) / 2.55)
     if (value == 0 || value == device.currentValue('level')) { return }
-    String descriptionText = " level was set to ${value}%"
-    logInfo "${descriptionText}"
-    sendEvent(name:'level', value:value, descriptionText:descriptionText, unit: '%')
+    Map eventMap = [name: 'level', value: value, descriptionText: "level was set to ${value}%", unit: '%']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText = "level is ${value}% [refresh]"
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    Object latestEvent = device.latestState('level', skipCache=true)
+    int latestEventTime = latestEvent != null ? latestEvent.getDate().getTime() : now()
+    int timeDiff = (now() - latestEventTime) as int
+
+    if (settings.spammyReportsFilter == null || (settings.spammyReportsFilter as int) == 0 || timeDiff > (settings.spammyReportsFilter as int)) {
+        // send it now!
+        unschedule('sendDelayedLevelEvent')
+        sendDelayedLevelEvent(eventMap)
+    }
+    else {
+        int delayedTime = (settings?.spammyReportsFilter as int) - timeDiff
+        eventMap.delayed = delayedTime
+        eventMap.descriptionText += " [delayed ${eventMap.delayed} ms]"
+        logDebug "this level event (${eventMap.value}%) will be delayed ${delayedTime} ms"
+        runInMillis(delayedTime, 'sendDelayedLevelEvent', [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedLevelEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText}"
+    //map.each {log.trace "$it"}
+    sendEvent(eventMap)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethodParameter */
@@ -342,9 +374,34 @@ private void sendHueEvent(String rawValue, Boolean presetColor = false) {
     Integer value = hex254ToInt100(rawValue)
     if (value == device.currentValue('hue')) { return }
     sendRGBNameEvent(value)
-    String descriptionText = " hue was set to ${value}%"
-    logInfo "${descriptionText}"
-    sendEvent(name:'hue', value:value, descriptionText:descriptionText, unit: '%')
+
+    Map eventMap = [name: 'hue', value: value, descriptionText: "hue was set to ${value}%", unit: '%']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    Object latestEvent = device.latestState('hue', skipCache = true)
+    int latestEventTime = latestEvent != null ? latestEvent.getDate().getTime() : now()
+    int timeDiff = (now() - latestEventTime) as int
+
+    if (settings.spammyReportsFilter == null || (settings.spammyReportsFilter as int) == 0 || timeDiff > (settings.spammyReportsFilter as int)) {
+        // send it now!
+        unschedule('sendDelayedHueEvent')
+        sendDelayedHueEvent(eventMap)
+    }
+    else {
+        int delayedTime = (settings?.spammyReportsFilter as int) - timeDiff
+        eventMap.delayed = delayedTime
+        eventMap.descriptionText += " [delayed ${eventMap.delayed} ms]"
+        logDebug "this hue event (${eventMap.value}) will be delayed ${delayedTime} ms"
+        runInMillis(delayedTime, 'sendDelayedHueEvent', [overwrite: true, data: eventMap])
+    }
+
+}
+
+private void sendDelayedHueEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethodParameter */
@@ -352,9 +409,33 @@ private void sendSaturationEvent(String rawValue, Boolean presetColor = false) {
     Integer value = hex254ToInt100(rawValue)
     if (value == device.currentValue('saturation')) { return }
     sendRGBNameEvent(null, value)
-    String descriptionText = " saturation was set to ${value}%"
-    logInfo "${descriptionText}"
-    sendEvent(name:'saturation', value:value, descriptionText:descriptionText, unit: '%')
+
+    Map eventMap = [name: 'saturation', value: value, descriptionText: "saturation was set to ${value}%", unit: '%']
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    Object latestEvent = device.latestState('saturation', skipCache = true)
+    int latestEventTime = latestEvent != null ? latestEvent.getDate().getTime() : now()
+    int timeDiff = (now() - latestEventTime) as int
+
+    if (settings.spammyReportsFilter == null || (settings.spammyReportsFilter as int) == 0 || timeDiff > (settings.spammyReportsFilter as int)) {
+        // send it now!
+        unschedule('sendDelayedSaturationEvent')
+        sendDelayedSaturationEvent(eventMap)
+    }
+    else {
+        int delayedTime = (settings?.spammyReportsFilter as int) - timeDiff
+        eventMap.delayed = delayedTime
+        eventMap.descriptionText += " [delayed ${eventMap.delayed} ms]"
+        logDebug "this saturation event (${eventMap.value}) will be delayed ${delayedTime} ms"
+        runInMillis(delayedTime, 'sendDelayedSaturationEvent', [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedSaturationEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
 }
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedPrivateMethodParameter */
@@ -368,9 +449,32 @@ private void sendRGBNameEvent(hue, sat = null) {
         genericName = colorRGBName.find { k , v -> hue < k }.value
     }
     if (genericName == device.currentValue('colorName')) { return }
-    String descriptionText = " color is ${genericName}"
-    logInfo "${descriptionText}"
-    sendEvent(name: 'colorName', value: genericName ,descriptionText: descriptionText)
+    Map eventMap = [name: 'colorName', value: genericName, descriptionText: "color is ${genericName}"]
+    if (state.states['isRefresh'] == true) {
+        eventMap.descriptionText += ' [refresh]'
+        eventMap.isStateChange = true   // force the event to be sent
+    }
+    Object latestEvent = device.latestState('colorName', skipCache = true)
+    int latestEventTime = latestEvent != null ? latestEvent.getDate().getTime() : now()
+    int timeDiff = (now() - latestEventTime) as int
+
+    if (settings.spammyReportsFilter == null || (settings.spammyReportsFilter as int) == 0 || timeDiff > (settings.spammyReportsFilter as int)) {
+        // send it now!
+        unschedule('sendDelayedRGBNameEvent')
+        sendDelayedRGBNameEvent(eventMap)
+    }
+    else {
+        int delayedTime = (settings?.spammyReportsFilter as int) - timeDiff
+        eventMap.delayed = delayedTime
+        eventMap.descriptionText += " [delayed ${eventMap.delayed} ms]"
+        logDebug "this colorName event (${eventMap.value}) will be delayed ${delayedTime} ms"
+        runInMillis(delayedTime, 'sendDelayedRGBNameEvent', [overwrite: true, data: eventMap])
+    }
+}
+
+private void sendDelayedRGBNameEvent(Map eventMap) {
+    logInfo "${eventMap.descriptionText}"
+    sendEvent(eventMap)
 }
 
 //capability commands
@@ -403,7 +507,7 @@ void identify() {
     cmdFields.add(matter.cmdField(0x05, 0x00, '0101'))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
-}    
+}
 
 void setLevel(Object value) {
     logDebug "setLevel(${value})"
@@ -442,7 +546,6 @@ void setSaturation(Object value) {
     }
     sendToDevice(cmds)
 }
-
 
 void setHueSat(Object hue, Object sat) {
     logDebug "setHueSat(${hue}, ${sat})"
@@ -583,7 +686,7 @@ void initialize() {
     log.warn 'initialize()...'
     Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
     Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
-    
+
     logDebug "'isSubscribe'= ${state.states['isSubscribe']} timeSinceLastSubscribe= ${timeSinceLastSubscribe} 'isUnsubscribe' = ${state.states['isUnsubscribe']} timeSinceLastUnsubscribe= ${timeSinceLastUnsubscribe}"
 
     state.stats['initializeCtr'] = (state.stats['initializeCtr'] ?: 0) + 1
@@ -620,7 +723,7 @@ void initialize() {
 
 void reSubscribe() {
     logWarn 'reSubscribe() ...'
-    unsubscribe() 
+    unsubscribe()
 }
 
 void unsubscribe() {
@@ -983,6 +1086,7 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
     if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.spammyReportsFilter == null) { device.updateSetting('spammyReportsFilter', [value: SpammyReportsFilterOpts.defaultValue.toString(), type: 'enum']) }
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
 }
 
@@ -1033,6 +1137,7 @@ void parseTest(par) {
     parse(par)
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 void test(par) {
     /*
     log.warn "test... ${par}"
@@ -1041,7 +1146,7 @@ void test(par) {
     log.debug "Matter getClusterName(3) = ${matter.getClusterName(3)}"  // not OK - echoes back the cluster number?
     */
     List<Map<String, String>> attributePaths = []
-    attributePaths.add(matter.attributePath(0, 0x4000, 0x00))   
+    attributePaths.add(matter.attributePath(0, 0x4000, 0x00))
     String cmd = matter.readAttributes(attributePaths)
     sendToDevice(cmd)
 }
