@@ -24,7 +24,7 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-22 kkossev  - first version
+  * ver. 1.0.0  2024-01-24 kkossev  - first version
   *
   *                                   TODO:
   *
@@ -44,7 +44,7 @@ import groovy.transform.Field
 @Field static final String  SUCCESS = 'SUCCESS'
 @Field static final String  ERROR   = 'ERROR'
 
-@Field static final Integer STATE_MACHINE_PERIOD = 100
+@Field static final Integer STATE_MACHINE_PERIOD = 250      // milliseconds
 @Field static final Integer STATE_MACHINE_MAX_RETRIES = 15
 
 void readSingeAttrStateMachine(Map data = null) {
@@ -258,7 +258,7 @@ void readAllAttributesStateMachine(Map data=null) {
  *      state['stateMachines']['discoverGlobalElementsRetry']  - the current number of retries (0..STATE_MACHINE_MAX_RETRIES)
  *      state['stateMachines']['discoverGlobalElementsResult'] - the result of the state machine execution (UNKNOWN, RUNNING, SUCCESS, ERROR)
  * 
- * Uses the common for all state machines state['stateMachines']['toBeConfirmed']  - [endpoint, cluster, 0xFFFB] and state['stateMachines']['Confirmation'] !
+ * Uses AND FILLS IN the common for all state machines state['stateMachines']['toBeConfirmed']  - [endpoint, cluster, 0xFFFB] and state['stateMachines']['Confirmation'] !
  * 
  * The calling function must check the state['stateMachines']['discoverGlobalElementsResult'] to determine the result of the state machine execution.
  */
@@ -293,7 +293,7 @@ void disoverGlobalElementsStateMachine(Map data) {
         case STATE_DISCOVER_GLOBAL_ELEMENTS_INIT :
             if (data.endpoint != 0 || data.cluster != 0x001D) {
                 // check whether the endpoint and the cluster are correct
-                logWarn "disoverGlobalElementsStateMachine: st:${st} - TODO - check endpoint and cluster !!!"
+                logWarn "disoverGlobalElementsStateMachine: st:${st} - TODO - ccheck whether the endpoint and the cluster are correct ... !!!"
                 // TODO  !!!!!!!!
             }
             else {
@@ -409,6 +409,7 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER                    = 70
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER_WAIT               = 71
 
+@Field static final Integer DISCOVER_ALL_STATE_NEXT_STATE                           = 80
 @Field static final Integer DISCOVER_ALL_STATE_ERROR                                = 98
 @Field static final Integer DISCOVER_ALL_STATE_END                                  = 99
 
@@ -442,6 +443,7 @@ void discoverAllStateMachine(Map data = null) {
 
     Integer st =    state['stateMachines']['discoverAllState']
     Integer retry = state['stateMachines']['discoverAllRetry']
+    Integer stateMachinePeriod = STATE_MACHINE_PERIOD              // can be changed, depending on the expected execution time of the different states
     //String fingerprintName = getFingerprintName(data.endpoint)
     //String attributeName = getAttributeName([cluster: HexUtils.integerToHexString(data.cluster, 2), attrId: HexUtils.integerToHexString(data.attribute, 2)])
     logTrace "discoverAllStateMachine: st:${st} retry:${retry} data:${data}"
@@ -461,6 +463,7 @@ void discoverAllStateMachine(Map data = null) {
             // continue with the next state
         case DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS :
             disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x001D, debug: false])
+            stateMachinePeriod = STATE_MACHINE_PERIOD * 2
             retry = 0; st = DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT
             break
         case DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT:
@@ -480,6 +483,7 @@ void discoverAllStateMachine(Map data = null) {
         case DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST :
             // Basic Info cluster 0x0028
             readAttribute(0, 0x0028, 0xFFFB)
+            // here we fill in 'toBeConfirmed' and 'Confirmation', because the readAttribute() is called directly !
             state['stateMachines']['toBeConfirmed'] = [0, 0x0028, 0xFFFB];  state['stateMachines']['Confirmation'] = false
             retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST_WAIT
             break
@@ -510,16 +514,14 @@ void discoverAllStateMachine(Map data = null) {
             state.tmp = null
             state['stateMachines']['Confirmation'] = false
             state['stateMachines']['toBeConfirmed'] = [0, 0x0028, attributeList.last()]
+            // here we fill in 'toBeConfirmed' and 'Confirmation', because the readAttributes() is called directly !
             sendToDevice(matter.readAttributes(attributePaths))
             retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT
             break
         case DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT :
             if (state['stateMachines']['Confirmation'] == true) {
                 logTrace "discoverAllStateMachine: st:${st} - received bridgeDescriptor Basic Info reading confirmation!"
-
                 logRequestedClusterAttrResult([cluster:0x28, endpoint:0])
-
-                sendInfoEvent("(A1) Matter Bridge discovery completed")
                 
                 // check if the Indentify cluster 03 is in the ServerList
                 List<String> serverList = state.bridgeDescriptor['ServerList']
@@ -528,14 +530,14 @@ void discoverAllStateMachine(Map data = null) {
                     state.states['isInfo'] = true
                     state.states['cluster'] = "0003"
                     state.tmp = null
-                    state['stateMachines']['Confirmation'] = false
-                    state['stateMachines']['toBeConfirmed'] = [0, 0x0003, serverList.last()]
-                    
+                    // Do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
                     disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0003, debug: false])
+                    stateMachinePeriod = STATE_MACHINE_PERIOD * 2
                     retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT
                 }
                 else {
-                    st = DISCOVER_ALL_STATE_END
+                    logWarn "discoverAllStateMachine: st:${st} - Identify cluster 0x0003 is not in the ServerList !"
+                    st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
                 }
             }
             else {
@@ -555,21 +557,13 @@ void discoverAllStateMachine(Map data = null) {
 
                 // check if the General Diagnostics cluster 0x0033 is in the ServerList
                 List<String> serverList = state.bridgeDescriptor['ServerList']
-                if (serverList?.contains("33")) {
-                    
-                    state.states['isInfo'] = true
-                    state.tmp = null
-                    state['stateMachines']['Confirmation'] = false
-                    state['stateMachines']['toBeConfirmed'] = [0, 0x0033, serverList.last()]
-                    state.states['cluster'] = "0033"
-                    
-                    disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0033, debug: false])
-                    retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT
+                if (serverList?.contains('33')) {
+                    stateMachinePeriod = 100        // go quickly ....
+                    st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
                 }
                 else {
-                    st = DISCOVER_ALL_STATE_END
+                    st = DISCOVER_ALL_STATE_NEXT_STATE
                 }
-                st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT
             }
             else {
                 logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
@@ -581,6 +575,23 @@ void discoverAllStateMachine(Map data = null) {
             }
             break
         case DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS :
+            // check if the General Diagnostics cluster 0x0033 is in the ServerList
+            List<String> serverList = state.bridgeDescriptor['ServerList']
+            logDebug "discoverAllStateMachine: DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS - serverList:${serverList}"
+            if (serverList?.contains('33')) {
+                logDebug "discoverAllStateMachine: st:${st} - found General Diagnostics cluster 0x0033 in the ServerList !"
+                state.states['isInfo'] = true
+                state.tmp = null
+                state.states['cluster'] = "0033"
+                // do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
+                disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0033, debug: false])
+                stateMachinePeriod = STATE_MACHINE_PERIOD * 2
+                retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT
+            }
+            else {
+                logWarn "discoverAllStateMachine: st:${st} - General Diagnostics cluster 0x0033 is not in the ServerList !"
+                st = DISCOVER_ALL_STATE_NEXT_STATE
+            }
         case DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT :
             if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
                 logDebug "discoverAllStateMachine: st:${st} - received General Diagnostics confirmation!"
@@ -597,7 +608,6 @@ void discoverAllStateMachine(Map data = null) {
             }
             break
 
-
         // TODO (optional) - explore the Bridge Extended Info
         case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT :
             // TODO 
@@ -608,7 +618,10 @@ void discoverAllStateMachine(Map data = null) {
             st = DISCOVER_ALL_STATE_END
             break
         
+        case DISCOVER_ALL_STATE_NEXT_STATE :
         case DISCOVER_ALL_STATE_GET_PARTS_LIST_START :
+            sendInfoEvent("(A1) Matter Bridge discovery completed")
+
             // TODO 
             sendInfoEvent("(A2) Starting Bridged Devices discovery")
             // for each bridged device endpoint in the state.bridgeDescriptor['PartsList'] we need to read the ServerList 
@@ -648,7 +661,7 @@ void discoverAllStateMachine(Map data = null) {
         if (data != null) {
             data['action'] = RUNNING
         }
-        runInMillis(STATE_MACHINE_PERIOD * 3, discoverAllStateMachine, [overwrite: true, data: data])
+        runInMillis(stateMachinePeriod, discoverAllStateMachine, [overwrite: true, data: data])
     }
     else {
         state.states['isInfo'] = false
