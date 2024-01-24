@@ -58,6 +58,7 @@
  *  ver. 1.7.8 2023-07-29 kkossev - added TS0001 _TZ3000_kqvb5akv; bug fix: report containing multiple 0x0006 attributes was not processed correctly; added setSwitchType configuration command; supressed some warning logs;
  *  ver. 1.8.0 2023-09-03 kkossev - added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
  *  ver. 1.9.0 2024-01-18 kkossev - (dev. branch) Groovy Linting; added TS0601 _TZE204_81yrt3lo Bidirectional energy meter with 80A current clamp (PJ-1203A); added TS0601 _TZE200_rks0sgb7 (one channel only!)
+ *  ver. 1.9.1 2024-01-24 kkossev - (dev. branch) currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
  *
  *                                 TODO: 'all' attribute
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -80,8 +81,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { '1.9.0' }
-def timeStamp() { '2024/01/18 8:19 PM' }
+def version() { '1.9.1' }
+def timeStamp() { '2024/01/24 10:52 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -1254,7 +1255,7 @@ def parseZHAcommand(Map descMap) {
                                     voltageEvent((zigbee.convertHexToInt(descMap.data[7]) + zigbee.convertHexToInt(descMap.data[6]) * 256) / (getVoltageDiv() as Float))
                                 }
                                 else if (isPJ1203A()) { // power_a divideBy10]
-                                    logInfo "(101) PJ1203A power_a : ${value / getPowerDiv()} raw (value)"
+                                    logInfo "(101) PJ1203A power_a : ${value / getPowerDiv()} raw ($value)"
                                     powerEvent(value / getPowerDiv())
                                 }
                                 else {
@@ -1326,7 +1327,7 @@ def parseZHAcommand(Map descMap) {
                                     logInfo "(110) Hoch Voltage Threshold is : ${value} raw (${value}) V"
                                 }
                                 else if (isPJ1203A()) {
-                                    logInfo "(110) PJ1203A power_factor_a : ${value / getPowerFactorDiv()} raw (value)"
+                                    logInfo "(110) PJ1203A power_factor_a : ${value / getPowerFactorDiv()} raw ($value)"
                                     powerFactorEvent(value / getPowerFactorDiv())
                                 }
                                 else {
@@ -1338,7 +1339,7 @@ def parseZHAcommand(Map descMap) {
                                     logInfo "(111) Hoch Current Threshold is : ${value} raw (${value}) A"
                                 }
                                 else if (isPJ1203A()) {
-                                    logInfo "(111) frequency : ${value} raw (${value / getFrequencyDiv()}) Hz"  // divideBy100
+                                    logInfo "(111) frequency : ${value / getFrequencyDiv()} raw (${value}) Hz"  // divideBy100
                                     frequencyEvent(value / getFrequencyDiv())
                                 }
                                 else {
@@ -1347,13 +1348,13 @@ def parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '70' : // (112) isPJ1203A divideBy10
-                                logDebug "(112) PJ1203A voltage : ${value / getVoltageDiv()} raw (value)"
+                                logDebug "(112) PJ1203A voltage : ${value / getVoltageDiv()} raw ($value)"
                                 voltageEvent(value / getVoltageDiv())
                                 break
                             case '71' : // (113) current_a: divideBy1000
                                 if (isPJ1203A()) {
-                                    logDebug "(115) PJ1203A current_a : ${value / getCurrentDiv()} raw (value)"
-                                    currentEvent(value / getCurrentDiv())
+                                    logDebug "(115) PJ1203A current_a : ${value / getCurrentDiv()} raw ($value)"
+                                    amperageEvent(value / getCurrentDiv())
                                 }
                                 else {
                                     logInfo "(113) Hoch Total Active Power (energy) is : ${value / getEnergyDiv()} (raw ${value}) kWh"
@@ -1362,26 +1363,26 @@ def parseZHAcommand(Map descMap) {
                                 break
                             case '72' : // (114) current_b: divideBy1000
                                 if (isPJ1203A()) {
-                                    logDebug "(115) PJ1203A current_b : ${value / getCurrentDiv()} raw (value)"
-                                    // currentEvent(value / getCurrentDiv())
+                                    logDebug "(115) PJ1203A current_b : ${value / getCurrentDiv()} raw ($value)"
+                                    // amperageEvent(value / getCurrentDiv())
                                 }
                                 else {
                                     logInfo "(114) Hoch Total Reactive Power is : ${value / getPowerDiv()} raw (${value}) VAr"
                                 }
                                 break
                             case '73' : // (115) isPJ1203A()
-                                logDebug "(115) PJ1203A power_ab : ${value / getPowerDiv()} raw (value)"
+                                logDebug "(115) PJ1203A power_ab : ${value / getPowerDiv()} raw ($value)"
                                  // powerEvent(value / getPowerDiv())
                                 break
                             case '75' : // (117) hochTotalReverseActivePower: 117
                                 logInfo "(117) Hoch Total Reverse Active Power is : ${value / getPowerDiv()} raw (${value}) W"
                                 break
                             case '79' : // (121) isPJ1203A()    divideBy100
-                                logInfo "(110) PJ1203A power_factor_b : ${value / getPowerFactorDiv()} raw (value)"
+                                logInfo "(110) PJ1203A power_factor_b : ${value / getPowerFactorDiv()} raw ($value)"
                                 //powerFactorEvent(value / getPowerFactorDiv())
                                 break
                             case '81' : // (129) isPJ1203A()    update_frequency
-                                logInfo "(129) PJ1203A update_frequency : ${value} raw (value)"
+                                logInfo "(129) PJ1203A update_frequency : ${value} raw ($value)"
                                 break
                                 /*
                             case '1A' : // hochFaultCode: 26
@@ -2278,8 +2279,8 @@ boolean otherTuyaOddities(String description) {
     }
     //if (logEnable) {log.trace "${device.displayName} Checking Tuya Oddities Desc Map: $descMap"}
     if (descMap.attrId == null) {
-        logDebug "otherTuyaOddities: descMap = ${descMap}"
-        if (logEnable) { log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping" }
+        //logDebug "otherTuyaOddities: descMap = ${descMap}"
+        //if (logEnable) { log.trace "${device.displayName} otherTuyaOddities - Cluster ${descMap.clusterId} NO ATTRIBUTE, skipping" }
         return false
     }
     boolean bWasAtLeastOneAttributeProcessed = false
@@ -2308,7 +2309,7 @@ boolean otherTuyaOddities(String description) {
                     bWasAtLeastOneAttributeProcessed = true
                 }
                 else {
-                    logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
+                    //logDebug "otherTuyaOddities? - Cluster ${descMap.cluster} attrId ${it.attrId} value ${it.value}) N/A, skipping"
                     bWasThereAnyStandardAttribite = true
                 }
                 break
