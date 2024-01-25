@@ -24,7 +24,7 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 1.0.6  2024-01-24 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine; 
+ * ver. 1.0.6  2024-01-25 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine; 
  *
  *                                   TODO: [== W.I.P.==] discoverAllStateMachine
  *                                   TODO: [== W.I.P.==] remove setSwitch command ?
@@ -88,7 +88,7 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.6' }
-String timeStamp() { '2023/01/24 10:23 PM' }
+String timeStamp() { '2023/01/25 11:29 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = true
@@ -151,7 +151,7 @@ metadata {
             'ready'
         ]
 
-        command 'a0DiscoverAll', [[name: 'Auto Discover All ...']]
+        command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'SupportedClusters']]]
         command 'a1BridgeDiscovery', [[name: 'First click here ...']]
         command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
         command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
@@ -271,7 +271,7 @@ void parse(final String description) {
         return
     }
 
-    if (!(descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE']) || !DO_NOT_TRACE_FFFX) {
+    if (!(descMap.attrId in ['FFF8', 'FFF9', 'FFFA', 'FFFC', 'FFFD', '00FE']) && !DO_NOT_TRACE_FFFX && !(state['states']['isDiscovery'] == true) ) {
         logDebug "parse: descMap:${descMap}  description:${description}"
     }
 
@@ -409,7 +409,7 @@ void checkStateMachineConfirmation(final Map descMap) {
     }
     // toBeConfirmedList first element is endpoint, second is clusterInt, third is attrInt
     if (HexUtils.hexStringToInt(descMap.endpoint) == toBeConfirmedList[0] && descMap.clusterInt == toBeConfirmedList[1] && descMap.attrInt == toBeConfirmedList[2]) {
-        logDebug "checkStateMachineConfirmation: endpoint:${descMap.endpoint} clusterInt:${descMap.clusterInt} attrInt:${descMap.attrInt} - <b>CONFIRMED!</b>"
+        logDebug "checkStateMachineConfirmation: endpoint:${descMap.endpoint} cluster:${descMap.cluster} attrId:${descMap.attrId} - <b>CONFIRMED!</b>"
         state['stateMachines']['Confirmation'] = true
     }
 }
@@ -644,7 +644,7 @@ void parseBridgedDeviceBasic(final Map descMap) {
     Map eventMap = [:]
     String attrName = getAttributeName(descMap)
     String fingerprintName = getFingerprintName(descMap)
-    logDebug "parseBridgedDeviceBasic: attrName:${attrName} fingerprintName:${fingerprintName} descMap:${descMap}"
+    logTrace "parseBridgedDeviceBasic: attrName:${attrName} fingerprintName:${fingerprintName} descMap:${descMap}"
 
     if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
 
@@ -1037,10 +1037,21 @@ void readAttributeSafe(String endpointPar, String clusterPar, String attrIdPar) 
 /* 
  *  Discover all the endpoints and clusters for the Bridge and all the Bridged Devices
  */
-void a0DiscoverAll() {
+void a0DiscoverAll(statePar = null) {
     logWarn "a0DiscoverAll()"
+    Integer stateSt = DISCOVER_ALL_STATE_INIT
     state.stateMachines = [:]
-    discoverAllStateMachine([action: START])
+    // ['All', 'BasicInfo', 'PartsList']]
+    if (statePar == 'All') { stateSt = DISCOVER_ALL_STATE_INIT }
+    else if (statePar == 'BasicInfo') { stateSt = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST }
+    else if (statePar == 'PartsList') { stateSt = DISCOVER_ALL_STATE_GET_PARTS_LIST_START }
+    else if (statePar == 'SupportedClusters') { stateSt = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START }
+    else {
+        logWarn "a0DiscoverAll(): unknown statePar:${statePar} !"
+        return
+    }
+
+    discoverAllStateMachine([action: START, goToState: stateSt])
     logWarn "a0DiscoverAll(): started!"
 }
 
