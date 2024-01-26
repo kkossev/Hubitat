@@ -153,10 +153,10 @@ void readSingeAttrStateMachine(Map data = null) {
                 st = 99
             }
             else {
-                logTrace "readSingeAttrStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "readSingeAttrStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "readSingeAttrStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "readSingeAttrStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     state['stateMachines']['readSingeAttrResult'] = ERROR
                     st = 99
                 }
@@ -273,10 +273,10 @@ void disoverGlobalElementsStateMachine(Map data) {
                 retry = 0; st = STATE_DISCOVER_GLOBAL_ELEMENTS_GLOBAL_ELEMENTS_WAIT
             }
             else {
-                logTrace "disoverGlobalElementsStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "disoverGlobalElementsStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "disoverGlobalElementsStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "disoverGlobalElementsStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR
                 }
             }
@@ -287,10 +287,10 @@ void disoverGlobalElementsStateMachine(Map data) {
                 st = STATE_DISCOVER_GLOBAL_ELEMENTS_END
             }
             else {
-                logTrace "disoverGlobalElementsStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "disoverGlobalElementsStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "disoverGlobalElementsStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "disoverGlobalElementsStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR
                 }
             }
@@ -357,7 +357,7 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_STATE      = 23
 @Field static final Integer DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE  = 24
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START                 = 25
-@Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE     = 26
+@Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE     = 26
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT                  = 27
 
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER                        = 70
@@ -436,10 +436,10 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -457,10 +457,10 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -504,10 +504,10 @@ void discoverAllStateMachine(Map data = null) {
                 }
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -529,10 +529,10 @@ void discoverAllStateMachine(Map data = null) {
                 }
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry}"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -562,10 +562,10 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_GET_PARTS_LIST_START
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -632,7 +632,7 @@ void discoverAllStateMachine(Map data = null) {
                 //            st = DISCOVER_ALL_STATE_END
             }
             else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - fingerprint${fingerprintName} timeout waiting for cluster 0x1D reading results !"
@@ -680,10 +680,10 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
             }
             else {
-                logDebug "discoverAllStateMachine: st:${st} - waiting for the attribute value"
+                logDebug "discoverAllStateMachine: st:${st} - waiting for the attribute value retry=${retry})"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value !"
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
                     //st = DISCOVER_ALL_STATE_ERROR
                     // continue with the next device, even if there is an error
                     sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
@@ -699,10 +699,10 @@ void discoverAllStateMachine(Map data = null) {
             sendInfoEvent('(A3) Starting capabilities discovery')
             // next step is for each child device -  check the ServerList for useful clusters ..
             state['stateMachines']['discoverAllPartsListIndex'] = 0
-            st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+            st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
             stateMachinePeriod = 100       // go quickly ....
             break
-        case DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE :
+        case DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE :
             Integer partsListIndex = state['stateMachines']['discoverAllPartsListIndex'] ?: 0
             Integer partsListCount = state.bridgeDescriptor['PartsList']?.size() ?: 0
             if (partsListIndex >= partsListCount) {
@@ -718,7 +718,7 @@ void discoverAllStateMachine(Map data = null) {
             if (fingerprintName == null || state[fingerprintName] == null || state[fingerprintName]['ServerList'] == null) {
                 logWarn "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} ServerList is empty !"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
                 break
             }
             Integer supportedClustersCount = state[fingerprintName]['ServerList']?.size() ?: 0
@@ -726,7 +726,7 @@ void discoverAllStateMachine(Map data = null) {
             if (supportedClustersCount == 0) {
                 logWarn "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} ServerList is empty !"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
                 break
             }
             //List<Integer> supportedClusters = SupportedMatterClusters.collect { it.key }
@@ -748,21 +748,57 @@ void discoverAllStateMachine(Map data = null) {
                 Map deviceData = fingerprintToData(fingerprintName)
                 logDebug "fingerPrintToData: deviceData:${deviceData}"
                 boolean result = createChildDevices(deviceData)
-                logDebug "discoverAllStateMachine: st:${st} - createChildDevice(${deviceData}) returned ${result}"
-
-                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+                if (result == false) {
+                    logWarn "discoverAllStateMachine: st:${st} - createChildDevice(${deviceData}) returned ${result}"
+                    state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                    st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
+                    break
+                }
+                else {
+                    logDebug "discoverAllStateMachine: st:${st} - createChildDevice(${deviceData}) returned ${result}"
+                    // fingerPrintToData: deviceData:[id:08, fingerprintName:fingerprint08, product_name:Humidity Sensor, name:Device#08, ServerList:[1D, 03, 0405]]
+                    sendInfoEvent("Created child device ${deviceData.name} (${deviceData.product_name})")
+                }
+                // now discove the supportedCluster attributes
+                state.states['isInfo'] = true
+                state.states['cluster'] = HexUtils.integerToHexString(supportedCluster, 2)
+                state.tmp = null
+                // do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
+                disoverGlobalElementsStateMachine([action: START, endpoint: partEndpointInt, cluster: supportedCluster, debug: false])
+                stateMachinePeriod = STATE_MACHINE_PERIOD * 2
+                retry = 0; st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT
             }
             else {
                 logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} SupportedMatterClusters ${supportedClusters} are not in the ServerList ${ServerListCluster} !"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
             }
             break
 
         case DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT :
-            // TODO
-            st = DISCOVER_ALL_STATE_NEXT_STATE
+            Integer partsListIndex = state['stateMachines']['discoverAllPartsListIndex'] ?: 0
+            String partEndpoint = state.bridgeDescriptor['PartsList'][partsListIndex] ?: 0
+            Integer partEndpointInt = HexUtils.hexStringToInt(partEndpoint)
+            String fingerprintName = getFingerprintName(partEndpointInt)
+            if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
+                logDebug "discoverAllStateMachine: st:${st} - fingerprint ${fingerprintName} received SupportedClusters confirmation!"
+                logRequestedClusterAttrResult([cluster: HexUtils.hexStringToInt(state.states['cluster']), endpoint: partEndpointInt])
+                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
+            }
+            else {
+                logDebug "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
+                retry++
+                stateMachinePeriod = STATE_MACHINE_PERIOD * 2
+                if (retry > STATE_MACHINE_MAX_RETRIES) {
+                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
+                    //st = DISCOVER_ALL_STATE_ERROR
+                    // continue with the next device, even if there is an error
+                    sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
+                    state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                    st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
+                }
+            }
             break
 
         case DISCOVER_ALL_STATE_NEXT_STATE :

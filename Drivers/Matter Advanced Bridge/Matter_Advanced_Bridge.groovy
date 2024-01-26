@@ -24,12 +24,15 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 1.0.6  2024-01-26 kkossev  - (dev.branch) removed setLabel command; added readSingeAttrStateMachine;
+ * ver. 1.0.6  2024-01-26 kkossev  - (dev.branch) added DiscoverAll() button (state machine), replacing the old manual discovery buttons; removed setLabel and setSwitch test command;
  *
+ *                                   TODO: [== W.I.P.==] bug fix -do not send events to the bridge device if the child device does not exist!
+ *                                   TODO: [== W.I.P.==] a5SubscribeKnownClustersAttributes
+ *                                   TODO: [== W.I.P.==] disable the debug logs in discovery mode
+ *                                   TODO: [== W.I.P.==] change attributes and values list Info log to be shown in Debug mode only
  *                                   TODO: [== W.I.P.==] discoverAllStateMachine - Replace the scheduled jobs w/ StateMachine (store each discovery step in a list)
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the refresh() command ! (add a deviceNumber parameter to the refresh() command command)
- *                                   TODO: [== W.I.P.==] remove setSwitch command ?
  *
  *                                   TODO: [====MVP====] Publish version 1.0.6
  *
@@ -86,7 +89,7 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.6' }
-String timeStamp() { '2023/01/26 3:28 PM' }
+String timeStamp() { '2023/01/26 5:16 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = true
@@ -152,8 +155,8 @@ metadata {
         command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices']]]
        // command 'a1BridgeDiscovery', [[name: 'First click here ...']]
        // command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
-        command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
-        command 'a4CreateChildDevices', [[name: 'Next click here ....']]
+        //command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
+        //command 'a4CreateChildDevices', [[name: 'Next click here ....']]
         command 'a5SubscribeKnownClustersAttributes', [[name: 'Last click here ....']]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
@@ -851,7 +854,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
         logDebug "sendMatterEvent: sending for parsing to the child device: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
         dw.parse([eventMap])
     } else {
-        // send events to parent for parsing        // TODO - check whether missing child device is a problem - will the event be sent to the parent device ? 
+        // send events to parent for parsing        // TODO - check whether missing child device is a problem - will the event be sent to the parent device ?
         logDebug "sendMatterEvent: sending parent event: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
         sendEvent(eventMap)
         logInfo "${eventMap.descriptionText}"       // logs are always sent to the parent device, when using system drivers :(
