@@ -24,7 +24,7 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-25 kkossev  - first version
+  * ver. 1.0.0  2024-01-26 kkossev  - first version
   *
   *                                   TODO:
   *
@@ -34,7 +34,7 @@ import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 @Field static final String matterStateMachinesLib = '1.0.0'
-@Field static final String matterStateMachinesLibStamp   = '2024/01/25 10:21 AM'
+@Field static final String matterStateMachinesLibStamp   = '2024/01/26 12:52 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -47,10 +47,20 @@ import groovy.transform.Field
 @Field static final Integer STATE_MACHINE_PERIOD = 250      // milliseconds
 @Field static final Integer STATE_MACHINE_MAX_RETRIES = 15
 
-void readSingeAttrStateMachine(Map data = null) {
+void initializeStateMachineVars() {
     if (state['stateMachines'] == null) { state['stateMachines'] = [] }
     if (state['stateMachines']['readSingeAttrState'] == null) { state['stateMachines']['readSingeAttrState'] = 0 }
     if (state['stateMachines']['readSingeAttrRetry'] == null) { state['stateMachines']['readSingeAttrRetry'] = 0 }
+    if (state['stateMachines']['discoverGlobalElementsState'] == null) { state['stateMachines']['discoverGlobalElementsState'] = STATE_DISCOVER_GLOBAL_ELEMENTS_IDLE }
+    if (state['stateMachines']['discoverGlobalElementsRetry'] == null) { state['stateMachines']['discoverGlobalElementsRetry'] = 0 }
+    if (state['stateMachines']['discoverGlobalElementsResult'] == null) { state['stateMachines']['discoverGlobalElementsResult'] = UNKNOWN }
+    if (state['stateMachines']['discoverAllState'] == null) { state['stateMachines']['discoverAllState'] = DISCOVER_ALL_STATE_IDLE }
+    if (state['stateMachines']['discoverAllRetry'] == null) { state['stateMachines']['discoverAllRetry'] = 0 }
+    if (state['stateMachines']['discoverAllResult'] == null) { state['stateMachines']['discoverAllResult'] = UNKNOWN }
+}
+
+void readSingeAttrStateMachine(Map data = null) {
+    initializeStateMachineVars()
 
     if (data != null) {
         if (data['action'] == START) {
@@ -76,7 +86,7 @@ void readSingeAttrStateMachine(Map data = null) {
             //logDebug "readSingeAttrStateMachine: st:${st} - checking whether attribute ${data.attribute} is in the fingerprint ${fingerprintName}"
             if (state[fingerprintName] == null) {
                 logWarn "readAttributeSafe(): state[${fingerprintName}] is null !"
-                logWarn "run steps A1 and A2 !"
+                logWarn 'run steps A1 and A2 !'
                 state['stateMachines']['readSingeAttrResult'] = ERROR
                 data['action'] = ERROR
                 st = 99
@@ -87,7 +97,7 @@ void readSingeAttrStateMachine(Map data = null) {
             List<String> serverList = state[fingerprintName]['ServerList']
             if (serverList == null) {
                 logWarn "readAttributeSafe(): state[${fingerprintName}]['ServerList'] is null !"
-                logWarn "run steps A1 and A2 !"
+                logWarn 'run steps A1 and A2 !'
                 state['stateMachines']['readSingeAttrResult'] = ERROR
                 data['action'] = ERROR
                 st = 99
@@ -110,7 +120,7 @@ void readSingeAttrStateMachine(Map data = null) {
             List<String>  attributeList = state[fingerprintName]['AttributeList']
             if (attributeList == null) {
                 logWarn "readAttributeSafe(): state[${fingerprintName}]['AttributeList'] is null !"
-                logWarn "run steps A1 and A2 !"
+                logWarn 'run steps A1 and A2 !'
                 state['stateMachines']['readSingeAttrResult'] = ERROR
                 data['action'] = ERROR
                 st = 99
@@ -168,71 +178,7 @@ void readSingeAttrStateMachine(Map data = null) {
         }
         runInMillis(STATE_MACHINE_PERIOD, readSingeAttrStateMachine, [overwrite: true, data: data])
     }
-    else {
-        //logWarn "readSingeAttrStateMachine: st:${st} - THE END"
-    }
 }
-
-
-@Field static final Integer READ_ALL_ATTRIBUTES_STATE_IDLE                                 = 0
-@Field static final Integer READ_ALL_ATTRIBUTES_STATE_INIT                                 = 1
-
-@Field static final Integer READ_ALL_ATTRIBUTES_STATE_ERROR                                = 98
-@Field static final Integer READ_ALL_ATTRIBUTES_STATE_END                                  = 99
-
-
-/****************************************** readAllAttributesStateMachine ******************************************
- *
- * This is the state machine for discovering ALL ATTRIBUTES of a specific endpoint and cluster.
- *
- * @param data (optional) A map containing additional data to control the state machine execution.
- *             The following data keys are supported:
-    *             - action: START
-    *             - endpoint: the endpoint to be discovered
-    *             - cluster: the cluster to be discovered
- */
- /*
-void readAllAttributesStateMachine(Map data=null) {
-    if (state['stateMachines'] == null) { state['stateMachines'] = [] }
-    if (state['stateMachines']['readAllAttributesState'] == null) { state['stateMachines']['readAllAttributesState'] = DISCOVER_ALL_STATE_IDLE }
-    if (state['stateMachines']['readAllAttributesRetry'] == null) { state['stateMachines']['readAllAttributesRetry'] = 0 }
-    if (state['stateMachines']['readAllAttributesResult'] == null) { state['stateMachines']['readAllAttributesResult'] = UNKNOWN }
-
-    if (data != null) {
-        if (data['action'] == START) {
-            state['stateMachines']['readAllAttributesState']  = READ_ALL_ATTRIBUTES_STATE_INIT
-            state['stateMachines']['readAllAttributesRetry']  = 0
-            state['stateMachines']['readAllAttributesResult'] = UNKNOWN
-            data['action'] = RUNNING
-        }
-    }
-    logDebug "readAllAttributesStateMachine: data:${data}, state['stateMachines'] = ${state['stateMachines']}"
-
-    Integer st =    state['stateMachines']['readAllAttributesState']
-    Integer retry = state['stateMachines']['readAllAttributesRetry']
-    String fingerprintName = getFingerprintName(data.endpoint)
-    //String attributeName = getAttributeName([cluster: HexUtils.integerToHexString(data.cluster, 2), attrId: HexUtils.integerToHexString(data.attribute, 2)])
-    logDebug "readAllAttributesStateMachine: st:${st} retry:${retry} data:${data}"
-    switch (st) {
-        case READ_ALL_ATTRIBUTES_STATE_IDLE :
-            logDebug "readAllAttributesStateMachine: st:${st} - idle -> unscheduling!"
-            unschedule('readAllAttributesStateMachine')
-            break
-        case READ_ALL_ATTRIBUTES_STATE_INIT:
-            logDebug "readAllAttributesStateMachine: st:${st} ep:- starting ..."
-            // state[fingerprintName] will be created [:] when the Global Element 0xFFFB is read ...
-            if (state.bridgeDescriptor == null) { state.bridgeDescriptor = [] } // or state['bridgeDescriptor'] = [:] ?
-            state.states['isInfo'] = true
-            // TODO
-            st = DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST
-            break
-
-
-
-    }
-}
-*/
-
 
 @Field static final Integer STATE_DISCOVER_GLOBAL_ELEMENTS_IDLE                       = 0
 @Field static final Integer STATE_DISCOVER_GLOBAL_ELEMENTS_INIT                       = 1
@@ -245,10 +191,10 @@ void readAllAttributesStateMachine(Map data=null) {
 
 /**
  * This state machine checks and discoveres the GLOBAL ELEMENTS of a specific endpoint and cluster.
- * 
+ *
  * Must be called this way : disoverGlobalElementsStateMachine([action: START, endpoint: Integer, cluster: Integer])
  * where:
- *      - action: START 
+ *      - action: START
  *      - endpoint: the endpoint to be discovered
  *      - cluster: the cluster to be discovered
  *      - debug: true/false
@@ -257,18 +203,14 @@ void readAllAttributesStateMachine(Map data=null) {
  *      state['stateMachines']['discoverGlobalElementsState']  - the current internal state (see the constants above)
  *      state['stateMachines']['discoverGlobalElementsRetry']  - the current number of retries (0..STATE_MACHINE_MAX_RETRIES)
  *      state['stateMachines']['discoverGlobalElementsResult'] - the result of the state machine execution (UNKNOWN, RUNNING, SUCCESS, ERROR)
- * 
+ *
  * Uses AND FILLS IN the common for all state machines state['stateMachines']['toBeConfirmed']  - [endpoint, cluster, 0xFFFB] and state['stateMachines']['Confirmation'] !
- * 
+ *
  * The calling function must check the state['stateMachines']['discoverGlobalElementsResult'] to determine the result of the state machine execution.
  */
 
 void disoverGlobalElementsStateMachine(Map data) {
-    if (state['stateMachines'] == null) { state['stateMachines'] = [] }
-    if (state['stateMachines']['discoverGlobalElementsState'] == null) { state['stateMachines']['discoverGlobalElementsState'] = STATE_DISCOVER_GLOBAL_ELEMENTS_IDLE }
-    if (state['stateMachines']['discoverGlobalElementsRetry'] == null) { state['stateMachines']['discoverGlobalElementsRetry'] = 0 }
-    if (state['stateMachines']['discoverGlobalElementsResult'] == null) { state['stateMachines']['discoverGlobalElementsResult'] = UNKNOWN }
-
+    initializeStateMachineVars()
     if (data != null) {
         if (data['action'] == START) {
             state['stateMachines']['discoverGlobalElementsState']  = STATE_DISCOVER_GLOBAL_ELEMENTS_INIT
@@ -291,18 +233,11 @@ void disoverGlobalElementsStateMachine(Map data) {
             unschedule('disoverGlobalElementsStateMachine')
             break
         case STATE_DISCOVER_GLOBAL_ELEMENTS_INIT :
-            if (data.endpoint != 0 || data.cluster != 0x001D) {
-                // check whether the endpoint and the cluster are correct
-                logDebug "disoverGlobalElementsStateMachine: st:${st} - TODO - ccheck whether the endpoint and the cluster are correct ... !!!"
-                // TODO  !!!!!!!!
-            }
-            else {
-                if (data.debug) { logDebug "disoverGlobalElementsStateMachine: st:${st} - starting ..." }
-            }
+            if (data.debug) { logDebug "disoverGlobalElementsStateMachine: st:${st} endpoint ${data.endpoint} attribute ${data.attribute}- starting ..." }
             st = STATE_DISCOVER_GLOBAL_ELEMENTS_ATTRIBUTE_LIST
             // continue with the next state
         case STATE_DISCOVER_GLOBAL_ELEMENTS_ATTRIBUTE_LIST :
-            state['stateMachines']['toBeConfirmed'] = [data.endpoint, data.cluster, 0xFFFB];
+            state['stateMachines']['toBeConfirmed'] = [data.endpoint, data.cluster, 0xFFFB]
             state['stateMachines']['Confirmation'] = false
             readAttribute(data.endpoint, data.cluster, 0xFFFB)
             retry = 0; st = STATE_DISCOVER_GLOBAL_ELEMENTS_ATTRIBUTE_LIST_WAIT
@@ -314,9 +249,21 @@ void disoverGlobalElementsStateMachine(Map data) {
                 // read all the attributes from the ['AttributeList']
                 List<Map<String, String>> attributePaths = []
                 String fingerprintName = getFingerprintName(data.endpoint)
-                String stateClusterName = getStateClusterName([cluster: HexUtils.integerToHexString(data.cluster,2), attrId: 'FFFB'])
+                String stateClusterName = getStateClusterName([cluster: HexUtils.integerToHexString(data.cluster, 2), attrId: 'FFFB'])
                 //logWarn "disoverGlobalElementsStateMachine: st:${st} - fingerprintName:${fingerprintName}, stateClusterName:${stateClusterName}, state[fingerprintName][stateClusterName]:${state[fingerprintName][stateClusterName]}"
-                List<Integer> attributeList = state[fingerprintName][stateClusterName].collect { HexUtils.hexStringToInt(it) }
+                List<Integer> attributeList = []
+                if (state[fingerprintName] != null && state[fingerprintName][stateClusterName] != null) {
+                    attributeList = state[fingerprintName][stateClusterName].collect { HexUtils.hexStringToInt(it) }
+                } else {
+                    logWarn "disoverGlobalElementsStateMachine: st:${st} - attributeList is null !"
+                    st = STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR
+                    break
+                }
+                if (attributeList == null) {
+                    logWarn "disoverGlobalElementsStateMachine: st:${st} - attributeList is null !"
+                    st = STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR
+                    break
+                }
                 attributeList.each { attrId ->
                     attributePaths.add(matter.attributePath(data.endpoint, data.cluster, attrId))
                 }
@@ -350,7 +297,7 @@ void disoverGlobalElementsStateMachine(Map data) {
             break
         case STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR : // 98 - error
             logWarn "disoverGlobalElementsStateMachine: st:${st} - error"
-            sendInfoEvent("ERROR during the Matter Bridge and Devices discovery")
+            sendInfoEvent('ERROR during the Matter Bridge and Devices discovery')
             state.states['isInfo'] = false
             st = 0
             break
@@ -376,7 +323,6 @@ void disoverGlobalElementsStateMachine(Map data) {
     }
     else {
         state.states['isInfo'] = false
-        //logWarn "disoverGlobalElementsStateMachine: st:${st} - THE END"
     }
 }
 
@@ -414,7 +360,6 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE     = 26
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT                  = 27
 
-
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER                        = 70
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER_WAIT                   = 71
 
@@ -422,7 +367,7 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_ERROR                                    = 98
 @Field static final Integer DISCOVER_ALL_STATE_END                                      = 99
 
-void testObject (Object p) {
+void testObject(Object p) {
     logDebug "test: p:${p}"
     // print the object properties
     p.properties.each { prop ->
@@ -442,15 +387,12 @@ void testObject (Object p) {
     *             - attribute: the attribute to be discovered
  */
 void discoverAllStateMachine(Map data = null) {
-    if (state['stateMachines'] == null) { state['stateMachines'] = [] }
-    if (state['stateMachines']['discoverAllState'] == null) { state['stateMachines']['discoverAllState'] = DISCOVER_ALL_STATE_IDLE }
-    if (state['stateMachines']['discoverAllRetry'] == null) { state['stateMachines']['discoverAllRetry'] = 0 }
-    if (state['stateMachines']['discoverAllResult'] == null) { state['stateMachines']['discoverAllResult'] = UNKNOWN }
+    initializeStateMachineVars()
     state['states']['isDiscovery'] = true
 
     if (data != null) {
         if (data['action'] == START) {
-            if (data['goToState' == null]) { 
+            if (data['goToState'] == null) {
                 state['stateMachines']['discoverAllState']  = DISCOVER_ALL_STATE_INIT
             }
             else {
@@ -475,7 +417,7 @@ void discoverAllStateMachine(Map data = null) {
             unschedule('discoverAllStateMachine')
             break
         case DISCOVER_ALL_STATE_INIT: // start (collectBasicInfo())
-            sendInfoEvent("Starting Matter Bridge and Devices discovery ...")
+            sendInfoEvent('Starting Matter Bridge and Devices discovery ...')
             if (state.bridgeDescriptor == null) { state.bridgeDescriptor = [] } // or state['bridgeDescriptor'] = [:] ?
             state.states['isInfo'] = true
             state['stateMachines']['discoverAllResult'] = RUNNING
@@ -532,7 +474,7 @@ void discoverAllStateMachine(Map data = null) {
                 attributePaths.add(matter.attributePath(0, 0x0028, attrId))
             }
             state.states['isInfo'] = true
-            state.states['cluster'] = "0028"
+            state.states['cluster'] = '0028'
             state.tmp = null
             state['stateMachines']['Confirmation'] = false
             state['stateMachines']['toBeConfirmed'] = [0, 0x0028, attributeList.last()]
@@ -544,13 +486,12 @@ void discoverAllStateMachine(Map data = null) {
             if (state['stateMachines']['Confirmation'] == true) {
                 logTrace "discoverAllStateMachine: st:${st} - received bridgeDescriptor Basic Info reading confirmation!"
                 logRequestedClusterAttrResult([cluster:0x28, endpoint:0])
-                
+
                 // check if the Indentify cluster 03 is in the ServerList
                 List<String> serverList = state.bridgeDescriptor['ServerList']
-                if (serverList?.contains("03")) {
-                    
+                if (serverList?.contains('03')) {
                     state.states['isInfo'] = true
-                    state.states['cluster'] = "0003"
+                    state.states['cluster'] = '0003'
                     state.tmp = null
                     // Do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
                     disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0003, debug: false])
@@ -604,7 +545,7 @@ void discoverAllStateMachine(Map data = null) {
                 logDebug "discoverAllStateMachine: st:${st} - found General Diagnostics cluster 0x0033 in the ServerList !"
                 state.states['isInfo'] = true
                 state.tmp = null
-                state.states['cluster'] = "0033"
+                state.states['cluster'] = '0033'
                 // do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
                 disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0033, debug: false])
                 stateMachinePeriod = STATE_MACHINE_PERIOD * 2
@@ -632,19 +573,19 @@ void discoverAllStateMachine(Map data = null) {
 
         // TODO (optional) - explore the Bridge Extended Info
         case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT :
-            // TODO 
+            // TODO
             st = DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT
             break
         case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT :
-            // TODO 
+            // TODO
             st = DISCOVER_ALL_STATE_END
             break
-        
+
         case DISCOVER_ALL_STATE_GET_PARTS_LIST_START :
             logDebug "discoverAllStateMachine: st:${st} - Starting Bridged Devices discovery ...<br><br><br><br><br><br><br><br><br>"
-            sendInfoEvent("(A1) Matter Bridge discovery completed")
-            sendInfoEvent("(A2) Starting Bridged Devices discovery")
-            logDebug "discoverAllStateMachine: st:${st} - Getting the PartList ... state.bridgeDescriptor['PartsList'] = ${state.bridgeDescriptor['PartsList']}" 
+            sendInfoEvent('(A1) Matter Bridge discovery completed')
+            sendInfoEvent('(A2) Starting Bridged Devices discovery')
+            logDebug "discoverAllStateMachine: st:${st} - Getting the PartList ... state.bridgeDescriptor['PartsList'] = ${state.bridgeDescriptor['PartsList']}"
             Integer partsListCount = state.bridgeDescriptor['PartsList']?.size() ?: 0
             if (partsListCount == 0) {
                 logWarn "discoverAllStateMachine: st:${st} - PartsList is empty !"
@@ -689,23 +630,20 @@ void discoverAllStateMachine(Map data = null) {
                 // for each child device that has the BridgedDeviceBasicInformationCluster '39' in the ServerList ->  read the BridgedDeviceBasicInformationCluster attributes
                 st = DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_STATE
                 //            st = DISCOVER_ALL_STATE_END
-
             }
             else {
                 logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for cluster 0x1D reading results !"
+                    logWarn "discoverAllStateMachine: st:${st} - fingerprint${fingerprintName} timeout waiting for cluster 0x1D reading results !"
                     //st = DISCOVER_ALL_STATE_ERROR
                     // continue with the next device, even if there is an error
                     sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
                     state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                     st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
-
                 }
             }
             break
-
 
         case DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_STATE :   // 0x0039 is NOT OBLIGATORY !
             // for each child device that has the BridgedDeviceBasicInformationCluster '39' in the ServerList ->  read the BridgedDeviceBasicInformationCluster attributes
@@ -714,13 +652,7 @@ void discoverAllStateMachine(Map data = null) {
             Integer partEndpointInt = HexUtils.hexStringToInt(partEndpoint)
             String fingerprintName = getFingerprintName(partEndpointInt)
             logDebug "discoverAllStateMachine: st:${st} - Getting the BridgedDeviceBasicInformationCluster attributes for endpoint ${partEndpoint} ...<br><br><br>"
-            if (!state[fingerprintName]['ServerList'].contains('39')) {
-                logDebug "discoverAllStateMachine: st:${st} - fingerprint ${fingerprintName} BridgedDeviceBasicInformationCluster '39' is not in the ServerList ! (this is not obligatory)"
-                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
-                // check the next bridged device ...
-            }
-            else {
+            if (state[fingerprintName]['ServerList'].contains('39')) {
                 state.states['isInfo'] = true
                 state.states['cluster'] = '0039'     // HexUtils.integerToHexString(partEndpointInt, 2)
                 state.tmp = null
@@ -728,6 +660,12 @@ void discoverAllStateMachine(Map data = null) {
                 disoverGlobalElementsStateMachine([action: START, endpoint: partEndpointInt, cluster: 0x0039, debug: false])
                 stateMachinePeriod = STATE_MACHINE_PERIOD * 2
                 retry = 0; st = DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE
+            }
+            else {
+                logDebug "discoverAllStateMachine: st:${st} - fingerprint ${fingerprintName} BridgedDeviceBasicInformationCluster '39' is not in the ServerList ! (this is not obligatory)"
+                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
+                // check the next bridged device ...
             }
             break
         case DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE :
@@ -755,19 +693,10 @@ void discoverAllStateMachine(Map data = null) {
             }
             break
 
-
-
-
-
-
-
-
-
-
-            
+        // ------------------------------- preparing for subscription to the known clusters atteributes -> filling in state[fingerprintName]['Subscribe']  -------------------------------
         case DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START :
-            sendInfoEvent("(A2) Bridged Devices discovery completed")
-            sendInfoEvent("(A3) Starting capabilities discovery")        
+            sendInfoEvent('(A2) Bridged Devices discovery completed')
+            sendInfoEvent('(A3) Starting capabilities discovery')
             // next step is for each child device -  check the ServerList for useful clusters ..
             state['stateMachines']['discoverAllPartsListIndex'] = 0
             st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
@@ -785,8 +714,13 @@ void discoverAllStateMachine(Map data = null) {
             String partEndpoint = state.bridgeDescriptor['PartsList'][partsListIndex]
             Integer partEndpointInt = HexUtils.hexStringToInt(partEndpoint)
             String fingerprintName = getFingerprintName(partEndpointInt)
-            logDebug "discoverAllStateMachine: st:${st} -fingerprint ${fingerprintName} Getting the SupportedClusters for endpoint ${partEndpoint} ...<br><br><br>"
-            logDebug "discoverAllStateMachine: st:${st} -fingerprint ${fingerprintName} ServerList = ${state[fingerprintName]}"
+            logDebug "discoverAllStateMachine: st:${st} - fingerprint ${fingerprintName} Getting the SupportedClusters for endpoint ${partEndpoint} ...<br><br><br>"
+            if (fingerprintName == null || state[fingerprintName] == null || state[fingerprintName]['ServerList'] == null) {
+                logWarn "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} ServerList is empty !"
+                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
+                break
+            }
             Integer supportedClustersCount = state[fingerprintName]['ServerList']?.size() ?: 0
             Integer supportedClustersIndex = state['stateMachines']['discoverAllSupportedClustersIndex'] ?: 0
             if (supportedClustersCount == 0) {
@@ -795,24 +729,32 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
                 break
             }
-            List<Integer> supportedClusters = SupportedMatterClusters.collect { it.key }
-            List<Integer> ServerListCluster = state[fingerprintName]['ServerList'].collect { HexUtils.hexStringToInt(it) }
-            logDebug "discoverAllStateMachine: st:${st} - ServerListCluster = ${ServerListCluster}"
+            //List<Integer> supportedClusters = SupportedMatterClusters.collect { it.key }
+            List<Integer> supportedClusters = SupportedMatterClusters*.key      // The spread-dot operator (*.) is used to invoke an action on all items of an aggregate object.
+            List<Integer> serverListCluster = state[fingerprintName]['ServerList'].collect { HexUtils.hexStringToInt(it) }
+            logTrace "discoverAllStateMachine: st:${st} - ServerListCluster = ${serverListCluster}"
             // check if any of the SupportedMatterClusters is in the ServerList
             // keep it simple for now - just check for the first one
             // find the first element in the supportedClusters that is in the ServerList
-            Integer supportedCluster = supportedClusters.find { ServerListCluster.contains(it) }
+            Integer supportedCluster = supportedClusters.find { serverListCluster.contains(it) }
             if (supportedCluster != null) {
                 logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} <b>found ${supportedCluster}</b> from the SupportedMatterClusters ${supportedClusters} in the ServerList ${ServerListCluster}"
                 if (state[fingerprintName]['Subscribe'] == null) { state[fingerprintName]['Subscribe'] = [] }
-                state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster,2))
-                logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster,2)} ..."
-                // TODO !!
+                state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster, 2))
+                logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
+                
+                // convert the figerprint data to a map needed for the createChildDevice() method
+                logDebug "fingerPrintToData: fingerprintName:${fingerprintName}"
+                Map deviceData = fingerprintToData(fingerprintName)
+                logDebug "fingerPrintToData: deviceData:${deviceData}"
+                boolean result = createChildDevices(deviceData)
+                logDebug "discoverAllStateMachine: st:${st} - createChildDevice(${deviceData}) returned ${result}"
+
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
             }
             else {
-                logWarn "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} SupportedMatterClusters ${supportedClusters} are not in the ServerList ${ServerListCluster} !"
+                logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} SupportedMatterClusters ${supportedClusters} are not in the ServerList ${ServerListCluster} !"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE_STATE
             }
@@ -823,17 +765,14 @@ void discoverAllStateMachine(Map data = null) {
             st = DISCOVER_ALL_STATE_NEXT_STATE
             break
 
-
-
         case DISCOVER_ALL_STATE_NEXT_STATE :
-        logWarn "discoverAllStateMachine: st:${st} - TODO - next state !"
+            logWarn "discoverAllStateMachine: st:${st} - TODO - next state !"
             st = DISCOVER_ALL_STATE_END
             break
 
-
         case DISCOVER_ALL_STATE_ERROR : // 98 - error
             logDebug "discoverAllStateMachine: st:${st} - error"
-            sendInfoEvent("ERROR during the Matter Bridge and Devices discovery")
+            sendInfoEvent('ERROR during the Matter Bridge and Devices discovery')
             state.states['isInfo'] = false
             state['stateMachines']['discoverAllResult'] = ERROR
             st = 0
@@ -841,7 +780,7 @@ void discoverAllStateMachine(Map data = null) {
         case DISCOVER_ALL_STATE_END : // 99 - end
             state.states['isInfo'] = false
             logDebug "discoverAllStateMachine: st:${st} - THE END"
-            sendInfoEvent("*** END of the Matter Bridge and Devices discovery ***")
+            sendInfoEvent('*** END of the Matter Bridge and Devices discovery ***')
             state['stateMachines']['discoverAllResult'] = SUCCESS
             st = 0
             break
@@ -863,6 +802,3 @@ void discoverAllStateMachine(Map data = null) {
         state['states']['isDiscovery'] = false
     }
 }
-
-
-

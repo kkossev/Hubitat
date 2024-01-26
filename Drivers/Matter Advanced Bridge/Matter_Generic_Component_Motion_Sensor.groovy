@@ -67,7 +67,7 @@ void parse(String description) { log.warn 'parse(String description) not impleme
 
 // parse commands from parent
 void parse(List<Map> description) {
-    //if (logEnable) { log.debug "${description}" }
+    if (logEnable) { log.debug "${device} ${description}" }
     description.each { d ->
         if (d.name == 'motion') {
             if (invertMotion) {

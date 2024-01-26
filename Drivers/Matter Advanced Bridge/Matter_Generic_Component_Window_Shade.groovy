@@ -82,7 +82,7 @@ void parse(List<Map> description) {
             processOperationalStatus(d)
         }
         else {
-            log.warn "${device} : unexpected '${d.name}' event"
+            //log.warn "${device} : unexpected '${d.name}' event"
             if (d.descriptionText && txtEnable) { log.info "${device} ${d.descriptionText}" }
             sendEvent(d)
         }
