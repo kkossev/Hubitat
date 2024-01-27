@@ -41,7 +41,7 @@
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
  * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
  * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
- * ver. 1.5.0  2024-01-18 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction;
+ * ver. 1.5.0  2024-01-27 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
  *
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
@@ -51,7 +51,7 @@
 */
 
 def version() { '1.5.0' }
-def timeStamp() { '2024/01/18 7:06 PM' }
+def timeStamp() { '2024/01/27 10:21 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -132,6 +132,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_dowj6gyi', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/79?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_8ybe88nf', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/262?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_rdhukkmi', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/tuya-humidity-temperature-sensor/76635/55?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0402,0405,0000', outClusters:'0003,0019,000A', model:'TS0201', manufacturer:'_TZ3000_utwgoauk', deviceJoinName: 'Tuya Temperature Humidity sensor'                // https://community.hubitat.com/t/humidity-sensor-usb-powered-zigbee/127569/14?u=kkossev
         //
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0402,0405', outClusters:'0003,0402,0405', model:'RH3052', manufacturer:'TUYATEC-gqhxixyk', deviceJoinName: 'TUYATEC RH3052 Motion Sensor'                    // https://community.hubitat.com/t/moes-zigbee-3-0-temp-humidity-sensor-driver/112318?u=kkossev
         //
@@ -249,6 +250,7 @@ metadata {
     '_TZ3000_dowj6gyi'  : 'TS0201_TH',
     '_TZ3000_8ybe88nf'  : 'TS0201',
     '_TZ3000_rdhukkmi'  : 'TS0201',
+    '_TZ3000_utwgoauk'  : 'TS0201',
     'TUYATEC-gqhxixyk'  : 'TS0201',             // model RH3052
     '_TZ3000_qaaysllp'  : 'TS0201_LCZ030',      // NAS-TH02B  / NEO Coolcam ?  - T/H/I - testing! // https://github.com/Datakg/tuya/blob/53e33ae7767aedbb5d2138f2a31798badffd80d2/zhaquirks/tuya/ts0201_neo.py
     '_TYZB01_kvwjujy9'  : 'TS0222',             // "MOES ZSS-ZK-THL" e-Ink display
