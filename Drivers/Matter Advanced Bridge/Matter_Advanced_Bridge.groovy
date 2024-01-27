@@ -24,29 +24,27 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 1.0.6  2024-01-26 kkossev  - (dev.branch) added DiscoverAll() button (state machine), replacing the old manual discovery buttons; removed setLabel and setSwitch test command;
+ * ver. 1.0.6  2024-01-27 kkossev  - (dev.branch) DiscoverAll() button (state machine) replaces tall old manual discovery buttons; removed setLabel and setSwitch test command;
  *
- *                                   TODO: [== W.I.P.==] bug fix -do not send events to the bridge device if the child device does not exist!
- *                                   TODO: [== W.I.P.==] a5SubscribeKnownClustersAttributes
- *                                   TODO: [== W.I.P.==] disable the debug logs in discovery mode
- *                                   TODO: [== W.I.P.==] change attributes and values list Info log to be shown in Debug mode only
- *                                   TODO: [== W.I.P.==] discoverAllStateMachine - Replace the scheduled jobs w/ StateMachine (store each discovery step in a list)
- *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint
- *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *
  *                                   TODO: [====MVP====] Publish version 1.0.6
  *
- *                                   TODO: [====MVP====] healhCheck schedued job is lost on resubscribe() - fix it!
- *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
- *                                   TODO: [====MVP====] add Data.Refresh for each child device
- *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
- *                                   TODO: [====MVP====] Publish version 1.0.7
- *
  *                                   TODO: [====MVP====] add cluster 08 processing
  *                                   TODO: [====MVP====] add cluster 0300 processing
+ *                                   TODO: [====MVP====] Publish version 1.0.7
+ *
+ *                                   TODO: [====MVP====] bug fix -do not send events to the bridge device if the child device does not exist!
+ *                                   TODO: [====MVP====] disable the debug logs in discovery mode
+ *                                   TODO: [====MVP====] change attributes and values list Info log to be shown in Debug mode only
+ *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint
+ *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the refresh() command ! (add a deviceNumber parameter to the refresh() command command)
+ *                                   TODO: [====MVP====] healhCheck schedued job is lost on resubscribe() - fix it!
  *                                   TODO: [====MVP====] Publish version 1.0.8
  *
  *                                   TODO: [====MVP====] add heathStatus to the child devices
+ *                                   TODO: [====MVP====] add Data.Refresh for each child device
+ *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
+ *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] Publish version 1.0.9
  *
  *                                   TODO: [REFACTORING] move the component drivers names into a table
@@ -89,10 +87,10 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.6' }
-String timeStamp() { '2023/01/26 5:16 PM' }
+String timeStamp() { '2023/01/27 8:52 AM' }
 
-@Field static final Boolean _DEBUG = true
-@Field static final Boolean DEFAULT_LOG_ENABLE = true
+@Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
@@ -152,12 +150,12 @@ metadata {
             'ready'
         ]
 
-        command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices']]]
-       // command 'a1BridgeDiscovery', [[name: 'First click here ...']]
-       // command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
+        command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
+        //command 'a1BridgeDiscovery', [[name: 'First click here ...']]
+        //command 'a2DevicesDiscovery', [[name: 'Next click here ....']]
         //command 'a3CapabilitiesDiscovery', [[name: 'Next click here ....']]
         //command 'a4CreateChildDevices', [[name: 'Next click here ....']]
-        command 'a5SubscribeKnownClustersAttributes', [[name: 'Last click here ....']]
+        //command 'a5SubscribeKnownClustersAttributes', [[name: 'Last click here ....']]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'panic button: Clear all States and start over']]
@@ -1022,14 +1020,15 @@ void a0DiscoverAll(statePar = null) {
     if (statePar == 'All') { stateSt = DISCOVER_ALL_STATE_INIT }
     else if (statePar == 'BasicInfo') { stateSt = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST }
     else if (statePar == 'PartsList') { stateSt = DISCOVER_ALL_STATE_GET_PARTS_LIST_START }
-    else if (statePar == 'ChildDevices') { stateSt = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START }
+    else if (statePar == 'ChildDevices') { stateSt = DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS }
+    else if (statePar == 'Subscribe') { stateSt = Subscribe }
     else {
         logWarn "a0DiscoverAll(): unknown statePar:${statePar} !"
         return
     }
 
     discoverAllStateMachine([action: START, goToState: stateSt])
-    logWarn "a0DiscoverAll(): started!"
+    logInfo "a0DiscoverAll(): started!"
 }
 
 void collectBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = false) {
@@ -2377,6 +2376,7 @@ void initializeVars(boolean fullInit = false) {
         sendInfoEvent('Initialized (fullInit = true)', 'full initialization - loaded all defaults!')
         sendEvent([ name: 'endpointsCount', value: 0 ])
         sendEvent([ name: 'deviceCount', value: 0 ])
+        sendEvent([ name: 'initializeCtr', value: 0 ])
     }
 
     if (state.stats == null)  { state.stats  = [:] }

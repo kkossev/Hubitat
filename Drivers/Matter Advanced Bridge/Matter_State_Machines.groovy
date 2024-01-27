@@ -24,7 +24,7 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-26 kkossev  - first version
+  * ver. 1.0.0  2024-01-27 kkossev  - first version
   *
   *                                   TODO:
   *
@@ -34,7 +34,7 @@ import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 @Field static final String matterStateMachinesLib = '1.0.0'
-@Field static final String matterStateMachinesLibStamp   = '2024/01/26 12:52 PM'
+@Field static final String matterStateMachinesLibStamp   = '2024/01/27 8:31 AM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -359,6 +359,7 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START                 = 25
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE     = 26
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT                  = 27
+@Field static final Integer DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS                 = 30
 
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER                        = 70
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_CLUSTER_WAIT                   = 71
@@ -707,7 +708,7 @@ void discoverAllStateMachine(Map data = null) {
             Integer partsListCount = state.bridgeDescriptor['PartsList']?.size() ?: 0
             if (partsListIndex >= partsListCount) {
                 logDebug "discoverAllStateMachine: st:${st} - all parts discovered (total #${partsListCount}) !"
-                st = DISCOVER_ALL_STATE_NEXT_STATE  // the end?
+                st = DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS  // last step
                 break
             }
 
@@ -742,7 +743,7 @@ void discoverAllStateMachine(Map data = null) {
                 if (state[fingerprintName]['Subscribe'] == null) { state[fingerprintName]['Subscribe'] = [] }
                 state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster, 2))
                 logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
-                
+
                 // convert the figerprint data to a map needed for the createChildDevice() method
                 logDebug "fingerPrintToData: fingerprintName:${fingerprintName}"
                 Map deviceData = fingerprintToData(fingerprintName)
@@ -801,8 +802,14 @@ void discoverAllStateMachine(Map data = null) {
             }
             break
 
+        case DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS :
+            a5SubscribeKnownClustersAttributes()
+            reSubscribe()
+            st = DISCOVER_ALL_STATE_NEXT_STATE
+            break
+
         case DISCOVER_ALL_STATE_NEXT_STATE :
-            logWarn "discoverAllStateMachine: st:${st} - TODO - next state !"
+            logWarn "discoverAllStateMachine: st:${st} - DISCOVER_ALL_STATE_NEXT_STATE - anything else left?"
             st = DISCOVER_ALL_STATE_END
             break
 
