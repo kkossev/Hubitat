@@ -67,7 +67,7 @@ void parse(String description) { log.warn 'parse(String description) not impleme
 
 // parse commands from parent
 void parse(List<Map> description) {
-    if (logEnable) { log.debug "${device} ${description}" }
+    if (logEnable) { log.debug "${device.displayName} ${description}" }
     description.each { d ->
         if (d.name == 'motion') {
             if (invertMotion) {
@@ -88,7 +88,7 @@ void parse(List<Map> description) {
 
 // Called when the device is first created
 void installed() {
-    log.info "${device} driver installed"
+    log.info "${device.displayName} driver installed"
 }
 
 // for tests
@@ -110,12 +110,12 @@ void setMotion( String mode ) {
 
 // Called when the device is removed
 void uninstalled() {
-    log.info "${device} driver uninstalled"
+    log.info "${device.displayName} driver uninstalled"
 }
 
 // Called when the settings are updated
 void updated() {
-    log.info "${device} driver configuration updated"
+    log.info "${device.displayName} driver configuration updated"
     if (logEnable) {
         log.debug settings
         runIn(86400, 'logsOff')
@@ -124,7 +124,7 @@ void updated() {
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
 private void logsOff() {
-    log.warn "debug logging disabled for ${device}"
+    log.warn "debug logging disabled for ${device.displayName}"
     device.updateSetting('logEnable', [value: 'false', type: 'bool'] )
 }
 

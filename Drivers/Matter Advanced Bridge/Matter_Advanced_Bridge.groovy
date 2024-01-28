@@ -25,14 +25,13 @@
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
  * ver. 1.0.6  2024-01-27 kkossev  - DiscoverAll() button (state machine) replaces all old manual discovery buttons; removed setLabel and setSwitch test command;
- * ver. 1.0.7  2024-01-28 kkossev  - (dev.branch) code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount, endpointsCount, nodeLabelbug fixes; refresh() button fixed; multiple subscribe entries bug fix;
- *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; 
+ * ver. 1.0.7  2024-01-28 kkossev  - (dev.branch) code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount, endpointsCount, nodeLabelbug fixes; refresh() button on the Bridge device fixed; multiple subscribe entries bug fix;
+ *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; Celsius to Fahrenheit conversion for temperature sensors
  *
  *
- *                                   TODO: [====MVP====] Celsius to Fahrenheit conversion for temperature sensors
- *                                   TODO: [====MVP====] bugfix: device label ;
  *                                   TODO: [====MVP====] Publish version 1.0.7
  *
+ *                                   TODO: [====MVP====] bugfix: device label @fanmanrules;
  *                                   TODO: [====MVP====] add cluster 0300 processing
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
@@ -84,9 +83,9 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.7' }
-String timeStamp() { '2023/01/28 11:54 PM' }
+String timeStamp() { '2023/01/28 11:55 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -759,16 +758,25 @@ void parseOccupancySensing(final Map descMap) {
 
 // Method for parsing temperature measurement
 void parseTemperatureMeasurement(final Map descMap) { // 0402
-    if (descMap.cluster != '0402') {
-        logWarn "parseTemperatureMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
-        return
-    }
+    if (descMap.cluster != '0402') { logWarn "parseTemperatureMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
     if (descMap.attrId == '0000') { // Temperature
         Double valueInt = HexUtils.hexStringToInt(descMap.value) / 100.0
+        String unit
+        //log.debug "parseTemperatureMeasurement: location.temperatureScale:${location.temperatureScale}"
+        if (location.temperatureScale == 'F') {
+            valueInt = (valueInt * 1.8) + 32
+            unit = "\u00B0" + 'F'
+        }
+        else {
+            unit = "\u00B0" + 'C'
+        }
+        Double valueIntCorrected = valueInt.round(1)
+
         sendMatterEvent([
             name: 'temperature',
-            value: valueInt.toString(),
-            descriptionText: "device #${descMap.endpoint} temperature is ${valueInt} °C"
+            value: valueIntCorrected,
+            descriptionText: "device #${descMap.endpoint} temperature is ${valueInt} ${unit}",
+            unit: unit
         ], descMap)
     } else {
         logTrace "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -832,6 +840,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
     String name = eventParams['name']
     String value = eventParams['value']
     String descriptionText = eventParams['descriptionText']
+    String unut = eventParams['unit']
 
     String dni = ''
     // get the dni from the descMap eddpoint
@@ -842,7 +851,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
         descriptionText = "${getDeviceLabel(descMap?.endpoint)} ${name} is ${value}"
     }
     ChildDeviceWrapper dw = getChildDevice(dni) // null if dni is null for the parent device
-    Map eventMap = [name: name, value: value, descriptionText: descriptionText, type: 'physical']
+    Map eventMap = [name: name, value: value, descriptionText: descriptionText, unit:unit, type: 'physical']
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force the event to be sent
