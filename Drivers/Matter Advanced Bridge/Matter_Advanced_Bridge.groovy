@@ -24,19 +24,18 @@
  * ver. 1.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
  *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
  * ver. 1.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 1.0.6  2024-01-27 kkossev  - DiscoverAll() button (state machine) replaces tall old manual discovery buttons; removed setLabel and setSwitch test command;
- * ver. 1.0.7  2024-01-28 kkossev  - (dev.branch) code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount and endpointsCount bug fixes; refresh() button fixed;
- *                                   added setLevel; 
+ * ver. 1.0.6  2024-01-27 kkossev  - DiscoverAll() button (state machine) replaces all old manual discovery buttons; removed setLabel and setSwitch test command;
+ * ver. 1.0.7  2024-01-28 kkossev  - (dev.branch) code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount, endpointsCount, nodeLabelbug fixes; refresh() button fixed; multiple subscribe entries bug fix;
+ *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; 
  *
  *
- *
- *                                   TODO: [====MVP====] bugfix: Subscribe=[0006, 0006, 0006, 0006, 0006], 
- *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint
- *                                   TODO: [====MVP====] add cluster 08 processing
- *                                   TODO: [====MVP====] add cluster 0300 processing
+ *                                   TODO: [====MVP====] Celsius to Fahrenheit conversion for temperature sensors
+ *                                   TODO: [====MVP====] bugfix: device label ;
  *                                   TODO: [====MVP====] Publish version 1.0.7
  *
+ *                                   TODO: [====MVP====] add cluster 0300 processing
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
+ *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
  *                                   TODO: [====MVP====] healhCheck schedued job is lost on resubscribe() - fix it!
  *                                   TODO: [====MVP====] Publish version 1.0.8
  *
@@ -44,6 +43,9 @@
  *                                   TODO: [====MVP====] add Data.Refresh for each child device
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
+ *                                   TODO: [====MVP====] implement componentStartLevelChange(), componentStopLevelChange(), doLevelChange() for bulbs and dimmers
+ *                                   TODO: [====MVP====] implement componentSetColorTemperature() for bulbs
+ *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] Publish version 1.0.9
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
@@ -52,23 +54,17 @@
  *                                   TODO: [REFACTORING] add a temporay state to store the attributes list of the currently interviewed cluster
  *                                   TODO: [REFACTORING] Convert SupportedMatterClusters to Map that include the known attributes to be subscribed to
  *
+ *                                   TODO: [ENHANCEMENT] add to Device#xx the Bridge name! ( add the bridge LABEL ( 'Hue Matter Bridge')
  *                                   TODO: [ENHANCEMENT] change attributes and values list Info log to be shown in Debug mode only
  *                                   TODO: [ENHANCEMENT] disable the debug logs in discovery mode
- *                                   TODO: [ENHANCEMENT] [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
- *                                   TODO: [ENHANCEMENT] Device Extended Info - expose as a command?
+ *                                   TODO: [ENHANCEMENT] Device Extended Info - expose as a command (needs state machine implementation) or remove the code?
  *                                   TODO: [ENHANCEMENT] option to automatically delete the child devices when missing from the PartsList
  *                                   TODO: [ENHANCEMENT] add initialized() method to the child devices (send 'unknown' events for all attributes)
- *                                   TODO: [ENHANCEMENT] deviceCount; endpointsCount
  *                                   TODO: [ENHANCEMENT] clearStatistics command/button
- *                                   TODO: [ENHANCEMENT] add support for cluster 0x003B  : 'Switch' (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [ENHANCEMENT] DeleteDevices() to take device# parameter to delete a single device (0=all)
  *                                   TODO: [ENHANCEMENT] store subscription lists in Hex format
- *                                   TODO: [ENHANCEMENT] Philips Hue Bridge discovery (subscription) depending on the ClusterAttributes list supported
- *                                   TODO: [ENHANCEMENT] add getInfo(Basic) for the child devices during the discovery !
  *                                   TODO: [ENHANCEMENT] add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
  *                                   TODO: [ENHANCEMENT] implement ping() for the child devices (requires individual states for each child device...)
- *                                   TODO: [ENHANCEMENT] implement healthStatus for the child devices
- *                                   TODO: [ENHANCEMENT] add to Device#xx the Bridge name! ( add the bridge LABEL ( 'Hue Matter Bridge')
  *                                   TODO: [ENHANCEMENT] add Configure() custom command - perform reSubscribe()
  *                                   TODO: [ENHANCEMENT] make Identify command work !
  *                                   TODO: [ENHANCEMENT] add GeneralDiagnostics (0x0033) endpoint 0x00 :  [0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
@@ -79,7 +75,7 @@
  *                                   TODO: [ RESEARCH  ] check setSwitch() device# commandsList
  *                                   TODO: [ RESEARCH  ] add a Parent entry in the child devices fingerprints (PartsList)
  *                                   TODO: [ RESEARCH  ] how to  combine 2 endpoints in one device - 'Temperature and Humidity Sensor' - 2 clusters
- *                                   TODO: [ RESEARCH  ] why the child devices are automatically disabled when shared via Hub Mesh ?
+ *                                   TODO: [ RESEARCH  ] why are the child devices  automatically disabled when shared via Hub Mesh ?
  *                                   TODO: - template -  [====MVP====] [REFACTORING] [RESEARCH] [ENHANCEMENT]
  */
 
@@ -88,7 +84,7 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '1.0.7' }
-String timeStamp() { '2023/01/28 8:06 AM' }
+String timeStamp() { '2023/01/28 11:54 PM' }
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -132,6 +128,7 @@ metadata {
         attribute 'rtt', 'number'
         attribute 'Status', 'string'
         attribute 'productName', 'string'
+        attribute 'nodeLabel', 'string'
         attribute 'softwareVersion', 'string'
         //[0001] RebootCount = 06 [0002] UpTime = 0x000E22B4 (926388)  [0003] TotalOperationalHours = 0x0101 (257)
         attribute 'rebootCount', 'number'           // TODO - Bridge specific
@@ -213,10 +210,13 @@ metadata {
 @Field static final Map<Integer, Map> SupportedMatterClusters = [
     //0x0039 : [parser: 'parseBridgedDeviceBasic', attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands'],   // BridgedDeviceBasic
     0x0006 : [parser: 'parseOnOffCluster', attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands'],   // On/Off Cluster
+    0x0008 : [parser: 'parseLevelControlCluster', attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands'],   // Level Control
     0x0102 : [parser: 'parseWindowCovering', attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],   // WindowCovering
     0x0402 : [parser: 'parseTemperatureMeasurement', attributes: 'TemperatureMeasurementClusterAttributes', commands: 'TemperatureMeasurementClusterCommands'],   // TemperatureMeasurement
     0x0405 : [parser: 'parseHumidityMeasurement', attributes: 'RelativeHumidityMeasurementClusterAttributes', commands: 'RelativeHumidityMeasurementClusterCommands'],   // HumidityMeasurement
     0x0406 : [parser: 'parseOccupancySensing', attributes: 'OccupancySensingClusterAttributes', commands: 'OccupancySensingClusterCommands']   // OccupancySensing (motion)
+    //0x0003 : [parser: 'parseOccupancySensing', attributes: 'OccupancySensingClusterAttributes', commands: 'OccupancySensingClusterCommands'],   // OccupancySensing (motion)
+    //0x001D : [parser: 'parseOccupancySensing', attributes: 'OccupancySensingClusterAttributes', commands: 'OccupancySensingClusterCommands']   // OccupancySensing (motion)
 ]
 
 // Json Parsing Cache
@@ -611,11 +611,6 @@ void parseBasicInformationCluster(final Map descMap) {  // 0x0028 BasicInformati
     }
     if (eventMap != [:]) {
         eventMap.type = 'physical'; eventMap.isStateChange = true
-        /*
-        if (state.states['isRefresh'] == true) { eventMap.descriptionText += ' [refresh]' }
-        sendEvent(eventMap) // bridge events
-        logInfo eventMap.descriptionText
-        */
         sendMatterEvent(eventMap, descMap) // bridge events
     }
 }
@@ -633,10 +628,6 @@ void parseBridgedDeviceBasic(final Map descMap) {       // 0x0039 BridgedDeviceB
     }
     if (eventMap != [:]) {
         eventMap.type = 'physical'; eventMap.isStateChange = true
-        /*
-        if (state.states['isRefresh'] == true) { eventMap.descriptionText += ' [refresh]' }
-        //logInfo eventMap.descriptionText
-        */
         sendMatterEvent(eventMap, descMap) // child events
     }
 }
@@ -646,9 +637,6 @@ void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
     String attrName = getAttributeName(descMap)    //= DescriptorClusterAttributes[descMap.attrInt as int] ?: GlobalElementsAttributes[descMap.attrInt as int] ?: UNKNOWN
     String endpointId = descMap.endpoint
     String fingerprintName =  getFingerprintName(descMap)  /*"fingerprint${endpointId}"
-    if (endpointId == '00') { fingerprintName = 'bridgeDescriptor' }*/
-
-    if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
 /*
 [0000] DeviceTypeList = [16, 1818]
 [0001] ServerList = [03, 1D, 1F, 28, 29, 2A, 2B, 2C, 2E, 30, 31, 32, 33, 34, 37, 39, 3C, 3E, 3F, 40]
@@ -665,10 +653,6 @@ void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
                     int partsListCount = partsList.size()   // the number of the elements in the partsList
                     int oldCount = device.currentValue('endpointsCount') ?: 0 as int
                     String descriptionText = "Bridge partsListCount is: ${partsListCount}"
-                    /*
-                    sendEvent(name: 'endpointsCount', value: partsListCount, descriptionText: descriptionText)
-                    logInfo descriptionText
-                    */
                     sendMatterEvent([name: 'endpointsCount', value: partsListCount, descriptionText: descriptionText], descMap)
                     if (partsListCount != oldCount) {
                         logWarn "THE NUMBER OF THE BRIDGED DEVICES CHANGED FROM ${oldCount} TO ${partsListCount} !!!"
@@ -684,16 +668,12 @@ void parseDescriptorCluster(final Map descMap) {    // 0x001D Descriptor
 
 void parseOnOffCluster(final Map descMap) {
     logTrace "parseOnOffCluster: descMap:${descMap}"
-    if (descMap.cluster != '0006') {
-        logWarn "parseOnOffCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
-        return
-    }
+    if (descMap.cluster != '0006') { logWarn "parseOnOffCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return  }
     Integer value
 
     switch (descMap.attrId) {
         case '0000' : // Switch
             String switchState = descMap.value == '01' ? 'on' : 'off'
-            //sendSwitchEvent(descMap.value)
             sendMatterEvent([
                 name: 'switch',
                 value: switchState,
@@ -724,15 +704,11 @@ void parseOnOffCluster(final Map descMap) {
         default :
             logWarn "parseOnOffCluster: unexpected attrId:${descMap.attrId} (raw:${descMap.value})"
     }
-    //parseOtherGlobalElements(descMap)
 }
 
 void parseLevelControlCluster(final Map descMap) {
     logTrace "parseLevelControlCluster: descMap:${descMap}"
-    if (descMap.cluster != '0008') {
-        logWarn "parseLevelControlCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"
-        return
-    }
+    if (descMap.cluster != '0008') { logWarn "parseLevelControlCluster: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
     Integer value
     switch (descMap.attrId) {
         case '0000' : // CurrentLevel
@@ -743,22 +719,6 @@ void parseLevelControlCluster(final Map descMap) {
                 descriptionText: "${getDeviceLabel(descMap.endpoint)} level is ${value}"
             ], descMap)
             break
-/*            
-        case '0001' : // RemainingTime
-            if (logEnable) { logInfo "parse: LevelControl: RemainingTime = ${descMap.value}" }
-            if (state.levelControl  == null) { state.levelControl =  [:] } ; state.levelControl['RemainingTime'] = descMap.value
-            break
-        case '0010' : // StartUpCurrentLevel
-            value = HexUtils.hexStringToInt(descMap.value)
-            String startUpCurrentLevelText = "parse: LevelControl: StartUpCurrentLevel = ${descMap.value} (${StartUpOnOffEnumOpts[value] ?: UNKNOWN})"
-            if (logEnable) { logInfo  "${startUpCurrentLevelText}" }
-            if (state.levelControl  == null) { state.levelControl =  [:] } ; state.levelControl['StartUpCurrentLevel'] = descMap.value
-            break
-        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
-            logTrace "parse: LevelControl: ${attrName} = ${descMap.value}"
-            break
-            */
-
         default :
             Map eventMap = [:]
             String attrName = getAttributeName(descMap)
@@ -766,7 +726,6 @@ void parseLevelControlCluster(final Map descMap) {
             if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
             String eventName = attrName[0].toLowerCase() + attrName[1..-1]  // change the attribute name first letter to lower case
             if (attrName in ['CurrentLevel', 'RemainingTime', 'MinLevel', 'MaxLevel', 'OnOffTransitionTime', 'OnLevel', 'OnTransitionTime', 'OffTransitionTime', 'Options', 'StartUpCurrentLevel', 'Reachable']) {
-                //state[fingerprintName][attrName] = descMap.value
                 eventMap = [name: eventName, value:descMap.value, descriptionText: "${eventName} is: ${descMap.value}"]
                 if (logEnable) { logInfo "parseLevelControlCluster: ${attrName} = ${descMap.value}" }
             }
@@ -775,14 +734,9 @@ void parseLevelControlCluster(final Map descMap) {
             }
             if (eventMap != [:]) {
                 eventMap.type = 'physical'; eventMap.isStateChange = true
-                /*
-                if (state.states['isRefresh'] == true) { eventMap.descriptionText += ' [refresh]' }
-                //logInfo eventMap.descriptionText
-                */
                 sendMatterEvent(eventMap, descMap) // child events
             }
     }
-    //parseOtherGlobalElements(descMap)
 }
 
 // Method for parsing occupancy sensing
@@ -801,7 +755,6 @@ void parseOccupancySensing(final Map descMap) {
     } else {
         logTrace "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
-//    parseOtherGlobalElements(descMap)
 }
 
 // Method for parsing temperature measurement
@@ -811,7 +764,6 @@ void parseTemperatureMeasurement(final Map descMap) { // 0402
         return
     }
     if (descMap.attrId == '0000') { // Temperature
-//        parseOtherGlobalElements(descMap)
         Double valueInt = HexUtils.hexStringToInt(descMap.value) / 100.0
         sendMatterEvent([
             name: 'temperature',
@@ -822,7 +774,6 @@ void parseTemperatureMeasurement(final Map descMap) { // 0402
         logTrace "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
         logTrace "parseTemperatureMeasurement: ${getAttributeName(descMap)} = ${descMap.value}"
     }
-//    parseOtherGlobalElements(descMap)
 }
 
 // Method for parsing humidity measurement
@@ -841,7 +792,6 @@ void parseHumidityMeasurement(final Map descMap) { // 0405
     } else {
         logTrace "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
-//    parseOtherGlobalElements(descMap)
 }
 
 void parseWindowCovering(final Map descMap) { // 0102
@@ -873,7 +823,6 @@ void parseWindowCovering(final Map descMap) { // 0102
     else {
         logTrace "parseWindowCovering: ${(WindowCoveringClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
-//    parseOtherGlobalElements(descMap)
 }
 
 //events
@@ -903,12 +852,6 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
         eventMap.isStateChange = true   // force the event to be sent
     }
     // TODO - use the child device wrapper to check the current value !!!!!!!!!!!!!!!!!!!!!
-    /*
-    if (device.currentValue(attributeName) == value && state.states['isRefresh'] != true) {
-        logDebug "ignored duplicated ${attributeName} event, value:${value}"
-        return
-    }
-    */
     if (dw != null && dw?.disabled != true) {
         // send events to child for parsing. Any filtering of duplicated events will be potentially done in the child device handler.
         logDebug "sendMatterEvent: sending for parsing to the child device: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
@@ -920,7 +863,9 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
     }
     else {
         // event intended to be sent to the parent device, but the dni is null ..
-        logWarn "sendMatterEvent: <b>cannot send </b> for parsing to the child device: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
+        if (state['states']['isDiscovery'] != true) { // do not log this event if the discovery is in progress
+            logWarn "sendMatterEvent: <b>cannot send </b> for parsing to the child device: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
+        }
     }
 }
 
@@ -1203,17 +1148,6 @@ void a5SubscribeKnownClustersAttributes() {
     runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
 }
 
-/*
-void a4CreateChildDevices() {
-    logDebug 'a4CreateChildDevices()'
-    sendInfoEvent('Creating child devices ...')
-    Integer childDevicesCreated = 0
-    childDevicesCreated = createChildDevices()
-    String info = "Completed, created ${childDevicesCreated} child devices!"
-    sendInfoEvent(info)
-}
-*/
-
 void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
     List<Map<String, String>> attributePaths = [matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer)]
     sendToDevice(matter.readAttributes(attributePaths))
@@ -1465,12 +1399,6 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
         logWarn "setSwitch(): OnOff capability is not present for ${getDeviceLabel(deviceNumber)} !"
         return
     }
-    /*
-    if (onOffCommandsList == null) {
-        logWarn "setSwitch(): OnOff commands not discovered for ${getDeviceLabel(deviceNumber)} !"
-        return
-    }
-    */
     // find the command in the OnOffClusterCommands map
     logDebug "setSwitch(): command = ${command}"
     Integer onOffcmd = OnOffClusterCommands.find { k, v -> v == command }?.key
@@ -1606,8 +1534,8 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
   *  MATTER : https://developer.tuya.com/en/docs/iot-device-dev/Matter_Product_Feature_List?id=Kd2wjfpuhgmrw
   */
 private static Map mapTuyaCategory(Map d) {
-    if ('06' in d.ServerList) {   // OnOff
-        return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Switch' ]
+    if ('08' in d.ServerList) {   // Dimmer
+        return [ driver: 'Generic Component Dimmer', product_name: 'Dimmer/Bulb' ]
     }
     if ('0402' in d.ServerList) {   // TemperatureMeasurement
         return [ driver: 'Generic Component Omni Sensor', product_name: 'Temperature Sensor' ]
@@ -1622,6 +1550,9 @@ private static Map mapTuyaCategory(Map d) {
     /* groovylint-disable-next-line IfStatementCouldBeTernary */
     if ('0102' in d.ServerList) {   // Curtain Motor (uses custom driver)
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Window Shade', product_name: 'Curtain Motor' ]
+    }
+    if ('06' in d.ServerList) {   // OnOff
+        return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Switch' ]
     }
 
 /*
@@ -1722,6 +1653,7 @@ private static Map mapTuyaCategory(Map d) {
     }
 */
    // logWarn "mapTuyaCategory(): Unknown category"   //  '${d.category}' for device '${d.name}'"
+   // fall back to the default driver
     return [ driver: 'Generic Component Switch', product_name: 'Unknown' ]
 }
 
@@ -1794,19 +1726,35 @@ void componentClose(DeviceWrapper dw) {
 
 // Component command to start level change (up or down)
 void componentStartLevelChange(DeviceWrapper dw, String direction) {
+    logWarn "componentStartLevelChange(${dw}, ${direction}) is not implemented!"
+    return
+    /*
     levelChanges[dw.deviceNetworkId] = (direction == 'down') ? -10 : 10
-    if (txtEnable) { LOG.info "Starting level change ${direction} for ${dw}" }
+    if (txtEnable) { logInfo "Starting level change ${direction} for ${dw}" }
     runInMillis(1000, 'doLevelChange')
+    */
 }
 
 // Component command to stop level change
 void componentStopLevelChange(DeviceWrapper dw) {
+    logWarn "componentStopLevelChange(${dw}) is not implemented!"
+    return
+    /*
     logInfo "Stopping level change for ${dw}"
     levelChanges.remove(dw.deviceNetworkId)
+    */
+}
+
+void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature, BigDecimal level, BigDecimal duration=0) {
+    logWarn "componentSetColorTemperature(${dw}, ${level}, ${duration}) is not implemented!"
+    return
 }
 
 // Utility function to handle multiple level changes
 void doLevelChange() {
+    logWarn "doLevelChange() is not implemented!"
+    return
+    /*
     List active = levelChanges.collect() // copy list locally
     active.each { kv ->
         ChildDeviceWrapper dw = getChildDevice(kv.key)
@@ -1815,17 +1763,17 @@ void doLevelChange() {
             if (newLevel < 0) { newLevel = 0 }
             if (newLevel > 100) { newLevel = 100 }
             componentSetLevel(dw, newLevel)
-            if (newLevel <= 0 && newLevel >= 100) {
+            if (newLevel <= 0 || newLevel >= 100) {
                 componentStopLevelChange(device)
             }
         } else {
             levelChanges.remove(kv.key)
         }
     }
-
     if (!levelChanges.isEmpty()) {
         runInMillis(1000, 'doLevelChange')
     }
+    */
 }
 
 // prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2 

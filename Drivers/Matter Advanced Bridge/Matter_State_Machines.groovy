@@ -24,7 +24,8 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-27 kkossev  - first version
+  * ver. 1.0.0  2024-01-27 kkossev  - first published version
+  * ver. 1.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
   *
   *                                   TODO:
   *
@@ -33,8 +34,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterStateMachinesLib = '1.0.0'
-@Field static final String matterStateMachinesLibStamp   = '2024/01/27 10:19 PM'
+@Field static final String matterStateMachinesLib = '1.0.1'
+@Field static final String matterStateMachinesLibStamp   = '2024/01/28 11:05 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -730,20 +731,25 @@ void discoverAllStateMachine(Map data = null) {
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
                 break
             }
-            //List<Integer> supportedClusters = SupportedMatterClusters.collect { it.key }
-            List<Integer> supportedClusters = SupportedMatterClusters*.key      // The spread-dot operator (*.) is used to invoke an action on all items of an aggregate object.
+            List<Integer> supportedMatterClusters = SupportedMatterClusters*.key      // The spread-dot operator (*.) is used to invoke an action on all items of an aggregate object.
             List<Integer> serverListCluster = state[fingerprintName]['ServerList'].collect { HexUtils.hexStringToInt(it) }
-            logTrace "discoverAllStateMachine: st:${st} - ServerListCluster = ${serverListCluster}"
-            // check if any of the SupportedMatterClusters is in the ServerList
-            // keep it simple for now - just check for the first one
-            // find the first element in the supportedClusters that is in the ServerList
-            Integer supportedCluster = supportedClusters.find { serverListCluster.contains(it) }
-            if (supportedCluster != null) {
-                logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} <b>found ${supportedCluster}</b> from the SupportedMatterClusters ${supportedClusters} in the ServerList ${ServerListCluster}"
+            logTrace "discoverAllStateMachine: st:${st} DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE- ServerListCluster = ${serverListCluster} (${state[fingerprintName]['ServerList']})"
+            // find all elements in the supportedMatterClusters that are in the ServerList
+            List<Integer> matchedClustersList = supportedMatterClusters.findAll { serverListCluster.contains(it) }       // empty list [] if nothing found
+            Integer supportedCluster =  matchedClustersList != [] ?  matchedClustersList?.first() : 0
+            if (supportedCluster != null && supportedCluster != 0) {
+                logDebug "discoverAllStateMachine: st:${st} - ${fingerprintName} <b>found supportedCluster ${supportedCluster} in matchedClustersList ${matchedClustersList}</b> from the SupportedMatterClusters ${supportedMatterClusters} in the ServerList ${serverListCluster}"
+                state[fingerprintName]['Subscribe'] = matchedClustersList
+                /*
                 if (state[fingerprintName]['Subscribe'] == null) { state[fingerprintName]['Subscribe'] = [] }
-                state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster, 2))
-                logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
-
+                if (state[fingerprintName]['Subscribe'].contains(HexUtils.integerToHexString(supportedCluster, 2))) {
+                    logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} already subscribed to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
+                }
+                else {
+                    state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster, 2))
+                    logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
+                }
+                */
                 // convert the figerprint data to a map needed for the createChildDevice() method
                 logDebug "fingerPrintToData: fingerprintName:${fingerprintName}"
                 Map deviceData = fingerprintToData(fingerprintName)
