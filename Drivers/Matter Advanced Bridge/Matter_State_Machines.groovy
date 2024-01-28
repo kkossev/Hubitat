@@ -34,7 +34,7 @@ import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 @Field static final String matterStateMachinesLib = '1.0.0'
-@Field static final String matterStateMachinesLibStamp   = '2024/01/27 8:31 AM'
+@Field static final String matterStateMachinesLibStamp   = '2024/01/27 10:19 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -824,7 +824,7 @@ void discoverAllStateMachine(Map data = null) {
             state.states['isInfo'] = false
             logDebug "discoverAllStateMachine: st:${st} - THE END"
             sendInfoEvent('*** END of the Matter Bridge and Devices discovery ***')
-            sendInfoEvent('Please wait up to 10 more seconds for the re-subscribe process to finish!')
+            sendInfoEvent('<b>Wait up to 30 more seconds for the re-subscribing process to complete...</b>')
             state['stateMachines']['discoverAllResult'] = SUCCESS
             st = 0
             break
