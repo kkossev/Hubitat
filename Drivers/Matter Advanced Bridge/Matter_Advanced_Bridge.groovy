@@ -88,11 +88,11 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '0.1.0' }
-String timeStamp() { '2023/02/03 10:20 AM' }
+String timeStamp() { '2023/02/03 10:28 AM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
-@Field static final Boolean DO_NOT_TRACE_FFFX = false         // don't trace the FFFx global attributes
+@Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
