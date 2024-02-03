@@ -19,8 +19,8 @@
   * For a big portions of code all credits go to Jonathan Bradshaw.
   *
   *
-  * ver. 1.0.0  2022-11-28 bradsjm - original code for Tuya Cloud driver
-  * ver. 1.0.1  2024-01-14 kkossev - first version for the Matter Advanced Bridge driver
+  * ver. 0.0.0  2022-11-28 bradsjm - original code for Tuya Cloud driver
+  * ver. 0.0.1  2024-01-14 kkossev - first version for the Matter Advanced Bridge driver
   *
   *                                   TODO: add a timeout preference for the position change
   *                                   TODO: restart the timer on each position change event
@@ -30,7 +30,7 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '1.0.1'
+@Field static final String matterComponentMotionVersion = '0.0.1'
 @Field static final String matterComponentMotionStamp   = '2024/01/14 12:08 AM'
 
 @Field static final Integer POSITION_DELTA = 5

@@ -14,9 +14,9 @@
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-11 kkossev  - first version
-  * ver. 1.0.1  2024-01-12 kkossev  - ignoring switch events if no change
-  * ver. 1.0.2  2024-01-20 kkossev  - debug logs
+  * ver. 0.0.0  2024-01-11 kkossev  - first version
+  * ver. 0.0.1  2024-01-12 kkossev  - ignoring switch events if no change
+  * ver. 0.0.2  2024-01-20 kkossev  - debug logs
   *
   *                                   TODO:
   *
@@ -24,7 +24,7 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '1.0.2'
+@Field static final String matterComponentMotionVersion = '0.0.2'
 @Field static final String matterComponentMotionStamp   = '2024/01/20 2:42 PM'
 
 metadata {

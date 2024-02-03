@@ -6,7 +6,7 @@ library(
     name: 'matterLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/MatterLib.groovy',
-    version: '1.0.1',
+    version: '0.0.3',
     documentationLink: ''
 )
 /*
@@ -24,9 +24,10 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-10 kkossev  - first version
-  * ver. 1.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
-  * ver. 1.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
+  * ver. 0.0.0  2024-01-10 kkossev  - first version
+  * ver. 0.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
+  * ver. 0.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
+  * ver. 0.0.3  2024-02-03 kkossev  - (dev. branch) ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions
   *
   *                                   TODO:
   *
@@ -35,8 +36,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterLibVersion = '1.0.2'
-@Field static final String matterLibStamp   = '2024/01/19 8:43 PM'
+@Field static final String matterLibVersion = '0.0.3'
+@Field static final String matterLibStamp   = '2024/02/03 9:52 AM'
 
 // no metadata section for matterLib
 
@@ -144,6 +145,8 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
 Map getAttributesMapByClusterId(String cluster) {
     /* groovylint-disable-next-line CouldBeSwitchStatement, ReturnsNullInsteadOfEmptyCollection */
     if (cluster == null) { return null }
+    if (cluster == '0006') { return OnOffClusterAttributes }
+    if (cluster == '0008') { return LevelControlClusterAttributes }
     if (cluster == '001D') { return DescriptorClusterAttributes }
     if (cluster == '001E') { return BindingClusterAttributes }
     if (cluster == '001F') { return AccessControlClusterAttributes }
@@ -166,6 +169,8 @@ Map getAttributesMapByClusterId(String cluster) {
     if (cluster == '003F') { return GroupKeyManagementClusterAttributes }
     if (cluster == '0040') { return FixedLabelClusterAttributes }
     if (cluster == '0041') { return UserLabelClusterAttributes }
+    if (cluster == '0045') { return BooleanStateClusterAttributes }
+    if (cluster == '0102') { return WindowCoveringClusterAttributes }
     if (cluster == '0400') { return IlluminanceMeasurementClusterAttributes }   // TODO
     if (cluster == '0402') { return TemperatureMeasurementClusterAttributes }
     if (cluster == '0403') { return PressureMeasurementClusterAttributes }      // TODO
@@ -261,6 +266,32 @@ Map getAttributesMapByClusterId(String cluster) {
 // 11.6.6.1 Poweer Source Configuration Cluster 0x002E
 @Field static final Map<Integer, String> PowerSourceConfigurationClusterAttributes = [
     0x0000  : 'dummy'
+]
+
+// 11.7. Power Source Cluster 0x002F    // attrList:[0, 1, 2, 11, 12, 14, 15, 16, 19, 25, 65528, 65529, 65531, 65532, 65533]
+@Field static final Map<Integer, String> PowerSourceClusterAttributes = [
+    0x0000  : 'Status',
+    0x0001  : 'Order',
+    0x0002  : 'Description',
+    0x000B  : 'BatVoltage',
+    0x000C  : 'BatPercentRemaining',
+    0x000D  : 'BatTimeRemaining',
+    0x000E  : 'BatChargeLevel',
+    0x000F  : 'BatReplacementNeeded',
+    0x0010  : 'BatReplaceability',
+    0x0013  : 'BatReplacementDescription',
+    0x0019  : 'BatQuantity'
+]
+@Field static final Map<Integer, String> PowerSourceClusterStatus = [
+    0x00    : 'Unspecified',    // SHALL indicate the source status is not specified
+    0x01    : 'Active',         // SHALL indicate the source is available and currently supplying power
+    0x02    : 'Standby',        // SHALL indicate the source is available, but is not currently supplying power
+    0x03    : 'Unavailable'     // SHALL indicate the source is not currently available to supply power
+]
+@Field static final Map<Integer, String> PowerSourceClusterBatteryChargeLevel = [
+    0x00    : 'OK',             // Charge level is nominal
+    0x01    : 'Warning',        // Charge level is low, intervention may soon be required.
+    0x02    : 'Critical'        // Charge level is critical, immediate intervention is required.
 ]
 
 // 11.9.6. General Commissioning Cluster 0x0030
@@ -421,56 +452,37 @@ Map getAttributesMapByClusterId(String cluster) {
 
 // 1.6. Level Control Cluster 0x0008
 @Field static final Map<Integer, String> LevelControlClusterAttributes = [
-    0x0000  : 'CurrentLevel',
-    0x0001  : 'RemainingTime',
-    0x0002  : 'MinLevel',
-    0x0003  : 'MaxLevel',
-    0x0004  : 'CurrentFrequency',
-    0x0005  : 'MinFrequency',
-    0x0010  : 'OnOffTransitionTime',
-    0x0011  : 'OnLevel',
-    0x0012  : 'OnTransitionTime',
-    0x0013  : 'OffTransitionTime',
+    0x0000  : 'CurrentLevel',       // uint8    - the current level of this device. The meaning of 'level' is device dependent
+    0x0001  : 'RemainingTime',      // uint16   -  the time remaining until the current command is complete - it is specified in 1/10ths of a second.
+    0x0002  : 'MinLevel',           // uint8    - indicates the minimum value of CurrentLevel that is capable of being assigned.
+    0x0003  : 'MaxLevel',           // uint8    -  indicates the maximum value of CurrentLevel that is capable of being assigned.
+    0x0004  : 'CurrentFrequency',   // uint16   -  represents the frequency at which the device is at CurrentLevel. A CurrentFrequency of 0 is unknown
+    0x0005  : 'MinFrequency',       // uint16
+    0x0006  : 'MaxFrequency',       // uint16
+    0x0010  : 'OnOffTransitionTime',// uint16   - represents the time taken to move to or from the target level when On or Off commands are received by an On/Off cluster on the same endpoint. It is specified in 1/10ths of a second.
+    0x0011  : 'OnLevel',            // uint8    - determines the value that the CurrentLevel attribute is set to when the OnOff attribute of an On/Off cluster on the same endpoint is set to TRUE, as a result of processing an On/Off cluster command.
+    0x0012  : 'OnTransitionTime',   // uint16   - represents the time taken to move the current level from the minimum level to the maximum level when an On command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second. 
+    0x0013  : 'OffTransitionTime',  // uint16   - represents the time taken to move the current level from the maximum level to the minimum level when an Off command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second. 
+    0x0014  : 'DefaultMoveRate',    // uint8    -  determines the movement rate, in units per second, when a Move command is received with a null value Rate parameter.
     0x000F  : 'Options',
-    0x4000  : 'StartUpCurrentLevel'
+    0x4000  : 'StartUpCurrentLevel' // uint8    - define the desired startup level for a device when it is supplied with power and this level SHALL be reflected in the CurrentLevel attribute.
 ]
 
 @Field static final Map<Integer, String> LevelControlClusterCommands = [
-    0x00    : 'MoveToLevel',
-    0x01    : 'Move',
-    0x02    : 'Step',
-    0x03    : 'Stop',
-    0x04    : 'MoveToLevelWithOnOff',
+    0x00    : 'MoveToLevel',        // 1.6.7.1. (Level, TransitionTime, OptionsMask, OptionsOverride) - the  device SHALL move from its current level to the value given in the Level field.
+    0x01    : 'Move',               // 1.6.7.2. (MoveMode, Rate, OptionsMask, OptionsOverride) - the device SHALL move from its current level to a new level based on the MoveMode and Rate fields.
+    0x02    : 'Step',               // 1.6.7.3. (StepMode, StepSize, TransitionTime, OptionsMask, OptionsOverride) - the device SHALL move from its current level to a new level based on the StepMode and StepSize fields.
+    0x03    : 'Stop',               // 1.6.7.4. (OptionsMask, OptionsOverride) - Upon receipt of this command, any MoveToLevel, Move or Step command (and their 'with On/Off' variants) currently in process SHALL be terminated.
+    0x04    : 'MoveToLevelWithOnOff', // 1.6.7.6. ^^^same as above^^^, but with OnOff
     0x05    : 'MoveWithOnOff',
     0x06    : 'StepWithOnOff',
     0x07    : 'StopWithOnOff',
     0x08    : 'MoveToClosestFrequency'
 ]
 
-// 11.7. Power Source Cluster 0x002F    // attrList:[0, 1, 2, 11, 12, 14, 15, 16, 19, 25, 65528, 65529, 65531, 65532, 65533]
-@Field static final Map<Integer, String> PowerSourceClusterAttributes = [
-    0x0000  : 'Status',
-    0x0001  : 'Order',
-    0x0002  : 'Description',
-    0x000B  : 'BatVoltage',
-    0x000C  : 'BatPercentRemaining',
-    0x000D  : 'BatTimeRemaining',
-    0x000E  : 'BatChargeLevel',
-    0x000F  : 'BatReplacementNeeded',
-    0x0010  : 'BatReplaceability',
-    0x0013  : 'BatReplacementDescription',
-    0x0019  : 'BatQuantity'
-]
-@Field static final Map<Integer, String> PowerSourceClusterStatus = [
-    0x00    : 'Unspecified',    // SHALL indicate the source status is not specified
-    0x01    : 'Active',         // SHALL indicate the source is available and currently supplying power
-    0x02    : 'Standby',        // SHALL indicate the source is available, but is not currently supplying power
-    0x03    : 'Unavailable'     // SHALL indicate the source is not currently available to supply power
-]
-@Field static final Map<Integer, String> PowerSourceClusterBatteryChargeLevel = [
-    0x00    : 'OK',             // Charge level is nominal
-    0x01    : 'Warning',        // Charge level is low, intervention may soon be required.
-    0x02    : 'Critical'        // Charge level is critical, immediate intervention is required.
+@Field static final Map<Integer, String> LevelControlMoveModeEnum = [
+    0x00    : 'Up',
+    0x01    : 'Down'
 ]
 
 // 1.12. Switch Cluster 0x003B Two types of switch devices are supported: latching switch (e.g. rocker switch) and momentary switch (e.g. push button), distinguished with their feature flags.
@@ -502,8 +514,8 @@ Map getAttributesMapByClusterId(String cluster) {
     0x06    : 'MultiPressComplete'
 ]
 
-// 1.7 Bolean State Cluster 0x0045
-@Field static final Map<Integer, String> BoleanStateClusterAttributes = [
+// 1.7 Boolean State Cluster 0x0045
+@Field static final Map<Integer, String> BooleanStateClusterAttributes = [
     0x0000  : 'StateValue'
 ]
 
@@ -536,6 +548,73 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0018  : 'IntermediateSetpointsLift',
     0x0019  : 'IntermediateSetpointsTilt',
     0x001A  : 'SafetyStatus'
+]
+
+// 4.3. Thermostat Cluster 0x0201 (513)
+// 4.3.9. Thermostat Cluster Attributes
+@Field static final Map<Integer, String> ThermostatClusterAttributes = [
+    0x0000  : 'LocalTemperature',
+    0x0001  : 'OutdoorTemperature',
+    0x0002  : 'Occupancy',
+    0x0003  : 'AbsMinHeatSetpointLimit',
+    0x0004  : 'AbsMaxHeatSetpointLimit',
+    0x0005  : 'AbsMinCoolSetpointLimit',
+    0x0006  : 'AbsMaxCoolSetpointLimit',
+    0x0007  : 'PIHeatingDemand',
+    0x0008  : 'PICoolingDemand',
+    0x0009  : 'HvacSystemTypeConfiguration',
+    0x0010  : 'LocalTemperatureCalibration',
+    0x0011  : 'OccupiedCoolingSetpoint',
+    0x0012  : 'OccupiedHeatingSetpoint',
+    0x0013  : 'UnoccupiedCoolingSetpoint',
+    0x0014  : 'UnoccupiedHeatingSetpoint',
+    0x0015  : 'MinHeatSetpointLimit',
+    0x0016  : 'MaxHeatSetpointLimit',
+    0x0017  : 'MinCoolSetpointLimit',
+    0x0018  : 'MaxCoolSetpointLimit',
+    0x0019  : 'MinSetpointDeadBand',
+    0x001A  : 'RemoteSensing',
+    0x001B  : 'ControlSequenceOfOperation',
+    0x001C  : 'SystemMode',
+    0x001D  : 'AlarmMask',
+    0x001E  : 'ThermostatRunningMode',
+    0x0020  : 'StartOfWeek',
+    0x0021  : 'NumberOfWeeklyTransitions',
+    0x0022  : 'NumberOfDailyTransitions',
+    0x0023  : 'TemperatureSetpointHold',
+    0x0024  : 'TemperatureSetpointHoldDuration',
+    0x0025  : 'ThermostatProgramingOperationMode',
+    0x0029  : 'ThermostatRunningState',
+    0x0030  : 'SetpointChangeSource',
+    0x0031  : 'SetpointChangeAmount',
+    0x0032  : 'SetpointChangeSourceTimeStamp',
+    0x0034  : 'OccupiedSetback',
+    0x0035  : 'OccupiedSetbackMin',
+    0x0036  : 'OccupiedSetbackMax',
+    0x0037  : 'UnoccupiedSetback',
+    0x0038  : 'UnoccupiedSetbackMin',
+    0x0039  : 'UnoccupiedSetbackMax',
+    0x003A  : 'EmergencyHeatDelta',
+    0x0040  : 'ACType',
+    0x0041  : 'ACCapacity',
+    0x0042  : 'ACRefrigerantType',
+    0x0043  : 'ACCompressorType',
+    0x0044  : 'ACErrorCode',
+    0x0045  : 'ACLouverPosition',
+    0x0046  : 'ACCoilTemperature',
+    0x0047  : 'ACCapacityFormat'
+]
+
+// 4.3.10 Thermostat Cluster Commands
+@Field static final Map<Integer, String> ThermostatClusterCommands = [
+    0x00    : 'SetpointRaiseLower',
+    0x01    : 'SetWeeklySchedule',
+    0x02    : 'GetWeeklySchedule',      // response : GetWeeklyScheduleResponse 0x00
+    0x03    : 'ClearWeeklySchedule',
+    0x04    : 'GetRelayStatusLog',      // response : GetRelayStatusLogResponse 0x01
+    0x0A    : 'GetWeeklyScheduleRsp',
+    0x0B    : 'GetDayOfWeekForDailyScheduleRsp',
+    0x0C    : 'GetRelayStatusLogRsp'
 ]
 
 // 5.3.7 Window Covering Controller Cluster Commands

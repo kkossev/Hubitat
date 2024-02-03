@@ -6,7 +6,7 @@ library(
     name: 'matterStateMachinesLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_State_Machines.groovy',
-    version: '1.0.0',
+    version: '0.0.1',
     documentationLink: ''
 )
 /*
@@ -24,8 +24,8 @@ library(
   *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
   *  for the specific language governing permissions and limitations under the License.
   *
-  * ver. 1.0.0  2024-01-27 kkossev  - first published version
-  * ver. 1.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
+  * ver. 0.0.0  2024-01-27 kkossev  - first published version
+  * ver. 0.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
   *
   *                                   TODO:
   *
@@ -34,7 +34,7 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterStateMachinesLib = '1.0.1'
+@Field static final String matterStateMachinesLib = '0.0.1'
 @Field static final String matterStateMachinesLibStamp   = '2024/01/28 11:05 PM'
 
 // no metadata section for matterStateMachinesLib
@@ -501,7 +501,7 @@ void discoverAllStateMachine(Map data = null) {
                     retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT
                 }
                 else {
-                    logWarn "discoverAllStateMachine: st:${st} - Identify cluster 0x0003 is not in the ServerList !"
+                    logDebug "discoverAllStateMachine: st:${st} - Identify cluster 0x0003 is not in the ServerList !"
                     st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
                 }
             }
