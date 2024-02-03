@@ -424,6 +424,7 @@ void discoverAllStateMachine(Map data = null) {
             state.states['isInfo'] = true
             state['stateMachines']['discoverAllResult'] = RUNNING
             // TODO
+            clearSubscriptionsState()   // clear the subscriptions state
             //st = DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST
             st = DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS
             // continue with the next state

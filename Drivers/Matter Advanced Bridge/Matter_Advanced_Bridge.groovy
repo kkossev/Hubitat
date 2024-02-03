@@ -27,16 +27,19 @@
  * ver. 0.0.6  2024-01-27 kkossev  - DiscoverAll() button (state machine) replaces all old manual discovery buttons; removed setLabel and setSwitch test command;
  * ver. 0.0.7  2024-01-28 kkossev  - code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount, endpointsCount, nodeLabelbug fixes; refresh() button on the Bridge device fixed; multiple subscribe entries bug fix;
  *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; Celsius to Fahrenheit conversion for temperature sensors
- * ver. 0.1.0  2024-02-03 kkossev  - (dev.branch) added Contact Sensor processing; added Thermostat cluster 0x0201 attributes decoding (only); nodeLabel null checks; rounded the humidity to the neares integer value; 
+ * ver. 0.1.0  2024-02-03 kkossev  - added Contact Sensor processing; added Thermostat cluster 0x0201 attributes decoding (only); nodeLabel null checks; rounded the humidity to the neares integer value; 
  *                                   versions renamed from major ver. 0.x.x; added a compatibility table matrix for Aqara devices on the top post; vibration sensors are processed as motion sensors; added Generic Component Battery
+ * ver. 0.1.1  2024-02-03 kkossev  - (dev.branch) - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
  *
- *                                   TODO: [====MVP====] Publish version 0.1.0
- *
+ *                                   TODO: [====MVP====] on DiscoveryAll - delete all previous states first?
+ *                                   TODO: [====MVP====] ignore duplicated switch and level events
+ *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
+ *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] bugfix: healhCheck schedued job is lost on resubscribe() - fix it!
  *                                   TODO: [====MVP====] bugfix: device label @fanmanrules;
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] Publish version 0.1.1
+ *                                   TODO: [====MVP====] Publish version 0.1.2
  *
  *                                   TODO: [====MVP====] add heathStatus to the child devices
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
@@ -87,8 +90,8 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-String version() { '0.1.0' }
-String timeStamp() { '2023/02/03 10:28 AM' }
+String version() { '0.1.1' }
+String timeStamp() { '2023/02/03 12:44 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -105,7 +108,6 @@ String timeStamp() { '2023/02/03 10:28 AM' }
 @Field static final String  UNKNOWN = 'UNKNOWN'
 @Field static final Integer SHORT_TIMEOUT  = 7
 @Field static final Integer LONG_TIMEOUT   = 15
-@Field static final Integer MAX_DEVICES_LIMIT = 20
 
 import com.hubitat.app.ChildDeviceWrapper
 import com.hubitat.app.DeviceWrapper
@@ -131,7 +133,7 @@ metadata {
         attribute 'Status', 'string'
         attribute 'productName', 'string'
         attribute 'nodeLabel', 'string'
-        attribute 'softwareVersion', 'string'
+        attribute 'softwareVersionString', 'string'
         attribute 'rebootCount', 'number'
         attribute 'upTime', 'number'
         attribute 'totalOperationalHours', 'number'
@@ -152,7 +154,7 @@ metadata {
         command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
-        command 'loadAllDefaults', [[name: 'panic button: Clear all States and start over']]
+        command 'loadAllDefaults', [[name: 'panic button: Clear all States and scheduled jobs']]
         command 'removeAllDevices', [[name: 'panic button: Remove all child devices']]
         command 'removeAllSubscriptions', [[name: 'panic button: remove all subscriptions']]
 
@@ -210,7 +212,7 @@ metadata {
     //0x0039 : [parser: 'parseBridgedDeviceBasic', attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands'],   // BridgedDeviceBasic
     0x0006 : [parser: 'parseOnOffCluster', attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands'],  // On/Off Cluster
     0x0008 : [parser: 'parseLevelControlCluster', attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands'],   // Level Control
-    0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                              // PowerSource
+    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                            // PowerSource - DO NOT ENABLE -> CRASHES THE BRIDGE!?
     //0x003B : [parser: 'parseSwitch', attributes: 'SwitchClusterAttributes', events: 'SwitchClusterEvents'],       // Switch - DO NOT ENABLE -> CRASHES THE BRIDGE!?
     0x0045 : [parser: 'parseContactSensor', attributes: 'BooleanStateClusterAttributes'],                           // Contact Sensor
     0x0102 : [parser: 'parseWindowCovering', attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],   // WindowCovering
@@ -1372,9 +1374,13 @@ String  unSubscribeCmd() {
 
 void removeAllSubscriptions() {
     logWarn 'removeAllSubscriptions() ...'
-    state.subscriptions = []
+    clearSubscriptionsState()
     unsubscribe()
     sendInfoEvent('all subsciptions are removed!', 're-discover the deices again ...')
+}
+
+void clearSubscriptionsState() {
+    state.subscriptions = []
 }
 
 void subscribe(String addOrRemove, String endpointPar=null, String clusterPar=null, String attrIdPar=null) {
@@ -1648,9 +1654,11 @@ private static Map mapTuyaCategory(Map d) {
     if ('3B' in d.ServerList) {   // Switch / Button - TODO !
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Switch' ]
     }
+    /*
     if ('2F' in d.ServerList) {   // Power Source
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Battery', product_name: 'Switch' ]
     }
+    */
 
     return [ driver: 'Generic Component Switch', product_name: 'Unknown' ]
 }
