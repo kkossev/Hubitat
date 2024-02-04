@@ -27,7 +27,7 @@ library(
   * ver. 0.0.0  2024-01-10 kkossev  - first version
   * ver. 0.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
   * ver. 0.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
-  * ver. 0.0.3  2024-02-03 kkossev  - (dev. branch) ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions
+  * ver. 0.0.3  2024-02-04 kkossev  - (dev. branch) ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions; DoorLockCluster 0x0101 definitions;
   *
   *                                   TODO:
   *
@@ -37,7 +37,7 @@ import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 @Field static final String matterLibVersion = '0.0.3'
-@Field static final String matterLibStamp   = '2024/02/03 9:52 AM'
+@Field static final String matterLibStamp   = '2024/02/04 4:03 PM'
 
 // no metadata section for matterLib
 
@@ -170,6 +170,7 @@ Map getAttributesMapByClusterId(String cluster) {
     if (cluster == '0040') { return FixedLabelClusterAttributes }
     if (cluster == '0041') { return UserLabelClusterAttributes }
     if (cluster == '0045') { return BooleanStateClusterAttributes }
+    if (cluster == '0101') { return DoorLockClusterAttributes }
     if (cluster == '0102') { return WindowCoveringClusterAttributes }
     if (cluster == '0400') { return IlluminanceMeasurementClusterAttributes }   // TODO
     if (cluster == '0402') { return TemperatureMeasurementClusterAttributes }
@@ -517,6 +518,27 @@ Map getAttributesMapByClusterId(String cluster) {
 // 1.7 Boolean State Cluster 0x0045
 @Field static final Map<Integer, String> BooleanStateClusterAttributes = [
     0x0000  : 'StateValue'
+]
+
+// 5.2.6 Door Lock Cluster 0x0101 (257)
+@Field static final Map<Integer, String> DoorLockClusterAttributes = [
+    0x0000  : 'LockState',          // enum8    
+    0x0001  : 'LockType',           // enum8
+    0x0002  : 'ActuatorEnabled',    // bool
+    0x0003  : 'DoorState',          // enum8
+    0x0025  : 'OperatingMode',      // enum8
+    0x0026  : 'SupportedOperatingModes'// bitmap8
+]
+@Field static final Map<Integer, String> DoorLockClusterLockState = [
+    0x00    : 'NotFullyLocked',
+    0x01    : 'Locked',
+    0x02    : 'Unlocked',
+    0x03    : 'Unlatched'
+]
+@Field static final Map<Integer, String> DoorLockClusterCommands = [
+    0x00    : 'LockDoor',
+    0x01    : 'UnlockDoor',
+    0x02    : 'Toggle'
 ]
 
 // 5.3.3 Window Covering Cluster 0x0102 (258)

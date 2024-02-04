@@ -29,17 +29,21 @@
  *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; Celsius to Fahrenheit conversion for temperature sensors
  * ver. 0.1.0  2024-02-03 kkossev  - added Contact Sensor processing; added Thermostat cluster 0x0201 attributes decoding (only); nodeLabel null checks; rounded the humidity to the neares integer value; 
  *                                   versions renamed from major ver. 0.x.x; added a compatibility table matrix for Aqara devices on the top post; vibration sensors are processed as motion sensors; added Generic Component Battery
- * ver. 0.1.1  2024-02-03 kkossev  - (dev.branch) - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
+ * ver. 0.1.1  2024-02-03 kkossev  - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
+ * ver. 0.2.0  2024-02-04 kkossev  - (dev.branch) - refactored the matter messages parsing method using a lookup map; bug fix: duplicated attrList entries; bug fix: deviceCount and initializeCtr nit updated; bug fix : healhCheck schedued job was lost on resubscribe() 
+ *                                   added cluster 0x0101 DoorLock decoding; lock and unlock commands (not tested!)
  *
- *                                   TODO: [====MVP====] on DiscoveryAll - delete all previous states first?
- *                                   TODO: [====MVP====] ignore duplicated switch and level events
- *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
- *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
- *                                   TODO: [====MVP====] bugfix: healhCheck schedued job is lost on resubscribe() - fix it!
+ *                                   TODO: [====MVP====] Publish version 0.2.0
+ *
  *                                   TODO: [====MVP====] bugfix: device label @fanmanrules;
+ *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
+ *                                   TODO: [====MVP====] on DiscoveryAll - delete all previous states first?
+ *                                   TODO: [====MVP====] ignore duplicated switch and level events on main driver level
+ *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
+ *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
+ *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] Publish version 0.1.2
+ *                                   TODO: [====MVP====] Publish version 0.2.1
  *
  *                                   TODO: [====MVP====] add heathStatus to the child devices
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
@@ -48,14 +52,16 @@
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
- *                                   TODO: [====MVP====] Publish version 0.2.0
+ *                                   TODO: [====MVP====] Publish version 0.3.0
  *
+ *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
+ *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
  *                                   TODO: [====MVP====] add cluster 0300 processing colorTemperature first
  *                                   TODO: [====MVP====] implement componentStartLevelChange(), componentStopLevelChange(), doLevelChange() for bulbs and dimmers
  *                                   TODO: [====MVP====] implement componentSetColorTemperature() for bulbs
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add Thermostat component driver
- *                                   TODO: [====MVP====] Publish version 0.3.0
+ *                                   TODO: [====MVP====] Publish version 0.4.0
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
  *                                   TODO: [REFACTORING] move the component drivers names into a table
@@ -90,8 +96,8 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-String version() { '0.1.1' }
-String timeStamp() { '2023/02/03 12:44 PM' }
+String version() { '0.2.0' }
+String timeStamp() { '2023/02/04 6:37 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -210,17 +216,37 @@ metadata {
 
 @Field static final Map<Integer, Map> SupportedMatterClusters = [
     //0x0039 : [parser: 'parseBridgedDeviceBasic', attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands'],   // BridgedDeviceBasic
-    0x0006 : [parser: 'parseOnOffCluster', attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands'],  // On/Off Cluster
-    0x0008 : [parser: 'parseLevelControlCluster', attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands'],   // Level Control
-    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                            // PowerSource - DO NOT ENABLE -> CRASHES THE BRIDGE!?
+    0x0006 : [attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands'],                  // On/Off Cluster
+    0x0008 : [attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands'],    // Level Control
+    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                // PowerSource - DO NOT ENABLE -> CRASHES THE BRIDGE!?
     //0x003B : [parser: 'parseSwitch', attributes: 'SwitchClusterAttributes', events: 'SwitchClusterEvents'],       // Switch - DO NOT ENABLE -> CRASHES THE BRIDGE!?
-    0x0045 : [parser: 'parseContactSensor', attributes: 'BooleanStateClusterAttributes'],                           // Contact Sensor
-    0x0102 : [parser: 'parseWindowCovering', attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],   // WindowCovering
-    0x0201 : [parser: 'parseThermostat', attributes: 'ThermostatClusterAttributes', commands: 'ThermostatClusterCommands'],   // Thermostat
-    0x0402 : [parser: 'parseTemperatureMeasurement', attributes: 'TemperatureMeasurementClusterAttributes'],        // TemperatureMeasurement
-    0x0405 : [parser: 'parseHumidityMeasurement', attributes: 'RelativeHumidityMeasurementClusterAttributes'],      // HumidityMeasurement
-    0x0406 : [parser: 'parseOccupancySensing', attributes: 'OccupancySensingClusterAttributes']                     // OccupancySensing (motion)
+    0x0045 : [attributes: 'BooleanStateClusterAttributes'],                                             // Contact Sensor
+    0x0101 : [attributes: 'DoorLockClusterAttributes', commands: 'DoorLockClusterCommands'],            // DoorLock
+    0x0102 : [attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],// WindowCovering
+    0x0201 : [attributes: 'ThermostatClusterAttributes', commands: 'ThermostatClusterCommands'],        // Thermostat
+    0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes'],                                   // TemperatureMeasurement
+    0x0405 : [attributes: 'RelativeHumidityMeasurementClusterAttributes'],                              // HumidityMeasurement
+    0x0406 : [attributes: 'OccupancySensingClusterAttributes']                                          // OccupancySensing (motion)
 ]
+
+@Field static final Map<Integer, String> ParsedMatterClusters = [
+    0x0006 : 'parseOnOffCluster',
+    0x0008 : 'parseLevelControlCluster',
+    0x001D : 'parseDescriptorCluster', 
+    0x0028 : 'parseBasicInformationCluster',
+    0x002F : 'parsePowerSource',
+    0x0033 : 'parseGeneralDiagnostics',
+    0x0039 : 'parseBridgedDeviceBasic',
+    0x003B : 'parseSwitch',
+    0x0045 : 'parseContactSensor',
+    0x0101 : 'parseDoorLock',
+    0x0102 : 'parseWindowCovering',
+    0x0201 : 'parseThermostat',
+    0x0402 : 'parseTemperatureMeasurement',
+    0x0405 : 'parseHumidityMeasurement',
+    0x0406 : 'parseOccupancySensing'
+]
+
 
 // Json Parsing Cache
 @Field static final Map<String, Map> jsonCache = new ConcurrentHashMap<>()
@@ -266,124 +292,19 @@ void parse(final String description) {
     }
 
     parseGlobalElements(descMap)
+    gatherAttributesValuesInfo(descMap)
 
-    switch (descMap.cluster) {
-        case '0003' :   // Identify
-            gatherAttributesValuesInfo(descMap, IdentifyClusterAttributes)
-            break
-        case '0006' :   // On/Off Cluster
-            gatherAttributesValuesInfo(descMap, OnOffClusterAttributes)
-            parseOnOffCluster(descMap)
-            break
-        case '0008' :   // Level Control
-            gatherAttributesValuesInfo(descMap, LevelControlClusterAttributes)
-            parseLevelControlCluster(descMap)
-            break
-        case '001D' :  // Descriptor, ep:00
-            gatherAttributesValuesInfo(descMap, DescriptorClusterAttributes)
-            parseDescriptorCluster(descMap)
-            break
-        case '001E' :  // Binding, ep:00
-            gatherAttributesValuesInfo(descMap, BindingClusterAttributes)
-            break
-        case '001F' :  // AccessControl, ep:00
-            gatherAttributesValuesInfo(descMap, AccessControlClusterAttributes)
-            break
-        case '0028' :  // BasicInformation, ep:00
-            gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
-            parseBasicInformationCluster(descMap)
-            break
-        case '0029' :  // OTSA Software Update Provider, ep:00
-            gatherAttributesValuesInfo(descMap, OTASoftwareUpdateProviderClusterAttributes)
-            break
-        case '002A' :  // OTA Software Update Requester, ep:00
-            gatherAttributesValuesInfo(descMap, OTASoftwareUpdateRequestorClusterAttributes)
-            break
-        case '002B' :  // Localization Configuration, ep:00
-            gatherAttributesValuesInfo(descMap, LocalizationConfigurationClusterAttributes)
-            break
-        case '002C' :  // TimeFormatLocalization, ep:00
-            gatherAttributesValuesInfo(descMap, TimeFormatLocalizationClusterAttributes)
-            break
-        case '002E' :  // PowerSourceConfiguration, ep:00
-            gatherAttributesValuesInfo(descMap, PowerSourceConfigurationClusterAttributes)
-            break
-        case '002F' :  // PowerSource, ep:02
-            parseBatteryEvent(descMap)
-            gatherAttributesValuesInfo(descMap, PowerSourceClusterAttributes)
-            break
-        case '0030' :  // GeneralCommissioning, ep:00
-            gatherAttributesValuesInfo(descMap, GeneralCommissioningClusterAttributes)
-            break
-        case '0031' :  // NetworkCommissioning, ep:00
-            gatherAttributesValuesInfo(descMap, NetworkCommissioningClusterAttributes)
-            break
-        case '0032' :  // DiagnosticLogs , ep:00
-            gatherAttributesValuesInfo(descMap, DiagnosticLogsClusterAttributes)
-            break
-        case '0033' :  // GeneralDiagnostics, ep:00
-            parseGeneralDiagnostics(descMap)
-            gatherAttributesValuesInfo(descMap, GeneralDiagnosticsClusterAttributes)
-            break
-        case '0034' :  // SoftwareDiagnostics, ep:00
-            gatherAttributesValuesInfo(descMap, SoftwareDiagnosticsClusterAttributes)
-            break
-        case '0037' :  // EthernetNetworkDiagnostics, ep:00
-            gatherAttributesValuesInfo(descMap, EthernetNetworkDiagnosticsClusterAttributes)
-            break
-        case '0039' :  // BridgedDeviceBasic
-            parseBridgedDeviceBasic(descMap)
-            gatherAttributesValuesInfo(descMap, BasicInformationClusterAttributes)
-            break
-        case '003B' :  // Switch
-            gatherAttributesValuesInfo(descMap, SwitchClusterAttributes)
-            parseSwitch(descMap)
-            break
-        case '003C' :  // AdministratorCommissioning, ep:00
-            gatherAttributesValuesInfo(descMap, AdministratorCommissioningClusterAttributes)
-            break
-        case '003E' :  // OperationalCredentials, ep:00
-            gatherAttributesValuesInfo(descMap, OperationalCredentialsClusterAttributes)
-            break
-        case '003F' :  // GroupKeyManagement, ep:00
-            gatherAttributesValuesInfo(descMap, GroupKeyManagementClusterAttributes)
-            break
-        case '0040' :  // FixedLabel, ep:00
-            gatherAttributesValuesInfo(descMap, FixedLabelClusterAttributes)
-            break
-        case '0041' :  // UserLabel, ep:00
-            gatherAttributesValuesInfo(descMap, UserLabelClusterAttributes)
-            break
-        case '0045' :  // ConteBoolean State Cluster / Contact Sensor
-            parseContactSensor(descMap)
-            gatherAttributesValuesInfo(descMap, BooleanStateClusterAttributes)
-            break
-        case '0102' :  // WindowCovering
-            parseWindowCovering(descMap)
-            gatherAttributesValuesInfo(descMap, WindowCoveringClusterAttributes)
-            break
-        case '0201' :  // Thermostat
-            parseThermostat(descMap)
-            gatherAttributesValuesInfo(descMap, ThermostatClusterAttributes)
-            break
-        case '0400' :  // IlluminanceMeasurement
-            gatherAttributesValuesInfo(descMap, IlluminanceMeasurementClusterAttributes)
-            break
-        case '0402' :  // TemperatureMeasurement
-            parseTemperatureMeasurement(descMap)
-            gatherAttributesValuesInfo(descMap, TemperatureMeasurementClusterAttributes)
-            break
-        case '0405' :  // HumidityMeasurement
-            parseHumidityMeasurement(descMap)
-            gatherAttributesValuesInfo(descMap, RelativeHumidityMeasurementClusterAttributes)
-            break
-        case '0406' :  // OccupancySensing (motion)
-            gatherAttributesValuesInfo(descMap, OccupancySensingClusterAttributes)
-            parseOccupancySensing(descMap)
-            break
-        default :
-            gatherAttributesValuesInfo(descMap, GlobalElementsAttributes)
-            logWarn "parse: NOT PROCESSED: ${descMap}"
+    String parserFunc = ParsedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]
+    String parserAttr = SupportedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]?.attributes
+
+    if (parserFunc) {
+        try {
+            this."${parserFunc}"(descMap)
+        } catch (e) {
+            logWarn "parserFunc: exception ${e} <br> Failed to parse description: ${description}"
+        }
+    } else {
+        logWarn "parserFunc: NOT PROCESSED: ${descMap} description:${description}"
     }
 }
 
@@ -502,25 +423,17 @@ void parseGlobalElements(final Map descMap) {
 
 }
 
-void gatherAttributesValuesInfo(final Map descMap, final Map knownClusterAttributes) {
+void gatherAttributesValuesInfo(final Map descMap) {
     Integer attrInt = descMap.attrInt as Integer
-    String  attrName = knownClusterAttributes[attrInt]
+    String  attrName = getAttributeName(descMap)
     Integer tempIntValue
     String  tmpStr
-    if (attrName == null) {
-        attrName = GlobalElementsAttributes[attrInt]
-    }
-    //logTrace"gatherAttributesValuesInfo: cluster:${descMap.cluster} attrInt:${attrInt} attrName:${attrName} value:${descMap.value}"
-    if (attrName == null) {
-        logWarn "gatherAttributesValuesInfo: unknown attribute # ${attrInt}"
-        return
-    }
     if (state.states['isInfo'] == true) {
         logTrace "gatherAttributesValuesInfo: <b>isInfo:${state.states['isInfo']}</b> state.states['cluster'] = ${state.states['cluster']} "
         if (state.states['cluster'] == descMap.cluster) {
             if (descMap.value != null && descMap.value != '') {
                 tmpStr = "[${descMap.attrId}] ${attrName}"
-                if (tmpStr in state.tmp) {  // TODO - seems to be not working ???
+                if (state.tmp?.contains(tmpStr)) {
                     logWarn "gatherAttributesValuesInfo: tmpStr:${tmpStr} is already in the state.tmp"
                     return
                 }
@@ -577,10 +490,6 @@ void parseGeneralDiagnostics(final Map descMap) {
             if (descMap.attrId != '0000') { if (traceEnable) { logInfo "parse: parseGeneralDiagnostics: ${attrName} = ${descMap.value}" } }
             break
     }
-}
-
-void parseBatteryEvent(final Map descMap) {
-    parsePowerSource(descMap)
 }
 
 void parsePowerSource(final Map descMap) {
@@ -850,6 +759,20 @@ void parseHumidityMeasurement(final Map descMap) { // 0405
         ], descMap)
     } else {
         logTrace "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+    }
+}
+
+void parseDoorLock(final Map descMap) { // 0101
+    if (descMap.cluster != '0101') { logWarn "parseDoorLock: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
+    if (descMap.attrId == '0000') { // LockState
+        String lockState = descMap.value == '01' ? 'locked' : 'unlocked'
+        sendMatterEvent([
+            name: 'lock',
+            value: lockState,
+            descriptionText: "device #${descMap.endpoint} lock is ${lockState}"
+        ], descMap)
+    } else {
+        logTrace "parseDoorLock: ${(DoorLockClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
 }
 
@@ -1349,9 +1272,10 @@ void initialize() {
     state.lastTx['subscribeTime'] = now()
     state.states['isUnsubscribe'] = false
     state.states['isSubscribe'] = true  // should be set to false in the parse() method
-    sendMatterEvent([attributeName: 'initializeCtr', value: state.stats['initializeCtr'].toString(), descriptionText: "initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
+    sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
     scheduleCommandTimeoutCheck(delay = 30)
     subscribe()
+    updated()   // added 02/03/2024
 }
 
 void clearStates() {
@@ -1535,13 +1459,14 @@ String refreshCmd() {
     List<Map<String, String>> attributePaths = state.subscriptions?.collect { sub ->
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     } ?: []
-    List<String> serverList = (state['bridgeDescriptor']['0033_FFFB'] as List).clone()  // new ArrayList<>(originalList)
-    serverList.removeAll(['FFF8', 'FFF9', 'FFFB', 'FFFC', 'FFFD', '00'])                // 0x0000  : 'NetworkInterfaces' - not supported
-    attributePaths.addAll(serverList.collect { attr ->
+    List<String> serverList = (state['bridgeDescriptor']['0033_FFFB'] as List)?.clone()  // new ArrayList<>(originalList)
+    serverList?.removeAll(['FFF8', 'FFF9', 'FFFB', 'FFFC', 'FFFD', '00'])                // 0x0000  : 'NetworkInterfaces' - not supported
+    attributePaths.addAll(serverList?.collect { attr ->
         matter.attributePath(0, 0x0033, HexUtils.hexStringToInt(attr))
     })
     return matter.readAttributes(attributePaths)
 }
+
 
 void logsOff() {
     log.warn 'debug logging disabled...'
@@ -1642,6 +1567,9 @@ private static Map mapTuyaCategory(Map d) {
     if ('0406' in d.ServerList) {   // OccupancySensing (motion)
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Motion Sensor', product_name: 'Motion Sensor' ]
     }
+    if ('0101' in d.ServerList) {   // Door Lock
+        return [driver: 'Generic Component Lock', product_name: 'Door Lock' ]
+    }
     if ('0102' in d.ServerList) {   // Curtain Motor (uses custom driver)
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Window Shade', product_name: 'Curtain Motor' ]
     }
@@ -1652,7 +1580,7 @@ private static Map mapTuyaCategory(Map d) {
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Switch' ]
     }
     if ('3B' in d.ServerList) {   // Switch / Button - TODO !
-        return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Switch' ]
+        return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Button' ]
     }
     /*
     if ('2F' in d.ServerList) {   // Power Source
@@ -1844,6 +1772,50 @@ void componentSetCoolingSetpoint(DeviceWrapper dw, BigDecimal temperature) {
     return
 }
 
+void componentLock(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    //logWarn "componentLock(${dw}) id=${id} (TODO: not implemented!)"
+    if (!dw.hasCommand('lock')) { logError "componentLock(${dw}) driver '${dw.typeName}' does not have command 'lock' in ${dw.supportedCommands}"; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    logInfo "sending Lock command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentLock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x01) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
+    logDebug "componentLock(): sending command '${cmd}'"
+    sendToDevice(cmd)
+}
+
+void componentUnlock(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    //logWarn "componentUnlock(${dw}) id=${id} (TODO: not implemented!)"
+    if (!dw.hasCommand('unlock')) { logError "componentUnlock(${dw}) driver '${dw.typeName}' does not have command 'unlock' in ${dw.supportedCommands}"; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    logInfo "sending Unlock command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentUnlock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x00) // 0x0101 = DoorLock Cluster, 0x01 = UnlockDoor
+    logDebug "componentUnlock(): sending command '${cmd}'"
+    sendToDevice(cmd)
+}
+
+void componentDeleteCode(DeviceWrapper dw, BigDecimal codePosition) {
+    String id = dw.getDataValue('id')
+    logWarn "componentDeleteCode(${dw}) id=${id} (TODO: not implemented!)"
+}
+
+void componentGetCodes(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    logWarn "componentGetCodes(${dw}) id=${id} (TODO: not implemented!)"
+}
+
+void componentSetCode(DeviceWrapper dw, BigDecimal codePosition, String code, String name = null) {
+    String id = dw.getDataValue('id')
+    logWarn "componentSetCode(${dw}) id=${id} (TODO: not implemented!)"
+}
+
+void componentSetCodeLength(DeviceWrapper dw, BigDecimal codeLength) {
+    String id = dw.getDataValue('id')
+    logWarn "componentSetCodeLength(${dw}) id=${id} (TODO: not implemented!)"
+}
+
 void initializeThermostat(DeviceWrapper dw) {
     logWarn "initializeThermostat(${dw}) is not implemented!"
     def supportedThermostatModes = []
@@ -1960,7 +1932,7 @@ private Integer createChildDevices() {
             logTrace "createChildDevices(): fingerprintName: ${fingerprintName} SKIPPED"
         }
     }
-    sendMatterEvent([attributeName: 'deviceCount', value: deviceCount.toString(), descriptionText: "number of devices exposing known clusters is ${deviceCount}"])
+    sendMatterEvent([name: 'deviceCount', value: deviceCount, descriptionText: "number of devices exposing known clusters is ${deviceCount}"])
     return deviceCount
 }
 
