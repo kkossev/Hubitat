@@ -67,7 +67,7 @@ void parse(List<Map> description) {
                 sendEvent(d)
             }
             else {
-                if (logEnable) { log.debug "${device} : ignored switch event '${d.value}' (no change)" }
+                if (logEnable) { log.debug "${device.displayName} : ignored switch event '${d.value}' (no change)" }
             }
         }
         else {
@@ -79,13 +79,13 @@ void parse(List<Map> description) {
 
 // Component command to turn device on
 void on() {
-    if (logEnable) { log.debug "${device} turning on ..." }
+    if (logEnable) { log.debug "${device.displayName} turning on ..." }
     parent?.componentOn(device)
 }
 
 // Component command to turn device off
 void off() {
-    if (logEnable) { log.debug "${device} turning off ..." }
+    if (logEnable) { log.debug "${device.displayName} turning off ..." }
     parent?.componentOff(device)
 }
 
@@ -96,17 +96,17 @@ void ping() {
 
 // Called when the device is first created
 void installed() {
-    log.info "${device} driver installed"
+    log.info "${device.displayName} driver installed"
 }
 
 // Called when the device is removed
 void uninstalled() {
-    log.info "${device} driver uninstalled"
+    log.info "${device.displayName} driver uninstalled"
 }
 
 // Called when the settings are updated
 void updated() {
-    log.info "${device} driver configuration updated"
+    log.info "${device.displayName} driver configuration updated"
     if (logEnable) {
         log.debug settings
         runIn(86400, 'logsOff')
@@ -115,10 +115,20 @@ void updated() {
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
 private void logsOff() {
-    log.warn "debug logging disabled for ${device}"
+    log.warn "debug logging disabled for ${device.displayName} "
     device.updateSetting('logEnable', [value: 'false', type: 'bool'] )
 }
 
 void refresh() {
     parent?.componentRefresh(this.device)
+}
+
+public void setState(String stateName, String stateValue) {
+    if (logEnable) { log.debug "${device.displayName} setting state '${stateName}' to '${stateValue}'" }
+    state[stateName] = stateValue
+}
+
+public String getState(String stateName) {
+    if (logEnable) { log.debug "${device.displayName} getting state '${stateName}'" }
+    return state[stateName]
 }

@@ -462,8 +462,8 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0006  : 'MaxFrequency',       // uint16
     0x0010  : 'OnOffTransitionTime',// uint16   - represents the time taken to move to or from the target level when On or Off commands are received by an On/Off cluster on the same endpoint. It is specified in 1/10ths of a second.
     0x0011  : 'OnLevel',            // uint8    - determines the value that the CurrentLevel attribute is set to when the OnOff attribute of an On/Off cluster on the same endpoint is set to TRUE, as a result of processing an On/Off cluster command.
-    0x0012  : 'OnTransitionTime',   // uint16   - represents the time taken to move the current level from the minimum level to the maximum level when an On command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second. 
-    0x0013  : 'OffTransitionTime',  // uint16   - represents the time taken to move the current level from the maximum level to the minimum level when an Off command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second. 
+    0x0012  : 'OnTransitionTime',   // uint16   - represents the time taken to move the current level from the minimum level to the maximum level when an On command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second.
+    0x0013  : 'OffTransitionTime',  // uint16   - represents the time taken to move the current level from the maximum level to the minimum level when an Off command is received by an On/Off cluster on the same endpoint. It is specified in 10ths of a second.
     0x0014  : 'DefaultMoveRate',    // uint8    -  determines the movement rate, in units per second, when a Move command is received with a null value Rate parameter.
     0x000F  : 'Options',
     0x4000  : 'StartUpCurrentLevel' // uint8    - define the desired startup level for a device when it is supplied with power and this level SHALL be reflected in the CurrentLevel attribute.
@@ -522,7 +522,7 @@ Map getAttributesMapByClusterId(String cluster) {
 
 // 5.2.6 Door Lock Cluster 0x0101 (257)
 @Field static final Map<Integer, String> DoorLockClusterAttributes = [
-    0x0000  : 'LockState',          // enum8    
+    0x0000  : 'LockState',          // enum8
     0x0001  : 'LockType',           // enum8
     0x0002  : 'ActuatorEnabled',    // bool
     0x0003  : 'DoorState',          // enum8

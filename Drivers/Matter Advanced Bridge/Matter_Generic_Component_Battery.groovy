@@ -79,7 +79,6 @@ void installed() {
     log.info "${device.displayName} driver installed"
 }
 
-
 // Called when the device is removed
 void uninstalled() {
     log.info "${device.displayName} driver uninstalled"

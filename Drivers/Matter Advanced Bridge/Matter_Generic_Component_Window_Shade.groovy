@@ -19,8 +19,9 @@
   * For a big portions of code all credits go to Jonathan Bradshaw.
   *
   *
-  * ver. 0.0.0  2022-11-28 bradsjm - original code for Tuya Cloud driver
+  * ver. 0.0.0  2022-11-28 bradsjm - original code (Tuya Cloud driver)
   * ver. 0.0.1  2024-01-14 kkossev - first version for the Matter Advanced Bridge driver
+  * ver. 0.0.2  2024-02-04 kkossev - use device.displayName in logs
   *
   *                                   TODO: add a timeout preference for the position change
   *                                   TODO: restart the timer on each position change event
@@ -30,13 +31,13 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.1'
-@Field static final String matterComponentMotionStamp   = '2024/01/14 12:08 AM'
+@Field static final String matterComponentMotionVersion = '0.0.2'
+@Field static final String matterComponentMotionStamp   = '2024/02/14 9:44 PM'
 
 @Field static final Integer POSITION_DELTA = 5
 
 metadata {
-    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Jonathan Bradshaw') {
+    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Krassimir Kossev') {
         capability 'Actuator'
         capability 'WindowShade'    // Attributes: position - NUMBER, unit:% windowShade - ENUM ["opening", "partially open", "closed", "open", "closing", "unknown"]
                                     // Commands: close(); open(); setPosition(position) position required (NUMBER) - Shade position (0 to 100);
@@ -82,16 +83,15 @@ void parse(List<Map> description) {
             processOperationalStatus(d)
         }
         else {
-            //log.warn "${device} : unexpected '${d.name}' event"
-            if (d.descriptionText && txtEnable) { log.info "${device} ${d.descriptionText}" }
+            if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
             sendEvent(d)
         }
     }
 }
 
 void processCurrentPosition(Map d) {
-    if (logEnable) { log.debug "${device} processCurrentPosition: ${d}" }
-    if (d.descriptionText && txtEnable) { log.info "${device} ${d.descriptionText}" }
+    if (logEnable) { log.debug "${device.displayName} processCurrentPosition: ${d}" }
+    if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
     // if the currentPosition is greater than POSITION_DELTA, then the shade is closed
     // if the currentPosition is less than 100 - POSITION_DELTA, then the shade is open
@@ -99,7 +99,7 @@ void processCurrentPosition(Map d) {
     String descriptionText
     Integer currentPosition = safeToInt(d.value)
     Integer targetPosition = device.currentValue('targetPosition') ?: 0
-    log.debug "${device} processCurrentPosition: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}"
+    log.debug "${device.displayName} processCurrentPosition: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}"
 
     // if the windowShade is moving, then do not change the windowShade state!
     if ((device.currentValue('windowShade') ?: 'unknown') in ['opening', 'closing']) {
@@ -108,14 +108,14 @@ void processCurrentPosition(Map d) {
         //Integer latestEventTime = latestEvent != null ? latestEvent.getDate().getTime() : now()
         def latestEventTime = latestEvent != null ? latestEvent.date.time : now()
         def timeDiff = (now() - latestEventTime)  as int
-        log.warn "${device} timeDiff: ${timeDiff} latestEvent=${latestEvent} latestEventTime=${latestEventTime}"
+        log.warn "${device.displayName} timeDiff: ${timeDiff} latestEvent=${latestEvent} latestEventTime=${latestEventTime}"
         Integer timeSinceLastChange = timeDiff
         if (timeSinceLastChange < 1200) {
-            if (logEnable) { log.debug "${device} windowShade is currently ${device.currentValue('windowShade')}, do not change the state!" }
+            if (logEnable) { log.debug "${device.displayName} windowShade is currently ${device.currentValue('windowShade')}, do not change the state!" }
             return
         }
         else {
-            if (logEnable) { log.debug "${device} windowShade is currently ${device.currentValue('windowShade')}, but the state was changed ${timeSinceLastChange} ms ago, change the state!" }
+            if (logEnable) { log.debug "${device.displayName} windowShade is currently ${device.currentValue('windowShade')}, but the state was changed ${timeSinceLastChange} ms ago, change the state!" }
         }
     }
     if (currentPosition > 100 - POSITION_DELTA) {
@@ -130,23 +130,23 @@ void processCurrentPosition(Map d) {
         descriptionText = 'partially open'
         sendEvent(name: 'windowShade', value: 'partially open', descriptionText: descriptionText)
     }
-    if (txtEnable) { log.info "${device} windowShade is ${descriptionText}" }
+    if (txtEnable) { log.info "${device.displayName} windowShade is ${descriptionText}" }
 }
 
 void processTargetPosition(Map d) {
-    if (logEnable) { log.debug "${device} processTargetPosition: ${d}" }
-    if (d.descriptionText && txtEnable) { log.info "${device} ${d.descriptionText}" }
+    if (logEnable) { log.debug "${device.displayName} processTargetPosition: ${d}" }
+    if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
     // if the currentPosition is less than the targetPosition, then the shade is opening
     // if the currentPosition is greater than the targetPosition, then the shade is closing
     String descriptionText
     Integer currentPosition = device.currentValue('position') ?: 0
     Integer targetPosition = safeToInt(d.value)
-    log.debug "${device} processTargetPosition: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}"
+    log.debug "${device.displayName} processTargetPosition: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}"
     /*
     // if the windowShade is moving, then do not change the windowShade state!
     if ((device.currentValue('windowShade') ?: 'unknown') in ['opening', 'closing']) {
-        if (logEnable) { log.debug "${device} windowShade is currently ${device.currentValue('windowShade')}, do not change the state!" }
+        if (logEnable) { log.debug "${device.displayName} windowShade is currently ${device.currentValue('windowShade')}, do not change the state!" }
         return
     }
     */
@@ -158,57 +158,57 @@ void processTargetPosition(Map d) {
         descriptionText = 'closing'
         sendEvent(name: 'windowShade', value: 'closing', descriptionText: descriptionText)
     }
-    if (txtEnable) { log.info "${device} windowShade is ${descriptionText}" }
+    if (txtEnable) { log.info "${device.displayName} windowShade is ${descriptionText}" }
 }
 
 void processOperationalStatus(Map d) {
-    if (logEnable) { log.debug "${device} processOperationalStatus: ${d}" }
-    if (d.descriptionText && txtEnable) { log.info "${device} ${d.descriptionText}" }
+    if (logEnable) { log.debug "${device.displayName} processOperationalStatus: ${d}" }
+    if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
 }
 
 // Called when the device is first created
 void installed() {
-    log.info "${device} driver installed"
+    log.info "${device.displayName} driver installed"
 }
 
 // Component command to open device
 void open() {
-    if (logEnable) { log.debug "${device} open" }
+    if (logEnable) { log.debug "${device.displayName} open" }
     sendEvent(name: 'windowShade', value: 'opening', descriptionText: 'opening', type: 'digital')
     sendEvent(name: 'targetPosition', value: 0, descriptionText: 'targetPosition set to 0', type: 'digital')
-    if (txtEnable) { log.info "${device} opening" }
+    if (txtEnable) { log.info "${device.displayName} opening" }
     parent?.componentOpen(device)
 }
 
 // Component command to close device
 void close() {
-    if (logEnable) { log.debug "${device} close" }
+    if (logEnable) { log.debug "${device.displayName} close" }
     sendEvent(name: 'windowShade', value: 'closing', descriptionText: 'closing', type: 'digital')
     sendEvent(name: 'targetPosition', value: 100, descriptionText: 'targetPosition set to 100', type: 'digital')
-    if (txtEnable) { log.info "${device} closing" }
+    if (txtEnable) { log.info "${device.displayName} closing" }
     parent?.componentClose(device)
 }
 
 // Component command to set position of device
 void setPosition(BigDecimal position) {
-    if (logEnable) { log.debug "${device} setPosition ${position}" }
+    if (logEnable) { log.debug "${device.displayName} setPosition ${position}" }
     parent?.componentSetPosition(device, position)
 }
 
 // Component command to start position change of device
 void startPositionChange(String change) {
-    if (logEnable) { log.debug "${device} startPositionChange ${change}" }
+    if (logEnable) { log.debug "${device.displayName} startPositionChange ${change}" }
     String operation = change == 'open' ? 'opening' : 'closing'
     String descriptionText = change == 'open' ? 'opening' : 'closing'
     sendEvent(name: 'windowShade', value: operation, descriptionText: descriptionText, type: 'digital')
-    if (txtEnable) { log.info "${device} ${descriptionText}" }
+    if (txtEnable) { log.info "${device.displayName} ${descriptionText}" }
     parent?.componentStartPositionChange(device, change)
 }
 
 // Component command to start position change of device
 void stopPositionChange() {
-    if (logEnable) { log.debug "${device} stopPositionChange" }
+    if (logEnable) { log.debug "${device.displayName} stopPositionChange" }
     parent?.componentStopPositionChange(device)
 }
 
@@ -219,12 +219,12 @@ void ping() {
 
 // Called when the device is removed
 void uninstalled() {
-    log.info "${device} driver uninstalled"
+    log.info "${device.displayName} driver uninstalled"
 }
 
 // Called when the settings are updated
 void updated() {
-    if (txtEnable) { log.info "${device} driver configuration updated" }
+    if (txtEnable) { log.info "${device.displayName} driver configuration updated" }
     if (logEnable) {
         log.debug settings
         runIn(1800, 'logsOff')
@@ -233,7 +233,7 @@ void updated() {
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
 private void logsOff() {
-    log.warn "debug logging disabled for ${device}"
+    log.warn "debug logging disabled for ${device.displayName}"
     device.updateSetting('logEnable', [value: 'false', type: 'bool'] )
 }
 
