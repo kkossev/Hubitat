@@ -32,12 +32,13 @@
  * ver. 0.1.1  2024-02-03 kkossev  - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
  * ver. 0.2.0  2024-02-04 kkossev  -  refactored the matter messages parsing method using a lookup map; bug fix: duplicated attrList entries; bug fix: deviceCount and initializeCtr nit updated; bug fix : healhCheck schedued job was lost on resubscribe()
  *                                   added cluster 0x0101 DoorLock decoding; lock and unlock commands (not tested!)
- * ver. 0.2.1  2024-02-06 kkossev  - (dev.branch) added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
- *                                   implemented componentStartLevelChange(), componentStopLevelChange()
+ * ver. 0.2.1  2024-02-07 kkossev  - (dev.branch) added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
+ *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
  *
- *                                   TODO: [====MVP====]
- *                                   TODO: [====MVP====] implement componentSetColorTemperature() for bulbs
- *                                   TODO: [====MVP====] driverVersion in child devices
+ *                                   TODO: [====MVP====] Publish version 0.2.1
+ *
+ *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes
+ *                                   TODO: [====MVP====] driverVersion to be stored in child devices states
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] on DiscoveryAll - delete all previous states first?
  *                                   TODO: [====MVP====] ignore duplicated switch and level events on main driver level
@@ -45,7 +46,7 @@
  *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] Publish version 0.2.1
+ *                                   TODO: [====MVP====] Publish version 0.2.2
  *
  *                                   TODO: [====MVP====] add heathStatus to the child devices
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
@@ -58,7 +59,6 @@
  *
  *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
- *                                   TODO: [====MVP====] add cluster 0300 processing colorTemperature first
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add Thermostat component driver
  *                                   TODO: [====MVP====] Publish version 0.4.0
@@ -96,9 +96,9 @@
 #include kkossev.matterStateMachinesLib
 
 String version() { '0.2.1' }
-String timeStamp() { '2023/02/06 7:07 PM' }
+String timeStamp() { '2023/02/07 6:52 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -120,6 +120,7 @@ import com.hubitat.app.exception.UnknownDeviceTypeException
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.Field
+import groovy.transform.CompileStatic
 import hubitat.helper.HexUtils
 import java.util.concurrent.ConcurrentHashMap
 import hubitat.matter.DataType
@@ -223,6 +224,7 @@ metadata {
     0x0101 : [attributes: 'DoorLockClusterAttributes', commands: 'DoorLockClusterCommands'],            // DoorLock
     0x0102 : [attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],// WindowCovering
     0x0201 : [attributes: 'ThermostatClusterAttributes', commands: 'ThermostatClusterCommands'],        // Thermostat
+    0x0300 : [attributes: 'ColorControlClusterAttributes', commands: 'ColorControlClusterCommands'],    // ColorControl
     0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes'],                                   // TemperatureMeasurement
     0x0405 : [attributes: 'RelativeHumidityMeasurementClusterAttributes'],                              // HumidityMeasurement
     0x0406 : [attributes: 'OccupancySensingClusterAttributes']                                          // OccupancySensing (motion)
@@ -241,6 +243,7 @@ metadata {
     0x0101 : 'parseDoorLock',
     0x0102 : 'parseWindowCovering',
     0x0201 : 'parseThermostat',
+    0x0300 : 'parseColorControl',
     0x0402 : 'parseTemperatureMeasurement',
     0x0405 : 'parseHumidityMeasurement',
     0x0406 : 'parseOccupancySensing'
@@ -296,10 +299,15 @@ void parse(final String description) {
     String parserAttr = SupportedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]?.attributes
 
     if (parserFunc) {
-        try {
+        if (_DEBUG) {
             this."${parserFunc}"(descMap)
-        } catch (e) {
-            logWarn "parserFunc: exception ${e} <br> Failed to parse description: ${description}"
+        }
+        else {
+            try {
+                this."${parserFunc}"(descMap)
+            } catch (e) {
+                logWarn "parserFunc: exception ${e} <br> Failed to parse description: ${description}"
+            }
         }
     } else {
         logWarn "parserFunc: NOT PROCESSED: ${descMap} description:${description}"
@@ -358,12 +366,18 @@ void checkStateMachineConfirmation(final Map descMap) {
     }
 }
 
+@CompileStatic
 String getClusterName(final String cluster) { return MatterClusters[HexUtils.hexStringToInt(cluster)] ?: UNKNOWN }
+//@CompileStatic
 String getAttributeName(final Map descMap) { return getAttributeName(descMap.cluster, descMap.attrId) }
+@CompileStatic
 String getAttributeName(final String cluster, String attrId) { return getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId)) ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)] }
+@CompileStatic
 String getFingerprintName(final Map descMap) { return descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}" }
+@CompileStatic
 String getFingerprintName(final Integer endpoint) { return getFingerprintName([endpoint: HexUtils.integerToHexString(endpoint, 1)]) }
 
+//@CompileStatic
 String getStateClusterName(final Map descMap) {
     String clusterMapName = ''
     if (descMap.cluster == '001D') {
@@ -374,6 +388,7 @@ String getStateClusterName(final Map descMap) {
     }
 }
 
+@CompileStatic
 String getDeviceDisplayName(final Integer endpoint) { return getDeviceDisplayName(HexUtils.integerToHexString(endpoint, 1)) }
 /**
  * Returns the device label based on the provided endpoint.
@@ -399,6 +414,25 @@ String getDeviceDisplayName(final String endpoint) {
     }
     label += customLabel
     return label
+}
+
+// credits: @jvm33 
+// Matter payloads need hex parameters of greater than 2 characters to be pair-reversed.
+// This function takes a list of parameters and pair-reverses those longer than 2 characters.
+// Alternatively, it can take a string and pair-revers that.
+// Thus, e.g., ["0123", "456789", "10"] becomes "230189674510" and "123456" becomes "563412"
+private String byteReverseParameters(String oneString) { byteReverseParameters([] << oneString) }
+private String byteReverseParameters(List<String> parameters) {
+    StringBuilder rStr = new StringBuilder(64)
+    
+    for (hexString in parameters) {
+        if (hexString.length() % 2) throw new Exception("In method byteReverseParameters, trying to reverse a hex string that is not an even number of characters in length. Error in Hex String: ${hexString}, All method parameters were ${parameters}.")
+        
+        for(Integer i = hexString.length() -1 ; i > 0 ; i -= 2) {
+            rStr << hexString[i-1..i]
+        }    
+    }
+    return rStr
 }
 
 // 7.13. Global Elements - used for self-description of the server
@@ -823,6 +857,50 @@ void parseWindowCovering(final Map descMap) { // 0102
     }
 }
 
+void parseColorControl(final Map descMap) { // 0300
+    if (descMap.cluster != '0300') { logWarn "parseColorControl: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
+    switch (descMap.attrId) {
+        case '0007' : // ColorTemperatureMireds
+            Integer valueCt = miredHexToCt(descMap.value)
+            logDebug "parseColorControl: ColorTemperatureCT= ${valueCt} (raw=0x${descMap.value})"
+            sendMatterEvent([
+                name: 'colorTemperature',
+                value: valueCt,
+                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} colorTemperature is ${valueCt}",
+                unit: '°K'
+            ], descMap)
+            String colorName = getGenericTempName(valueCt)
+            sendMatterEvent([
+                name: 'colorName',
+                value: colorName,
+                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${valueCt}"
+            ], descMap)
+            break
+        case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
+            logTrace "parseColorControl: ${getAttributeName(descMap)} = ${descMap.value}"
+            break
+        default :
+            Map eventMap = [:]
+            String attrName = getAttributeName(descMap)
+            String fingerprintName = getFingerprintName(descMap)
+            logDebug "parseColorControl: fingerprintName:${fingerprintName} attrName:${attrName}"
+            if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
+            String eventName = attrName[0].toLowerCase() + attrName[1..-1]  // change the attribute name first letter to lower case
+            if (attrName in ColorControlClusterAttributes.values().toList()) {
+                eventMap = [name: eventName, value:descMap.value, descriptionText: "${eventName} is: ${descMap.value}"]
+                if (logEnable) { logInfo "parseLevelControlCluster: ${attrName} = ${descMap.value}" }
+            }
+            else {
+                logWarn "parseLevelControlCluster: unsupported LevelControl: ${attrName} = ${descMap.value}"
+            }
+            if (eventMap != [:]) {
+                eventMap.type = 'physical'; eventMap.isStateChange = true
+                sendMatterEvent(eventMap, descMap) // child events
+            }
+            break
+    }
+}
+
 void parseThermostat(final Map descMap) {
     if (descMap.cluster != '0201') { logWarn "parseThermostat: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
     if (descMap.attrId == '0000') { // LocalTemperature
@@ -1158,10 +1236,14 @@ void a5SubscribeKnownClustersAttributes() {
                     // fingerprintName:fingerprint07 entry:0402 map:[FFF8:1618, FFF9:1618, 0002:2710, 0000:092A, 0001:EC78, FFFC:00, FFFD:04]
                     String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
                     logDebug "a5SubscribeKnownClustersAttributes: (deviceCount=${deviceCount}) fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry}"
-                    // for now, we subscribe to attribute 0x0000 of the cluster, except for teh WindowCovering cluster, where we subscribe to attributes 0x000B and 0x000E
+                    // we subscribe to attribute 0x0000 of the cluster by default
                     if (entry == '0102') {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000B'))
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
+                    }
+                    else if (entry == '0300') {
+                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
+                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
                     }
                     else {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
@@ -1570,7 +1652,7 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
   */
 private static Map mapTuyaCategory(Map d) {
     if ('08' in d.ServerList) {   // Dimmer
-        return [ driver: 'Generic Component Dimmer', product_name: 'Dimmer/Bulb' ]
+        return [ driver: 'Generic Component CT', product_name: 'Dimmer/Bulb' ]      // was 'Generic Component Dimmer'
     }
     if ('45' in d.ServerList) {   // Contact Sensor
         return [ driver: 'Generic Component Contact Sensor', product_name: 'Contact Sensor' ]
@@ -1707,13 +1789,33 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentSetColorTemperature(): deviceNumber ${deviceNumber} is not valid!"; return; }
-    String colorTemperatureMireds = zigbee.swapOctets(HexUtils.integerToHexString(ctToMired(colorTemperature as int), 2))
-    String transitionTime = zigbee.swapOctets(HexUtils.integerToHexString(duration as int, 2))
+    String colorTemperatureMireds = byteReverseParameters(HexUtils.integerToHexString(ctToMired(colorTemperature as int), 2))
+    String transitionTime = zigbee.swapOctets(HexUtils.integerToHexString((duration ?: 0) as int, 2))
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(DataType.UINT16, 0, colorTemperatureMireds))
     cmdFields.add(matter.cmdField(DataType.UINT16, 1, transitionTime))
     cmd = matter.invoke(deviceNumber, 0x0300, 0x0A, cmdFields)  // 0x0300 = Color Control Cluster, 0x0A = MoveToColorTemperature
     sendToDevice(cmd)
+}
+
+// Color Names
+String getGenericTempName(temp){
+    if (!temp) return UNKNOWN
+    String genericName = UNKNOWN
+    Integer value = temp.toInteger()
+    if (value <= 2000) genericName = "Sodium"
+    else if (value <= 2100) genericName = "Starlight"
+    else if (value < 2400) genericName = "Sunrise"
+    else if (value < 2800) genericName = "Incandescent"
+    else if (value < 3300) genericName = "Soft White"
+    else if (value < 3500) genericName = "Warm White"
+    else if (value < 4150) genericName = "Moonlight"
+    else if (value <= 5000) genericName = "Horizon"
+    else if (value < 5500) genericName = "Daylight"
+    else if (value < 6000) genericName = "Electronic"
+    else if (value <= 6500) genericName = "Skylight"
+    else if (value < 20000) genericName = "Polar"
+    return genericName
 }
 
 /**
@@ -1724,6 +1826,16 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
 private static Integer ctToMired(final int kelvin) {
     return (1000000 / kelvin).toInteger()
 }
+
+/**
+ * Mired to Kelvin conversion
+ * @param mired mired value in hex
+ * @return color temperature in Kelvin
+ */
+private int miredHexToCt(final String mired) {
+    return (1000000 / hexStrToUnsignedInt(mired)) as int
+}
+
 
 // prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2
 

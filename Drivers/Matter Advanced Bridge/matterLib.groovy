@@ -27,7 +27,8 @@ library(
   * ver. 0.0.0  2024-01-10 kkossev  - first version
   * ver. 0.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
   * ver. 0.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
-  * ver. 0.0.3  2024-02-04 kkossev  - (dev. branch) ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions; DoorLockCluster 0x0101 definitions;
+  * ver. 0.0.3  2024-02-04 kkossev  - ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions; DoorLockCluster 0x0101 definitions;
+  * ver. 0.0.4  2024-02-06 kkossev  - (dev. branch) added Color Control Cluster 0x0300;
   *
   *                                   TODO:
   *
@@ -172,6 +173,7 @@ Map getAttributesMapByClusterId(String cluster) {
     if (cluster == '0045') { return BooleanStateClusterAttributes }
     if (cluster == '0101') { return DoorLockClusterAttributes }
     if (cluster == '0102') { return WindowCoveringClusterAttributes }
+    if (cluster == '0300') { return ColorControlClusterAttributes }
     if (cluster == '0400') { return IlluminanceMeasurementClusterAttributes }   // TODO
     if (cluster == '0402') { return TemperatureMeasurementClusterAttributes }
     if (cluster == '0403') { return PressureMeasurementClusterAttributes }      // TODO
@@ -648,6 +650,49 @@ Map getAttributesMapByClusterId(String cluster) {
     0x05    : 'GoToLiftPercentage',
     0x07    : 'GoToTiltValue',
     0x08    : 'GoToTiltPercentage'
+]
+
+// 3.2.7.Color Control Cluster 0x0300 (768)
+@Field static final Map<Integer, String> ColorControlClusterAttributes = [
+    // cluster:0300, attrId:FFFB, value:[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD]
+    0x0000  : 'CurrentHue',
+    0x0001  : 'CurrentSaturation',
+    0x0002  : 'RemainingTime',
+    0x0003  : 'CurrentX',
+    0x0004  : 'CurrentY',
+    0x0007  : 'ColorTemperatureMireds',
+    0x0008  : 'ColorMode',
+    0x000F  : 'Options',
+    0x0010  : 'Unknown10',
+    0x4000  : 'EnhancedCurrentHue',
+    0x4001  : 'EnhancedColorMode',
+    0x400A  : 'ColorCapabilities',
+    0x400B  : 'ColorTempPhysicalMinMireds',
+    0x400C  : 'ColorTempPhysicalMaxMireds',
+    0x400D  : 'CoupleColorTempToLevelMinMireds',
+    0x4010  : 'StartUpColorTemperatureMireds'
+]
+
+@Field static final Map<Integer, String> ColorControlClusterCommands = [
+    0x00    : 'MoveToHue',
+    0x01    : 'MoveHue',
+    0x02    : 'StepHue',
+    0x03    : 'MoveToSaturation',
+    0x04    : 'MoveSaturation',
+    0x05    : 'StepSaturation',
+    0x06    : 'MoveToHueAndSaturation',
+    0x07    : 'MoveToColor',
+    0x08    : 'MoveColor',
+    0x09    : 'StepColor',
+    0x0A    : 'MoveToColorTemperature',
+    0x40    : 'EnhancedMoveToHue',
+    0x41    : 'EnhancedMoveHue',
+    0x42    : 'EnhancedStepHue',
+    0x43    : 'EnhancedMoveToHueAndSaturation',
+    0x44    : 'ColorLoopSet',
+    0x47    : 'StopMoveStep',
+    0x4B    : 'MoveColorTemperature',
+    0x4C    : 'StepColorTemperature'
 ]
 
 // 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
