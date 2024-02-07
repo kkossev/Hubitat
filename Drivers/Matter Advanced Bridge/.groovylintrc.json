@@ -33,6 +33,9 @@
         },
         "PublicMethodsBeforeNonPublicMethods": {
             "enabled": false
+        },
+        "UnnecessaryPublicModifier": {
+            "enabled": false
         }
     }
 }
