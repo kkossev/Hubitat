@@ -26,6 +26,7 @@ library(
   *
   * ver. 0.0.0  2024-01-27 kkossev  - first published version
   * ver. 0.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
+  * ver. 0.0.2  2024-02-09 kkossev  - all states are cleared at the start of the full discovery
   *
   *                                   TODO:
   *
@@ -34,8 +35,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterStateMachinesLib = '0.0.1'
-@Field static final String matterStateMachinesLibStamp   = '2024/01/28 11:05 PM'
+@Field static final String matterStateMachinesLib = '0.0.2'
+@Field static final String matterStateMachinesLibStamp   = '2024/02/09 11:58 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -45,10 +46,11 @@ import groovy.transform.Field
 @Field static final String  SUCCESS = 'SUCCESS'
 @Field static final String  ERROR   = 'ERROR'
 
-@Field static final Integer STATE_MACHINE_PERIOD = 250      // milliseconds
-@Field static final Integer STATE_MACHINE_MAX_RETRIES = 15
+@Field static final Integer STATE_MACHINE_PERIOD = 330      // milliseconds
+@Field static final Integer STATE_MACHINE_MAX_RETRIES = 20
 
 void initializeStateMachineVars() {
+    if (state['states'] == null) { state['states'] = [:] }
     if (state['stateMachines'] == null) { state['stateMachines'] = [] }
     if (state['stateMachines']['readSingeAttrState'] == null) { state['stateMachines']['readSingeAttrState'] = 0 }
     if (state['stateMachines']['readSingeAttrRetry'] == null) { state['stateMachines']['readSingeAttrRetry'] = 0 }
@@ -334,8 +336,8 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_IDLE                                     = 0
 @Field static final Integer DISCOVER_ALL_STATE_INIT                                     = 1
 
-@Field static final Integer DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS                    = 101
-@Field static final Integer DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT               = 102
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS                    = 101
+@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS_WAIT               = 102
 
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST                 = 2
 @Field static final Integer DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST_WAIT            = 3
@@ -424,16 +426,17 @@ void discoverAllStateMachine(Map data = null) {
             state.states['isInfo'] = true
             state['stateMachines']['discoverAllResult'] = RUNNING
             // TODO
-            clearSubscriptionsState()   // clear the subscriptions state
-            //st = DISCOVER_ALL_STATE_DESCIPTOR_ATTRIBUTE_LIST
-            st = DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS
+            initializeVars(fullInit = true)            // added 02/09/2024
+            sendInfoEvent('All states cleared!')
+            clearSubscriptionsState()                  // clear the subscriptions state
+            st = DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS
             // continue with the next state
-        case DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS :
+        case DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS :
             disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x001D, debug: false])
             stateMachinePeriod = STATE_MACHINE_PERIOD * 2
-            retry = 0; st = DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT
+            retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS_WAIT
             break
-        case DISCOVER_ALL_STATE_BRIDE_GLOBAL_ELEMENTS_WAIT:
+        case DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS_WAIT:
             if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
                 logDebug "discoverAllStateMachine: st:${st} - received discoverGlobalElementsResult confirmation!"
                 st = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST
@@ -629,10 +632,9 @@ void discoverAllStateMachine(Map data = null) {
                 logDebug "discoverAllStateMachine: st:${st} - ['PartsList'][$partEndpoint] confirmation!"
                 logRequestedClusterAttrResult([cluster: 0x001D, endpoint: partEndpointInt])
                 //state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
-                sendInfoEvent("Found bridged device part #${partsListIndex} fingerprint ${fingerprintName}")
+                sendInfoEvent("Found bridged device part #${partsListIndex} ${fingerprintName}")
                 // for each child device that has the BridgedDeviceBasicInformationCluster '39' in the ServerList ->  read the BridgedDeviceBasicInformationCluster attributes
                 st = DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_STATE
-                //            st = DISCOVER_ALL_STATE_END
             }
             else {
                 logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value retry=${retry})"
@@ -767,7 +769,7 @@ void discoverAllStateMachine(Map data = null) {
                     // fingerPrintToData: deviceData:[id:08, fingerprintName:fingerprint08, product_name:Humidity Sensor, name:Device#08, ServerList:[1D, 03, 0405]]
                     sendInfoEvent("Created child device ${deviceData.name} (${deviceData.product_name})")
                 }
-                // now discove the supportedCluster attributes
+                // now discover the supportedCluster attributes
                 state.states['isInfo'] = true
                 state.states['cluster'] = HexUtils.integerToHexString(supportedCluster, 2)
                 state.tmp = null
@@ -816,7 +818,7 @@ void discoverAllStateMachine(Map data = null) {
             break
 
         case DISCOVER_ALL_STATE_NEXT_STATE :
-            logWarn "discoverAllStateMachine: st:${st} - DISCOVER_ALL_STATE_NEXT_STATE - anything else left?"
+            logWarn "discoverAllStateMachine: st:${st} - DISCOVER_ALL_STATE_NEXT_STATE - anything else?"
             st = DISCOVER_ALL_STATE_END
             break
 

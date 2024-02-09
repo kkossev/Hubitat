@@ -32,23 +32,26 @@
  * ver. 0.1.1  2024-02-03 kkossev  - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
  * ver. 0.2.0  2024-02-04 kkossev  -  refactored the matter messages parsing method using a lookup map; bug fix: duplicated attrList entries; bug fix: deviceCount and initializeCtr nit updated; bug fix : healhCheck schedued job was lost on resubscribe()
  *                                   added cluster 0x0101 DoorLock decoding; lock and unlock commands (not tested!)
- * ver. 0.2.1  2024-02-07 kkossev  - (dev.branch) added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
+ * ver. 0.2.1  2024-02-07 kkossev  - added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
  *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
+ * ver. 0.2.2  2024-02-09 kkossev  - (dev.branch) bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process; added a compatibility table matrix for Tuya devices on the top post; added a compatibility table matrix for SwitchBot Hub2 devices on the top post; bugfix: CT/RGB bulbs reinitialization;
  *
- *                                   TODO: [====MVP====] Publish version 0.2.1
- *
- *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes
- *                                   TODO: [====MVP====] driverVersion to be stored in child devices states
- *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
- *                                   TODO: [====MVP====] on DiscoveryAll - delete all previous states first?
- *                                   TODO: [====MVP====] ignore duplicated switch and level events on main driver level
- *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
- *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
- *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] Publish version 0.2.2
  *
+ *                                   TODO: [====MVP====] copy DeviceType list to the child device
+ *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
+ *                                   TODO: [====MVP====] keep a list of DeviceTypes that need to be tested in the top post
+ *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
+ *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
+ *                                   TODO: [====MVP====] copy the Matter specificatgion PDSs too Google Drive; Lock cluster specifications page numbers;
+ *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes
+ *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
+ *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
+ *                                   TODO: [====MVP====] Publish version 0.2.3
+ *
  *                                   TODO: [====MVP====] add heathStatus to the child devices
+ *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
+ *                                   TODO: [====MVP====] ignore duplicated switch and level events on main driver level
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
  *                                   TODO: [====MVP====] add Data.Refresh for each child device
@@ -62,6 +65,10 @@
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add Thermostat component driver
  *                                   TODO: [====MVP====] Publish version 0.4.0
+
+ *                                   TODO: [====MVP====] add support for Lock cluster 0x0101
+ *                                   TODO: [====MVP====] add illuminance processing
+ *                                   TODO: [====MVP====] Publish version 0.5.0
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
  *                                   TODO: [REFACTORING] move the component drivers names into a table
@@ -69,7 +76,7 @@
  *                                   TODO: [REFACTORING] add a temporary state to store the attributes list of the currently interviewed cluster
  *                                   TODO: [REFACTORING] Convert SupportedMatterClusters to Map that include the known attributes to be subscribed to
  *
- *                                   TODO: [ENHANCEMENT] add illuminance processing
+ *                                   TODO: [ENHANCEMENT] driverVersion to be stored in child devices states
  *                                   TODO: [ENHANCEMENT] check water sensors
  *                                   TODO: [ENHANCEMENT] change attributes and values list Info log to be shown in Debug mode only
  *                                   TODO: [ENHANCEMENT] disable the debug logs in discovery mode
@@ -95,8 +102,8 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-String version() { '0.2.1' }
-String timeStamp() { '2023/02/07 6:52 PM' }
+String version() { '0.2.2' }
+String timeStamp() { '2023/02/09 11:59 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -157,7 +164,7 @@ metadata {
             'ready'
         ]
 
-        command 'a0DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
+        command '_DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'panic button: Clear all States and scheduled jobs']]
@@ -371,7 +378,7 @@ String getClusterName(final String cluster) { return MatterClusters[HexUtils.hex
 //@CompileStatic
 String getAttributeName(final Map descMap) { return getAttributeName(descMap.cluster, descMap.attrId) }
 @CompileStatic
-String getAttributeName(final String cluster, String attrId) { return getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId)) ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)] }
+String getAttributeName(final String cluster, String attrId) { return getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId)) ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)] ?: UNKNOWN }
 @CompileStatic
 String getFingerprintName(final Map descMap) { return descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}" }
 @CompileStatic
@@ -395,7 +402,7 @@ String getDeviceDisplayName(final Integer endpoint) { return getDeviceDisplayNam
  * If a child device exists, the label is retrieved from the child device display name.
  * If no child device exists yet, the label is constructed by combining the endpoint with the vendor name, product name, and custom label.
  * If the vendor name or product name is available, they are included in parentheses.
- * 
+ *
  * @param endpoint The endpoint of the device.
  * @return The device display label.
  */
@@ -416,7 +423,7 @@ String getDeviceDisplayName(final String endpoint) {
     return label
 }
 
-// credits: @jvm33 
+// credits: @jvm33
 // Matter payloads need hex parameters of greater than 2 characters to be pair-reversed.
 // This function takes a list of parameters and pair-reverses those longer than 2 characters.
 // Alternatively, it can take a string and pair-revers that.
@@ -424,13 +431,13 @@ String getDeviceDisplayName(final String endpoint) {
 private String byteReverseParameters(String oneString) { byteReverseParameters([] << oneString) }
 private String byteReverseParameters(List<String> parameters) {
     StringBuilder rStr = new StringBuilder(64)
-    
+
     for (hexString in parameters) {
         if (hexString.length() % 2) throw new Exception("In method byteReverseParameters, trying to reverse a hex string that is not an even number of characters in length. Error in Hex String: ${hexString}, All method parameters were ${parameters}.")
-        
+
         for(Integer i = hexString.length() -1 ; i > 0 ; i -= 2) {
             rStr << hexString[i-1..i]
-        }    
+        }
     }
     return rStr
 }
@@ -1131,8 +1138,8 @@ void readAttributeSafe(String endpointPar, String clusterPar, String attrIdPar) 
 /*
  *  Discover all the endpoints and clusters for the Bridge and all the Bridged Devices
  */
-void a0DiscoverAll(statePar = null) {
-    logWarn "a0DiscoverAll()"
+void _DiscoverAll(statePar = null) {
+    logWarn "_DiscoverAll()"
     Integer stateSt = DISCOVER_ALL_STATE_INIT
     state.stateMachines = [:]
     // ['All', 'BasicInfo', 'PartsList']]
@@ -1142,12 +1149,12 @@ void a0DiscoverAll(statePar = null) {
     else if (statePar == 'ChildDevices') { stateSt = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START }
     else if (statePar == 'Subscribe') { stateSt = DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS }
     else {
-        logWarn "a0DiscoverAll(): unknown statePar:${statePar} !"
+        logWarn "_DiscoverAll(): unknown statePar:${statePar} !"
         return
     }
 
     discoverAllStateMachine([action: START, goToState: stateSt])
-    logInfo "a0DiscoverAll(): started!"
+    logInfo "_DiscoverAll(): started!"
 }
 
 void collectBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = false) {
@@ -1242,7 +1249,8 @@ void a5SubscribeKnownClustersAttributes() {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
                     }
                     else if (entry == '0300') {
-                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
+                        // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        //subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
                     }
                     else {
@@ -1257,7 +1265,7 @@ void a5SubscribeKnownClustersAttributes() {
     int numberOfSubscriptions = state.subscriptions?.size() ?: 0
     sendInfoEvent("the number of subscriptions is ${numberOfSubscriptions}")
     sendMatterEvent([name: 'deviceCount', value: deviceCount, descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} subscribed for events from ${deviceCount} devices"])
-    runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
+    //runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
 }
 
 void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
@@ -1559,6 +1567,7 @@ String refreshCmd() {
     List<Map<String, String>> attributePaths = state.subscriptions?.collect { sub ->
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     } ?: []
+    if (state['bridgeDescriptor'] == null) { logWarn 'refreshCmd(): state.bridgeDescriptor is null!'; return null  }
     List<String> serverList = (state['bridgeDescriptor']['0033_FFFB'] as List)?.clone()  // new ArrayList<>(originalList)
     serverList?.removeAll(['FFF8', 'FFF9', 'FFFB', 'FFFC', 'FFFD', '00'])                // 0x0000  : 'NetworkInterfaces' - not supported
     attributePaths.addAll(serverList?.collect { attr ->
@@ -1835,7 +1844,6 @@ private static Integer ctToMired(final int kelvin) {
 private int miredHexToCt(final String mired) {
     return (1000000 / hexStrToUnsignedInt(mired)) as int
 }
-
 
 // prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2
 
@@ -2131,7 +2139,7 @@ private ChildDeviceWrapper createChildDevice(String dni, Map mapping, Map d) {
         try {
             dw = addChildDevice(mapping.namespace ?: 'hubitat', mapping.driver, dni,
                 [
-                    name: d.name    // was  d.product_name   
+                    name: d.name    // was  d.product_name
                     //label: null     // do not set the label here, it will be set by the user!
                 ]
             )
@@ -2363,7 +2371,8 @@ void resetStats() {
 
 void initializeVars(boolean fullInit = false) {
     logDebug "InitializeVars()... fullInit = ${fullInit}"
-    if (fullInit == true) {
+    if (fullInit == true || state.deviceType == null) {
+        logWarn 'forcing fullInit = true'
         state.clear()
         unschedule()
         resetStats()
@@ -2505,7 +2514,7 @@ void test(par) {
     logWarn "test(): dw.getState('testState')=${dw.getState('testState')}"
     */
         Integer intpar = safeNumberToInt(par)
-        String hexEP = HexUtils.integerToHexString(intpar, 2) 
+        String hexEP = HexUtils.integerToHexString(intpar, 2)
         /*
         String cmd = 'he rattrs [{"ep":"0x' + hexEP + '","cluster":"0x0300","attr":"0xFFFFFFFF"}]'
         sendHubCommand(new hubitat.device.HubAction(cmd, hubitat.device.Protocol.MATTER))
@@ -2527,5 +2536,5 @@ void test(par) {
     cmd = matter.subscribe(0, 0xFFFF, eventPaths)
     logWarn "test(): sending command '${cmd}'"
     sendToDevice(cmd)
- 
+
 }
