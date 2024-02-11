@@ -35,27 +35,28 @@
  * ver. 0.2.1  2024-02-07 kkossev  - added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
  *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
  * ver. 0.2.2  2024-02-10 kkossev  - bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process;  bugfix: CT/RGB bulbs reinitialization;
- * ver. 0.2.3  2024-02-11 kkossev  - (dev.branch) lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor
+ * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
+ * ver. 0.2.4  2024-02-11 kkossev  - (dev.branch) bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
  *
+ *                                   TODO: [====MVP====] colorName in RGB mode
+ *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes :
  *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
- *                                   TODO: [====MVP====] add physical to ping; healthStatus offline not working !!??
- *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes : hue   TODO - check setLevel duration is not working!
  *                                   TODO: [====MVP====] RGBW bulbs to be assigned 'Generic Component RGBW' driver;
- *                                   TODO: [====MVP====] during the discovery, read 0xFFFB attribute of the supported clusters for each child device!
+ *                                   TODO: [====MVP====] during the discovery, read 0xFFFB attribute of the supported clusters for each child device ? (or just subscribe for all attributes of the supported clusters)?
  *                                   TODO: [====MVP====] when subscribing to the attributes, check if the attribute is in the 0300_FFFB=[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD]
- *                                   TODO: [====MVP====] copy DeviceType list to the child device
- *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
- *                                   TODO: [====MVP====] keep a list of DeviceTypes that need to be tested in the top post
+ *                                   TODO: [====MVP====] Publish version 0.2.5  
+ *
+ *                                   TODO: [====MVP====] ERROR during the Matter Bridge and Devices discovery - add more information in the Info log !
  *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
- *                                   TODO: [====MVP====] copy the Matter specificatgion PDSs too Google Drive; Lock cluster specifications page numbers;
+ *                                   TODO: [====MVP====] copy the Matter specificatgion PDFs on Google Drive;
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] Publish version 0.2.3
- *
+ *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
+ *                                   TODO: [====MVP====] keep a list of DeviceTypes that need to be tested in the top post
  *                                   TODO: [====MVP====] add heathStatus to the child devices
+ *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] ignore duplicated switch and level events on main driver level
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
  *                                   TODO: [====MVP====] add Data.Refresh for each child device
@@ -105,11 +106,12 @@
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
+//#include matterTools.getExpandedColorNames
 
-String version() { '0.2.3' }
-String timeStamp() { '2023/02/11 10:59 AM' }
+String version() { '0.2.4' }
+String timeStamp() { '2023/02/11 11:58 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -577,7 +579,7 @@ void parsePowerSource(final Map descMap) {
     if (eventMap != [:]) {
         eventMap.type = 'physical'
         eventMap.isStateChange = true
-        sendMatterEvent(eventMap, descMap) // bridge events
+        sendMatterEvent(eventMap, descMap, true) // bridge events
     }
 }
 
@@ -665,7 +667,7 @@ void parseOnOffCluster(final Map descMap) {
                 name: 'switch',
                 value: switchState,
                 descriptionText: "${getDeviceDisplayName(descMap.endpoint)} switch is ${switchState}"
-            ], descMap)
+            ], descMap, true)
             break
         case '4000' : // GlobalSceneControl
             if (logEnable) { logInfo "parse: Switch: GlobalSceneControl = ${descMap.value}" }
@@ -704,7 +706,7 @@ void parseLevelControlCluster(final Map descMap) {
                 name: 'level',
                 value: value, //.toString(),
                 descriptionText: "${getDeviceDisplayName(descMap.endpoint)} level is ${value}"
-            ], descMap)
+            ], descMap, true)
             break
         default :
             Map eventMap = [:]
@@ -721,7 +723,7 @@ void parseLevelControlCluster(final Map descMap) {
             }
             if (eventMap != [:]) {
                 eventMap.type = 'physical'; eventMap.isStateChange = true
-                sendMatterEvent(eventMap, descMap) // child events
+                sendMatterEvent(eventMap, descMap, true) // child events
             }
     }
 }
@@ -738,7 +740,7 @@ void parseOccupancySensing(final Map descMap) {
             name: 'motion',
             value: motionAttr,
             descriptionText: "${getDeviceDisplayName(descMap.endpoint)} motion is ${motionAttr}"
-        ], descMap)
+        ], descMap, true)
     } else {
         logTrace "parseOccupancySensing: ${(OccupancySensingClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
@@ -753,7 +755,7 @@ void parseSwitch(final Map descMap) {
             name: 'switch',
             value: switchState,
             descriptionText: "${getDeviceDisplayName(descMap.endpoint)} switch is ${switchState}"
-        ], descMap)
+        ], descMap, true)
     } else {
         logTrace "parseSwitch: ${(SwitchClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
@@ -768,7 +770,7 @@ void parseContactSensor(final Map descMap) {
             name: 'contact',
             value: contactAttr,
             descriptionText: "${getDeviceDisplayName(descMap.endpoint)} contact is ${contactAttr}"
-        ], descMap)
+        ], descMap, true)
     } else {
         logTrace "parseContactSensor: ${(BooleanStateClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
@@ -794,10 +796,10 @@ void parseTemperatureMeasurement(final Map descMap) { // 0402
         }
         sendMatterEvent([
             name: 'temperature',
-            value: valueInt.round(1),
+            value: valueInt.round(1) as double,
             descriptionText: "${getDeviceDisplayName(descMap.endpoint)} temperature is ${valueInt.round(2)} ${unit}",
             unit: unit
-        ], descMap)
+        ], descMap, true)
     } else {
         logTrace "parseTemperatureMeasurement: ${(TemperatureMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
         logTrace "parseTemperatureMeasurement: ${getAttributeName(descMap)} = ${descMap.value}"
@@ -818,9 +820,9 @@ void parseHumidityMeasurement(final Map descMap) { // 0405
         }
         sendMatterEvent([
             name: 'humidity',
-            value: valueInt.round(0),
+            value: valueInt.round(0) as int,
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)}  humidity is ${valueInt.round(1)} %"
-        ], descMap)
+        ], descMap, true)
     } else {
         logTrace "parseHumidityMeasurement: ${(RelativeHumidityMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
     }
@@ -848,20 +850,20 @@ void parseWindowCovering(final Map descMap) { // 0102
             name: 'position',
             value: valueInt.toString(),
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} currentPosition  is ${valueInt} %"
-        ], descMap)
+        ], descMap, true)
     } else if (descMap.attrId == '000E') { // CurrentPositionLiftPercent100ths - actually this is the target position !!!
         Integer valueInt = (100 - HexUtils.hexStringToInt(descMap.value) / 100.0) as int
         sendMatterEvent([
             name: 'targetPosition',
             value: valueInt.toString(),
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} targetPosition is ${valueInt} %"
-        ], descMap)
+        ], descMap, true)
     } else if (descMap.attrId == '000A') { // OperationalStatus
         sendMatterEvent([
             name: 'operationalStatus',
             value: descMap.value,
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} operationalStatus is ${descMap.value}"
-        ], descMap)
+        ], descMap, true)
     }
     else {
         logTrace "parseWindowCovering: ${(WindowCoveringClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -873,37 +875,38 @@ void parseColorControl(final Map descMap) { // 0300
     switch (descMap.attrId) {
         case '0000' : // CurrentHue
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: CurrentHue= ${valueInt} (raw=0x${descMap.value})"
+            logDebug "parseColorControl: hue = ${valueInt}"
             sendMatterEvent([
                 name: 'hue',
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} hue is ${valueInt}"
-            ], descMap)
+            ], descMap, true)
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: CurrentSaturation= ${valueInt} (raw=0x${descMap.value})"
+            logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'saturation',
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} saturation is ${valueInt}"
-            ], descMap)
+            ], descMap, true)
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
-            logDebug "parseColorControl: ColorTemperatureCT= ${valueCt} (raw=0x${descMap.value})"
+            logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'colorTemperature',
                 value: valueCt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} colorTemperature is ${valueCt}",
                 unit: '°K'
-            ], descMap)
-            String colorName = getGenericTempName(valueCt)
+            ], descMap, true)
+            //String colorName = getGenericTempName(valueCt)
+            String colorName = convertTemperatureToGenericColorName(valueCt)    //  (Since 2.3.2)
             sendMatterEvent([
                 name: 'colorName',
                 value: colorName,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${valueCt}"
-            ], descMap)
+            ], descMap, true)
             break
         case '0008' : // ColorMode
             String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
@@ -912,7 +915,7 @@ void parseColorControl(final Map descMap) { // 0300
                 name: 'colorMode',
                 value: colorMode,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} colorMode is ${colorMode}"
-            ], descMap)
+            ], descMap, true)
             break
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
             logTrace "parseColorControl: ${getAttributeName(descMap)} = ${descMap.value}"
@@ -933,7 +936,7 @@ void parseColorControl(final Map descMap) { // 0300
             }
             if (eventMap != [:]) {
                 eventMap.type = 'physical'; eventMap.isStateChange = true
-                sendMatterEvent(eventMap, descMap) // child events
+                sendMatterEvent(eventMap, descMap, true) // child events
             }
             break
     }
@@ -959,7 +962,7 @@ void parseThermostat(final Map descMap) {
             value: valueIntCorrected,
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} temperature is ${valueInt} ${unit}",
             unit: unit
-        ], descMap)
+        ], descMap, true)
     }
     else {
         logDebug "parseThermostat: ${(ThermostatClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -969,12 +972,12 @@ void parseThermostat(final Map descMap) {
 //events
 
 // Common code method for sending events
-void sendMatterEvent(final Map<String, String> eventParams, DeviceWrapper dw) {
+void sendMatterEvent(final Map<String, String> eventParams, DeviceWrapper dw, ignoreDuplicates = false) {
     String id = dw?.getDataValue('id') ?: '00'
-    sendMatterEvent(eventParams, [endpoint: id])
+    sendMatterEvent(eventParams, [endpoint: id], ignoreDuplicates)
 }
 
-void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
+void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], ignoreDuplicates = false) {
     String name = eventParams['name']
     String value = eventParams['value']
     String descriptionText = eventParams['descriptionText']
@@ -999,6 +1002,39 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:]) {
         eventMap.isStateChange = true   // force the event to be sent
     }
     // TODO - use the child device wrapper to check the current value !!!!!!!!!!!!!!!!!!!!!
+
+    if (ignoreDuplicates == true) {
+        boolean isDuplicate = false
+        Object latestEvent = dw?.device?.currentState(name)
+        //latestEvent.properties.each { k, v -> logWarn ("$k: $v") }
+        if (latestEvent != null) {
+            if (latestEvent.dataType in ['NUMBER', 'DOUBLE', 'FLOAT'] ) {
+                isDuplicate = Math.abs(latestEvent.doubleValue - safeToDouble(value)) < 0.00001
+            }
+            else if (latestEvent.dataType == 'STRING' || latestEvent.dataType == 'ENUM' || latestEvent.dataType == 'DATE') {
+                isDuplicate = (latestEvent.stringValue == value.toString())
+            }
+            else if (latestEvent.dataType == 'JSON_OBJECT') {
+                isDuplicate = (latestEvent.jsonValue == value.toString())   // TODO - check this
+            }
+            else {
+                isDuplicate = false
+                logWarn "sendMatterEvent: unsupported dataType:${latestEvent.dataType}"
+            }
+        }
+        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: dw:${dw} dni:${dni} name: ${name} value:${value} oldValue:${dw?.device?.currentValue(name)}"
+        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: isDuplicate=${isDuplicate} (latestEvent.dataType:${latestEvent.dataType})"
+        if (isDuplicate) {
+            logDebug "sendMatterEvent: <b>IGNORED</b> duplicate event: ${eventMap.descriptionText} (value:${value} dataType:${latestEvent.dataType})"
+            return
+        }
+        else {
+            logDebug "sendMatterEvent: <b>NOT IGNORED</b> event: ${eventMap.descriptionText} (value:${value} latestEvent.value = ${latestEvent.value} dataType:${latestEvent.dataType})"
+        }
+    }
+    else {
+        logDebug "sendMatterEvent: <b>ignoreDuplicates=false</b> for event: ${eventMap.descriptionText} (value:${value})"
+    }
     if (dw != null && dw?.disabled != true) {
         // send events to child for parsing. Any filtering of duplicated events will be potentially done in the child device handler.
         logDebug "sendMatterEvent: sending for parsing to the child device: dw:${dw} dni:${dni} name:${name} value:${value} descriptionText:${descriptionText}"
@@ -1598,7 +1634,13 @@ void refresh() {
     logInfo'refresh() ...'
     checkDriverVersion()
     setRefreshRequest()    // 6 seconds
-    sendToDevice(refreshCmd())
+    String cmd = refreshCmd()
+    if (cmd != null && cmd != '') {
+        sendToDevice(cmd)
+    }
+    else {
+        logWarn 'refresh(): cmd is null!'
+    }
 }
 
 String refreshCmd() {
@@ -1609,6 +1651,7 @@ String refreshCmd() {
     if (state['bridgeDescriptor'] == null) { logWarn 'refreshCmd(): state.bridgeDescriptor is null!'; return null  }
     List<String> serverList = (state['bridgeDescriptor']['0033_FFFB'] as List)?.clone()  // new ArrayList<>(originalList)
     serverList?.removeAll(['FFF8', 'FFF9', 'FFFB', 'FFFC', 'FFFD', '00'])                // 0x0000  : 'NetworkInterfaces' - not supported
+    if (serverList == null) { logWarn 'refreshCmd(): serverList is null!'; return null  }
     attributePaths.addAll(serverList?.collect { attr ->
         matter.attributePath(0, 0x0033, HexUtils.hexStringToInt(attr))
     })
@@ -1808,13 +1851,12 @@ void componentClose(DeviceWrapper dw) {
 // prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2
 
 // Component command to set level
-void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal durationlPar=0) {
+void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal durationPar=null) {
     if (!dw.hasCommand('setLevel')) { logError "componentSetLevel(${dw}) driver '${dw.typeName}' does not have command 'setLevel' in ${dw.supportedCommands}" ; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     int level = levelPar as int
-    int duration = durationPar ?: 0 as int
-    if (level < 0) { level = 0 }
-    if (level > 100) { level = 100 }
+    level = level < 0 ? 0 : level > 100 ? 100 : level
+    int duration = (durationPar ?: 0) * 10
     logInfo "Setting level ${level} durtion ${duration} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     Integer levelHex = Math.round(level * 2.54)
     List<Map<String, String>> cmdFields = []
@@ -1852,7 +1894,7 @@ void componentStopLevelChange(DeviceWrapper dw) {
     sendToDevice(cmd)
 }
 
-void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature, BigDecimal level, BigDecimal duration=0) {
+void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature, BigDecimal level=null, BigDecimal duration=null) {
     if (!dw.hasCommand('setColorTemperature')) { logError "componentSetColorTemperature(${dw}) driver '${dw.typeName}' does not have command 'setColorTemperature' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
@@ -1863,6 +1905,9 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
     cmdFields.add(matter.cmdField(DataType.UINT16, 1, transitionTime))
     String cmd = matter.invoke(deviceNumber, 0x0300, 0x0A, cmdFields)  // 0x0300 = Color Control Cluster, 0x0A = MoveToColorTemperature
     sendToDevice(cmd)
+    if (level != null || duration != null) {
+        componentSetLevel(dw, level, duration)
+    }
 }
 
 void componentSetHue(DeviceWrapper dw, BigDecimal hue) {
@@ -1935,7 +1980,7 @@ void componentSetPreviousEffect(DeviceWrapper dw) {
     String id = dw.getDataValue('id')
     logWarn "componentSetPreviousEffect(${dw}) id=${id} (TODO: not implemented!)"
 }
-
+/*
 // Color Names
 String getGenericTempName(temp){
     if (!temp) return UNKNOWN
@@ -1955,6 +2000,7 @@ String getGenericTempName(temp){
     else if (value < 20000) genericName = "Polar"
     return genericName
 }
+*/
 
 /**
  * Convert a color temperature in Kelvin to a mired value
@@ -2064,7 +2110,7 @@ void componentUnlock(DeviceWrapper dw) {
     List<Map<String, String>> cmdFields = []
     Integer duration = 1
     cmdFields.add(matter.cmdField(0x05, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(duration, 2))))
-    String cmd = matter.invoke(deviceNumber, 0x0101, 0x07, cmdFields) // 0x0101 = DoorLock Cluster, 0x01 = UnlockDoor; 04 - GetLockRecord 08-clear all PIN codes; Clear PIN Code 
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x07, cmdFields) // 0x0101 = DoorLock Cluster, 0x01 = UnlockDoor; 04 - GetLockRecord 08-clear all PIN codes; Clear PIN Code
     logDebug "componentUnlock(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
@@ -2371,14 +2417,11 @@ void setHealthStatusOnline() {
     }
 }
 
-// a periodic cron job, increasing the checkCtr3 each time called.
-// checkCtr3 is cleared when some event is received from the device.
-void deviceHealthCheck() {
-    checkDriverVersion()
+void checkHealthStatusForOffline() {
     if (state.health == null) { state.health = [:] }
     Integer ctr = state.health['checkCtr3'] ?: 0
     String healthStatus = device.currentValue('healthStatus') ?: 'unknown'
-    logDebug "deviceHealthCheck: healthStstus = ${healthStatus} checkCtr3=${ctr}"
+    logDebug "checkHealthStatusForOffline: healthStstus = ${healthStatus} checkCtr3=${ctr}"
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         state.health['offlineCtr'] = (state.health['offlineCtr'] ?: 0) + 1      // increase the offline counter even if the device is already not present - changed 02/1/2024
         if (healthStatus != 'offline') {
@@ -2387,12 +2430,19 @@ void deviceHealthCheck() {
         }
     }
     else {
-        logDebug "deviceHealthCheck: ${healthStatus} (checkCtr3=${ctr}) offlineCtr=${state.health['offlineCtr']}"
+        logDebug "checkHealthStatusForOffline: ${healthStatus} (checkCtr3=${ctr}) offlineCtr=${state.health['offlineCtr']}"
     }
+    state.health['checkCtr3'] = ctr + 1
+}
+
+// a periodic cron job, increasing the checkCtr3 each time called.
+// checkCtr3 is cleared when some event is received from the device.
+void deviceHealthCheck() {
+    checkDriverVersion()
+    checkHealthStatusForOffline()
     if (((settings.healthCheckMethod as Integer) ?: 0) == 2) { //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
         ping()          // TODO - ping() results in initialize() call if the device is switched off !
     }
-    state.health['checkCtr3'] = ctr + 1
 }
 
 void sendHealthStatusEvent(String value) {
@@ -2453,8 +2503,8 @@ void deviceCommandTimeout() {
     } else {
         sendInfoEvent('timeout!', "no response received on the last matter command! (checkCtr3 = ${state.health['checkCtr3']} offlineCtr = ${state.health['offlineCtr']})")
     }
-    // added 02/11/2024 - deviceHealthCheck() will increase the check3Ctr and will send the healthStatus event if the device is offline
-    deviceHealthCheck()
+    // added 02/11/2024 - checkHealthStatusForOffline() will increase the check3Ctr and will send the healthStatus event if the device is offline
+    checkHealthStatusForOffline()
 }
 
 void sendRttEvent(String value=null) {
