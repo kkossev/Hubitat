@@ -34,17 +34,21 @@
  *                                   added cluster 0x0101 DoorLock decoding; lock and unlock commands (not tested!)
  * ver. 0.2.1  2024-02-07 kkossev  - added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
  *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
- * ver. 0.2.2  2024-02-09 kkossev  - (dev.branch) bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process; added a compatibility table matrix for Tuya devices on the top post; added a compatibility table matrix for SwitchBot Hub2 devices on the top post; bugfix: CT/RGB bulbs reinitialization;
+ * ver. 0.2.2  2024-02-10 kkossev  - bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process;  bugfix: CT/RGB bulbs reinitialization;
+ * ver. 0.2.3  2024-02-11 kkossev  - (dev.branch) lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor
  *
- *                                   TODO: [====MVP====] Publish version 0.2.2
- *
+ *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
+ *                                   TODO: [====MVP====] add physical to ping; healthStatus offline not working !!??
+ *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes : hue   TODO - check setLevel duration is not working!
+ *                                   TODO: [====MVP====] RGBW bulbs to be assigned 'Generic Component RGBW' driver;
+ *                                   TODO: [====MVP====] during the discovery, read 0xFFFB attribute of the supported clusters for each child device!
+ *                                   TODO: [====MVP====] when subscribing to the attributes, check if the attribute is in the 0300_FFFB=[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD]
  *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
  *                                   TODO: [====MVP====] keep a list of DeviceTypes that need to be tested in the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
  *                                   TODO: [====MVP====] copy the Matter specificatgion PDSs too Google Drive; Lock cluster specifications page numbers;
- *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] Publish version 0.2.3
@@ -102,10 +106,10 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-String version() { '0.2.2' }
-String timeStamp() { '2023/02/09 11:59 PM' }
+String version() { '0.2.3' }
+String timeStamp() { '2023/02/11 10:59 AM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
@@ -116,7 +120,7 @@ String timeStamp() { '2023/02/09 11:59 PM' }
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
 @Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
 @Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
-@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 2     // missing 3 checks will set the device healthStatus to offline
 @Field static final String  UNKNOWN = 'UNKNOWN'
 @Field static final Integer SHORT_TIMEOUT  = 7
 @Field static final Integer LONG_TIMEOUT   = 15
@@ -216,8 +220,8 @@ metadata {
     options     : [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
-    defaultValue: 60,
-    options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+    defaultValue: 15,
+    options     : [1: 'Every minute (not recommended!)', 15: 'Every 15 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
 
@@ -867,6 +871,24 @@ void parseWindowCovering(final Map descMap) { // 0102
 void parseColorControl(final Map descMap) { // 0300
     if (descMap.cluster != '0300') { logWarn "parseColorControl: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
     switch (descMap.attrId) {
+        case '0000' : // CurrentHue
+            Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
+            logDebug "parseColorControl: CurrentHue= ${valueInt} (raw=0x${descMap.value})"
+            sendMatterEvent([
+                name: 'hue',
+                value: valueInt,
+                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} hue is ${valueInt}"
+            ], descMap)
+            break
+        case '0001' : // CurrentSaturation
+            Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
+            logDebug "parseColorControl: CurrentSaturation= ${valueInt} (raw=0x${descMap.value})"
+            sendMatterEvent([
+                name: 'saturation',
+                value: valueInt,
+                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} saturation is ${valueInt}"
+            ], descMap)
+            break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
             logDebug "parseColorControl: ColorTemperatureCT= ${valueCt} (raw=0x${descMap.value})"
@@ -881,6 +903,15 @@ void parseColorControl(final Map descMap) { // 0300
                 name: 'colorName',
                 value: colorName,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${valueCt}"
+            ], descMap)
+            break
+        case '0008' : // ColorMode
+            String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
+            logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value})"
+            sendMatterEvent([
+                name: 'colorMode',
+                value: colorMode,
+                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} colorMode is ${colorMode}"
             ], descMap)
             break
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
@@ -1249,7 +1280,15 @@ void a5SubscribeKnownClustersAttributes() {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
                     }
                     else if (entry == '0300') {
-                        // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        List<String> attributeList = fingerprintMap['0300_FFFB']
+                        List<Integer> attributeListInt = attributeList.collect { it -> safeHexToInt(it) }
+                        // TODO - check whether 0000 is in 0300_FFFB list  // 300_FFFB=[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD],
+                        if (0x00 in attributeListInt || 0x01 in attributeListInt) {
+                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
+                        }
+                        else {
+                            logWarn "a5SubscribeKnownClustersAttributes: attributeListInt ${attributeListInt} does not contain 0x00 !"
+                        }
                         //subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
                     }
@@ -1380,7 +1419,7 @@ void initialize() {
     state.lastTx['subscribeTime'] = now()
     state.states['isUnsubscribe'] = false
     state.states['isSubscribe'] = true  // should be set to false in the parse() method
-    sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
+    sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
     scheduleCommandTimeoutCheck(delay = 30)
     subscribe()
     updated()   // added 02/03/2024
@@ -1766,6 +1805,26 @@ void componentClose(DeviceWrapper dw) {
     sendToDevice(cmd)
 }
 
+// prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2
+
+// Component command to set level
+void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal durationlPar=0) {
+    if (!dw.hasCommand('setLevel')) { logError "componentSetLevel(${dw}) driver '${dw.typeName}' does not have command 'setLevel' in ${dw.supportedCommands}" ; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    int level = levelPar as int
+    int duration = durationPar ?: 0 as int
+    if (level < 0) { level = 0 }
+    if (level > 100) { level = 100 }
+    logInfo "Setting level ${level} durtion ${duration} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    Integer levelHex = Math.round(level * 2.54)
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(0x04, 0x00, HexUtils.integerToHexString(levelHex, 1)))
+    cmdFields.add(matter.cmdField(0x05, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(duration, 2))))
+    cmd = matter.invoke(deviceNumber, 0x0008, 0x04, cmdFields)  // 0x0008 = Level Control Cluster, 0x04 = MoveToLevelWithOnOff
+    def stock = matter.setLevel(level, duration)                             //    {152400 0C2501 0A0018}'
+    sendToDevice(cmd)
+}
+
 // Component command to start level change (up or down)
 void componentStartLevelChange(DeviceWrapper dw, String direction) {
     if (!dw.hasCommand('startLevelChange')) { logError "componentStartLevelChange(${dw}) driver '${dw.typeName}' does not have command 'startLevelChange' in ${dw.supportedCommands}"; return }
@@ -1778,7 +1837,7 @@ void componentStartLevelChange(DeviceWrapper dw, String direction) {
     logInfo "Starting level change UP for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x00, moveMode))   // MoveMode
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x01, moveRate))   // MoveRate    // TODO - configurable ??
-    cmd = matter.invoke(deviceNumber, 0x0008, 0x01, cmdFields)       // 0x01 = Move
+    String cmd = matter.invoke(deviceNumber, 0x0008, 0x01, cmdFields)       // 0x01 = Move
     sendToDevice(cmd)
 }
 
@@ -1789,7 +1848,7 @@ void componentStopLevelChange(DeviceWrapper dw) {
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x00, '00'))      // OptionsMask - map8 = 0x18
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x01, '00'))      // OptionsOverride
-    cmd = matter.invoke(deviceNumber, 0x0008, 0x03, cmdFields)      // 0x03 = Stop
+    String cmd = matter.invoke(deviceNumber, 0x0008, 0x03, cmdFields)      // 0x03 = Stop
     sendToDevice(cmd)
 }
 
@@ -1797,14 +1856,84 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
     if (!dw.hasCommand('setColorTemperature')) { logError "componentSetColorTemperature(${dw}) driver '${dw.typeName}' does not have command 'setColorTemperature' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
-    if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentSetColorTemperature(): deviceNumber ${deviceNumber} is not valid!"; return; }
     String colorTemperatureMireds = byteReverseParameters(HexUtils.integerToHexString(ctToMired(colorTemperature as int), 2))
     String transitionTime = zigbee.swapOctets(HexUtils.integerToHexString((duration ?: 0) as int, 2))
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(DataType.UINT16, 0, colorTemperatureMireds))
     cmdFields.add(matter.cmdField(DataType.UINT16, 1, transitionTime))
-    cmd = matter.invoke(deviceNumber, 0x0300, 0x0A, cmdFields)  // 0x0300 = Color Control Cluster, 0x0A = MoveToColorTemperature
+    String cmd = matter.invoke(deviceNumber, 0x0300, 0x0A, cmdFields)  // 0x0300 = Color Control Cluster, 0x0A = MoveToColorTemperature
     sendToDevice(cmd)
+}
+
+void componentSetHue(DeviceWrapper dw, BigDecimal hue) {
+    if (!dw.hasCommand('setHue')) { logError "componentSetHue(${dw}) driver '${dw.typeName}' does not have command 'setHue' in ${dw.supportedCommands}"; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    logInfo "Setting hue ${hue} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    Integer hueScaled = Math.round(hue * 2.54)
+    Integer transitionTime = 1
+    hueScaled = hueScaled < 0 ? 0 : hueScaled > 254 ? 254 : hueScaled
+    String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled as int, 1))
+    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(DataType.UINT8, 0, hueHex))
+    cmdFields.add(matter.cmdField(DataType.UINT8,  1, "00"))               // Direction 00 = Shortest
+    cmdFields.add(matter.cmdField(DataType.UINT16, 2, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
+    String cmd = matter.invoke(deviceNumber, 0x0300, 0x00, cmdFields)  // 0x0300 = Color Control Cluster, 0x00 = MoveToHue
+    sendToDevice(cmd)
+}
+
+void componentSetSaturation(DeviceWrapper dw, BigDecimal saturation) {
+    if (!dw.hasCommand('setSaturation')) { logError "componentSetSaturation(${dw}) driver '${dw.typeName}' does not have command 'setSaturation' in ${dw.supportedCommands}"; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    logInfo "Setting saturation ${saturation} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    Integer saturationScaled = Math.round(saturation * 2.54)
+    Integer transitionTime = 1
+    saturationScaled = saturationScaled < 0 ? 0 : saturationScaled > 254 ? 254 : saturationScaled
+    String saturationHex = byteReverseParameters(HexUtils.integerToHexString(saturationScaled as int, 1))
+    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(DataType.UINT8, 0, saturationHex))
+    cmdFields.add(matter.cmdField(DataType.UINT16, 1, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
+    String cmd = matter.invoke(deviceNumber, 0x0300, 0x03, cmdFields)  // 0x0300 = Color Control Cluster, 0x03 = MoveToSaturation
+    sendToDevice(cmd)
+}
+
+void componentSetColor(DeviceWrapper dw, Map colormap) {
+    if (!dw.hasCommand('setColor')) { logError "componentSetColor(${dw}) driver '${dw.typeName}' does not have command 'setColor' in ${dw.supportedCommands}"; return }
+    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    logInfo "Setting color hue ${colormap.hue} saturation ${colormap.saturation} level ${colormap.level} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    Integer hueScaled = Math.round(colormap.hue * 2.54)
+    Integer saturationScaled = Math.round(colormap.saturation * 2.54)
+    Integer levelScaled = Math.round(colormap.level * 2.54)
+    Integer transitionTime = 1
+    hueScaled = hueScaled < 0 ? 0 : hueScaled > 254 ? 254 : hueScaled
+    saturationScaled = saturationScaled < 0 ? 0 : saturationScaled > 254 ? 254 : saturationScaled
+    levelScaled = levelScaled < 0 ? 0 : levelScaled > 254 ? 254 : levelScaled
+    String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled as int, 1))
+    String saturationHex = byteReverseParameters(HexUtils.integerToHexString(saturationScaled as int, 1))
+    String levelHex = byteReverseParameters(HexUtils.integerToHexString(levelScaled as int, 1))
+    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(DataType.UINT8, 0, hueHex))
+    cmdFields.add(matter.cmdField(DataType.UINT8, 1, saturationHex))
+    cmdFields.add(matter.cmdField(DataType.UINT16, 2, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
+    String cmd = matter.invoke(deviceNumber, 0x0300, 0x06, cmdFields)  // 0x0300 = Color Control Cluster, 0x06 = MoveToHueAndSaturation ;0x07 = MoveToColor
+    sendToDevice(cmd)
+}
+
+void componentSetEffect(DeviceWrapper dw, BigDecimal effect) {
+    String id = dw.getDataValue('id')
+    logWarn "componentSetEffect(${dw}) id=${id} (TODO: not implemented!)"
+}
+
+void componentSetNextEffect(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    logWarn "componentSetNextEffect(${dw}) id=${id} (TODO: not implemented!)"
+}
+
+void componentSetPreviousEffect(DeviceWrapper dw) {
+    String id = dw.getDataValue('id')
+    logWarn "componentSetPreviousEffect(${dw}) id=${id} (TODO: not implemented!)"
 }
 
 // Color Names
@@ -1832,6 +1961,7 @@ String getGenericTempName(temp){
  * @param kelvin color temperature in Kelvin
  * @return mired value
  */
+ @CompileStatic
 private static Integer ctToMired(final int kelvin) {
     return (1000000 / kelvin).toInteger()
 }
@@ -1842,27 +1972,8 @@ private static Integer ctToMired(final int kelvin) {
  * @return color temperature in Kelvin
  */
 private int miredHexToCt(final String mired) {
-    return (1000000 / hexStrToUnsignedInt(mired)) as int
-}
-
-// prestage level : https://community.hubitat.com/t/sengled-element-color-plus-driver/21811/2
-
-// Component command to set level
-void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal durationlPar=0) {
-    if (!dw.hasCommand('setLevel')) { logError "componentSetLevel(${dw}) driver '${dw.typeName}' does not have command 'setLevel' in ${dw.supportedCommands}" ; return }
-    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    int level = levelPar as int
-    int duration = durationPar ?: 0 as int
-    if (level < 0) { level = 0 }
-    if (level > 100) { level = 100 }
-    logInfo "Setting level ${level} durtion ${duration} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
-    Integer levelHex = Math.round(level * 2.54)
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(0x04, 0x00, HexUtils.integerToHexString(levelHex, 1)))
-    cmdFields.add(matter.cmdField(0x05, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(duration, 2))))
-    cmd = matter.invoke(deviceNumber, 0x0008, 0x04, cmdFields)  // 0x0008 = Level Control Cluster, 0x04 = MoveToLevelWithOnOff
-    def stock = matter.setLevel(level, duration)                             //    {152400 0C2501 0A0018}'
-    sendToDevice(cmd)
+    Integer miredInt = hexStrToUnsignedInt(mired)
+    return miredInt > 0 ? (1000000 / miredInt) as int : 0
 }
 
 // Component command to set position
@@ -1927,24 +2038,33 @@ void componentSetCoolingSetpoint(DeviceWrapper dw, BigDecimal temperature) {
 
 void componentLock(DeviceWrapper dw) {
     String id = dw.getDataValue('id')
-    //logWarn "componentLock(${dw}) id=${id} (TODO: not implemented!)"
+    logWarn "componentLock(${dw}) id=${id} TODO: not implemented!<br>Use virtual switch to control the lock via Apple Home..."
+    return
+
     if (!dw.hasCommand('lock')) { logError "componentLock(${dw}) driver '${dw.typeName}' does not have command 'lock' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "sending Lock command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentLock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
-    String cmd = matter.invoke(deviceNumber, 0x0101, 0x01) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
+    List<Map<String, String>> cmdFields = []
+    cmdFields.add(matter.cmdField(0x12, 0x00, "0000"))
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x00, cmdFields) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
     logDebug "componentLock(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
 
 void componentUnlock(DeviceWrapper dw) {
     String id = dw.getDataValue('id')
-    //logWarn "componentUnlock(${dw}) id=${id} (TODO: not implemented!)"
+    logWarn "componentLock(${dw}) id=${id} TODO: not implemented!<br>Use virtual switch to control the lock via Apple Home..."
+    return
+
     if (!dw.hasCommand('unlock')) { logError "componentUnlock(${dw}) driver '${dw.typeName}' does not have command 'unlock' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "sending Unlock command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentUnlock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
-    String cmd = matter.invoke(deviceNumber, 0x0101, 0x00) // 0x0101 = DoorLock Cluster, 0x01 = UnlockDoor
+    List<Map<String, String>> cmdFields = []
+    Integer duration = 1
+    cmdFields.add(matter.cmdField(0x05, 0x01, zigbee.swapOctets(HexUtils.integerToHexString(duration, 2))))
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x07, cmdFields) // 0x0101 = DoorLock Cluster, 0x01 = UnlockDoor; 04 - GetLockRecord 08-clear all PIN codes; Clear PIN Code 
     logDebug "componentUnlock(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
@@ -2210,11 +2330,11 @@ String getModel() {
 void sendInfoEvent(info = null, descriptionText = null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
-        sendEvent(name: 'Status', value: 'clear', descriptionText: 'last info messages auto cleared', isDigital: true)
+        sendEvent(name: 'Status', value: 'clear', descriptionText: 'last info messages auto cleared', type: 'digital')
     }
     else {
         logInfo "${info}"
-        sendEvent(name: 'Status', value: info, descriptionText:descriptionText ?: '', isDigital: true)
+        sendEvent(name: 'Status', value: info, descriptionText:descriptionText ?: '',  type: 'digital')
         runIn(INFO_AUTO_CLEAR_PERIOD, 'clearInfoEvent')            // automatically clear the Info attribute after 1 minute
     }
 }
@@ -2251,30 +2371,33 @@ void setHealthStatusOnline() {
     }
 }
 
+// a periodic cron job, increasing the checkCtr3 each time called.
+// checkCtr3 is cleared when some event is received from the device.
 void deviceHealthCheck() {
     checkDriverVersion()
     if (state.health == null) { state.health = [:] }
     Integer ctr = state.health['checkCtr3'] ?: 0
-    logDebug "deviceHealthCheck: checkCtr3=${ctr}"
+    String healthStatus = device.currentValue('healthStatus') ?: 'unknown'
+    logDebug "deviceHealthCheck: healthStstus = ${healthStatus} checkCtr3=${ctr}"
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
-        if ((device.currentValue('healthStatus') ?: 'unknown') != 'offline') {
-            state.health['offlineCtr'] = (state.health['offlineCtr'] ?: 0) + 1
+        state.health['offlineCtr'] = (state.health['offlineCtr'] ?: 0) + 1      // increase the offline counter even if the device is already not present - changed 02/1/2024
+        if (healthStatus != 'offline') {
             logWarn 'not present!'
             sendHealthStatusEvent('offline')
         }
     }
     else {
-        logDebug "deviceHealthCheck: online (notPresentCounter=${ctr})"
+        logDebug "deviceHealthCheck: ${healthStatus} (checkCtr3=${ctr}) offlineCtr=${state.health['offlineCtr']}"
     }
     if (((settings.healthCheckMethod as Integer) ?: 0) == 2) { //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
-        ping()
+        ping()          // TODO - ping() results in initialize() call if the device is switched off !
     }
     state.health['checkCtr3'] = ctr + 1
 }
 
 void sendHealthStatusEvent(String value) {
-    String descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} healthStatus changed to ${value}"
-    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true)
+    String descriptionText = "${device.displayName} healthStatus changed to ${value}"
+    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true,  type: 'digital')
     if (value == 'online') {
         logInfo "${descriptionText}"
     }
@@ -2317,15 +2440,21 @@ void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
     runIn(delay, 'deviceCommandTimeout')
 }
 
+// scheduled job to check if the device responded to the last command
+// increases the checkCtr3 each time called.
 void deviceCommandTimeout() {
-    logWarn 'no response received (sleepy device or offline?)'
+    checkDriverVersion()
+    if (state.health == null) { state.health = [:] }
+    logWarn "no response received (sleepy device or offline?) checkCtr3 = ${state.health['checkCtr3']} offlineCtr = ${state.health['offlineCtr']} "
     if (state.states['isPing'] == true) {
         sendRttEvent('timeout')
         state.states['isPing'] = false
         if (state.stats != null) { state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1 } else { state.stats = [:] }
     } else {
-        sendInfoEvent('timeout!', 'no response received on the last matter command!')
+        sendInfoEvent('timeout!', "no response received on the last matter command! (checkCtr3 = ${state.health['checkCtr3']} offlineCtr = ${state.health['offlineCtr']})")
     }
+    // added 02/11/2024 - deviceHealthCheck() will increase the check3Ctr and will send the healthStatus event if the device is offline
+    deviceHealthCheck()
 }
 
 void sendRttEvent(String value=null) {
@@ -2335,12 +2464,12 @@ void sendRttEvent(String value=null) {
     String descriptionText = "${device.displayName} Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
     if (value == null) {
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', type: 'physical')
     }
     else {
-        descriptionText = "${device.displayName} Round-trip time : ${value}"
+        descriptionText = "${device.displayName} Round-trip time : ${value} (healthStatus=<b>${device.currentValue('healthStatus')}</b> offlineCtr=${state.health['offlineCtr']} checkCtr3=${state.health['checkCtr3']})"
         logInfo "${descriptionText}"
-        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, type: 'digital')
     }
 }
 

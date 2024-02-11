@@ -695,6 +695,13 @@ Map getAttributesMapByClusterId(String cluster) {
     0x4C    : 'StepColorTemperature'
 ]
 
+@Field static final Map<Integer, String> ColorControlClusterColorMode = [
+    0x00    : 'RGB',        // CurrentHue and CurrentSaturation
+    0x01    : 'XY',         // CurrentX and CurrentY
+    0x02    : 'CT',         // ColorTemperatureMireds
+    0x03    : 'Enhanced'    // EnhancedCurrentHue, CurrentSaturation, CurrentX, CurrentY, ColorTemperatureMireds
+]
+
 // 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
 @Field static final Map<Integer, String> TemperatureMeasurementClusterAttributes = [
     0x0000  : 'MeasuredValue',
