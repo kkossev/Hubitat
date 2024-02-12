@@ -36,8 +36,14 @@
  *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
  * ver. 0.2.2  2024-02-10 kkossev  - bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process;  bugfix: CT/RGB bulbs reinitialization;
  * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
- * ver. 0.2.4  2024-02-11 kkossev  - (dev.branch) bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
+ * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
+ * ver. 0.2.5  2024-02-12 kkossev  - (dev.branch) exception processing while checking for duplicate events. 
  *
+ *                                   TODO: [====MVP====] add product_name: Temperature Sensor to the device name when creating devices
+ *                                   TODO: [====MVP====] add more info in checkSubscription(): unsubscribe() is completed Info log
+ *                                   TODO: [====MVP====] Zemismart M1 Matter Bridge parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 09, cluster: 0406, attrId: 0000, value: 0400
+ *                                   TODO: [====MVP====] parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 14, cluster: 0008, attrId: 0000, value: 04FE
+ *                                   TODO: [====MVP====] Hue Matter Bridge parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 14, cluster: 0300, attrId: 0007, value: 057201
  *                                   TODO: [====MVP====] colorName in RGB mode
  *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes :
  *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
@@ -108,8 +114,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.getExpandedColorNames
 
-String version() { '0.2.4' }
-String timeStamp() { '2023/02/11 11:58 PM' }
+String version() { '0.2.5' }
+String timeStamp() { '2023/02/12 7:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -875,7 +881,7 @@ void parseColorControl(final Map descMap) { // 0300
     switch (descMap.attrId) {
         case '0000' : // CurrentHue
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: hue = ${valueInt}"
+            //logDebug "parseColorControl: hue = ${valueInt}"
             sendMatterEvent([
                 name: 'hue',
                 value: valueInt,
@@ -884,7 +890,7 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
+            //logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'saturation',
                 value: valueInt,
@@ -893,7 +899,7 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
-            logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
+            //logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'colorTemperature',
                 value: valueCt,
@@ -910,7 +916,7 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0008' : // ColorMode
             String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
-            logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value})"
+            //logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'colorMode',
                 value: colorMode,
@@ -918,13 +924,13 @@ void parseColorControl(final Map descMap) { // 0300
             ], descMap, true)
             break
         case ['FFF8', 'FFF9', 'FFFA', 'FFFB', 'FFFC', 'FFFD', '00FE'] :
-            logTrace "parseColorControl: ${getAttributeName(descMap)} = ${descMap.value}"
+            //logTrace "parseColorControl: ${getAttributeName(descMap)} = ${descMap.value}"
             break
         default :
             Map eventMap = [:]
             String attrName = getAttributeName(descMap)
             String fingerprintName = getFingerprintName(descMap)
-            logDebug "parseColorControl: fingerprintName:${fingerprintName} attrName:${attrName}"
+            //logDebug "parseColorControl: fingerprintName:${fingerprintName} attrName:${attrName}"
             if (state[fingerprintName] == null) { state[fingerprintName] = [:] }
             String eventName = attrName[0].toLowerCase() + attrName[1..-1]  // change the attribute name first letter to lower case
             if (attrName in ColorControlClusterAttributes.values().toList()) {
@@ -1007,29 +1013,36 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
         boolean isDuplicate = false
         Object latestEvent = dw?.device?.currentState(name)
         //latestEvent.properties.each { k, v -> logWarn ("$k: $v") }
-        if (latestEvent != null) {
-            if (latestEvent.dataType in ['NUMBER', 'DOUBLE', 'FLOAT'] ) {
-                isDuplicate = Math.abs(latestEvent.doubleValue - safeToDouble(value)) < 0.00001
-            }
-            else if (latestEvent.dataType == 'STRING' || latestEvent.dataType == 'ENUM' || latestEvent.dataType == 'DATE') {
-                isDuplicate = (latestEvent.stringValue == value.toString())
-            }
-            else if (latestEvent.dataType == 'JSON_OBJECT') {
-                isDuplicate = (latestEvent.jsonValue == value.toString())   // TODO - check this
+        try {
+            if (latestEvent != null && latestEvent.value != null) {
+                if (latestEvent.dataType in ['NUMBER', 'DOUBLE', 'FLOAT'] ) {
+                    isDuplicate = Math.abs(latestEvent.doubleValue - safeToDouble(value)) < 0.00001
+                }
+                else if (latestEvent.dataType == 'STRING' || latestEvent.dataType == 'ENUM' || latestEvent.dataType == 'DATE') {
+                    isDuplicate = (latestEvent.stringValue == value.toString())
+                }
+                else if (latestEvent.dataType == 'JSON_OBJECT') {
+                    isDuplicate = (latestEvent.jsonValue == value.toString())   // TODO - check this
+                }
+                else {
+                    isDuplicate = false
+                    logWarn "sendMatterEvent: unsupported dataType:${latestEvent.dataType}"
+                }
             }
             else {
-                isDuplicate = false
-                logWarn "sendMatterEvent: unsupported dataType:${latestEvent.dataType}"
+                logWarn "sendMatterEvent: latestEvent is null or latestEvent.value is null"
             }
+        } catch (Exception e) {
+            logWarn "sendMatterEvent: error checking for duplicates: ${e}"
         }
         //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: dw:${dw} dni:${dni} name: ${name} value:${value} oldValue:${dw?.device?.currentValue(name)}"
-        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: isDuplicate=${isDuplicate} (latestEvent.dataType:${latestEvent.dataType})"
+        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: isDuplicate=${isDuplicate} (latestEvent?.dataType:${latestEvent?.dataType})"
         if (isDuplicate) {
-            logDebug "sendMatterEvent: <b>IGNORED</b> duplicate event: ${eventMap.descriptionText} (value:${value} dataType:${latestEvent.dataType})"
+            logDebug "sendMatterEvent: <b>IGNORED</b> duplicate event: ${eventMap.descriptionText} (value:${value} dataType:${latestEvent?.dataType})"
             return
         }
         else {
-            logDebug "sendMatterEvent: <b>NOT IGNORED</b> event: ${eventMap.descriptionText} (value:${value} latestEvent.value = ${latestEvent.value} dataType:${latestEvent.dataType})"
+            logDebug "sendMatterEvent: <b>NOT IGNORED</b> event: ${eventMap.descriptionText} (value:${value} latestEvent.value = ${latestEvent?.value} dataType:${latestEvent?.dataType})"
         }
     }
     else {

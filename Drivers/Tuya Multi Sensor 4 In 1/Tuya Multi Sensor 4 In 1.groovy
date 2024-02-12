@@ -68,6 +68,7 @@
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  *
+ *                                   TODO:  check : errorjava.lang.NullPointerException: Cannot invoke method latestState() on null object on line 3015 (method parse)
  *                                   TODO:   https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/926?u=kkossev
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;

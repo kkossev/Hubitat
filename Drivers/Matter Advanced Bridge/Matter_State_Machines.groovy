@@ -833,7 +833,7 @@ void discoverAllStateMachine(Map data = null) {
             state.states['isInfo'] = false
             logDebug "discoverAllStateMachine: st:${st} - THE END"
             sendInfoEvent('*** END of the Matter Bridge and Devices discovery ***')
-            sendInfoEvent('<b>Wait up to 30 more seconds for the re-subscribing process to complete...</b>')
+            sendInfoEvent('<b>Please wait for the re-subscribe process to complete...</b>')
             state['stateMachines']['discoverAllResult'] = SUCCESS
             st = 0
             break
