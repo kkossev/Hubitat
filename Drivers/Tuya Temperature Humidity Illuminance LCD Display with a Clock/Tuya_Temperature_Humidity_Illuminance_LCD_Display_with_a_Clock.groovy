@@ -41,7 +41,8 @@
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
  * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
  * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
- * ver. 1.5.0  2024-01-27 kkossev - Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
+ * ver. 1.5.0  2024-01-27 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
+ * ver. 1.5.1  2024-02-13 kkossev - bugfix: battery reporting period for non-Tuya devices.
  *
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
@@ -50,8 +51,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-def version() { '1.5.0' }
-def timeStamp() { '2024/01/27 10:21 AM' }
+def version() { '1.5.1' }
+def timeStamp() { '2024/02/13 8:00 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1027,7 +1028,7 @@ def updated() {
             logDebug "Humidity reporting already configured (${lastTxMap.humiCfg}), skipping ..."
             lastTxMap.humiCfgOK = true
         }
-        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 1440, 0x01, [:], 200)
+        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 14400, 0x01, [:], 200)
 
         cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
         cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
@@ -1303,7 +1304,7 @@ def initializeDevice() {
     if (getModelGroup() == 'OWON') {    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/e8750f6f2a34a3a6ae87f61e989a00964fb1107f/devices/owon.js
         // It seem this device have 2 version, one using the endpoint 0x01 and one other using the endpoint 0x03
         // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/5738#issuecomment-1579521543
-        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67�C if the real sensor temperature is near -20�C e.g. in a fridge.
+        // there is a firmware bug in the OWON THS317-ET which leads to a reported temperature of 327.67?C if the real sensor temperature is near -20?C e.g. in a fridge.
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 200',]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 200',]
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x03 0x01 0x0001 {${device.zigbeeId}} {}", 'delay 200',]
