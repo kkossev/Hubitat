@@ -21,11 +21,11 @@
 | Vibration Sensors         | working OK - tested          |  Aqara Vibration Sensor (as motion sensor) |
 | Bulbs - On/Off            | working OK - tested          |  Aqara LED Strip T1               |
 | Bulbs - level control     | working OK - tested          |  Aqara LED Strip T1               |
-| Bulbs - CT control        |  working OK - tested         |  Aqara LED Strip T1               |
+| Bulbs - CT control        | working OK - tested          |  Aqara LED Strip T1               |
 | Aqara LED Strip T1        | OK (partially implemented)   |  Aqara LED Strip T                |
 | Thermostats               | OK (partially implemented)   |  Aqara thermostat E1 (TRV) - TODO |
 | Aqara Cube T1 Pro         | OK (exposed as 6 x OnOff)    |  Aqara Cube T1 Pro                |
-| Aqara Door Lock           | W.I.P (decoding only)        |  Aqara U100                       |
+| Aqara Door Lock           | partially working (status only) |  Aqara U100                       |
 |:---------------------|:-------------------------:|--------------------------------------:|
 | Bulbs - color control     | TODO  (not implemented yet)  |  not implemented                  |
 | Wireless Remote Switch    | TODO  (not implemented yet)  | Aqara Double Rocker H1 - CRASHES! |
@@ -42,11 +42,10 @@
 | Smoke Detector            | NOT working (not exposed via Matter)    |   Aqara  Smart Smoke Detector     |
 |:-------------------|:--------------------------:|-------------------------------------:|
 | Aqara Leak Sensor         | Unknown                |   not tested / not implemented           |
-
 | Aqara Dimmers             | Unknown                |   not tested / not implemented           |
 | Smart Natural Gas Detector| Unknown                |   not tested / not implemented           |
 | Curtain Controllers       | Unknown                |   not tested / not implemented           |
-| Smart Pet Feeder          | Unknown                |   not tested / not implemented           |
+| Smart Pet Feeder          | Unknown                |   waiting to be tested by bobbyD :)      |
 
 
 

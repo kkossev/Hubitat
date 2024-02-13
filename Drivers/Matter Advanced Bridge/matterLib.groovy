@@ -6,7 +6,7 @@ library(
     name: 'matterLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/MatterLib.groovy',
-    version: '0.0.3',
+    version: '0.0.5',
     documentationLink: ''
 )
 /*
@@ -28,7 +28,8 @@ library(
   * ver. 0.0.1  2024-01-11 kkossev  - added WindowCovering cluster 0x0102;
   * ver. 0.0.2  2024-01-19 kkossev  - added BridgedDeviceBasicClusterAttributes cluster 0x0102;
   * ver. 0.0.3  2024-02-04 kkossev  - ThermostatCluster 0x0201 definitions; PowerSourceCluster 0x002F definitions; DoorLockCluster 0x0101 definitions;
-  * ver. 0.0.4  2024-02-06 kkossev  - (dev. branch) added Color Control Cluster 0x0300;
+  * ver. 0.0.4  2024-02-06 kkossev  - added Color Control Cluster 0x0300;
+  * ver. 0.0.5  2024-02-06 kkossev  - (dev. branch)  @CompileStatic getAttributesMapByClusterId; added illuminance and pressure cluster attribute definitions
   *
   *                                   TODO:
   *
@@ -37,8 +38,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterLibVersion = '0.0.3'
-@Field static final String matterLibStamp   = '2024/02/04 4:03 PM'
+@Field static final String matterLibVersion = '0.0.5'
+@Field static final String matterLibStamp   = '2024/02/12 12:14 PM'
 
 // no metadata section for matterLib
 
@@ -143,6 +144,7 @@ Matter cluster names = [$FaultInjection, $UnitTesting, $ElectricalMeasurement, $
     0x050D  : 'ApplicationBasic'            // information about a Content App running on a Video Player device which is represented as an endpoint
 ]
 
+@CompileStatic
 Map getAttributesMapByClusterId(String cluster) {
     /* groovylint-disable-next-line CouldBeSwitchStatement, ReturnsNullInsteadOfEmptyCollection */
     if (cluster == null) { return null }
@@ -702,12 +704,34 @@ Map getAttributesMapByClusterId(String cluster) {
     0x03    : 'Enhanced'    // EnhancedCurrentHue, CurrentSaturation, CurrentX, CurrentY, ColorTemperatureMireds
 ]
 
+// 2.2.5 Illuminance Measurement Cluster 0x0400
+@Field static final Map<Integer, String> IlluminanceMeasurementClusterAttributes = [
+    0x00    : 'MeasuredValue',
+    0x0001  : 'MinMeasuredValue',
+    0x0002  : 'MaxMeasuredValue',
+    0x0003  : 'Tolerance',
+    0x0004  : 'LightSensorType'
+]
+
 // 2.3.3. Temperature Measurement Cluster 0x0402 (1026)
 @Field static final Map<Integer, String> TemperatureMeasurementClusterAttributes = [
     0x0000  : 'MeasuredValue',
     0x0001  : 'MinMeasuredValue',
     0x0002  : 'MaxMeasuredValue',
     0x0003  : 'Tolerance'
+]
+
+// 2.4.5. Pressure Measurement Cluster 0x0403 
+@Field static final Map<Integer, String> PressureMeasurementClusterAttributes = [
+    0x0000  : 'MeasuredValue',
+    0x0001  : 'MinMeasuredValue',
+    0x0002  : 'MaxMeasuredValue',
+    0x0003  : 'Tolerance',
+    0x0010  : 'ScaledValue',
+    0x0011  : 'MinScaledValue',
+    0x0012  : 'MaxScaledValue',
+    0x0013  : 'ScaledTolerance',
+    0x0014  : 'Scale'
 ]
 
 // 2.6.4. Relative Humidity Measurement Cluster 0x0405 (1029)

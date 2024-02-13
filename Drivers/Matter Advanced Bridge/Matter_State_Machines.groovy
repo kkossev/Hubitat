@@ -6,7 +6,7 @@ library(
     name: 'matterStateMachinesLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_State_Machines.groovy',
-    version: '0.0.1',
+    version: '0.0.3',
     documentationLink: ''
 )
 /*
@@ -27,6 +27,7 @@ library(
   * ver. 0.0.0  2024-01-27 kkossev  - first published version
   * ver. 0.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
   * ver. 0.0.2  2024-02-09 kkossev  - all states are cleared at the start of the full discovery
+  * ver. 0.0.3  2024-02-12 kkossev  - (dev. branch) removed discovering the IDENTIFY cluster; read the 0xFFFB attributes for ALL clusters in the matchedClustersList
   *
   *                                   TODO:
   *
@@ -35,8 +36,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterStateMachinesLib = '0.0.2'
-@Field static final String matterStateMachinesLibStamp   = '2024/02/09 11:58 PM'
+@Field static final String matterStateMachinesLib = '0.0.3'
+@Field static final String matterStateMachinesLibStamp   = '2024/02/12 9:12 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -347,10 +348,7 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST_WAIT         = 7
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES            = 8
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT       = 9
-@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT = 10
-@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT = 11
-@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_IDENTIFY                          = 12
-@Field static final Integer DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT                     = 13
+
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS               = 14
 @Field static final Integer DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS_WAIT          = 15
 
@@ -358,9 +356,9 @@ void disoverGlobalElementsStateMachine(Map data) {
 @Field static final Integer DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE         = 21
 @Field static final Integer DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_WAIT_STATE    = 22
 @Field static final Integer DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_STATE      = 23
-@Field static final Integer DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE  = 24
+@Field static final Integer DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE = 24
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START                 = 25
-@Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE     = 26
+@Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE           = 26
 @Field static final Integer DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT                  = 27
 @Field static final Integer DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS                 = 30
 
@@ -492,50 +490,10 @@ void discoverAllStateMachine(Map data = null) {
             if (state['stateMachines']['Confirmation'] == true) {
                 logTrace "discoverAllStateMachine: st:${st} - received bridgeDescriptor Basic Info reading confirmation!"
                 logRequestedClusterAttrResult([cluster:0x28, endpoint:0])
-
-                // check if the Indentify cluster 03 is in the ServerList
-                List<String> serverList = state.bridgeDescriptor['ServerList']
-                if (serverList?.contains('03')) {
-                    state.states['isInfo'] = true
-                    state.states['cluster'] = '0003'
-                    state.tmp = null
-                    // Do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
-                    disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x0003, debug: false])
-                    stateMachinePeriod = STATE_MACHINE_PERIOD * 2
-                    retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT
-                }
-                else {
-                    logDebug "discoverAllStateMachine: st:${st} - Identify cluster 0x0003 is not in the ServerList !"
-                    st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
-                }
+                st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
             }
             else {
                 logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry})"
-                retry++
-                if (retry > STATE_MACHINE_MAX_RETRIES) {
-                    logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
-                    st = DISCOVER_ALL_STATE_ERROR
-                }
-            }
-            break
-        case DISCOVER_ALL_STATE_BRIDGE_IDENTIFY :
-        case DISCOVER_ALL_STATE_BRIDGE_IDENTIFY_WAIT :
-            if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
-                logDebug "discoverAllStateMachine: st:${st} - received Indentify cluster confirmation!"
-                logRequestedClusterAttrResult([cluster: 0x0003, endpoint: 0])
-
-                // check if the General Diagnostics cluster 0x0033 is in the ServerList
-                List<String> serverList = state.bridgeDescriptor['ServerList']
-                if (serverList?.contains('33')) {
-                    stateMachinePeriod = 100        // go quickly ....
-                    st = DISCOVER_ALL_STATE_BRIDGE_GENERAL_DIAGNOSTICS
-                }
-                else {
-                    st = DISCOVER_ALL_STATE_NEXT_STATE
-                }
-            }
-            else {
-                logTrace "discoverAllStateMachine: st:${st} - waiting for the attribute value (retry=${retry}"
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
@@ -575,16 +533,6 @@ void discoverAllStateMachine(Map data = null) {
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
-            break
-
-        // TODO (optional) - explore the Bridge Extended Info
-        case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT :
-            // TODO
-            st = DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT
-            break
-        case DISCOVER_ALL_STATE_BRIDGE_EXTENDED_INFO_ATTR_VALUES_RESULT_WAIT :
-            // TODO
-            st = DISCOVER_ALL_STATE_END
             break
 
         case DISCOVER_ALL_STATE_GET_PARTS_LIST_START :
@@ -739,20 +687,11 @@ void discoverAllStateMachine(Map data = null) {
             logTrace "discoverAllStateMachine: st:${st} DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE- ServerListCluster = ${serverListCluster} (${state[fingerprintName]['ServerList']})"
             // find all elements in the supportedMatterClusters that are in the ServerList
             List<Integer> matchedClustersList = supportedMatterClusters.findAll { serverListCluster.contains(it) }       // empty list [] if nothing found
+            logInfo "${fingerprintName} supported clusters : ${matchedClustersList}"
             Integer supportedCluster =  matchedClustersList != [] ?  matchedClustersList?.first() : 0
             if (supportedCluster != null && supportedCluster != 0) {
                 logDebug "discoverAllStateMachine: st:${st} - ${fingerprintName} <b>found supportedCluster ${supportedCluster} in matchedClustersList ${matchedClustersList}</b> from the SupportedMatterClusters ${supportedMatterClusters} in the ServerList ${serverListCluster}"
                 state[fingerprintName]['Subscribe'] = matchedClustersList
-                /*
-                if (state[fingerprintName]['Subscribe'] == null) { state[fingerprintName]['Subscribe'] = [] }
-                if (state[fingerprintName]['Subscribe'].contains(HexUtils.integerToHexString(supportedCluster, 2))) {
-                    logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} already subscribed to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
-                }
-                else {
-                    state[fingerprintName]['Subscribe'].add(HexUtils.integerToHexString(supportedCluster, 2))
-                    logInfo "discoverAllStateMachine: st:${st} - added subsubscription to cluster ${HexUtils.integerToHexString(supportedCluster, 2)} ..."
-                }
-                */
                 // convert the figerprint data to a map needed for the createChildDevice() method
                 logDebug "fingerPrintToData: fingerprintName:${fingerprintName}"
                 Map deviceData = fingerprintToData(fingerprintName)
@@ -769,14 +708,15 @@ void discoverAllStateMachine(Map data = null) {
                     // fingerPrintToData: deviceData:[id:08, fingerprintName:fingerprint08, product_name:Humidity Sensor, name:Device#08, ServerList:[1D, 03, 0405]]
                     sendInfoEvent("Created child device ${deviceData.name} (${deviceData.product_name})")
                 }
-                // now discover the supportedCluster attributes
-                state.states['isInfo'] = true
-                state.states['cluster'] = HexUtils.integerToHexString(supportedCluster, 2)
-                state.tmp = null
-                // do not call 'toBeConfirmed' and 'Confirmation' here - it is filled in in the disoverGlobalElementsStateMachine() !
-                disoverGlobalElementsStateMachine([action: START, endpoint: partEndpointInt, cluster: supportedCluster, debug: false])
-                stateMachinePeriod = STATE_MACHINE_PERIOD * 2
-                retry = 0; st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_WAIT
+                // 02/12/2024 - read the 0xFFFB attributes for ALL clusters in the matchedClustersList
+                List<Map<String, String>> attributePaths = []
+                matchedClustersList.each { cluster ->
+                    attributePaths.add(matter.attributePath(partEndpointInt, cluster, 0xFFFB))
+                }
+                sendToDevice(matter.readAttributes(attributePaths))
+                state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
+                // 02/12/2024 - go next device !
             }
             else {
                 logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} SupportedMatterClusters ${supportedClusters} are not in the ServerList ${ServerListCluster} !"
@@ -802,7 +742,6 @@ void discoverAllStateMachine(Map data = null) {
                 stateMachinePeriod = STATE_MACHINE_PERIOD * 2
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
-                    //st = DISCOVER_ALL_STATE_ERROR
                     // continue with the next device, even if there is an error
                     sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
                     state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1

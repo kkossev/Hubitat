@@ -37,24 +37,20 @@
  * ver. 0.2.2  2024-02-10 kkossev  - bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process;  bugfix: CT/RGB bulbs reinitialization;
  * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
  * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
- * ver. 0.2.5  2024-02-12 kkossev  - (dev.branch) exception processing while checking for duplicate events. 
+ * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
+ * ver. 0.2.6  2024-02-13 kkossev  - (dev.branch) added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; 
  *
- *                                   TODO: [====MVP====] add product_name: Temperature Sensor to the device name when creating devices
- *                                   TODO: [====MVP====] add more info in checkSubscription(): unsubscribe() is completed Info log
- *                                   TODO: [====MVP====] Zemismart M1 Matter Bridge parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 09, cluster: 0406, attrId: 0000, value: 0400
- *                                   TODO: [====MVP====] parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 14, cluster: 0008, attrId: 0000, value: 04FE
- *                                   TODO: [====MVP====] Hue Matter Bridge parserFunc: exception java.lang.NullPointerException: Cannot get property 'value' on null object Failed to parse description: read attr - endpoint: 14, cluster: 0300, attrId: 0007, value: 057201
- *                                   TODO: [====MVP====] colorName in RGB mode
- *                                   TODO: [====MVP====] process the rest of cluster 0300 attributes :
- *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
+ *                                   TODO: [====MVP====] 
  *                                   TODO: [====MVP====] RGBW bulbs to be assigned 'Generic Component RGBW' driver;
- *                                   TODO: [====MVP====] during the discovery, read 0xFFFB attribute of the supported clusters for each child device ? (or just subscribe for all attributes of the supported clusters)?
- *                                   TODO: [====MVP====] when subscribing to the attributes, check if the attribute is in the 0300_FFFB=[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD]
- *                                   TODO: [====MVP====] Publish version 0.2.5  
- *
- *                                   TODO: [====MVP====] ERROR during the Matter Bridge and Devices discovery - add more information in the Info log !
- *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
+ *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
+ *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
+ *                                   TODO: [====MVP====] add Data.Refresh for each child device
+ *                                   TODO: [====MVP====] Publish version 0.3.0
+ *
+ *                                   TODO: [====MVP====] create a short MVP list and publish it on the top post
+ *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
+ *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
  *                                   TODO: [====MVP====] copy the Matter specificatgion PDFs on Google Drive;
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
@@ -63,13 +59,10 @@
  *                                   TODO: [====MVP====] add heathStatus to the child devices
  *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
- *                                   TODO: [====MVP====] add Data.Refresh for each child device
- *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
- *                                   TODO: [====MVP====] Publish version 0.3.0
+ *                                   TODO: [====MVP====] Publish version 0.3.1
  *
  *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
@@ -87,6 +80,10 @@
  *                                   TODO: [REFACTORING] add a temporary state to store the attributes list of the currently interviewed cluster
  *                                   TODO: [REFACTORING] Convert SupportedMatterClusters to Map that include the known attributes to be subscribed to
  *
+ *                                   TODO: [ENHANCEMENT] add more info in checkSubscription(): unsubscribe() is completed Info log
+ *                                   TODO: [ENHANCEMENT] check if the child device has attribute $name before sending an event to it !
+ *                                   TODO: [ENHANCEMENT] add product_name: Temperature Sensor to the device name when creating devices
+ *                                   TODO: [ENHANCEMENT] ERROR during the Matter Bridge and Devices discovery - add more information in the Info log !
  *                                   TODO: [ENHANCEMENT] driverVersion to be stored in child devices states
  *                                   TODO: [ENHANCEMENT] check water sensors
  *                                   TODO: [ENHANCEMENT] change attributes and values list Info log to be shown in Debug mode only
@@ -114,8 +111,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.getExpandedColorNames
 
-String version() { '0.2.5' }
-String timeStamp() { '2023/02/12 7:57 AM' }
+String version() { '0.2.6' }
+String timeStamp() { '2023/02/13 5:01 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -887,6 +884,7 @@ void parseColorControl(final Map descMap) { // 0300
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} hue is ${valueInt}"
             ], descMap, true)
+            sendColorNameEvent(descMap, hue=valueInt, saturation=null)   // added 02/13/2024 
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
@@ -896,6 +894,7 @@ void parseColorControl(final Map descMap) { // 0300
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} saturation is ${valueInt}"
             ], descMap, true)
+            sendColorNameEvent(descMap, hue=null, saturation=valueInt)   // added 02/13/2024 
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
@@ -907,7 +906,7 @@ void parseColorControl(final Map descMap) { // 0300
                 unit: '°K'
             ], descMap, true)
             //String colorName = getGenericTempName(valueCt)
-            String colorName = convertTemperatureToGenericColorName(valueCt)    //  (Since 2.3.2)
+            String colorName = convertTemperatureToGenericColorName(valueCt)    //  (Since 2.3.2) - for CT bulbs only
             sendMatterEvent([
                 name: 'colorName',
                 value: colorName,
@@ -916,7 +915,15 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0008' : // ColorMode
             String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
-            //logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value})"
+            logWarn "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value}) - send <b>colorName</b> not implemented yet!"
+            if (colorMode == 'CT') {
+                // TODO - get the child device dw to obtain the colorTemperature value
+                // TODO - send "colorName" event with the color name  // convertTemperatureToGenericColorName(colorTemperature)
+            }
+            else if (colorMode == 'RGB') {
+                // TODO - get the child device dw to obtain the hue and saturation values
+                // TODO - send "colorName" event with the color name (based on hue)
+            }
             sendMatterEvent([
                 name: 'colorMode',
                 value: colorMode,
@@ -946,6 +953,24 @@ void parseColorControl(final Map descMap) { // 0300
             }
             break
     }
+}
+
+ChildDeviceWrapper getDw(descMap) {
+    String id = descMap?.endpoint ?: '00'
+    return getChildDevice("${device.id}-${id}")
+}
+
+void sendColorNameEvent(final Map descMap, final Integer huePar=null, final Integer saturationPar=null) {
+    Integer hue = huePar == null ? safeToInt(getDw(descMap)?.currentValue('hue')) : huePar
+    Integer saturation = saturationPar == null ? safeToInt(getDw(descMap)?.currentValue('saturation')) : saturationPar
+    logWarn "sendColorNameEvent -> huePar:${huePar}  saturationPar=${saturationPar} hue:${hue} saturation:${saturation}"
+    if (hue == null || saturation == null) { logWarn "sendColorNameEvent: hue:${hue} <b>or</b> saturation:${saturation} is null"; return }
+    String colorName = convertHueToGenericColorName(hue, saturation)    //  (Since 2.3.2) - for RGB bulbs only
+    sendMatterEvent([
+        name: 'colorName',
+        value: colorName,
+        descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${colorName}"
+    ], descMap, true)
 }
 
 void parseThermostat(final Map descMap) {
@@ -1328,20 +1353,21 @@ void a5SubscribeKnownClustersAttributes() {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000B'))
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
                     }
-                    else if (entry == '0300') {
+                    else if (entry == '0300') { 
                         List<String> attributeList = fingerprintMap['0300_FFFB']
                         List<Integer> attributeListInt = attributeList.collect { it -> safeHexToInt(it) }
-                        // TODO - check whether 0000 is in 0300_FFFB list  // 300_FFFB=[00, 01, 02, 03, 04, 07, 08, 0F, 10, 4001, 400A, 400B, 400C, 400D, 4010, FFF8, FFF9, FFFB, FFFC, FFFD],
-                        if (0x00 in attributeListInt || 0x01 in attributeListInt) {
+                        if (0x00 in attributeListInt) {
                             subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
                         }
-                        else {
-                            logWarn "a5SubscribeKnownClustersAttributes: attributeListInt ${attributeListInt} does not contain 0x00 !"
+                        if (0x01 in attributeListInt) {
+                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0001'))
                         }
-                        //subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
-                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
+                        if (0x07 in attributeListInt) {
+                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
+                        }
                     }
                     else {
+                        // TODO - do not assume that the 0000 attribute is always present in the cluster !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
                     }
                     knownClusterFound = true
@@ -1379,8 +1405,7 @@ void configure() {
 void updated() {
     log.info 'updated...'
     checkDriverVersion()
-    log.warn "debug logging is: ${logEnable == true}"
-    log.warn "description logging is: ${txtEnable == true}"
+    logInfo "debug logging is: ${logEnable == true} description logging is: ${txtEnable == true}"
     if (settings.logEnable)   { runIn(86400, logsOff) }   // 24 hours
     if (settings.traceEnable) { logTrace settings; runIn(20000, traceOff) }   // 1800 = 30 minutes
 
@@ -1468,7 +1493,7 @@ void initialize() {
     state.lastTx['subscribeTime'] = now()
     state.states['isUnsubscribe'] = false
     state.states['isSubscribe'] = true  // should be set to false in the parse() method
-    sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
+    sendEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
     scheduleCommandTimeoutCheck(delay = 30)
     subscribe()
     updated()   // added 02/03/2024
@@ -1911,6 +1936,14 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
     if (!dw.hasCommand('setColorTemperature')) { logError "componentSetColorTemperature(${dw}) driver '${dw.typeName}' does not have command 'setColorTemperature' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    if (dw.currentValue('switch') == 'off') {
+        logDebug "componentSetColorTemperature(): device is off, turning it on"
+        componentOn(dw)
+    }
+    if (dw.currentValue('colorMode') != 'CT') {
+        logDebug "componentSetColor(): setting color mode to CT"
+        sendMatterEvent([name: 'colorMode', value: 'CT', isStateChange: true, displayed: false], dw, true)
+    }    
     String colorTemperatureMireds = byteReverseParameters(HexUtils.integerToHexString(ctToMired(colorTemperature as int), 2))
     String transitionTime = zigbee.swapOctets(HexUtils.integerToHexString((duration ?: 0) as int, 2))
     List<Map<String, String>> cmdFields = []
@@ -1925,57 +1958,55 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
 
 void componentSetHue(DeviceWrapper dw, BigDecimal hue) {
     if (!dw.hasCommand('setHue')) { logError "componentSetHue(${dw}) driver '${dw.typeName}' does not have command 'setHue' in ${dw.supportedCommands}"; return }
-    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "Setting hue ${hue} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
-    Integer hueScaled = Math.round(hue * 2.54)
-    Integer transitionTime = 1
-    hueScaled = hueScaled < 0 ? 0 : hueScaled > 254 ? 254 : hueScaled
-    String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled as int, 1))
-    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(DataType.UINT8, 0, hueHex))
-    cmdFields.add(matter.cmdField(DataType.UINT8,  1, "00"))               // Direction 00 = Shortest
-    cmdFields.add(matter.cmdField(DataType.UINT16, 2, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
-    String cmd = matter.invoke(deviceNumber, 0x0300, 0x00, cmdFields)  // 0x0300 = Color Control Cluster, 0x00 = MoveToHue
+    Integer deviceNumber = 
+    logDebug "Setting hue ${hue} for device ${dw.getDataValue('id')} ${dw}"
+    Integer hueScaled = Math.min(Math.max(Math.round(hue * 2.54), 0), 254)
+    String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled, 1))
+    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(1, 2))
+    List<Map<String, String>> cmdFields = [
+        matter.cmdField(DataType.UINT8, 0, hueHex),
+        matter.cmdField(DataType.UINT8, 1, "00"), // Direction 00 = Shortest
+        matter.cmdField(DataType.UINT16, 2, transitionTimeHex) // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
+    ]
+    String cmd = matter.invoke(HexUtils.hexStringToInt(dw.getDataValue('id')), 0x0300, 0x00, cmdFields) // 0x0300 = Color Control Cluster, 0x00 = MoveToHue
     sendToDevice(cmd)
 }
 
 void componentSetSaturation(DeviceWrapper dw, BigDecimal saturation) {
     if (!dw.hasCommand('setSaturation')) { logError "componentSetSaturation(${dw}) driver '${dw.typeName}' does not have command 'setSaturation' in ${dw.supportedCommands}"; return }
-    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "Setting saturation ${saturation} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
-    Integer saturationScaled = Math.round(saturation * 2.54)
-    Integer transitionTime = 1
-    saturationScaled = saturationScaled < 0 ? 0 : saturationScaled > 254 ? 254 : saturationScaled
+    Integer saturationScaled = Math.min(Math.max(Math.round(saturation * 2.54), 0), 254)
     String saturationHex = byteReverseParameters(HexUtils.integerToHexString(saturationScaled as int, 1))
-    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(DataType.UINT8, 0, saturationHex))
-    cmdFields.add(matter.cmdField(DataType.UINT16, 1, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
-    String cmd = matter.invoke(deviceNumber, 0x0300, 0x03, cmdFields)  // 0x0300 = Color Control Cluster, 0x03 = MoveToSaturation
+    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(1, 2))
+    List<Map<String, String>> cmdFields = [
+        matter.cmdField(DataType.UINT8, 0, saturationHex),
+        matter.cmdField(DataType.UINT16, 1, transitionTimeHex)
+    ]
+    String cmd = matter.invoke(HexUtils.hexStringToInt(dw.getDataValue('id')), 0x0300, 0x03, cmdFields)
     sendToDevice(cmd)
 }
 
 void componentSetColor(DeviceWrapper dw, Map colormap) {
     if (!dw.hasCommand('setColor')) { logError "componentSetColor(${dw}) driver '${dw.typeName}' does not have command 'setColor' in ${dw.supportedCommands}"; return }
-    Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "Setting color hue ${colormap.hue} saturation ${colormap.saturation} level ${colormap.level} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
-    Integer hueScaled = Math.round(colormap.hue * 2.54)
-    Integer saturationScaled = Math.round(colormap.saturation * 2.54)
-    Integer levelScaled = Math.round(colormap.level * 2.54)
+    logDebug "Setting color hue ${colormap.hue} saturation ${colormap.saturation} level ${colormap.level} for device# ${dw.getDataValue('id')} ${dw}"
+    if (dw.currentValue('switch') == 'off') {
+        logDebug "componentSetColor(): device is off, turning it on"
+        componentOn(dw)
+    }
+    if (dw.currentValue('colorMode') != 'RGB') {
+        logDebug "componentSetColor(): setting color mode to RGB"
+        sendMatterEvent([name: 'colorMode', value: 'RGB', isStateChange: true, displayed: false], dw, true)
+    }
+    Integer hueScaled = Math.round(Math.max(0, Math.min((double)(colormap.hue * 2.54), 254.0)))
+    Integer saturationScaled = Math.round(Math.max(0, Math.min((colormap.saturation * 2.54).toInteger(), 254)))
+    Integer levelScaled = Math.round(Math.max(0, Math.min((colormap.level * 2.54).toInteger(), 254)))
     Integer transitionTime = 1
-    hueScaled = hueScaled < 0 ? 0 : hueScaled > 254 ? 254 : hueScaled
-    saturationScaled = saturationScaled < 0 ? 0 : saturationScaled > 254 ? 254 : saturationScaled
-    levelScaled = levelScaled < 0 ? 0 : levelScaled > 254 ? 254 : levelScaled
-    String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled as int, 1))
-    String saturationHex = byteReverseParameters(HexUtils.integerToHexString(saturationScaled as int, 1))
-    String levelHex = byteReverseParameters(HexUtils.integerToHexString(levelScaled as int, 1))
-    String transitionTimeHex = zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2))
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(DataType.UINT8, 0, hueHex))
-    cmdFields.add(matter.cmdField(DataType.UINT8, 1, saturationHex))
-    cmdFields.add(matter.cmdField(DataType.UINT16, 2, transitionTimeHex))  // TransitionTime in 0.1 seconds, uint16 0-65534, byte swapped
-    String cmd = matter.invoke(deviceNumber, 0x0300, 0x06, cmdFields)  // 0x0300 = Color Control Cluster, 0x06 = MoveToHueAndSaturation ;0x07 = MoveToColor
+    logDebug    "Setting color hue ${hueScaled} saturation ${saturationScaled} level ${levelScaled} for device# ${dw.getDataValue('id')} ${dw}"
+    List<Map<String, String>> cmdFields = [
+        matter.cmdField(DataType.UINT8, 0, byteReverseParameters(HexUtils.integerToHexString(hueScaled as int, 1))),
+        matter.cmdField(DataType.UINT8, 1, byteReverseParameters(HexUtils.integerToHexString(saturationScaled as int, 1))),
+        matter.cmdField(DataType.UINT16, 2, zigbee.swapOctets(HexUtils.integerToHexString(transitionTime as int, 2)))
+    ]
+    String cmd = matter.invoke(HexUtils.hexStringToInt(dw.getDataValue('id')), 0x0300, 0x06, cmdFields)  // 0x0300 = Color Control Cluster, 0x06 = MoveToHueAndSaturation ;0x07 = MoveToColor
     sendToDevice(cmd)
 }
 
@@ -1993,27 +2024,6 @@ void componentSetPreviousEffect(DeviceWrapper dw) {
     String id = dw.getDataValue('id')
     logWarn "componentSetPreviousEffect(${dw}) id=${id} (TODO: not implemented!)"
 }
-/*
-// Color Names
-String getGenericTempName(temp){
-    if (!temp) return UNKNOWN
-    String genericName = UNKNOWN
-    Integer value = temp.toInteger()
-    if (value <= 2000) genericName = "Sodium"
-    else if (value <= 2100) genericName = "Starlight"
-    else if (value < 2400) genericName = "Sunrise"
-    else if (value < 2800) genericName = "Incandescent"
-    else if (value < 3300) genericName = "Soft White"
-    else if (value < 3500) genericName = "Warm White"
-    else if (value < 4150) genericName = "Moonlight"
-    else if (value <= 5000) genericName = "Horizon"
-    else if (value < 5500) genericName = "Daylight"
-    else if (value < 6000) genericName = "Electronic"
-    else if (value <= 6500) genericName = "Skylight"
-    else if (value < 20000) genericName = "Polar"
-    return genericName
-}
-*/
 
 /**
  * Convert a color temperature in Kelvin to a mired value
@@ -2574,9 +2584,9 @@ void initializeVars(boolean fullInit = false) {
         logInfo "DEVICE_TYPE = ${DEVICE_TYPE}"
         state.deviceType = DEVICE_TYPE
         sendInfoEvent('Initialized (fullInit = true)', 'full initialization - loaded all defaults!')
-        sendEvent([ name: 'endpointsCount', value: 0 ])
-        sendEvent([ name: 'deviceCount', value: 0 ])
-        sendEvent([ name: 'initializeCtr', value: 0 ])
+        sendEvent([ name: 'endpointsCount', value: 0, type: 'digital'])
+        sendEvent([ name: 'deviceCount', value: 0, type: 'digital'])
+        sendEvent([ name: 'initializeCtr', value: 0, type: 'digital'])
     }
 
     if (state.stats == null)  { state.stats  = [:] }

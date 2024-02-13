@@ -42,6 +42,7 @@
  * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
  * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
  * ver. 1.5.0  2024-01-27 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
+ * ver. 1.5.1  2024-02-13 kkossev - bugfix: battery reporting period for non-Tuya devices.
  *
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
@@ -50,8 +51,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-def version() { '1.5.0' }
-def timeStamp() { '2024/01/27 10:21 AM' }
+def version() { '1.5.1' }
+def timeStamp() { '2024/02/13 8:00 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1027,7 +1028,7 @@ def updated() {
             logDebug "Humidity reporting already configured (${lastTxMap.humiCfg}), skipping ..."
             lastTxMap.humiCfgOK = true
         }
-        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 1440, 0x01, [:], 200)
+        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8, 10, 14400, 0x01, [:], 200)
 
         cmds += zigbee.reportingConfiguration(0x0402, 0x0000, [:], 250)
         cmds += zigbee.reportingConfiguration(0x0405, 0x0000, [:], 250)
