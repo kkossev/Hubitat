@@ -38,20 +38,19 @@
  * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
  * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
  * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
- * ver. 0.2.6  2024-02-13 kkossev  - (dev.branch) added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; 
+ * ver. 0.2.6  2024-02-13 kkossev  - (dev.branch) added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver;
  *
- *                                   TODO: [====MVP====] 
- *                                   TODO: [====MVP====] RGBW bulbs to be assigned 'Generic Component RGBW' driver;
+ *                                   TODO: [====MVP====] Publish version 0.3.0
+ *
  *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
+ *                                   TODO: [====MVP====] create a short MVP list and publish it on the top post
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device
- *                                   TODO: [====MVP====] Publish version 0.3.0
+ *                                   TODO: [====MVP====] Publish version 0.3.1
  *
- *                                   TODO: [====MVP====] create a short MVP list and publish it on the top post
  *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
- *                                   TODO: [====MVP====] copy the Matter specificatgion PDFs on Google Drive;
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
@@ -62,7 +61,7 @@
  *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
- *                                   TODO: [====MVP====] Publish version 0.3.1
+ *                                   TODO: [====MVP====] Publish version 0.3.2
  *
  *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
@@ -105,14 +104,13 @@
  *                                   TODO: [ RESEARCH  ] why are the child devices  automatically disabled when shared via Hub Mesh ?
  *                                   TODO: - template -  [====MVP====] [REFACTORING] [RESEARCH] [ENHANCEMENT]
  */
-
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 //#include matterTools.getExpandedColorNames
 
-String version() { '0.2.6' }
-String timeStamp() { '2023/02/13 5:01 PM' }
+String version() { '0.3.0' }
+String timeStamp() { '2023/02/13 11:57 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -722,7 +720,7 @@ void parseLevelControlCluster(final Map descMap) {
                 if (logEnable) { logInfo "parseLevelControlCluster: ${attrName} = ${descMap.value}" }
             }
             else {
-                logWarn "parseLevelControlCluster: unsupported LevelControl: ${attrName} = ${descMap.value}"
+                logWarn "parseLevelControlCluster: unsupported LevelControl: attribute ${descMap.attrId} ${attrName} = ${descMap.value}"
             }
             if (eventMap != [:]) {
                 eventMap.type = 'physical'; eventMap.isStateChange = true
@@ -884,7 +882,7 @@ void parseColorControl(final Map descMap) { // 0300
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} hue is ${valueInt}"
             ], descMap, true)
-            sendColorNameEvent(descMap, hue=valueInt, saturation=null)   // added 02/13/2024 
+            sendColorNameEvent(descMap, hue=valueInt, saturation=null)   // added 02/13/2024
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
@@ -894,7 +892,7 @@ void parseColorControl(final Map descMap) { // 0300
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} saturation is ${valueInt}"
             ], descMap, true)
-            sendColorNameEvent(descMap, hue=null, saturation=valueInt)   // added 02/13/2024 
+            sendColorNameEvent(descMap, hue=null, saturation=valueInt)   // added 02/13/2024
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
@@ -963,7 +961,7 @@ ChildDeviceWrapper getDw(descMap) {
 void sendColorNameEvent(final Map descMap, final Integer huePar=null, final Integer saturationPar=null) {
     Integer hue = huePar == null ? safeToInt(getDw(descMap)?.currentValue('hue')) : huePar
     Integer saturation = saturationPar == null ? safeToInt(getDw(descMap)?.currentValue('saturation')) : saturationPar
-    logWarn "sendColorNameEvent -> huePar:${huePar}  saturationPar=${saturationPar} hue:${hue} saturation:${saturation}"
+    logTrace "sendColorNameEvent -> huePar:${huePar}  saturationPar=${saturationPar} hue:${hue} saturation:${saturation}"
     if (hue == null || saturation == null) { logWarn "sendColorNameEvent: hue:${hue} <b>or</b> saturation:${saturation} is null"; return }
     String colorName = convertHueToGenericColorName(hue, saturation)    //  (Since 2.3.2) - for RGB bulbs only
     sendMatterEvent([
@@ -1039,39 +1037,42 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
         Object latestEvent = dw?.device?.currentState(name)
         //latestEvent.properties.each { k, v -> logWarn ("$k: $v") }
         try {
-            if (latestEvent != null && latestEvent.value != null) {
-                if (latestEvent.dataType in ['NUMBER', 'DOUBLE', 'FLOAT'] ) {
-                    isDuplicate = Math.abs(latestEvent.doubleValue - safeToDouble(value)) < 0.00001
-                }
-                else if (latestEvent.dataType == 'STRING' || latestEvent.dataType == 'ENUM' || latestEvent.dataType == 'DATE') {
-                    isDuplicate = (latestEvent.stringValue == value.toString())
-                }
-                else if (latestEvent.dataType == 'JSON_OBJECT') {
-                    isDuplicate = (latestEvent.jsonValue == value.toString())   // TODO - check this
+            if (latestEvent != null) {
+                if (latestEvent.value != null) {
+                    if (latestEvent.dataType in ['NUMBER', 'DOUBLE', 'FLOAT'] ) {
+                        isDuplicate = Math.abs(latestEvent.doubleValue - safeToDouble(value)) < 0.00001
+                    }
+                    else if (latestEvent.dataType == 'STRING' || latestEvent.dataType == 'ENUM' || latestEvent.dataType == 'DATE') {
+                        isDuplicate = (latestEvent.stringValue == value.toString())
+                    }
+                    else if (latestEvent.dataType == 'JSON_OBJECT') {
+                        isDuplicate = (latestEvent.jsonValue == value.toString())   // TODO - check this
+                    }
+                    else {
+                        isDuplicate = false
+                        logWarn "sendMatterEvent: unsupported dataType:${latestEvent.dataType}"
+                    }
                 }
                 else {
-                    isDuplicate = false
-                    logWarn "sendMatterEvent: unsupported dataType:${latestEvent.dataType}"
+                    logTrace "sendMatterEvent: latestEvent.value is null"
                 }
             }
             else {
-                logWarn "sendMatterEvent: latestEvent is null or latestEvent.value is null"
+                logTrace "sendMatterEvent: latestEvent is null"
             }
         } catch (Exception e) {
             logWarn "sendMatterEvent: error checking for duplicates: ${e}"
         }
-        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: dw:${dw} dni:${dni} name: ${name} value:${value} oldValue:${dw?.device?.currentValue(name)}"
-        //logWarn "parseColorControl: ignoreDuplicates=${ignoreDuplicates}: isDuplicate=${isDuplicate} (latestEvent?.dataType:${latestEvent?.dataType})"
         if (isDuplicate) {
-            logDebug "sendMatterEvent: <b>IGNORED</b> duplicate event: ${eventMap.descriptionText} (value:${value} dataType:${latestEvent?.dataType})"
+            logTrace "sendMatterEvent: <b>IGNORED</b> duplicate event: ${eventMap.descriptionText} (value:${value} dataType:${latestEvent?.dataType})"
             return
         }
         else {
-            logDebug "sendMatterEvent: <b>NOT IGNORED</b> event: ${eventMap.descriptionText} (value:${value} latestEvent.value = ${latestEvent?.value} dataType:${latestEvent?.dataType})"
+            logTrace "sendMatterEvent: <b>NOT IGNORED</b> event: ${eventMap.descriptionText} (value:${value} latestEvent.value = ${latestEvent?.value} dataType:${latestEvent?.dataType})"
         }
     }
     else {
-        logDebug "sendMatterEvent: <b>ignoreDuplicates=false</b> for event: ${eventMap.descriptionText} (value:${value})"
+        logTrace "sendMatterEvent: <b>ignoreDuplicates=false</b> for event: ${eventMap.descriptionText} (value:${value})"
     }
     if (dw != null && dw?.disabled != true) {
         // send events to child for parsing. Any filtering of duplicated events will be potentially done in the child device handler.
@@ -1347,13 +1348,13 @@ void a5SubscribeKnownClustersAttributes() {
                 if (safeHexToInt(entry) in SupportedMatterClusters.keySet()) {
                     // fingerprintName:fingerprint07 entry:0402 map:[FFF8:1618, FFF9:1618, 0002:2710, 0000:092A, 0001:EC78, FFFC:00, FFFD:04]
                     String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
-                    logDebug "a5SubscribeKnownClustersAttributes: (deviceCount=${deviceCount}) fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry}"
+                    logTrace "a5SubscribeKnownClustersAttributes: (deviceCount=${deviceCount}) fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry}"
                     // we subscribe to attribute 0x0000 of the cluster by default
                     if (entry == '0102') {
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000B'))
                         subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
                     }
-                    else if (entry == '0300') { 
+                    else if (entry == '0300') {
                         List<String> attributeList = fingerprintMap['0300_FFFB']
                         List<Integer> attributeListInt = attributeList.collect { it -> safeHexToInt(it) }
                         if (0x00 in attributeListInt) {
@@ -1537,7 +1538,7 @@ void subscribe(String addOrRemove, String endpointPar=null, String clusterPar=nu
 
 void subscribe(String addOrRemove, Integer endpoint, Integer cluster, Integer attrId) {
     String cmd = ''
-    logDebug "subscribe(action: ${addOrRemove} endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
+    logTrace "subscribe(action: ${addOrRemove} endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
     List<Map<String, String>> attributePaths = []
     attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer))
     // format EP_CLUSTER_ATTRID
@@ -1545,9 +1546,9 @@ void subscribe(String addOrRemove, Integer endpoint, Integer cluster, Integer at
     List<List<String>> subscriptions = state.subscriptions ?: []
     if (addOrRemove == 'add') {
         if (subscriptions.contains(newSub)) {
-            logDebug "subscribe(): subscription already exists: ${newSub}"
+            logTrace "subscribe(): subscription already exists: ${newSub}"
         } else {
-            logDebug "subscribe(): adding subscription: ${newSub}"
+            logTrace "subscribe(): adding subscription: ${newSub}"
             cmd = matter.subscribe(0, 0xFFFF, attributePaths)
             sendToDevice(cmd)
             subscriptions.add(newSub)
@@ -1740,48 +1741,26 @@ List<String> commands(List<String> cmds, Integer delay = 300) {
 /* ============================= Child Devices code ================================== */
 /* code segments 'borrowed' from Jonathan's 'Tuya IoT Platform (Cloud)' driver importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/Tuya/TuyaOpenCloudAPI.groovy' */
 
-// Json Parsing Cache
-
-// Tuya Function Categories  TODO - refactor or remove !!!!
-@Field static final Map<String, List<String>> tuyaFunctions = [
-    'battery'        : [ 'battery_percentage', 'va_battery' ],
-    'brightness'     : [ 'bright_value', 'bright_value_v2', 'bright_value_1', 'bright_value_2' ],
-    'co'             : [ 'co_state' ],
-    'co2'            : [ 'co2_value' ],
-    'colour'         : [ 'colour_data', 'colour_data_v2' ],
-    'contact'        : [ 'doorcontact_state' ],
-    'ct'             : [ 'temp_value', 'temp_value_v2' ],
-    'control'        : [ 'control', 'mach_operate' ],
-    'fanSpeed'       : [ 'fan_speed_enum', 'fan_speed' ],
-    'fanSwitch'      : [ 'switch_fan', 'switch' ],
-    'light'          : [ 'switch_led', 'switch_led_1', 'switch_led_2', 'light' ],
-    'humiditySet'    : [ 'dehumidify_set_value' ],                                                                                       /* Inserted by SJB */
-    'humiditySpeed'  : [ 'fan_speed_enum' ],
-    'humidity'       : [ 'temp_indoor', 'swing', 'shake', 'child_lock', 'lock', 'fan_speed_enum', 'dehumidify_set_value', 'humidity_indoor', 'humidity', 'envhumid', 'switch', 'mode', 'anion', 'pump', 'dry', 'windspeed', 'countdown', 'countdown_left', 'fault' ],
-    'meteringSwitch' : [ 'countdown_1' , 'add_ele' , 'cur_current', 'cur_power', 'cur_voltage' , 'relay_status', 'light_mode' ],
-    'omniSensor'     : [ 'bright_value', 'humidity_value', 'va_humidity', 'bright_sensitivity', 'shock_state', 'inactive_state', 'sensitivity' ],
-    'pir'            : [ 'pir' ],
-    'power'          : [ 'Power', 'power', 'power_go', 'switch', 'switch_1', 'switch_2', 'switch_3', 'switch_4', 'switch_5', 'switch_6', 'switch_usb1', 'switch_usb2', 'switch_usb3', 'switch_usb4', 'switch_usb5', 'switch_usb6', 'alarm_switch', 'start' ],
-    'percentControl' : [ 'percent_control', 'fan_speed_percent', 'position' ],
-    'push'           : [ 'manual_feed' ],
-    'sceneSwitch'    : [ 'switch1_value', 'switch2_value', 'switch3_value', 'switch4_value', 'switch_mode2', 'switch_mode3', 'switch_mode4' ],
-    'smoke'          : [ 'smoke_sensor_status' ],
-    'temperatureSet' : [ 'temp_set' ],
-    'temperature'    : [ 'temp_current', 'va_temperature' ],
-    'water'          : [ 'watersensor_state' ],
-    'workMode'       : [ 'work_mode' ],
-    'workState'      : [ 'work_state' ],
-    'situationSet'   : [ 'situation_set' ]
-].asImmutable()
-
 /**
   *  Tuya Standard Instruction Set Category Mapping to Hubitat Drivers
   *  https://developer.tuya.com/en/docs/iot/standarddescription?id=K9i5ql6waswzq
   *  MATTER : https://developer.tuya.com/en/docs/iot-device-dev/Matter_Product_Feature_List?id=Kd2wjfpuhgmrw
   */
-private static Map mapTuyaCategory(Map d) {
+//private static Map mapTuyaCategory(Map d) {
+Map mapTuyaCategory(Map d) {
+    // check order is important!
+    logDebug "mapTuyaCategory: ServerList=${d.ServerList} DeviceType=${d.DeviceType}"
+
+    if ('0300' in d.ServerList) { 
+        if ('0D' in d.DeviceType || '13' in d.DeviceType) {
+            return [ driver: 'Generic Component RGBW', product_name: 'RGB Extended Color Light' ]
+        }
+        else {
+            return [ driver: 'Generic Component CT', product_name: 'Color Temperature Light' ]
+        }
+    }
     if ('08' in d.ServerList) {   // Dimmer
-        return [ driver: 'Generic Component CT', product_name: 'Dimmer/Bulb' ]      // was 'Generic Component Dimmer'
+        return [ driver: 'Generic Component Dimmer', product_name: 'Dimmer/Bulb' ]
     }
     if ('45' in d.ServerList) {   // Contact Sensor
         return [ driver: 'Generic Component Contact Sensor', product_name: 'Contact Sensor' ]
@@ -1842,7 +1821,7 @@ void componentOn(DeviceWrapper dw) {
     // TODO: check if the device has command 'on' in the {0006={FFF8=1618, FFF9=[00, 01, 02],
     code = 'Go agead!'
     if (code != null) {
-        logInfo "Turning ${dw} on"
+        logDebug "Turning ${dw} on"
         setSwitch('On', '0x' + dw.getDataValue('id'))
     } else {
         logError "Unable to determine on function code in ${functions}"
@@ -1856,7 +1835,7 @@ void componentOff(DeviceWrapper dw) {
     // TODO: check if the device has command 'off' in the {0006={FFF8=1618, FFF9=[00, 01, 02],
     code = 'Go agead!'
     if (code != null) {
-        logInfo "Turning ${dw} off"
+        logDebug "Turning ${dw} off"
         setSwitch('Off', '0x' + dw.getDataValue('id'))
     } else {
         logError "Unable to determine off function code in ${functions}"
@@ -1868,10 +1847,10 @@ void componentOff(DeviceWrapper dw) {
 void componentOpen(DeviceWrapper dw) {
     if (!dw.hasCommand('open')) { logError "componentOpen(${dw}) driver '${dw.typeName}' does not have command 'open' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "sending Open command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "sending Open command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentOpen(): deviceNumber ${deviceNumberPar} is not valid!"; return }
     String cmd = matter.invoke(deviceNumber, 0x0102, 0x00) // 0x0102 = Window Covering Cluster, 0x00 = UpOrOpen
-    logDebug "componentOpen(): sending command '${cmd}'"
+    logTrace "componentOpen(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
 
@@ -1879,10 +1858,10 @@ void componentOpen(DeviceWrapper dw) {
 void componentClose(DeviceWrapper dw) {
     if (!dw.hasCommand('close')) { logError "componentClose(${dw}) driver '${dw.typeName}' does not have command 'close' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "sending Close command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "sending Close command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentClose(): deviceNumber ${deviceNumberPar} is not valid!"; return }
     String cmd = matter.invoke(deviceNumber, 0x0102, 0x01) // 0x0102 = Window Covering Cluster, 0x01 = DownOrClose
-    logDebug "componentClose(): sending command '${cmd}'"
+    logTrace "componentClose(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
 
@@ -1895,7 +1874,7 @@ void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal duratio
     int level = levelPar as int
     level = level < 0 ? 0 : level > 100 ? 100 : level
     int duration = (durationPar ?: 0) * 10
-    logInfo "Setting level ${level} durtion ${duration} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "Setting level ${level} durtion ${duration} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     Integer levelHex = Math.round(level * 2.54)
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(0x04, 0x00, HexUtils.integerToHexString(levelHex, 1)))
@@ -1914,7 +1893,7 @@ void componentStartLevelChange(DeviceWrapper dw, String direction) {
     //String moveRate = zigbee.swapOctets(HexUtils.integerToHexString(rateInt as int, 1))   // TODO - errorjava.lang.StringIndexOutOfBoundsException: begin 2, end 4, length 2 on line 1684 (method componentStartLevelChange)
     String moveRate = '50'
     List<Map<String, String>> cmdFields = []
-    logInfo "Starting level change UP for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "Starting level change UP for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x00, moveMode))   // MoveMode
     cmdFields.add(matter.cmdField(DataType.UINT8, 0x01, moveRate))   // MoveRate    // TODO - configurable ??
     String cmd = matter.invoke(deviceNumber, 0x0008, 0x01, cmdFields)       // 0x01 = Move
@@ -1935,7 +1914,7 @@ void componentStopLevelChange(DeviceWrapper dw) {
 void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature, BigDecimal level=null, BigDecimal duration=null) {
     if (!dw.hasCommand('setColorTemperature')) { logError "componentSetColorTemperature(${dw}) driver '${dw.typeName}' does not have command 'setColorTemperature' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "Setting color temperature ${colorTemperature} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (dw.currentValue('switch') == 'off') {
         logDebug "componentSetColorTemperature(): device is off, turning it on"
         componentOn(dw)
@@ -1943,7 +1922,7 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
     if (dw.currentValue('colorMode') != 'CT') {
         logDebug "componentSetColor(): setting color mode to CT"
         sendMatterEvent([name: 'colorMode', value: 'CT', isStateChange: true, displayed: false], dw, true)
-    }    
+    }
     String colorTemperatureMireds = byteReverseParameters(HexUtils.integerToHexString(ctToMired(colorTemperature as int), 2))
     String transitionTime = zigbee.swapOctets(HexUtils.integerToHexString((duration ?: 0) as int, 2))
     List<Map<String, String>> cmdFields = []
@@ -1958,7 +1937,7 @@ void componentSetColorTemperature(DeviceWrapper dw, BigDecimal colorTemperature,
 
 void componentSetHue(DeviceWrapper dw, BigDecimal hue) {
     if (!dw.hasCommand('setHue')) { logError "componentSetHue(${dw}) driver '${dw.typeName}' does not have command 'setHue' in ${dw.supportedCommands}"; return }
-    Integer deviceNumber = 
+    Integer deviceNumber =
     logDebug "Setting hue ${hue} for device ${dw.getDataValue('id')} ${dw}"
     Integer hueScaled = Math.min(Math.max(Math.round(hue * 2.54), 0), 254)
     String hueHex = byteReverseParameters(HexUtils.integerToHexString(hueScaled, 1))
@@ -2052,7 +2031,7 @@ void componentSetPosition(DeviceWrapper dw, BigDecimal positionPar) {
     int position = positionPar as int
     if (position < 0) { position = 0 }
     if (position > 100) { position = 100 }
-    logInfo "Setting position ${position} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "Setting position ${position} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString((100 - position) * 100, 2))))
     cmd = matter.invoke(deviceNumber, 0x0102, 0x05, cmdFields)  // 0x0102 = Window Covering Cluster, 0x05 = GoToLiftPercentage
@@ -2074,10 +2053,10 @@ void componentStartPositionChange(DeviceWrapper dw, String direction) {
 // Component command to stop position change
 void componentStopPositionChange(DeviceWrapper dw) {
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
-    logInfo "Stopping position change for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
+    logDebug "Stopping position change for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "setSwitch(): deviceNumber ${deviceNumberPar} is not valid!"; return; }
     String cmd = matter.invoke(deviceNumber, 0x0102, 0x02) // 0x0102 = Window Covering Cluster, 0x02 = StopMotion
-    logInfo "componentStopPositionChange(): sending command '${cmd}'"
+    logTrace "componentStopPositionChange(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
 
@@ -2233,12 +2212,17 @@ Map fingerprintToData(String fingerprint) {
     Map fingerprintMap = state[fingerprint]
     if (fingerprintMap != null) {
         data['id'] = fingerprint.substring(fingerprint.length() - 2, fingerprint.length())  // Device Number
+        data['name'] = getDeviceDisplayName(data['id'])
         data['fingerprintName'] = fingerprint
-        Map productName = mapTuyaCategory([ServerList: fingerprintMap['ServerList']])
+        data['ServerList'] = fingerprintMap['ServerList']
+        List deviceTypeList = fingerprintMap['DeviceTypeList'] as List ?: []
+        data['DeviceType'] = deviceTypeList
+        logWarn "fingerprintToData(): fingerprintMap=${fingerprintMap} data=${data}"
+        Map productName = mapTuyaCategory(data)
+
         data['product_name'] = fingerprintMap['ProductName'] ?: productName['product_name']           // Device Name
         //data['name'] = fingerprintMap['Label'] ?: "Device#${data['id']}"          // Device Label
-        data['name'] = getDeviceDisplayName(data['id'])
-        data['ServerList'] = fingerprintMap['ServerList']
+
         // TODO !!
         //data['local_key'] = fingerprintMap['local_key']
         //data['product_id'] = fingerprintMap['product_id']
@@ -2280,7 +2264,7 @@ private Integer createChildDevices() {
 private boolean createChildDevices(Map d) {
     logDebug "createChildDevices(Map d): d=${d}"
     Map mapping = mapTuyaCategory(d)
-    logDebug "createChildDevices(Map d): Tuya category ${d.category} driver ${mapping}"
+    logDebug "createChildDevices(Map d): product_name ${d.product_name} driver ${mapping}"
 
     if (mapping.driver != null) {
         logDebug "createChildDevices(Map d): mapping.driver is ${mapping.driver}, <b>device.id is ${device.id}</b> "

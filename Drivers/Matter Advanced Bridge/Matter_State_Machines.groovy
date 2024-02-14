@@ -27,7 +27,7 @@ library(
   * ver. 0.0.0  2024-01-27 kkossev  - first published version
   * ver. 0.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
   * ver. 0.0.2  2024-02-09 kkossev  - all states are cleared at the start of the full discovery
-  * ver. 0.0.3  2024-02-12 kkossev  - (dev. branch) removed discovering the IDENTIFY cluster; read the 0xFFFB attributes for ALL clusters in the matchedClustersList
+  * ver. 0.0.3  2024-02-13 kkossev  - (dev. branch) removed discovering the IDENTIFY cluster; read the 0xFFFB attributes for ALL clusters in the matchedClustersList
   *
   *                                   TODO:
   *
@@ -37,7 +37,7 @@ import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 @Field static final String matterStateMachinesLib = '0.0.3'
-@Field static final String matterStateMachinesLibStamp   = '2024/02/12 9:12 PM'
+@Field static final String matterStateMachinesLibStamp   = '2024/02/13 11:47 PM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -675,7 +675,7 @@ void discoverAllStateMachine(Map data = null) {
                 break
             }
             Integer supportedClustersCount = state[fingerprintName]['ServerList']?.size() ?: 0
-            Integer supportedClustersIndex = state['stateMachines']['discoverAllSupportedClustersIndex'] ?: 0
+            //Integer supportedClustersIndex = state['stateMachines']['discoverAllSupportedClustersIndex'] ?: 0 // not used!
             if (supportedClustersCount == 0) {
                 logWarn "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} ServerList is empty !"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
@@ -757,7 +757,7 @@ void discoverAllStateMachine(Map data = null) {
             break
 
         case DISCOVER_ALL_STATE_NEXT_STATE :
-            logWarn "discoverAllStateMachine: st:${st} - DISCOVER_ALL_STATE_NEXT_STATE - anything else?"
+            logDebug "discoverAllStateMachine: st:${st} - DISCOVER_ALL_STATE_NEXT_STATE - anything else?"
             st = DISCOVER_ALL_STATE_END
             break
 

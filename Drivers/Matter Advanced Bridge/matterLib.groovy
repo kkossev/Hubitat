@@ -721,7 +721,7 @@ Map getAttributesMapByClusterId(String cluster) {
     0x0003  : 'Tolerance'
 ]
 
-// 2.4.5. Pressure Measurement Cluster 0x0403 
+// 2.4.5. Pressure Measurement Cluster 0x0403
 @Field static final Map<Integer, String> PressureMeasurementClusterAttributes = [
     0x0000  : 'MeasuredValue',
     0x0001  : 'MinMeasuredValue',
