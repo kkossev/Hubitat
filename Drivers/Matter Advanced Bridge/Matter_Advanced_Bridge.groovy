@@ -39,30 +39,30 @@
  * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
  * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
  * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
- * ver. 0.4.0  2024-02-18 kkossev  - (dev.branch) added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
- *                                   major refactoring of the attributes subscription process
+ * ver. 0.4.0  2024-02-18 kkossev  - added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
+ *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; 
+ * ver. 0.4.1  2024-02-18 kkossev  - (dev.branch)
  *
- *                                   TODO: [====MVP====] Publish version 0.4.0
  *
- *                                   TODO: [====MVP====] add a list of known issues and limitations in the top post - for both HE system and the driver
  *                                   TODO: [====MVP====] bugfix: colorName is sent wrongly for RGB bulbs !!
- *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
- *                                   TODO: [====MVP====] add an optoon to print the chld device logs on the main driver logs (default enabled)
- *                                   TODO: [====MVP====] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
- *                                   TODO: [====MVP====] Ping the bridge at the start of the discovery process
- *                                   TODO: [ENHANCEMENT] check the 'healthStatus' attribute at the start of the Discovery process !
+ *                                   TODO: [====MVP====] Hue Matter Bridge parseColorControl: ColorMode= XY (raw=0x01) - send colorName not implemented yet!
+ *                                   TODO: [====MVP====] add a list of known issues and limitations in the top post - for both HE system and the driver
+ *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
+ *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
+ * 
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
- *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
- *                                   TODO: [====MVP====] When subscribing, remove devices that are disabled !
- *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
- *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
- *                                   TODO: [====MVP====] add Data.Refresh for each child device
+ *                                   TODO: [====BUG====] refresh CT temperature? (returns 0 after power off/on)
+ *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default enabled)
+ *                                   TODO: [ENHANCEMENT] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
+ *                                   TODO: [ENHANCEMENT] Ping the bridge at the start of the discovery process
+ *                                   TODO: [ENHANCEMENT] check the 'healthStatus' attribute at the start of the Discovery process !
+ *                                   TODO: [ENHANCEMENT] When deleting device, unsubscribe from all attributes
+ *                                   TODO: [ENHANCEMENT] When subscribing, remove devices that are disabled !
  *                                   TODO: [ENHANCEMENT] add 'Utilities' command w/ one par
  *                                   TODO: [ENHANCEMENT] add cleanStates method
  *                                   TODO: [====MVP====] Publish version 0.4.1
  *
- *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)

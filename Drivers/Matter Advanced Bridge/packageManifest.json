@@ -1,0 +1,17 @@
+{
+ "packageName":"Matter Advanced Bridge (ALPHA testing)",
+ "author":"Krassimir Kossev",
+ "version":"0.4.0",
+ "minimumHEVersion":"2.3.8.119",
+ "dateReleased":"2024-02-18",
+ "releaseNotes":"v 0.4.0 - first version available in HPM",
+ "communityLink":"https://community.hubitat.com/t/project-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009",
+ "bundles": [
+  {
+     "id":"9fa7a4c9-8f3f-4e70-a841-5565e982b35b",
+     "name":"MatterAdvancedBridge.zip",
+     "location":"https://github.com/kkossev/Hubitat/raw/development/Drivers/Matter%20Advanced%20Bridge/MatterAdvancedBridge.zip",
+     "required":true
+  }
+  ]
+}

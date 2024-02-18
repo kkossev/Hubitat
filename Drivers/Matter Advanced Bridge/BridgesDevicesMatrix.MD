@@ -10,7 +10,7 @@ Target release date : mid of March 2024
 ## <b>Matter Advanced Bridge Project : MVP</b>
 1. Publish and maintain a clearly defined and easy to understand list of which device types work and which do not work for each of the various Matter Bridges tested. (**status: WIP**)
 2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (**Status: WIP**)
-3. Stable discovery process. (**Status: WIP**)
+3. Stable discovery process. (**Status: TESTING (ver 0.4.0)**)
 4. RGB bulb bugs fixed and tested.  (**Status: TODO**)
 5. Battery level support. (**status: TODO**)
 6. Make the refresh command work in the child devices. (**Status: TODO**)
@@ -137,7 +137,7 @@ Target release date : mid of March 2024
 
 
 # **Matter Advanced Bridge driver - device support per Bridge model matrix**
-last updated 2024/02/17
+*last updated 2024/02/17*
 |Matter Clusters| Matter Device Type <br>ID                    |Tuya|Aqara|Philips Hue|Switch Bot|HE Child Device Driver | Remarks |
 |:----------:|:--------------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|:--------------:|
 |    --        | 4.   <b>Lighting Device Types</b>             |       |       |       |     |                |         |
@@ -196,10 +196,11 @@ Table Legend:
 
 --------------------------------
 
-Known Hubitat Matter platform related issues : 
+Known Hubitat Matter platform limitations and issues : 
 * initialize() method is called on each and every Matter error - 
 * Matter interface status (operational/failure) can not be checked in the driver - 
-* Hubitat does not receive a notification when a Matter device has been reset (powered off/on) -
+* Hubitat does not receive a notification when a Matter device has been reset (powered off/on) - the subscriptions (automatic reproting) are lost!
+* There is no decoding of complex data structures - Hue bridge rooms as example can not be imported.
 
 ----------------------------
 
