@@ -4,25 +4,25 @@ author: "Krassimir Kossev"
 ---
 
 
-*last updated 2024/02/16* <br>
+*last updated 2024/02/17* <br>
 Target release date : mid of March 2024
 
 ## <b>Matter Advanced Bridge Project : MVP</b>
-1. Publish and maintain a clearly defined and easy to understand list of which device types work and which do not work for each of the various Matter Bridges tested. (*status: WIP*)
-2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (*Status: WIP*)
-3. Stable discovery process. (*Status: WIP*)
-4. RGB bulb bugs fixed and tested.  (*Status: WIP*)
-5. Battery level support. (*status: TODO*)
-6. Make the refresh command work in the child devices. (*Status: TODO*)
-7. Curtain Motors (WindowCovering) bugs fixed and tested.(*status: TODO*)
-8. Matter Advanced Bridge package can be installed and updated via HPM. (*status: TODO*)
-9. Help/Documentation button in driver linked to GitHub web page.
+1. Publish and maintain a clearly defined and easy to understand list of which device types work and which do not work for each of the various Matter Bridges tested. (**status: WIP**)
+2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (**Status: WIP**)
+3. Stable discovery process. (**Status: WIP**)
+4. RGB bulb bugs fixed and tested.  (**Status: TODO**)
+5. Battery level support. (**status: TODO**)
+6. Make the refresh command work in the child devices. (**Status: TODO**)
+7. Curtain Motors (WindowCovering) bugs fixed and tested.(**status: TODO**)
+8. Matter Advanced Bridge package can be installed and updated via HPM. (**status: TODO**)
+9. Help/Documentation button in driver linked to GitHub web page. (**status: TODO**)
 10. ???
 
 
 
 ## <b>Zemismart M1 Hub as Matter Bridge</b>   
-last updated 2024/02/14
+*last updated 2024/02/17*
 |Device Type                |         Status               |          Remarks                  |
 |:--------------------------|:----------------------------:|----------------------------------:|
 | Relays/Switches - On/Off  | working OK - tested          |                                   |
@@ -31,8 +31,8 @@ last updated 2024/02/14
 | Bulbs - level control     | working OK - tested          |                                   |
 | Bulbs - CT control        | working OK - tested          |                                   |
 | Bulbs - RGBW control      | working OK - tested          |                                   |
-| Motion Sensors            | working OK - tested          |                                   |
-| mmWave Presence Sensors   | working OK - tested          |  Moes/Linptech                    |
+| Motion Sensors            | working OK - tested          | Not all motion sensors are working! |
+| mmWave Presence Sensors   | working OK - tested          | Moes/Linptech                     |
 | Contact Sensors           | working OK - tested          | Generic Component Contact Sensor  |
 | Water Leak Sensor         | working OK - tested          | as contact / switch               |
 | Tuya Valve on/off         | working OK - tested          | as contact / switch               |
@@ -60,7 +60,7 @@ last updated 2024/02/14
 ---------------------
 
 ### <b>Aqara E1 Hub as Matter Bridge</b>
-last updated 2024/02/14
+*last updated 2024/02/17*
 |Device Type                |         Status               |          Remarks                  |
 |:--------------------------|:----------------------------:|----------------------------------:|
 | Relays - On/Off           | working OK - tested          |  Aqara Double Rocker H1 EU        |
@@ -102,7 +102,7 @@ last updated 2024/02/14
 ---------------------
 
 ### <b>Philips Hue Hub as Matter Bridge</b>
-last updated 2024/02/14
+*last updated 2024/02/14*
 |Device Type                | Status                    |          Remarks       |
 |:--------------------------|:-------------------------:|--------------------------------:|
 | Bulbs - On/Off            | working -   tested        |   All bulbs                           |
@@ -125,7 +125,7 @@ last updated 2024/02/14
 ---------------------
 
 ### <b>Swithbot Hub2 as Matter Bridge</b>
-last updated 2024/02/14
+*last updated 2024/02/14*
 |Device Type                |         Status               |          Remarks                  |
 |:--------------------------|:----------------------------:|----------------------------------:|
 | Temperature Sensor        | working OK - tested          |  Switchbot Hub2 integrated   |
@@ -137,13 +137,7 @@ last updated 2024/02/14
 
 
 # **Matter Advanced Bridge driver - device support per Bridge model matrix**
-last updated 2024/02/14
-|Device Type                | Zemismart |   Aqara   | Phlips Hue| Switchbot |          Remarks                  |
-|:--------------------------|:---------:|:---------:|:---------:|:---------:|----------------------------------:|
-
-
-"ID" refers to the device type ID as set out in each device type's "Classification" section in the the MDL.
-
+last updated 2024/02/17
 |Matter Clusters| Matter Device Type <br>ID                    |Tuya|Aqara|Philips Hue|Switch Bot|HE Child Device Driver | Remarks |
 |:----------:|:--------------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|:--------------:|
 |    --        | 4.   <b>Lighting Device Types</b>             |       |       |       |     |                |         |

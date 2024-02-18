@@ -6,7 +6,7 @@ library(
     name: 'matterStateMachinesLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_State_Machines.groovy',
-    version: '0.0.3',
+    version: '0.0.4',
     documentationLink: ''
 )
 /*
@@ -27,7 +27,8 @@ library(
   * ver. 0.0.0  2024-01-27 kkossev  - first published version
   * ver. 0.0.1  2024-01-28 kkossev  - avoid multiple Subscribe entries
   * ver. 0.0.2  2024-02-09 kkossev  - all states are cleared at the start of the full discovery
-  * ver. 0.0.3  2024-02-13 kkossev  - (dev. branch) removed discovering the IDENTIFY cluster; read the 0xFFFB attributes for ALL clusters in the matchedClustersList
+  * ver. 0.0.3  2024-02-13 kkossev  - removed discovering the IDENTIFY cluster; read the 0xFFFB attributes for ALL clusters in the matchedClustersList
+  * ver. 0.0.4  2024-02-18 kkossev  - (dev. branch) state error specific Info messages; max retries increased to 35
   *
   *                                   TODO:
   *
@@ -36,8 +37,8 @@ library(
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterStateMachinesLib = '0.0.3'
-@Field static final String matterStateMachinesLibStamp   = '2024/02/13 11:47 PM'
+@Field static final String matterStateMachinesLib = '0.0.4'
+@Field static final String matterStateMachinesLibStamp   = '2024/02/18 12:39 AM'
 
 // no metadata section for matterStateMachinesLib
 @Field static final String  START   = 'START'
@@ -48,7 +49,7 @@ import groovy.transform.Field
 @Field static final String  ERROR   = 'ERROR'
 
 @Field static final Integer STATE_MACHINE_PERIOD = 330      // milliseconds
-@Field static final Integer STATE_MACHINE_MAX_RETRIES = 20
+@Field static final Integer STATE_MACHINE_MAX_RETRIES = 35
 
 void initializeStateMachineVars() {
     if (state['states'] == null) { state['states'] = [:] }
@@ -239,7 +240,7 @@ void disoverGlobalElementsStateMachine(Map data) {
         case STATE_DISCOVER_GLOBAL_ELEMENTS_INIT :
             if (data.debug) { logDebug "disoverGlobalElementsStateMachine: st:${st} endpoint ${data.endpoint} attribute ${data.attribute}- starting ..." }
             st = STATE_DISCOVER_GLOBAL_ELEMENTS_ATTRIBUTE_LIST
-            // continue with the next state
+        // continue with the next state
         case STATE_DISCOVER_GLOBAL_ELEMENTS_ATTRIBUTE_LIST :
             state['stateMachines']['toBeConfirmed'] = [data.endpoint, data.cluster, 0xFFFB]
             state['stateMachines']['Confirmation'] = false
@@ -301,7 +302,7 @@ void disoverGlobalElementsStateMachine(Map data) {
             break
         case STATE_DISCOVER_GLOBAL_ELEMENTS_ERROR : // 98 - error
             logWarn "disoverGlobalElementsStateMachine: st:${st} - error"
-            sendInfoEvent('ERROR during the Matter Bridge and Devices discovery')
+            sendInfoEvent('ERROR during the Matter Bridge and Devices discovery (STATE_DISCOVER_GLOBAL_ELEMENTS)')
             state.states['isInfo'] = false
             st = 0
             break
@@ -402,7 +403,9 @@ void discoverAllStateMachine(Map data = null) {
             }
             state['stateMachines']['discoverAllRetry']  = 0
             state['stateMachines']['discoverAllResult'] = UNKNOWN
+            state['stateMachines']['errorText'] = 'none'
             data['action'] = RUNNING
+            logInfo '_DiscoverAll(): started!'
         }
     }
     logTrace "discoverAllStateMachine: data:${data}, state['stateMachines'] = ${state['stateMachines']}"
@@ -415,21 +418,24 @@ void discoverAllStateMachine(Map data = null) {
     logTrace "discoverAllStateMachine: st:${st} retry:${retry} data:${data}"
     switch (st) {
         case DISCOVER_ALL_STATE_IDLE :
-            logDebug "discoverAllStateMachine: st:${st} - idle -> unscheduling!"
+            logWarn "discoverAllStateMachine: st:${st} - idle -> unscheduling!"
             unschedule('discoverAllStateMachine')
             break
         case DISCOVER_ALL_STATE_INIT: // start (collectBasicInfo())
-            sendInfoEvent('Starting Matter Bridge and Devices discovery ...')
+            sendInfoEvent('Starting Matter Bridge and Devices discovery ...<br><br><br>')
             if (state.bridgeDescriptor == null) { state.bridgeDescriptor = [] } // or state['bridgeDescriptor'] = [:] ?
             state.states['isInfo'] = true
             state['stateMachines']['discoverAllResult'] = RUNNING
             // TODO
+            boolean oldLogEnable = settings.logEnable
             initializeVars(fullInit = true)            // added 02/09/2024
-            sendInfoEvent('All states cleared!')
+            if (_DEBUG == true) { device.updateSetting('logEnable', oldLogEnable) }
+            sendInfoEvent('Removing all current subscriptions ...')
             clearSubscriptionsState()                  // clear the subscriptions state
             st = DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS
-            // continue with the next state
+        // continue with the next state
         case DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS :
+            sendInfoEvent('Discovering the Bridge...')
             disoverGlobalElementsStateMachine([action: START, endpoint: 0, cluster: 0x001D, debug: false])
             stateMachinePeriod = STATE_MACHINE_PERIOD * 2
             retry = 0; st = DISCOVER_ALL_STATE_BRIDGE_GLOBAL_ELEMENTS_WAIT
@@ -444,6 +450,7 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
+                    state['stateMachines']['errorText'] = 'ERROR during the Matter Bridge and Devices discovery (state BRIDGE_GLOBAL_ELEMENTS_WAIT)'
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -465,6 +472,7 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
+                    state['stateMachines']['errorText'] = 'state BRIDGE_BASIC_INFO_ATTR_LIST_WAIT timeout !'
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -497,6 +505,7 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value (retry=${retry})!"
+                    sendInfoEvent('state BRIDGE_BASIC_INFO_ATTR_VALUES_WAIT timeout !')
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -530,6 +539,7 @@ void discoverAllStateMachine(Map data = null) {
                 retry++
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
+                    state['stateMachines']['errorText'] = 'state BRIDGE_GENERAL_DIAGNOSTICS_WAIT timeout !'
                     st = DISCOVER_ALL_STATE_ERROR
                 }
             }
@@ -543,6 +553,7 @@ void discoverAllStateMachine(Map data = null) {
             Integer partsListCount = state.bridgeDescriptor['PartsList']?.size() ?: 0
             if (partsListCount == 0) {
                 logWarn "discoverAllStateMachine: st:${st} - PartsList is empty !"
+                state['stateMachines']['errorText'] = 'state GET_PARTS_LIST_START - PartsList is empty !'
                 st = DISCOVER_ALL_STATE_ERROR
                 break
             }
@@ -576,7 +587,7 @@ void discoverAllStateMachine(Map data = null) {
             Integer partEndpointInt = HexUtils.hexStringToInt(partEndpoint)
             String fingerprintName = getFingerprintName(partEndpointInt)
             if (state['stateMachines']['discoverGlobalElementsResult']  == SUCCESS) {
-                    //logWarn "AFTER : state.states['cluster'] = ${state.states['cluster']}"
+                //logWarn "AFTER : state.states['cluster'] = ${state.states['cluster']}"
                 logDebug "discoverAllStateMachine: st:${st} - ['PartsList'][$partEndpoint] confirmation!"
                 logRequestedClusterAttrResult([cluster: 0x001D, endpoint: partEndpointInt])
                 //state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
@@ -591,7 +602,7 @@ void discoverAllStateMachine(Map data = null) {
                     logWarn "discoverAllStateMachine: st:${st} - fingerprint${fingerprintName} timeout waiting for cluster 0x1D reading results !"
                     //st = DISCOVER_ALL_STATE_ERROR
                     // continue with the next device, even if there is an error
-                    sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
+                    sendInfoEvent("<b>ERROR discovering bridged device #${partsListIndex} ${fingerprintName} - timeout waiting for cluster 0x1D reading results !</b>")
                     state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                     st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
                 }
@@ -618,7 +629,7 @@ void discoverAllStateMachine(Map data = null) {
                 logDebug "discoverAllStateMachine: st:${st} - fingerprint ${fingerprintName} BridgedDeviceBasicInformationCluster '39' is not in the ServerList ! (this is not obligatory)"
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                 st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
-                // check the next bridged device ...
+            // check the next bridged device ...
             }
             break
         case DISCOVER_ALL_STATE_GET_BRIDGED_DEVICE_BASIC_INFO_WAIT_STATE :
@@ -639,7 +650,7 @@ void discoverAllStateMachine(Map data = null) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
                     //st = DISCOVER_ALL_STATE_ERROR
                     // continue with the next device, even if there is an error
-                    sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
+                    sendInfoEvent("<b>ERROR discovering bridged device #${partsListIndex} ${fingerprintName} - timeout waiting for cluster 0x39 reading results !</b>")
                     state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                     st = DISCOVER_ALL_STATE_GET_PARTS_LIST_NEXT_DEVICE_STATE
                 }
@@ -687,7 +698,7 @@ void discoverAllStateMachine(Map data = null) {
             logTrace "discoverAllStateMachine: st:${st} DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE- ServerListCluster = ${serverListCluster} (${state[fingerprintName]['ServerList']})"
             // find all elements in the supportedMatterClusters that are in the ServerList
             List<Integer> matchedClustersList = supportedMatterClusters.findAll { serverListCluster.contains(it) }       // empty list [] if nothing found
-            logInfo "${fingerprintName} supported clusters : ${matchedClustersList}"
+            logDebug "${fingerprintName} supported clusters : ${matchedClustersList}"
             Integer supportedCluster =  matchedClustersList != [] ?  matchedClustersList?.first() : 0
             if (supportedCluster != null && supportedCluster != 0) {
                 logDebug "discoverAllStateMachine: st:${st} - ${fingerprintName} <b>found supportedCluster ${supportedCluster} in matchedClustersList ${matchedClustersList}</b> from the SupportedMatterClusters ${supportedMatterClusters} in the ServerList ${serverListCluster}"
@@ -714,9 +725,10 @@ void discoverAllStateMachine(Map data = null) {
                     attributePaths.add(matter.attributePath(partEndpointInt, cluster, 0xFFFB))
                 }
                 sendToDevice(matter.readAttributes(attributePaths))
+                // TODO - check if the confirmation is received !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
-                // 02/12/2024 - go next device !
+            // 02/12/2024 - go next device !
             }
             else {
                 logDebug "discoverAllStateMachine: st:${st} - fingerprintName ${fingerprintName} SupportedMatterClusters ${supportedClusters} are not in the ServerList ${ServerListCluster} !"
@@ -743,7 +755,7 @@ void discoverAllStateMachine(Map data = null) {
                 if (retry > STATE_MACHINE_MAX_RETRIES) {
                     logWarn "discoverAllStateMachine: st:${st} - timeout waiting for the attribute value retry=${retry})!"
                     // continue with the next device, even if there is an error
-                    sendInfoEvent("ERROR discovering bridged device #${partsListIndex}")
+                    sendInfoEvent("<b>ERROR discovering bridged device #${partsListIndex} ${fingerprintName} - timeout waiting for cluster ${state.states['cluster']} reading results !</b>")
                     state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
                     st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
                 }
@@ -751,7 +763,9 @@ void discoverAllStateMachine(Map data = null) {
             break
 
         case DISCOVER_ALL_STATE_SUBSCRIBE_KNOWN_CLUSTERS :
-            a5SubscribeKnownClustersAttributes()
+            sendInfoEvent('compiling the subscriptions list ...')
+            fingerprintsToSubscriptionsList()
+            sendInfoEvent('re-subscribing ...')
             reSubscribe()
             st = DISCOVER_ALL_STATE_NEXT_STATE
             break
@@ -763,9 +777,9 @@ void discoverAllStateMachine(Map data = null) {
 
         case DISCOVER_ALL_STATE_ERROR : // 98 - error
             logDebug "discoverAllStateMachine: st:${st} - error"
-            sendInfoEvent('ERROR during the Matter Bridge and Devices discovery')
             state.states['isInfo'] = false
             state['stateMachines']['discoverAllResult'] = ERROR
+            sendInfoEvent("<b>ERROR during the Matter Bridge and Devices discovery : ${state['stateMachines']['errorText']}</b>")
             st = 0
             break
         case DISCOVER_ALL_STATE_END : // 99 - end

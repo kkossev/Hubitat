@@ -38,40 +38,48 @@
  * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
  * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
  * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
- * ver. 0.2.6  2024-02-13 kkossev  - (dev.branch) added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver;
+ * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
+ * ver. 0.4.0  2024-02-18 kkossev  - (dev.branch) added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
+ *                                   major refactoring of the attributes subscription process
  *
- *                                   TODO: [====MVP====] Publish version 0.3.0
+ *                                   TODO: [====MVP====] Publish version 0.4.0
  *
- *                                   TODO: [====MVP====] add a compatibility table matrix for SwitchBot Hub2 devices on the top post
- *                                   TODO: [====MVP====] create a short MVP list and publish it on the top post
+ *                                   TODO: [====MVP====] add a list of known issues and limitations in the top post - for both HE system and the driver
+ *                                   TODO: [====MVP====] bugfix: colorName is sent wrongly for RGB bulbs !!
+ *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
+ *                                   TODO: [====MVP====] add an optoon to print the chld device logs on the main driver logs (default enabled)
+ *                                   TODO: [====MVP====] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
+ *                                   TODO: [====MVP====] Ping the bridge at the start of the discovery process
+ *                                   TODO: [ENHANCEMENT] check the 'healthStatus' attribute at the start of the Discovery process !
+ *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
+ *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
+ *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
+ *                                   TODO: [====MVP====] When subscribing, remove devices that are disabled !
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] refresh to be individual list in each fingerprint - needed for the device individual refresh() command ! (add a deviceNumber parameter to the refresh() command command)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device
- *                                   TODO: [====MVP====] Publish version 0.3.1
+ *                                   TODO: [ENHANCEMENT] add 'Utilities' command w/ one par
+ *                                   TODO: [ENHANCEMENT] add cleanStates method
+ *                                   TODO: [====MVP====] Publish version 0.4.1
  *
- *                                   TODO: [====MVP====] add a compatibility table matrix for Tuya devices on the top post
  *                                   TODO: [====MVP====] refresh CT temperature (returns 0 after power off/on)
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] keep a list of known issues and limitations in the top post
- *                                   TODO: [====MVP====] keep a list of DeviceTypes that need to be tested in the top post
- *                                   TODO: [====MVP====] add heathStatus to the child devices
+ *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
  *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] subscriptions to be individual list in each fingerprint, minReportTime to be different for each attribute
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
- *                                   TODO: [====MVP====] When deleting device, unsubscribe from all attributes
- *                                   TODO: [====MVP====] Publish version 0.3.2
+ *                                   TODO: [====MVP====] Publish version 0.4.2
  *
  *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add Thermostat component driver
- *                                   TODO: [====MVP====] Publish version 0.4.0
+ *                                   TODO: [====MVP====] Publish version 0.5.0
 
  *                                   TODO: [====MVP====] add support for Lock cluster 0x0101
  *                                   TODO: [====MVP====] add illuminance processing
- *                                   TODO: [====MVP====] Publish version 0.5.0
+ *                                   TODO: [====MVP====] Publish version 0.6.0
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
  *                                   TODO: [REFACTORING] move the component drivers names into a table
@@ -82,11 +90,8 @@
  *                                   TODO: [ENHANCEMENT] add more info in checkSubscription(): unsubscribe() is completed Info log
  *                                   TODO: [ENHANCEMENT] check if the child device has attribute $name before sending an event to it !
  *                                   TODO: [ENHANCEMENT] add product_name: Temperature Sensor to the device name when creating devices
- *                                   TODO: [ENHANCEMENT] ERROR during the Matter Bridge and Devices discovery - add more information in the Info log !
  *                                   TODO: [ENHANCEMENT] driverVersion to be stored in child devices states
- *                                   TODO: [ENHANCEMENT] check water sensors
- *                                   TODO: [ENHANCEMENT] change attributes and values list Info log to be shown in Debug mode only
- *                                   TODO: [ENHANCEMENT] disable the debug logs in discovery mode
+ *                                   TODO: [ENHANCEMENT] check water sensors for Tuya and for Aqara
  *                                   TODO: [ENHANCEMENT] Device Extended Info - expose as a command (needs state machine implementation) or remove the code?
  *                                   TODO: [ENHANCEMENT] option to automatically delete the child devices when missing from the PartsList
  *                                   TODO: [ENHANCEMENT] add initialized() method to the child devices (send 'unknown' events for all attributes)
@@ -107,10 +112,9 @@
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
-//#include matterTools.getExpandedColorNames
 
-String version() { '0.3.0' }
-String timeStamp() { '2023/02/13 11:57 PM' }
+static String version() { '0.4.0' }
+static String timeStamp() { '2023/02/18 2:38 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -194,7 +198,7 @@ metadata {
                     [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
                     [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
             ]
-            command 'subscribe', [
+            command 'subscribeSingleAttribute', [
                     [name:'addOrRemove',  type: 'ENUM',   description: 'Select',    constraints: ['add', 'remove', 'show']],
                     [name:'endpointPar',  type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
                     [name:'clusterPar',   type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
@@ -229,19 +233,70 @@ metadata {
 @Field static final Map StartUpOnOffEnumOpts = [0: 'Off', 1: 'On', 2: 'Toggle']
 
 @Field static final Map<Integer, Map> SupportedMatterClusters = [
-    //0x0039 : [parser: 'parseBridgedDeviceBasic', attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands'],   // BridgedDeviceBasic
-    0x0006 : [attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands'],                  // On/Off Cluster
-    0x0008 : [attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands'],    // Level Control
-    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                // PowerSource - DO NOT ENABLE -> CRASHES THE BRIDGE!?
+    // On/Off Cluster
+    0x0006 : [attributes: 'OnOffClusterAttributes', commands: 'OnOffClusterCommands',  parser: 'parseOnOffCluster',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
+    // Level Control Cluster
+    0x0008 : [attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands', parser: 'parseLevelControlCluster',
+              subscriptions : [[0x0000: [min: 1, max: 0xFFFF, delta: 0]]]
+    ],
+    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                // PowerSource (battery) - DO NOT ENABLE -> CRASHES THE BRIDGE!?
+    /*
+    0x0039 : [attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands', parser: 'parseBridgedDeviceBasic',            // BridgedDeviceBasic
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
+    */
     //0x003B : [parser: 'parseSwitch', attributes: 'SwitchClusterAttributes', events: 'SwitchClusterEvents'],       // Switch - DO NOT ENABLE -> CRASHES THE BRIDGE!?
-    0x0045 : [attributes: 'BooleanStateClusterAttributes'],                                             // Contact Sensor
-    0x0101 : [attributes: 'DoorLockClusterAttributes', commands: 'DoorLockClusterCommands'],            // DoorLock
-    0x0102 : [attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands'],// WindowCovering
-    0x0201 : [attributes: 'ThermostatClusterAttributes', commands: 'ThermostatClusterCommands'],        // Thermostat
-    0x0300 : [attributes: 'ColorControlClusterAttributes', commands: 'ColorControlClusterCommands'],    // ColorControl
-    0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes'],                                   // TemperatureMeasurement
-    0x0405 : [attributes: 'RelativeHumidityMeasurementClusterAttributes'],                              // HumidityMeasurement
-    0x0406 : [attributes: 'OccupancySensingClusterAttributes']                                          // OccupancySensing (motion)
+    // Descriptor Cluster
+    /*
+    0x001D : [attributes: 'DescriptorClusterAttributes', parser: 'parseDescriptorCluster',      // decimal(29) manually subscribe to the Bridge device ep=0 0x001D 0x0003
+              subscriptions : [[0x0003: [min: 0, max: 0xFFFF, delta: 0]]]   // PartsList
+    ],
+    */
+    // Contact Sensor Cluster
+    0x0045 : [attributes: 'BooleanStateClusterAttributes', parser: 'parseContactSensor',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
+    // DoorLock Cluster
+    0x0101 : [attributes: 'DoorLockClusterAttributes', commands: 'DoorLockClusterCommands', parser: 'parseDoorLock',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]   // LockState
+    ],
+    // WindowCovering
+    0x0102 : [attributes: 'WindowCoveringClusterAttributes', commands: 'WindowCoveringClusterCommands', parser: 'parseWindowCovering',
+              subscriptions : [[0x000A: [min: 0, max: 0xFFFF, delta: 0]],   // OperationalStatus
+                               [0x000B: [min: 0, max: 0xFFFF, delta: 0]],   // TargetPositionLiftPercent100ths
+                               [0x000E: [min: 0, max: 0xFFFF, delta: 0]]]   // CurrentPositionLiftPercent100ths
+    ],
+    // Thermostat
+    0x0201 : [attributes: 'ThermostatClusterAttributes', commands: 'ThermostatClusterCommands', parser: 'parseThermostat',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]],   // LocalTemperature
+                               [0x0003: [min: 0, max: 0xFFFF, delta: 0]],   // OccupiedCoolingSetpoint  // TODO - not implemented!
+                               [0x0004: [min: 0, max: 0xFFFF, delta: 0]],   // OccupiedHeatingSetpoint
+                               [0x0007: [min: 0, max: 0xFFFF, delta: 0]],   // SystemMode
+                               [0x0008: [min: 0, max: 0xFFFF, delta: 0]],   // AlarmMask
+                               [0x0009: [min: 0, max: 0xFFFF, delta: 0]],   // RunningState
+                               [0x0011: [min: 0, max: 0xFFFF, delta: 0]]]   // ControlSequenceOfOperation
+    ],
+    // ColorControl Cluster
+    0x0300 : [attributes: 'ColorControlClusterAttributes', commands: 'ColorControlClusterCommands', parser: 'parseColorControl',
+              subscriptions : [[0x0000: [min: 2, max: 0xFFFF, delta: 0]],   // CurrentHue
+                               [0x0001: [min: 2, max: 0xFFFF, delta: 0]],   // CurrentSaturation
+                               [0x0007: [min: 2, max: 0xFFFF, delta: 0]],   // ColorTemperatureMireds
+                               [0x0008: [min: 2, max: 0xFFFF, delta: 0]]]   // ColorMode
+    ],
+    // TemperatureMeasurement Cluster
+    0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes', parser: 'parseTemperatureMeasurement',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
+    // HumidityMeasurement Cluster
+    0x0405 : [attributes: 'RelativeHumidityMeasurementClusterAttributes', parser: 'parseHumidityMeasurement',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
+    // OccupancySensing (motion) Cluster
+    0x0406 : [attributes: 'OccupancySensingClusterAttributes', parser: 'parseOccupancySensing',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ]
 ]
 
 @Field static final Map<Integer, String> ParsedMatterClusters = [
@@ -310,7 +365,7 @@ void parse(final String description) {
     gatherAttributesValuesInfo(descMap)
 
     String parserFunc = ParsedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]
-    String parserAttr = SupportedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]?.attributes
+    //String parserAttr = SupportedMatterClusters[HexUtils.hexStringToInt(descMap.cluster)]?.attributes
 
     if (parserFunc) {
         if (_DEBUG) {
@@ -594,7 +649,7 @@ void parseBasicInformationCluster(final Map descMap) {  // 0x0028 BasicInformati
         if (descMap.value != null && descMap.value != '') {
             state[fingerprintName][attrName] = descMap.value
             eventMap = [name: eventName, value:descMap.value, descriptionText: "${getDeviceDisplayName(descMap?.endpoint)}  ${eventName} is: ${descMap.value}"]
-            if (logEnable) { logInfo "parseBridgedDeviceBasic: ${attrName} = ${descMap.value}" }
+            if (logEnable) { logInfo "parseBasicInformationCluster: ${attrName} = ${descMap.value}" }
         }
     }
     if (eventMap != [:]) {
@@ -1260,7 +1315,6 @@ void _DiscoverAll(statePar = null) {
     }
 
     discoverAllStateMachine([action: START, goToState: stateSt])
-    logInfo "_DiscoverAll(): started!"
 }
 
 void collectBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = false) {
@@ -1327,60 +1381,6 @@ void requestExtendedInfo(Integer endpoint = 0, Integer timePar = 15, boolean fas
 
     runIn(time, 'delayedInfoEvent', [overwrite: true, data: [info: 'Extended Bridge Discovery finished', descriptionText: '']])
     logDebug "requestExtendedInfo(): jobs scheduled for total time: ${time} seconds"
-}
-
-void a5SubscribeKnownClustersAttributes() {
-    logDebug 'a5SubscribeKnownClustersAttributes:'
-    sendInfoEvent('Subscribing for known clusters attributes reporting ...')
-    // subscribe to the Descriptor cluster PartsList attribute
-    subscribe('add', 0, 0x001D, 0x0003)
-
-    // For each fingerprint in the state, check if the fingerprint has entries in the SupportedMatterClusters list. Then, add these entries to the state.subscriptions map
-    Integer deviceCount = 0
-    //Map stateCopy = state.clone()
-    Map stateCopy = state
-    state.each { fingerprintName, fingerprintMap ->
-        logDebug "a5SubscribeKnownClustersAttributes: fingerprintName:${fingerprintName} fingerprintMap:${fingerprintMap}"
-        if (fingerprintName.startsWith('fingerprint')) {
-            boolean knownClusterFound = false
-            List serverList = fingerprintMap['ServerList'] as List
-            serverList.each { entry  ->
-                if (safeHexToInt(entry) in SupportedMatterClusters.keySet()) {
-                    // fingerprintName:fingerprint07 entry:0402 map:[FFF8:1618, FFF9:1618, 0002:2710, 0000:092A, 0001:EC78, FFFC:00, FFFD:04]
-                    String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
-                    logTrace "a5SubscribeKnownClustersAttributes: (deviceCount=${deviceCount}) fingerprintName:${fingerprintName} endpointId:${endpointId} entry:${entry}"
-                    // we subscribe to attribute 0x0000 of the cluster by default
-                    if (entry == '0102') {
-                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000B'))
-                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('000E'))
-                    }
-                    else if (entry == '0300') {
-                        List<String> attributeList = fingerprintMap['0300_FFFB']
-                        List<Integer> attributeListInt = attributeList.collect { it -> safeHexToInt(it) }
-                        if (0x00 in attributeListInt) {
-                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
-                        }
-                        if (0x01 in attributeListInt) {
-                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0001'))
-                        }
-                        if (0x07 in attributeListInt) {
-                            subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0007'))
-                        }
-                    }
-                    else {
-                        // TODO - do not assume that the 0000 attribute is always present in the cluster !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        subscribe(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = safeHexToInt(entry), attrId = safeHexToInt('0000'))
-                    }
-                    knownClusterFound = true
-                }
-            }
-            if (knownClusterFound) { deviceCount ++ }
-        }
-    }
-    int numberOfSubscriptions = state.subscriptions?.size() ?: 0
-    sendInfoEvent("the number of subscriptions is ${numberOfSubscriptions}")
-    sendMatterEvent([name: 'deviceCount', value: deviceCount, descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} subscribed for events from ${deviceCount} devices"])
-    //runIn(1, 'delayedInfoEvent', [overwrite: true, data: [info: 'Subscribing finished', descriptionText: '']])
 }
 
 void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
@@ -1490,13 +1490,13 @@ void initialize() {
         initializeVars(fullInit = true)
         sendInfoEvent('initialize()...', 'full initialization - all settings are reset to default')
     }
-    log.warn "initialize(): calling subscribe()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
+    log.warn "initialize(): calling sendSubsribeList()! (last unsubscribe was more than ${timeSinceLastSubscribe} seconds ago)"
     state.lastTx['subscribeTime'] = now()
     state.states['isUnsubscribe'] = false
     state.states['isSubscribe'] = true  // should be set to false in the parse() method
     sendEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} initializeCtr is ${state.stats['initializeCtr']}", type: 'digital'])
-    scheduleCommandTimeoutCheck(delay = 30)
-    subscribe()
+    scheduleCommandTimeoutCheck(delay = 55)
+    sendSubsribeList()
     updated()   // added 02/03/2024
 }
 
@@ -1529,56 +1529,142 @@ void clearSubscriptionsState() {
     state.subscriptions = []
 }
 
-void subscribe(String addOrRemove, String endpointPar=null, String clusterPar=null, String attrIdPar=null) {
+/**
+ * Subscribes to or unsubscribes from a specific attribute in the Matter Advanced Bridge.
+ *
+ * @param addOrRemove The action to perform. Valid values are 'add', 'remove', or 'show'.
+ * @param endpoint The endpoint of the attribute.
+ * @param cluster The cluster of the attribute.
+ * @param attrId The attribute ID.
+ *
+ * sends matter.subscribe command to the bridge!!
+ */
+void subscribeSingleAttribute(String addOrRemove, String endpointPar=null, String clusterPar=null, String attrIdPar=null) {
     Integer endpoint = safeNumberToInt(endpointPar)
     Integer cluster = safeNumberToInt(clusterPar)
     Integer attrId = safeNumberToInt(attrIdPar)
-    subscribe(addOrRemove, endpoint, cluster, attrId)
+    String cmd = updateStateSubscriptionsList(addOrRemove, endpoint, cluster, attrId)
+    if (cmd != null && cmd != '') {
+        logDebug "subscribeSingleAttribute(): cmd = ${cmd}"
+        sendToDevice(cmd)
+    }
 }
 
-void subscribe(String addOrRemove, Integer endpoint, Integer cluster, Integer attrId) {
+String updateStateSubscriptionsList(String addOrRemove, Integer endpoint, Integer cluster, Integer attrId) {
     String cmd = ''
-    logTrace "subscribe(action: ${addOrRemove} endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
+    logTrace "updateStateSubscriptionsList(action: ${addOrRemove} endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
     List<Map<String, String>> attributePaths = []
     attributePaths.add(matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer))
     // format EP_CLUSTER_ATTRID
     List<String> newSub = [endpoint, cluster, attrId]
-    List<List<String>> subscriptions = state.subscriptions ?: []
+    List<List<String>> stateSubscriptionsList = state.subscriptions ?: []
     if (addOrRemove == 'add') {
-        if (subscriptions.contains(newSub)) {
-            logTrace "subscribe(): subscription already exists: ${newSub}"
+        if (stateSubscriptionsList.contains(newSub)) {
+            logTrace "updateStateSubscriptionsList(): subscription already exists: ${newSub}"
         } else {
-            logTrace "subscribe(): adding subscription: ${newSub}"
+            logTrace "updateStateSubscriptionsList(): adding subscription: ${newSub}"
             cmd = matter.subscribe(0, 0xFFFF, attributePaths)
-            sendToDevice(cmd)
-            subscriptions.add(newSub)
-            state.subscriptions = subscriptions
+            //sendToDevice(cmd)     // commented out 2024-02-17
+            stateSubscriptionsList.add(newSub)
+            state.subscriptions = stateSubscriptionsList
         }
     }
     else if (addOrRemove == 'remove') {
-        if (subscriptions.contains(newSub)) {
-            subscriptions.remove(newSub)
-            state.subscriptions = subscriptions
+        if (stateSubscriptionsList.contains(newSub)) {
+            stateSubscriptionsList.remove(newSub)
+            state.subscriptions = stateSubscriptionsList
         } else {
-            logWarn "subscribe(): subscription not found!: ${newSub}"
+            logWarn "updateStateSubscriptionsList(): subscription not found!: ${newSub}"
         }
     }
     else if (addOrRemove == 'show') {
-        if (logEnable) { logInfo "subscribe(): state.subscriptions size is ${state.subscriptions?.size()}" }
+        if (logEnable) { 
+            logInfo "updateStateSubscriptionsList(): state.subscriptions size is ${state.subscriptions?.size()}"
+            logInfo "updateStateSubscriptionsList(): state.subscriptions = ${state.subscriptions}"
+        }
     }
     else {
-        logWarn "subscribe(): unknown action: ${addOrRemove}"
+        logWarn "updateStateSubscriptionsList(): unknown action: ${addOrRemove}"
     }
-    if (logEnable) { logInfo "subscribe(): state.subscriptions = ${state.subscriptions}" }
+    return cmd
 }
 
-void subscribe() {
-    sendInfoEvent('subscribe()...Please wait.', 'sent device subscribe command')
-    String cmd = subscribeCmd()
-    if (cmd != null && cmd != '') {
-        logDebug "subscribe(): cmd = ${cmd}"
-        sendToDevice(cmd)
+void sendSubsribeList() {
+    sendInfoEvent('sendSubsribeList()...Please wait.', 'sent device subscribe command')
+    List<String> cmds = getSubscribeOrRefreshCmdList('SUBSCRIBE_ALL')
+    if (cmds != null && cmds != []) {
+        logTrace "sendSubsribeList(): cmds = ${cmds}"
+        sendToDevice(cmds)
     }
+}
+
+List<String> getSubscribeOrRefreshCmdList(action='REFRESH') {
+    // the state.subscriptions list is: subscriptions : [[0, 29, 3], [36, 6, 0], [36, 8, 0], [36, 768, 0], [36, 768, 1], [36, 768, 7], [54, 6, 0], [8, 1029, 0], [7, 1026, 0], [55, 6, 0], [15, 6, 0], [13, 513, 0]]
+    List<List<Integer>>  stateSubscriptionsList = new ArrayList<List<Integer>>(state.subscriptions ) ?: []
+    List<String> cmdsList = []
+    logDebug "getSubscribeCmdList(): stateSubscriptionsList = ${stateSubscriptionsList}"
+
+    LinkedHashMap<Integer, List<List<Integer>>>  groupedSubscriptionsByCluster = stateSubscriptionsList.groupBy { it[1] }
+    logTrace "groupedSubscriptionsByCluster=${groupedSubscriptionsByCluster}"
+    // sample groupedSubscriptionsByCluster:  768 : [[36, 768, 0], [36, 768, 1], [36, 768, 7]]
+    for (Map.Entry<Integer, List<List<Integer>>> entry : groupedSubscriptionsByCluster.entrySet()) {
+        Integer cluster = entry.getKey()
+        Integer attribute = null
+        List<List<Integer>> value = entry.getValue()
+        logTrace "Cluster:${cluster}, value:${value}"
+        // check if the cluster is in the supported clusters list
+        if (!SupportedMatterClusters.containsKey(cluster)) {
+            logWarn "getSubscribeCmdList(): cluster 0x${HexUtils.integerToHexString(cluster, 2)} is not in the SupportedMatterClusters list!"
+            continue  // do not subscribe to this cluster, continue with the next cluster
+        }
+        // Sample groupedSubscriptionsByAttribute Attribute 0 : [[36, 768, 0]]
+        Map<Integer, List<List<Integer>>> groupedSubscriptionsByAttribute = value.groupBy { it[2] }
+        logTrace "groupedSubscriptionsByAttribute=${groupedSubscriptionsByAttribute}"
+        for (Map.Entry<Integer, List<List<Integer>>> entry2 : groupedSubscriptionsByAttribute.entrySet()) {
+            List<Map<String, String>> attributePaths = []       // individual attributePaths for each attribute
+            attribute = entry2.getKey()
+            List<List<Integer>> endpointsList = entry2.getValue()
+            logTrace "Cluster:${cluster}, Attribute:${attribute}, endpointsList:${endpointsList}"
+
+            List<List<Map<Integer, Map<String, Integer>>>> supportedSubscriptions = SupportedMatterClusters[cluster]['subscriptions']
+            //def supportedSubscriptions = SupportedMatterClusters[cluster]['subscriptions']
+            // sample supportedSubscriptions=[[0:[min:0, max:65535, delta:0]], [1:[min:0, max:65535, delta:0]]]
+            if (supportedSubscriptions == null || supportedSubscriptions == []) {
+                logWarn "<b>getSubscribeCmdList(): supportedSubscriptions is null or empty for cluster:${cluster} attribute:${attribute}!</b>"
+                continue  // do not subscribe to this attribute, continue with the next
+            }
+            // make a list of integer keys from  the supportedSubscriptions list
+            List<Integer> supportedSubscriptionsKeys = supportedSubscriptions*.keySet().flatten()
+            logTrace "supportedSubscriptionsKeys=${supportedSubscriptionsKeys}"
+            // check if the attribute is in the supportedSubscriptionsKeys list
+            if (!supportedSubscriptionsKeys.contains(attribute)) {
+                logWarn "getSubscribeCmdList(): attribute 0x${HexUtils.integerToHexString(attribute, 2)} is not in the supportedSubscriptionsKeys:${supportedSubscriptionsKeys} list! "
+                continue  // do not subscribe to this attribute, continue with the next
+            }
+            // here we have a list of same cluster, same attribute, different endpoints
+            endpointsList.each { endpointList ->
+                Integer endpoint = endpointList[0]
+                //logDebug "endpoint:${endpoint}, Cluster:${cluster}, Attribute:${attribute}"
+                attributePaths.add(matter.attributePath(endpoint, cluster, attribute))
+            }
+            logTrace "attribute: ${attribute} attributePaths:${attributePaths} supportedSubscriptions[attribute]:${supportedSubscriptions[attribute]}"
+            // assume the min, max and delta values are the same for all endpoints
+            def firstSupportedSubscription = supportedSubscriptions[attribute]?.get(0)
+            logTrace "firstSupportedSubscription = ${firstSupportedSubscription}"
+            Integer min = firstSupportedSubscription?.get('min') ?: 0
+            Integer max = firstSupportedSubscription?.get('max') ?: 0xFFFF
+            logTrace "min=${min}, max=${max}, delta=${delta}"
+            if (action == 'REFRESH_ALL') {
+                cmdsList.add(matter.readAttributes(attributePaths))
+            }
+            else if (action == 'SUBSCRIBE_ALL') {
+                cmdsList.add(matter.subscribe(min, max, attributePaths))
+            }
+        } // for each attribute
+        logTrace "attribute:${attribute} cmdsList=${cmdsList}"
+        //return cmdsList
+    }   // for each cluster
+    return cmdsList
 }
 
 String subscribeCmd() {
@@ -1588,7 +1674,7 @@ String subscribeCmd() {
         matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
     })
     if (attributePaths.isEmpty()) {
-        logWarn 'subscribe(): attributePaths is empty!'
+        logWarn 'subscribeCmd(): attributePaths is empty!'
         return null
     }
     return matter.subscribe(0, 0xFFFF, attributePaths)
@@ -1602,10 +1688,78 @@ void checkSubscriptionStatus() {
         state.states['isUnsubscribe'] = false
     }
     if (state.states['isSubscribe'] == true) {
-        logInfo 'checkSubscription(): subscribe() is completed.'
+        logInfo 'checkSubscription(): completed.'
         sendInfoEvent('completed', 'something was received in the parse() method')
         state.states['isSubscribe'] = false
     }
+}
+
+/**
+ * This method is called at the end of the discovery process to update the state.subscriptions list of lists.
+ * It collects the known clusters and attributes based on the state.fingerprintXX.Subscribe individual devoces lists.
+ * It iterates through each fingerprint in the state and checks if the fingerprint has entries in the SupportedMatterClusters list.
+ * If a match is found, it adds the corresponding entries to the state.subscriptions list of lists.
+ * The number of the found subscriptions and the device count are logged and sent as info events.
+ */
+void fingerprintsToSubscriptionsList() {
+    logDebug 'fingerprintsToSubscriptionsList:'
+    sendInfoEvent('Subscribing for known clusters and attributes reporting ...')
+    state.subscriptions = []
+    // subscribe to the Descriptor cluster PartsList attribute
+    updateStateSubscriptionsList('add', 0, 0x001D, 0x0003)
+
+    // For each fingerprint in the state, check if the fingerprint has entries in the SupportedMatterClusters list. Then, add these entries to the state.subscriptions map
+    Integer deviceCount = 0
+    //Map stateCopy = state.clone()
+    Map stateCopy = state
+    state.each { fingerprintName, fingerprintMap ->
+        if (fingerprintName.startsWith('fingerprint')) {
+            boolean knownClusterFound = false
+            List subscribeList = fingerprintMap['Subscribe'] as List
+            logTrace "fingerprintsToSubscriptionsList: fingerprintName:${fingerprintName} subscribeList:${subscribeList}"
+            // Subscribe=[6, 8, 768]
+            subscribeList.each { cluster  ->
+                Integer clusterInt = safeToInt(cluster)
+                List supportedClustersKeys = SupportedMatterClusters.keySet().collect { it as Integer }
+                if (!supportedClustersKeys.contains(clusterInt)) {
+                    logWarn "fingerprintsToSubscriptionsList: clusterInt:${clusterInt} is not in the SupportedMatterClusters list!"
+                    return  // continue with the next cluster
+                }
+                def supportedSubscriptions = SupportedMatterClusters[clusterInt]['subscriptions']
+                def supportedSubscriptionsKeys = supportedSubscriptions*.keySet().flatten()
+                logTrace "fingerprintsToSubscriptionsList: clusterInt:${clusterInt} subscribeList=${subscribeList} supportedSubscriptions=${supportedSubscriptions} supportedSubscriptionsKeys=${supportedSubscriptionsKeys}"
+                String endpointId = fingerprintName.substring(fingerprintName.length() - 2, fingerprintName.length())
+                // Add the supported subscriptions to the state.subscriptions list
+                supportedSubscriptionsKeys.each { attribute ->
+                    // check whether the attribute_0xFFFB entry is in the fingerprintMap
+                    String clusterListName = HexUtils.integerToHexString(clusterInt, 2) + '_FFFB'
+                    List clusterAttrList = fingerprintMap[clusterListName]
+                    // convert clusterAttrList from list of hex to list of integers
+                    clusterAttrList = clusterAttrList.collect { safeHexToInt(it) }
+                    logTrace "fingerprintsToSubscriptionsList: clusterInt:${clusterInt} attribute:${attribute} clusterListName=${clusterListName} clusterAttrList=${clusterAttrList}"
+                    if (clusterAttrList != null && clusterAttrList != []) {
+                        // 0006_FFFB=[00, 4000, 4001, 4002, 4003, FFF8, FFF9, FFFB, FFFC, FFFD]
+                        // check if the attribute is in the clusterAttrList
+                        if (!clusterAttrList.contains(attribute)) {
+                            logWarn "fingerprintsToSubscriptionsList: clusterInt:${clusterInt} attribute:${attribute} is not in the clusterAttrList ${clusterAttrList}!"
+                            return  // continue with the next attribute
+                        }
+                        logDebug "fingerprintsToSubscriptionsList: updateStateSubscriptionsList: adding endpointId=${endpointId} clusterInt:${clusterInt} attribute:${attribute} clusterListName=${clusterListName} to the state.subscriptions list!"
+                        updateStateSubscriptionsList(addOrRemove = 'add', endpoint = safeHexToInt(endpointId), cluster = clusterInt, attrId = safeToInt(attribute))
+                    }
+                    else {
+                        logWarn "fingerprintsToSubscriptionsList: clusterInt:${clusterInt} attribute:${attribute} clusterListName ${clusterListName} is not in the fingerprintMap!"
+                    }
+                }
+                // done!
+                knownClusterFound = true
+            }
+            if (knownClusterFound) { deviceCount ++ }
+        }
+    }
+    int numberOfSubscriptions = state.subscriptions?.size() ?: 0
+    sendInfoEvent("the number of subscriptions is ${numberOfSubscriptions}")
+    sendEvent([name: 'deviceCount', value: deviceCount, descriptionText: "${device.displayName} subscribed for events from ${deviceCount} devices"])
 }
 
 void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
@@ -1673,12 +1827,22 @@ void refresh() {
     logInfo'refresh() ...'
     checkDriverVersion()
     setRefreshRequest()    // 6 seconds
+    /*
     String cmd = refreshCmd()
     if (cmd != null && cmd != '') {
         sendToDevice(cmd)
     }
     else {
         logWarn 'refresh(): cmd is null!'
+    }
+    */
+    List<String> cmdsList = getSubscribeOrRefreshCmdList('REFRESH_ALL')
+    if (cmdsList != null && cmdsList != []) {
+        logDebug "refresh(): cmdsList = ${cmdsList}"
+        sendToDevice(cmdsList)
+    }
+    else {
+        logWarn 'refresh(): cmdsList is null or empty!'
     }
 }
 
@@ -1751,7 +1915,7 @@ Map mapTuyaCategory(Map d) {
     // check order is important!
     logDebug "mapTuyaCategory: ServerList=${d.ServerList} DeviceType=${d.DeviceType}"
 
-    if ('0300' in d.ServerList) { 
+    if ('0300' in d.ServerList) {
         if ('0D' in d.DeviceType || '13' in d.DeviceType) {
             return [ driver: 'Generic Component RGBW', product_name: 'RGB Extended Color Light' ]
         }
@@ -1789,11 +1953,9 @@ Map mapTuyaCategory(Map d) {
     if ('3B' in d.ServerList) {   // Switch / Button - TODO !
         return [ namespace: 'kkossev', driver: 'Matter Generic Component Switch', product_name: 'Button' ]
     }
-    /*
     if ('2F' in d.ServerList) {   // Power Source
-        return [ namespace: 'kkossev', driver: 'Matter Generic Component Battery', product_name: 'Switch' ]
+        return [ namespace: 'kkossev', driver: 'Matter Generic Component Battery', product_name: 'Battery' ]
     }
-    */
 
     return [ driver: 'Generic Component Switch', product_name: 'Unknown' ]
 }
@@ -2650,77 +2812,10 @@ void updateStateStats(Map descMap) {
 /* groovylint-disable-next-line UnusedMethodParameter */
 void test(par) {
     log.warn "test(${par})"
-    //log.warn "test(${par}) stateCache=${stateCache}"
-    int endpoint = 0x14
-    int cluster = 0x003B
-    int attrId = 0x0000
-    int event = 0x0001
-    int time = 0x0010
-
-   // String cmd = ''
-
-    //List<Map<String, String>> attributePaths = []
-    //List<Map<String, String>> eventPaths = []
-    //attributePaths.add(matter.attributePath(endpoint, cluster, attrId))
-    //eventPaths.add(matter.eventPath(endpoint, cluster, event))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x00))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x01))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x02))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x03))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x04))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x05))
-//    eventPaths.add(matter.eventPath(endpoint, cluster, 0x06))
-    //cmd = matter.subscribe(0, 0xFFFF, eventPaths)
     /*
-    cmd = matter.subscribe(1, 5, eventPaths)
-    logWarn "test(): sending command '${cmd}'"
-    sendToDevice(cmd)
+    List<String> list = []
+    s = getSubscribeOrRefreshCmdList('SUBSCRIBE_ALL')
+    log.warn "getSubscribeOrRefreshCmdList=${s}"
     */
-    //log.debug "test(): this.TTSVoices=${this.TTSVoices}"
-    // print all TTSVoices properties
-    //this.TTSVoices.each { k, v -> log.debug "TTSVoices.${k}=${v}" }
-   // TTSVoices.each { log.debug "$it" }
-   // this.properties.each { log.debug "$it" }
-
-    /*
-    //cmd = matter.setColorTemperature(3000, 1)
-    List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(DataType.UINT8, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
-    cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)       //  'he invoke 0x01 0x0003 0x0000 {152500100018}'
-    logWarn "test(): sending command '${cmd}'  DataType.UINT8=${DataType.UINT8}"
-    */
-    /*
-    Map descMap = [:]
-    descMap.endpoint = '01'
-    logWarn "displayName(${par}) = ${getDeviceDisplayName(par)}"
-    String dni = "${device.id}-${descMap.endpoint}"
-    ChildDeviceWrapper dw = getChildDevice(dni)
-    logDebug "test(): dw=${dw}"
-    dw.setState('testState', 'testValue')
-    logWarn "test(): dw.getState('testState')=${dw.getState('testState')}"
-    */
-        Integer intpar = safeNumberToInt(par)
-        String hexEP = HexUtils.integerToHexString(intpar, 2)
-        /*
-        String cmd = 'he rattrs [{"ep":"0x' + hexEP + '","cluster":"0x0300","attr":"0xFFFFFFFF"}]'
-        sendHubCommand(new hubitat.device.HubAction(cmd, hubitat.device.Protocol.MATTER))
-        */
-
-    List<Map<String, String>> attributePaths = []
-    //List<Map<String, String>> attributeWriteRequests = []
-
-    attributePaths.add(matter.attributePath(hexEP, -1, -1))     // IdentifyTime
-    String cmd = matter.readAttributes(attributePaths)
-    //sendToDevice(cmd)
-
-    List eventPaths = []
-    eventPaths.add(matter.eventPath("29", 0x3B, 0x00))
-    eventPaths.add(matter.eventPath("2A", 0x3B, 0x01))
-    eventPaths.add(matter.eventPath("2A", 0x3B, 0x01))
-    eventPaths.add(matter.eventPath("29", 0x3B, 0xFFFF))
-    eventPaths.add(matter.eventPath("29", 0xFFFF, 0xFFFF))
-    cmd = matter.subscribe(0, 0xFFFF, eventPaths)
-    logWarn "test(): sending command '${cmd}'"
-    sendToDevice(cmd)
-
+    fingerprintsToSubscriptionsList()
 }
