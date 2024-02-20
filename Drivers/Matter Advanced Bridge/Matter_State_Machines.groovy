@@ -723,10 +723,12 @@ void discoverAllStateMachine(Map data = null) {
                 List<Map<String, String>> attributePaths = []
                 matchedClustersList.each { cluster ->
                     attributePaths.add(matter.attributePath(partEndpointInt, cluster, 0xFFFB))
+                    attributePaths.add(matter.attributePath(partEndpointInt, cluster, 0xFFFC))  // added 02/19/2024 - read the FeatureMap also !
                 }
                 sendToDevice(matter.readAttributes(attributePaths))
                 // TODO - check if the confirmation is received !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 state['stateMachines']['discoverAllPartsListIndex'] = partsListIndex + 1
+                stateMachinePeriod = STATE_MACHINE_PERIOD * 2   // double the period for the next state
                 st = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_NEXT_DEVICE
             // 02/12/2024 - go next device !
             }

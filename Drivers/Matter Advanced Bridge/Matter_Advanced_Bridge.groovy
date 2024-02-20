@@ -40,15 +40,19 @@
  * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
  * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
  * ver. 0.4.0  2024-02-18 kkossev  - added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
- *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; 
- * ver. 0.4.1  2024-02-18 kkossev  - (dev.branch)
+ *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to; 
+ * ver. 0.4.1  2024-02-19 kkossev  - (dev.branch) the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
  *
  *
- *                                   TODO: [====MVP====] bugfix: colorName is sent wrongly for RGB bulbs !!
- *                                   TODO: [====MVP====] Hue Matter Bridge parseColorControl: ColorMode= XY (raw=0x01) - send colorName not implemented yet!
+ *                                   TODO: [====MVP====] Hue Matter Bridge parseColorControl: colrName is still wrong for Hue CT bulbs !!!
  *                                   TODO: [====MVP====] add a list of known issues and limitations in the top post - for both HE system and the driver
+ *                                   TODO: [====MVP====] add illuminance cluster support (Aqara T1 Light Sensor)
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
+ *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices !!!!!!!!!!!!!!!!!!
+ *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
+ *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
+ *                                   TODO: [ENHANCEMENT] add minimizeStateVariables advanced option
  * 
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
@@ -85,13 +89,11 @@
  *                                   TODO: [REFACTORING] move the component drivers names into a table
  *                                   TODO: [REFACTORING] substitute the tmp state with a in-memory cache
  *                                   TODO: [REFACTORING] add a temporary state to store the attributes list of the currently interviewed cluster
- *                                   TODO: [REFACTORING] Convert SupportedMatterClusters to Map that include the known attributes to be subscribed to
  *
  *                                   TODO: [ENHANCEMENT] add more info in checkSubscription(): unsubscribe() is completed Info log
  *                                   TODO: [ENHANCEMENT] check if the child device has attribute $name before sending an event to it !
  *                                   TODO: [ENHANCEMENT] add product_name: Temperature Sensor to the device name when creating devices
  *                                   TODO: [ENHANCEMENT] driverVersion to be stored in child devices states
- *                                   TODO: [ENHANCEMENT] check water sensors for Tuya and for Aqara
  *                                   TODO: [ENHANCEMENT] Device Extended Info - expose as a command (needs state machine implementation) or remove the code?
  *                                   TODO: [ENHANCEMENT] option to automatically delete the child devices when missing from the PartsList
  *                                   TODO: [ENHANCEMENT] add initialized() method to the child devices (send 'unknown' events for all attributes)
@@ -113,12 +115,13 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-static String version() { '0.4.0' }
-static String timeStamp() { '2023/02/18 2:38 AM' }
+static String version() { '0.4.1' }
+static String timeStamp() { '2023/02/19 11:51 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
+@Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = true  // minimize the state variables
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
@@ -176,7 +179,7 @@ metadata {
         ]
 
         command '_DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
-        command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
+        //command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'panic button: Clear all States and scheduled jobs']]
         command 'removeAllDevices', [[name: 'panic button: Remove all child devices']]
@@ -218,6 +221,7 @@ metadata {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
             input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
             input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
+            input name: 'minimizeStateVariables', type: 'bool', title: '<b>Minimize State Variables</b>', defaultValue: MINIMIZE_STATE_VARIABLES_DEFAULT, description: '<i>Minimize the state variables to save memory.</i>'
         }
     }
 }
@@ -239,7 +243,7 @@ metadata {
     ],
     // Level Control Cluster
     0x0008 : [attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands', parser: 'parseLevelControlCluster',
-              subscriptions : [[0x0000: [min: 1, max: 0xFFFF, delta: 0]]]
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
     ],
     //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                // PowerSource (battery) - DO NOT ENABLE -> CRASHES THE BRIDGE!?
     /*
@@ -280,10 +284,10 @@ metadata {
     ],
     // ColorControl Cluster
     0x0300 : [attributes: 'ColorControlClusterAttributes', commands: 'ColorControlClusterCommands', parser: 'parseColorControl',
-              subscriptions : [[0x0000: [min: 2, max: 0xFFFF, delta: 0]],   // CurrentHue
-                               [0x0001: [min: 2, max: 0xFFFF, delta: 0]],   // CurrentSaturation
-                               [0x0007: [min: 2, max: 0xFFFF, delta: 0]],   // ColorTemperatureMireds
-                               [0x0008: [min: 2, max: 0xFFFF, delta: 0]]]   // ColorMode
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]],   // CurrentHue
+                               [0x0001: [min: 0, max: 0xFFFF, delta: 0]],   // CurrentSaturation
+                               [0x0007: [min: 0, max: 0xFFFF, delta: 0]],   // ColorTemperatureMireds
+                               [0x0008: [min: 0, max: 0xFFFF, delta: 0]]]   // ColorMode
     ],
     // TemperatureMeasurement Cluster
     0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes', parser: 'parseTemperatureMeasurement',
@@ -928,55 +932,83 @@ void parseWindowCovering(final Map descMap) { // 0102
 
 void parseColorControl(final Map descMap) { // 0300
     if (descMap.cluster != '0300') { logWarn "parseColorControl: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
+    ChildDeviceWrapper dw = getDw(descMap)
     switch (descMap.attrId) {
         case '0000' : // CurrentHue
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            //logDebug "parseColorControl: hue = ${valueInt}"
+            logDebug "parseColorControl: hue = ${valueInt}"
             sendMatterEvent([
                 name: 'hue',
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} hue is ${valueInt}"
             ], descMap, true)
-            sendColorNameEvent(descMap, hue=valueInt, saturation=null)   // added 02/13/2024
+            if (dw?.currentValue('colorMode') != 'CT') {
+                sendColorNameEvent(descMap, hue=valueInt, saturation=null)   // added 02/19/2024
+            }
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            //logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
+            logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'saturation',
                 value: valueInt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} saturation is ${valueInt}"
             ], descMap, true)
-            sendColorNameEvent(descMap, hue=null, saturation=valueInt)   // added 02/13/2024
+            if (dw?.currentValue('colorMode') != 'CT') {
+                sendColorNameEvent(descMap, hue=null, saturation=valueInt)   // added 02/19/2024
+            }
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
-            //logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
+            logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'colorTemperature',
                 value: valueCt,
                 descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} colorTemperature is ${valueCt}",
                 unit: '°K'
             ], descMap, true)
-            //String colorName = getGenericTempName(valueCt)
-            String colorName = convertTemperatureToGenericColorName(valueCt)    //  (Since 2.3.2) - for CT bulbs only
-            sendMatterEvent([
-                name: 'colorName',
-                value: colorName,
-                descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${valueCt}"
-            ], descMap, true)
+            String colorMode = dw?.currentValue('colorMode') ?: UNKNOWN
+            if (colorMode == 'CT') {
+                String colorName = convertTemperatureToGenericColorName(valueCt)
+                sendMatterEvent([
+                    name: 'colorName',
+                    value: colorName,
+                    descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${colorName}"
+                ], descMap, true)
+            }
             break
         case '0008' : // ColorMode
             String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
-            logWarn "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value}) - send <b>colorName</b> not implemented yet!"
-            if (colorMode == 'CT') {
-                // TODO - get the child device dw to obtain the colorTemperature value
-                // TODO - send "colorName" event with the color name  // convertTemperatureToGenericColorName(colorTemperature)
+            logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value}) - sending <b>colorName</b>"
+            if (dw != null) {
+                Integer colorTemperature = dw.currentValue('colorTemperature') ?: -1
+                Integer hue = dw.currentValue('hue') ?: -1
+                Integer saturation = dw.currentValue('saturation') ?: -1
+                if (colorMode == 'CT') {
+                    logDebug "parseColorControl: CT colorTemperature = ${colorTemperature}"
+                    if (colorTemperature != -1) {
+                        String colorName = convertTemperatureToGenericColorName(colorTemperature)
+                        sendMatterEvent([
+                            name: 'colorName',
+                            value: colorName,
+                            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${colorName}"
+                        ], descMap, true)
+                    }
+                }
+                else if (colorMode == 'RGB' || colorMode == 'XY') {
+                    logDebug "parseColorControl: colorMode = ${colorMode} hue=${hue} saturation = ${saturation}"
+                    if (hue != -1 && saturation != -1) {
+                        String colorName = convertHueToGenericColorName(hue, saturation)
+                        logDebug "parseColorControl: RGB colorName = ${colorName}"
+                        sendMatterEvent([
+                            name: 'colorName',
+                            value: colorName,
+                            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} color is ${colorName}"
+                        ], descMap, true)
+                    }
+                }
             }
-            else if (colorMode == 'RGB') {
-                // TODO - get the child device dw to obtain the hue and saturation values
-                // TODO - send "colorName" event with the color name (based on hue)
-            }
+            // 
             sendMatterEvent([
                 name: 'colorMode',
                 value: colorMode,
@@ -1479,6 +1511,7 @@ void loadAllDefaults() {
 void initialize() {
     log.warn 'initialize()...'
     unschedule()
+    if (state.states == null) { state.states = [:] }
     state.states['isInfo'] = false
     Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
     Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
@@ -2033,6 +2066,7 @@ void componentClose(DeviceWrapper dw) {
 void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal durationPar=null) {
     if (!dw.hasCommand('setLevel')) { logError "componentSetLevel(${dw}) driver '${dw.typeName}' does not have command 'setLevel' in ${dw.supportedCommands}" ; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    if (levelPar == null) { logWarn "componentSetLevel(): levelPar is null!"; return }
     int level = levelPar as int
     level = level < 0 ? 0 : level > 100 ? 100 : level
     int duration = (durationPar ?: 0) * 10
@@ -2050,6 +2084,7 @@ void componentSetLevel(DeviceWrapper dw, BigDecimal levelPar, BigDecimal duratio
 void componentStartLevelChange(DeviceWrapper dw, String direction) {
     if (!dw.hasCommand('startLevelChange')) { logError "componentStartLevelChange(${dw}) driver '${dw.typeName}' does not have command 'startLevelChange' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
+    if (direction == null) { logWarn "componentStartLevelChange(): direction is null!"; return }
     String moveMode = direction == 'up' ? '00' : '01'
     Integer rateInt = 5  // seconds
     //String moveRate = zigbee.swapOctets(HexUtils.integerToHexString(rateInt as int, 1))   // TODO - errorjava.lang.StringIndexOutOfBoundsException: begin 2, end 4, length 2 on line 1684 (method componentStartLevelChange)
@@ -2680,7 +2715,7 @@ void sendRttEvent(String value=null) {
     Long now = new Date().getTime()
     if (state.lastTx == null) { state.lastTx = [:] }
     Integer timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
-    String descriptionText = "${device.displayName} Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
+    String descriptionText = "${device.displayName} Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']} (HE uptime: ${formatUptime()})"
     if (value == null) {
         logInfo "${descriptionText}"
         sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', type: 'physical')
@@ -2689,6 +2724,21 @@ void sendRttEvent(String value=null) {
         descriptionText = "${device.displayName} Round-trip time : ${value} (healthStatus=<b>${device.currentValue('healthStatus')}</b> offlineCtr=${state.health['offlineCtr']} checkCtr3=${state.health['checkCtr3']})"
         logInfo "${descriptionText}"
         sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, type: 'digital')
+    }
+}
+
+// credits @thebearmay
+String formatUptime() {
+    try {
+        Long ut = location.hub.uptime.toLong()
+        Integer days = Math.floor(ut/(3600*24)).toInteger()
+        Integer hrs = Math.floor((ut - (days * (3600*24))) /3600).toInteger()
+        Integer min = Math.floor( (ut -  ((days * (3600*24)) + (hrs * 3600))) /60).toInteger()
+        Integer sec = Math.floor(ut -  ((days * (3600*24)) + (hrs * 3600) + (min * 60))).toInteger()
+        String attrval = "${days.toString()}d, ${hrs.toString()}h, ${min.toString()}m, ${sec.toString()}s"
+        return attrval
+    } catch(ignore) {
+        return UNKNOWN
     }
 }
 
@@ -2744,9 +2794,10 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_LOG_ENABLE) }
     if (fullInit || settings?.traceEnable == null) { device.updateSetting('traceEnable', false) }
-    if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
+    if (settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
     if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (settings?.minimizeStateVariables == null) { device.updateSetting('minimizeStateVariables', [value: MINIMIZE_STATE_VARIABLES_DEFAULT, type: 'bool']) }
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
 }
 
