@@ -34,6 +34,9 @@
         "PublicMethodsBeforeNonPublicMethods": {
             "enabled": false
         },
+        "StaticMethodsBeforeInstanceMethods": {
+            "enabled": false
+        },
         "UnnecessaryPublicModifier": {
             "enabled": false
         }

@@ -99,10 +99,10 @@ private void logsOff() {
     device.updateSetting('logEnable', [value: 'false', type: 'bool'] )
 }
 
-void refresh() {
+static void refresh() {
     parent?.componentRefresh(this.device)
 }
 
-void ping() {
+static void ping() {
     refresh()
 }

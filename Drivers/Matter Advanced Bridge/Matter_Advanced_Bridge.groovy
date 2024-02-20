@@ -41,18 +41,21 @@
  * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
  * ver. 0.4.0  2024-02-18 kkossev  - added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
  *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to; 
- * ver. 0.4.1  2024-02-19 kkossev  - (dev.branch) the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
+ * ver. 0.4.1  2024-02-20 kkossev  - (dev.branch) added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
+ *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong! 
  *
+ *                                   TODO: [====MVP====] Publish version 0.4.1
  *
- *                                   TODO: [====MVP====] Hue Matter Bridge parseColorControl: colrName is still wrong for Hue CT bulbs !!!
- *                                   TODO: [====MVP====] add a list of known issues and limitations in the top post - for both HE system and the driver
- *                                   TODO: [====MVP====] add illuminance cluster support (Aqara T1 Light Sensor)
+ *                                   TODO: [====MVP====] WIP - add a list of known issues and limitations on the top post - for both HE system and the driver
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices !!!!!!!!!!!!!!!!!!
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
  *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
  *                                   TODO: [ENHANCEMENT] add minimizeStateVariables advanced option
+ *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
+ *                                   TODO: [ENHANCEMENT] add Utilities command w/ one par
+ *                                   TODO: [====MVP====] Publish version 0.4.x
  * 
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
@@ -65,7 +68,7 @@
  *                                   TODO: [ENHANCEMENT] When subscribing, remove devices that are disabled !
  *                                   TODO: [ENHANCEMENT] add 'Utilities' command w/ one par
  *                                   TODO: [ENHANCEMENT] add cleanStates method
- *                                   TODO: [====MVP====] Publish version 0.4.1
+ *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
@@ -73,7 +76,7 @@
  *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
- *                                   TODO: [====MVP====] Publish version 0.4.2
+ *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
@@ -82,7 +85,6 @@
  *                                   TODO: [====MVP====] Publish version 0.5.0
 
  *                                   TODO: [====MVP====] add support for Lock cluster 0x0101
- *                                   TODO: [====MVP====] add illuminance processing
  *                                   TODO: [====MVP====] Publish version 0.6.0
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
@@ -116,9 +118,9 @@
 #include kkossev.matterStateMachinesLib
 
 static String version() { '0.4.1' }
-static String timeStamp() { '2023/02/19 11:51 PM' }
+static String timeStamp() { '2023/02/20 8:46 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = true  // minimize the state variables
@@ -289,6 +291,10 @@ metadata {
                                [0x0007: [min: 0, max: 0xFFFF, delta: 0]],   // ColorTemperatureMireds
                                [0x0008: [min: 0, max: 0xFFFF, delta: 0]]]   // ColorMode
     ],
+    // IlluminanceMeasurement Cluster
+    0x0400 : [attributes: 'IlluminanceMeasurementClusterAttributes', parser: 'parseIlluminanceMeasurement',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
+    ],
     // TemperatureMeasurement Cluster
     0x0402 : [attributes: 'TemperatureMeasurementClusterAttributes', parser: 'parseTemperatureMeasurement',
               subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
@@ -317,6 +323,7 @@ metadata {
     0x0102 : 'parseWindowCovering',
     0x0201 : 'parseThermostat',
     0x0300 : 'parseColorControl',
+    0x0400 : 'parseIlluminanceMeasurement',
     0x0402 : 'parseTemperatureMeasurement',
     0x0405 : 'parseHumidityMeasurement',
     0x0406 : 'parseOccupancySensing'
@@ -439,18 +446,12 @@ void checkStateMachineConfirmation(final Map descMap) {
     }
 }
 
-@CompileStatic
 String getClusterName(final String cluster) { return MatterClusters[HexUtils.hexStringToInt(cluster)] ?: UNKNOWN }
-//@CompileStatic
 String getAttributeName(final Map descMap) { return getAttributeName(descMap.cluster, descMap.attrId) }
-@CompileStatic
 String getAttributeName(final String cluster, String attrId) { return getAttributesMapByClusterId(cluster)?.get(HexUtils.hexStringToInt(attrId)) ?: GlobalElementsAttributes[HexUtils.hexStringToInt(attrId)] ?: UNKNOWN }
-@CompileStatic
 String getFingerprintName(final Map descMap) { return descMap.endpoint == '00' ? 'bridgeDescriptor' : "fingerprint${descMap.endpoint}" }
-@CompileStatic
 String getFingerprintName(final Integer endpoint) { return getFingerprintName([endpoint: HexUtils.integerToHexString(endpoint, 1)]) }
 
-//@CompileStatic
 String getStateClusterName(final Map descMap) {
     String clusterMapName = ''
     if (descMap.cluster == '001D') {
@@ -494,7 +495,9 @@ String getDeviceDisplayName(final String endpoint) {
 // This function takes a list of parameters and pair-reverses those longer than 2 characters.
 // Alternatively, it can take a string and pair-revers that.
 // Thus, e.g., ["0123", "456789", "10"] becomes "230189674510" and "123456" becomes "563412"
+@CompileStatic
 private String byteReverseParameters(String oneString) { byteReverseParameters([] << oneString) }
+@CompileStatic
 private String byteReverseParameters(List<String> parameters) {
     StringBuilder rStr = new StringBuilder(64)
 
@@ -509,6 +512,7 @@ private String byteReverseParameters(List<String> parameters) {
 }
 
 // 7.13. Global Elements - used for self-description of the server
+//@CompileStatic
 void parseGlobalElements(final Map descMap) {
     //logTrace "parseGlobalElements: descMap:${descMap}"
     switch (descMap.attrId) {
@@ -588,8 +592,9 @@ void gatherAttributesValuesInfo(final Map descMap) {
     }
 }
 
+//@CompileStatic
 void parseGeneralDiagnostics(final Map descMap) {
-    logTrace "parseGeneralDiagnostics: descMap:${descMap}"
+    //logTrace "parseGeneralDiagnostics: descMap:${descMap}"
     Integer value
     switch (descMap.attrId) {
         case '0001' :   // RebootCount -  a best-effort count of the number of times the Node has rebooted
@@ -836,6 +841,26 @@ void parseContactSensor(final Map descMap) {
     }
 }
 
+// Method for parsing illuminance measurement
+void parseIlluminanceMeasurement(final Map descMap) { // 0400
+    if (descMap.cluster != '0400') { logWarn "parseIlluminanceMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
+    if (descMap.attrId == '0000') { // Illuminance
+        Double valueInt = HexUtils.hexStringToInt(descMap.value)
+        if (valueInt <= 0 || valueInt > 100000) {
+            logWarn "parseIlluminanceMeasurement: valueInt:${valueInt} is out of range"
+            return
+        }
+        sendMatterEvent([
+            name: 'illuminance',
+            value: valueInt.round(0) as int,
+            unit: 'lx',
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)}  illuminance is ${valueInt.round(0)} lux"
+        ], descMap, true)
+    } else {
+        logTrace "parseIlluminanceMeasurement: ${(IlluminanceMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
+    }
+}
+
 // Method for parsing temperature measurement
 void parseTemperatureMeasurement(final Map descMap) { // 0402
     if (descMap.cluster != '0402') { logWarn "parseTemperatureMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
@@ -936,7 +961,7 @@ void parseColorControl(final Map descMap) { // 0300
     switch (descMap.attrId) {
         case '0000' : // CurrentHue
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: hue = ${valueInt}"
+            logTrace "parseColorControl: hue = ${valueInt}"
             sendMatterEvent([
                 name: 'hue',
                 value: valueInt,
@@ -948,7 +973,7 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0001' : // CurrentSaturation
             Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 2.54) as int
-            logDebug "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
+            logTrace "parseColorControl: CurrentSaturation = ${valueInt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'saturation',
                 value: valueInt,
@@ -960,7 +985,7 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0007' : // ColorTemperatureMireds
             Integer valueCt = miredHexToCt(descMap.value)
-            logDebug "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
+            logTrace "parseColorControl: ColorTemperatureCT = ${valueCt} (raw=0x${descMap.value})"
             sendMatterEvent([
                 name: 'colorTemperature',
                 value: valueCt,
@@ -979,13 +1004,13 @@ void parseColorControl(final Map descMap) { // 0300
             break
         case '0008' : // ColorMode
             String colorMode = descMap.value == '00' ? 'RGB' : descMap.value == '01' ? 'XY' : descMap.value == '02' ? 'CT' : UNKNOWN
-            logDebug "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value}) - sending <b>colorName</b>"
+            logTrace "parseColorControl: ColorMode= ${colorMode} (raw=0x${descMap.value}) - sending <b>colorName</b>"
             if (dw != null) {
                 Integer colorTemperature = dw.currentValue('colorTemperature') ?: -1
                 Integer hue = dw.currentValue('hue') ?: -1
                 Integer saturation = dw.currentValue('saturation') ?: -1
                 if (colorMode == 'CT') {
-                    logDebug "parseColorControl: CT colorTemperature = ${colorTemperature}"
+                    logTrace "parseColorControl: CT colorTemperature = ${colorTemperature}"
                     if (colorTemperature != -1) {
                         String colorName = convertTemperatureToGenericColorName(colorTemperature)
                         sendMatterEvent([
@@ -996,10 +1021,9 @@ void parseColorControl(final Map descMap) { // 0300
                     }
                 }
                 else if (colorMode == 'RGB' || colorMode == 'XY') {
-                    logDebug "parseColorControl: colorMode = ${colorMode} hue=${hue} saturation = ${saturation}"
                     if (hue != -1 && saturation != -1) {
                         String colorName = convertHueToGenericColorName(hue, saturation)
-                        logDebug "parseColorControl: RGB colorName = ${colorName}"
+                        logTrace "parseColorControl: RGB colorName = ${colorName}"
                         sendMatterEvent([
                             name: 'colorName',
                             value: colorName,
@@ -1812,10 +1836,7 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
     String cluster = '0006'
     // list key is 0006_FFFB=[00, FFF8, FFF9, FFFB, FFFD, FFFC]
     String stateClusterName = getStateClusterName([cluster: cluster, attrId: 'FFFB'])
-    logDebug "setSwitch(): fingerprintName = ${fingerprintName}, stateClusterName = ${stateClusterName}"
-
     List<String> onOffClusterAttributesList = state[fingerprintName][stateClusterName] as List
-    logDebug "setSwitch(): onOffClusterAttributesList = ${onOffClusterAttributesList}"
     if (onOffClusterAttributesList == null) {
         logWarn "setSwitch(): OnOff capability is not present for ${getDeviceDisplayName(deviceNumber)} !"
         return
@@ -1826,9 +1847,8 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
         return
     }
     // find the command in the OnOffClusterCommands map
-    logDebug "setSwitch(): command = ${command}"
     Integer onOffcmd = OnOffClusterCommands.find { k, v -> v == command }?.key
-    logDebug "setSwitch(): command = ${command}, onOffcmd = ${onOffcmd}, onOffCommandsList = ${onOffCommandsList}"
+    logTrace "setSwitch(): command = ${command}, onOffcmd = ${onOffcmd}, onOffCommandsList = ${onOffCommandsList}"
     if (onOffcmd == null) {
         logWarn "setSwitch(): command '${command}' is not valid for ${getDeviceDisplayName(deviceNumber)} !"
         return
@@ -1852,7 +1872,7 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
             logWarn "setSwitch(): command '${command}' is not valid!"
             return
     }
-    logInfo "setSwitch(): sending command '${cmd}'"
+    logTrace "setSwitch(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
 
@@ -1961,6 +1981,9 @@ Map mapTuyaCategory(Map d) {
     }
     if ('45' in d.ServerList) {   // Contact Sensor
         return [ driver: 'Generic Component Contact Sensor', product_name: 'Contact Sensor' ]
+    }
+    if ('0400' in d.ServerList) {   // Illuminance Sensor
+        return [ driver: 'Generic Component Omni Sensor', product_name: 'Illuminance Sensor' ]
     }
     if ('0402' in d.ServerList) {   // TemperatureMeasurement
         return [ driver: 'Generic Component Omni Sensor', product_name: 'Temperature Sensor' ]

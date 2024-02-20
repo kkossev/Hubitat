@@ -1,10 +1,10 @@
 {
  "packageName":"Matter Advanced Bridge (ALPHA testing)",
  "author":"Krassimir Kossev",
- "version":"0.4.0",
+ "version":"0.4.1",
  "minimumHEVersion":"2.3.8.119",
  "dateReleased":"2024-02-18",
- "releaseNotes":"v 0.4.0 - first version available in HPM",
+ "releaseNotes":"0.4.1  2024-02-20 kkossev  - (dev.branch) added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs; bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong! \nv 0.4.0 - first version available in HPM",
  "communityLink":"https://community.hubitat.com/t/project-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009",
  "bundles": [
   {
