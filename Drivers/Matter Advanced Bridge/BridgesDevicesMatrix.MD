@@ -10,8 +10,8 @@ Target release date : mid of March 2024
 ### <b>Matter Advanced Bridge Project : MVP</b>
 1. Publish and maintain a list of devices types work and which do not work for each of the Matter Bridges tested. (**status: WIP**)
 2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (**Status: WIP**)
-3. Stable discovery process. (**Status: TESTING (ver 0.4.0)**)
-4. RGB bulb bugs fixed and tested.  (**Status: WIP**)
+3. Stable discovery process. (**Status: TESTING (from ver 0.4.0)**)
+4. RGB bulb bugs fixed and tested.  (**Status: TESTING (ver 0.4.1)**)
 5. Battery level support. (**status: TODO**)
 6. Make the refresh command work in the child devices. (**Status: TODO**)
 7. Curtain Motors (WindowCovering) bugs fixed and tested.(**status: TODO**)
@@ -34,8 +34,8 @@ Target release date : mid of March 2024
 | Motion Sensors            | working OK - tested          | Not all motion sensors are working! |
 | mmWave Presence Sensors   | working OK - tested          | Moes/Linptech                     |
 | Contact Sensors           | working OK - tested          | Generic Component Contact Sensor  |
-| Water Leak Sensor         | working OK - tested          | as contact / switch               |
-| Tuya Valve on/off         | working OK - tested          | as contact / switch               |
+| Water Leak Sensor         | working OK - tested          | as a contact / switch             |
+| Tuya Valve on/off         | working OK - tested          | as a contact / switch             |
 | Temperature Sensor        | ????????                     |  test it!                         |
 | Humidity Sensor           | ????????                     |  test it!                         |
 | Zemismart Curtain Motor   | working (some bugs to be fixed) | Zemismart Curtain Motor        |
@@ -206,12 +206,13 @@ Table Legend:
 * Matter interface status (operational/failure) can not be checked in the driver - it is unknown whether the bridge is online or offline before sendinga ping command.
 * Subscription to Matter events does not work - this prevents buttons/scene switches supprot in Hubitat. 
 * There is no decoding of matter complex data structures - Hue bridge rooms as example can not be imported.
+* Hubitat pareser for some matter messages throws exception java.lang.ArrayIndexOutOfBoundsException - the effect of this problem is unknown.
 
 ----------------------------
 
 ## Known driver issues
 
-* TODO
+* Performance may not be the optimal, because of the huge state variables. Optimizating the speed/performance will be a second stage of the project, after the BETA release.
 * TODO
 
 ----------------------------
