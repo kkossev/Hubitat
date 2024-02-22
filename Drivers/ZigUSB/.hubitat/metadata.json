@@ -1,0 +1,16 @@
+{
+  "files": [
+    {
+      "filepath": "/C:/Work/Hubitat/Drivers/ZigUSB/ZigUSB.groovy",
+      "id": 2823,
+      "codeType": "driver",
+      "version": 2
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Drivers/ZigUSB/ZigUSB.groovy",
+      "id": 2823,
+      "codeType": "driver",
+      "version": 14
+    }
+  ]
+}
