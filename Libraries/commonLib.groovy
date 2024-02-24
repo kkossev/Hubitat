@@ -1,4 +1,4 @@
-/* groovylint-disable ImplicitReturnStatement */
+/* groovylint-disable ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, NoDef, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.0',
+    version: '3.0.3',
     documentationLink: ''
 )
 /*
@@ -30,9 +30,12 @@ library(
   * ver. 2.0.0  2023-05-08 kkossev  - first published version 2.x.x
   * ver. 2.1.6  2023-11-06 kkossev  - last update on version 2.x.x
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
-  * ver. 3.0.1  2023-12-06 kkossev  - (dev.branch) Info event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
-  * ver. 3.0.2  2023-12-17 kkossev  - (dev.branch) configure() changes; Groovy Lint, Format and Fix v3.0.0
+  * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
+  * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
+  * ver. 3.0.3  2024-02-24 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; 
   *
+  *                                   TODO: add custom* handlers for the new drivers!
+  *                                   TODO: remove the automatic capabilities selectionm for the new drivers!
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
   *                                   TODO: battery voltage low/high limits configuration
   *                                   TODO: add GetInof (endpoints list) command
@@ -43,15 +46,15 @@ library(
  *
 */
 
-String commonLibVersion() { '3.0.2' }
-String thermostatLibStamp() { '2023/12/17 10:15 PM' }
+String commonLibVersion() { '3.0.3' }
+String thermostatLibStamp() { '2024/02/24 9:04 AM' }
 
 import groovy.transform.Field
-import hubitat.device.HubMultiAction
-import hubitat.device.Protocol
-import hubitat.helper.HexUtils
+//import hubitat.device.HubMultiAction
+//import hubitat.device.Protocol
+//import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
-import java.util.concurrent.ConcurrentHashMap
+//import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 @Field static final Boolean _THREE_STATE = true
@@ -99,7 +102,7 @@ metadata {
         if (deviceType in  ['Device', 'MotionSensor', 'Radar']) {
             capability 'MotionSensor'
         }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Plug', 'Outlet', 'Thermostat', 'Fingerbot', 'Dimmer', 'Bulb', 'IRBlaster']) {
+        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Fingerbot', 'Dimmer', 'Bulb', 'IRBlaster']) {
             capability 'Actuator'
         }
         if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'Fingerbot', 'ButtonDimmer', 'AqaraCube', 'IRBlaster']) {
@@ -109,10 +112,7 @@ metadata {
         if (deviceType in  ['Thermostat']) {
             capability 'Thermostat'
         }
-        if (deviceType in  ['Plug', 'Outlet']) {
-            capability 'Outlet'
-        }
-        if (deviceType in  ['Device', 'Switch', 'Plug', 'Outlet', 'Dimmer', 'Fingerbot', 'Bulb']) {
+        if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Fingerbot', 'Bulb']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
@@ -151,7 +151,7 @@ metadata {
         //input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
-        if (advancedOptions == true || advancedOptions == false) { // groovy ...
+        if (device) {
             if (device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
                 input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
@@ -163,7 +163,7 @@ metadata {
         }
 
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
-        if (advancedOptions == true || advancedOptions == true) {
+        if (device) {  // advancedOptions == true || advancedOptions == true
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 //if (healthCheckMethod != null && safeToInt(healthCheckMethod.value) != 0) {
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
@@ -171,7 +171,7 @@ metadata {
             if (device.hasCapability('Battery')) {
                 input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
             }
-            if ((deviceType in  ['Switch', 'Plug', 'Dimmer']) && _THREE_STATE == true) {
+            if ((deviceType in  ['Switch', 'Dimmer']) && _THREE_STATE == true) {
                 input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
             }
             input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
@@ -228,6 +228,7 @@ metadata {
 ]
 
 def isVirtual() { device.controllerType == null || device.controllerType == '' }
+/* groovylint-disable-next-line UnusedMethodParameter */
 def isChattyDeviceReport(description)  { return false /*(description?.contains("cluster: FC7E")) */ }
 //def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 def isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
@@ -235,6 +236,7 @@ def isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airr
 def isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 def isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
 def isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
+def isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
 /**
  * Parse Zigbee message
@@ -261,8 +263,8 @@ void parse(final String description) {
     else if (description?.startsWith('enroll request')) {
         logDebug "parse: enroll request: $description"
         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
-        if (settings?.logEnable) logInfo 'Sending IAS enroll response...'
-        ArrayList<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        if (settings?.logEnable) { logInfo 'Sending IAS enroll response...' }
+        def cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
     }
@@ -279,7 +281,7 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
-    if (!isChattyDeviceReport(description)) { logDebug "parse: descMap = ${descMap } description=${description}"}
+    if (!isChattyDeviceReport(description)) { logDebug "parse: descMap = ${descMap} description=${description }" }
     //
     //final String clusterName = clusterLookup(descMap.clusterInt)
     //final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
@@ -314,9 +316,14 @@ void parse(final String description) {
             parseLevelControlCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseLevelControlCluster(descMap + map) }
             break
-        case 0x000C :                                       // Aqara TVOC Air Monitor; Aqara Cube T1 Pro
-            parseAnalogInputCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map) }
+        case 0x000C :                                       // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
+            if (isZigUSB()) {
+                parseZigUSBAnlogInputCluster(description)
+            }
+            else {
+                parseAnalogInputCluster(descMap)
+                descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map) }
+            }
             break
         case 0x0012 :                                       // Aqara Cube - Multistate Input
             parseMultistateInputCluster(descMap)
@@ -505,11 +512,29 @@ void parseReadReportingConfigResponse(final Map descMap) {
         else {
             logDebug "descMap.data.size = ${descMap.data.size()}"
         }
-        logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribute:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=='00' ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
+        logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribute:${descMap.data[3] + descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0] == '00' ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
     }
     else {
-        logWarn "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribute:${descMap.data[3]+descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0]=='00' ? 'Success' : '<b>Failure</b>'})"
+        logWarn "<b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribute:${descMap.data[3] + descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0] == '00' ? 'Success' : '<b>Failure</b>'})"
     }
+}
+
+def executeCustomHandler(String handlerName, handlerArgs) {
+    if (!this.respondsTo(handlerName)) {
+        logDebug "executeCustomHandler: function <b>${handlerName}</b> not found"
+        return false
+    }
+    // execute the customHandler function
+    boolean result = false
+    try {
+        result = "$handlerName"(handlerArgs)
+    }
+    catch (e) {
+        logWarn "executeCustomHandler: Exception '${e}'caught while processing <b>$handlerName</b>(<b>$handlerArgs</b>) (val=${fncmd}))"
+        return false
+    }
+    //logDebug "customSetFunction result is ${fncmd}"
+    return result
 }
 
 /**
@@ -525,6 +550,10 @@ void parseDefaultCommandResponse(final Map descMap) {
         logWarn "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} error: ${status}"
     } else {
         logDebug "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} response: ${status}"
+        // ZigUSB has its own interpretation of the Zigbee standards ... :(
+        if (isZigUSB()) {
+            executeCustomHandler('customParseDefaultCommandResponse', descMap)
+        }
     }
 }
 
@@ -625,11 +654,10 @@ void parseXiaomiCluster(final Map descMap) {
 }
 
 @Field static final int ROLLING_AVERAGE_N = 10
-double approxRollingAverage (double avg, double new_sample) {
-    if (avg == null || avg == 0) { avg = new_sample }
+BigDecimal approxRollingAverage(BigDecimal avg, BigDecimal newSample) {
+    if (avg == null || avg == 0) { avg = newSample }
     avg -= avg / ROLLING_AVERAGE_N
-    avg += new_sample / ROLLING_AVERAGE_N
-    // TOSO: try Method II : New average = old average * (n-1)/n + new value /n
+    avg += newSample / ROLLING_AVERAGE_N
     return avg
 }
 
@@ -645,11 +673,13 @@ double approxRollingAverage (double avg, double new_sample) {
  * @param descMap Zigbee message in parsed map format
  */
 void parseBasicCluster(final Map descMap) {
-    def now = new Date().getTime()
+    Long now = new Date().getTime()
+    /*
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.states == null) { state.states = [:] }
     if (state.stats == null) { state.stats = [:] }
+    */
     state.lastRx['checkInTime'] = now
     switch (descMap.attrInt as Integer) {
         case 0x0000:
@@ -758,8 +788,8 @@ def sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
         def maxVolts = 3.2
         def pct = (volts - minVolts) / (maxVolts - minVolts)
         def roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0) roundedPct = 1
-        if (roundedPct > 100) roundedPct = 100
+        if (roundedPct <= 0) { roundedPct = 1 }
+        if (roundedPct > 100) { roundedPct = 100 }
         if (convertToPercent == true) {
             result.value = Math.min(100, roundedPct)
             result.name = 'battery'
@@ -831,6 +861,7 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
  * Zigbee Identity Cluster 0x0003
  * -----------------------------------------------------------------------------
 */
+/* groovylint-disable-next-line UnusedMethodParameter */
 void parseIdentityCluster(final Map descMap) {
     logDebug 'unprocessed parseIdentityCluster'
 }
@@ -857,7 +888,7 @@ void parseScenesCluster(final Map descMap) {
 void parseGroupsCluster(final Map descMap) {
     // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]]
     logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}"
-    if (state.zigbeeGroups == null) state.zigbeeGroups = [:]
+    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     switch (descMap.command as Integer) {
         case 0x00: // Add group    0x0001 – 0xfff7
             final List<String> data = descMap.data as List<String>
@@ -952,7 +983,7 @@ List<String> addGroupMembership(groupNr) {
     final Integer group = safeToInt(groupNr)
     if (group < 1 || group > 0xFFF7) {
         logWarn "addGroupMembership: invalid group ${groupNr}"
-        return
+        return []
     }
     final String groupHex = DataType.pack(group, DataType.UINT16, true)
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x00, [:], DELAY_MS, "${groupHex} 00")
@@ -969,6 +1000,7 @@ List<String> viewGroupMembership(groupNr) {
     return cmds
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 List<String> getGroupMembership(dummy) {
     List<String> cmds = []
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')
@@ -981,7 +1013,7 @@ List<String> removeGroupMembership(groupNr) {
     final Integer group = safeToInt(groupNr)
     if (group < 1 || group > 0xFFF7) {
         logWarn "removeGroupMembership: invalid group ${groupNr}"
-        return
+        return []
     }
     final String groupHex = DataType.pack(group, DataType.UINT16, true)
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x03, [:], DELAY_MS, "${groupHex} 00")
@@ -998,6 +1030,7 @@ List<String> removeAllGroups(groupNr) {
     return cmds
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 List<String> notImplementedGroups(groupNr) {
     List<String> cmds = []
     //final Integer group = safeToInt(groupNr)
@@ -1007,7 +1040,7 @@ List<String> notImplementedGroups(groupNr) {
 }
 
 @Field static final Map GroupCommandsMap = [
-    '--- select ---'           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'GroupCommandsHelp'],
+    '--- select ---'           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'groupCommandsHelp'],
     'Add group'                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'],
     'View group'               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'],
     'Get group membership'     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'],
@@ -1016,11 +1049,11 @@ List<String> notImplementedGroups(groupNr) {
     'Add group if identifying' : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
 ]
 
-def zigbeeGroups(command=null, par=null) {
+void zigbeeGroups(command=null, par=null) {
     logInfo "executing command \'${command}\', parameter ${par}"
-    ArrayList<String> cmds = []
-    if (state.zigbeeGroups == null) state.zigbeeGroups = [:]
-    if (state.zigbeeGroups['groups'] == null) state.zigbeeGroups['groups'] = []
+    List<String> cmds = []
+    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
+    if (state.zigbeeGroups['groups'] == null) { state.zigbeeGroups['groups'] = [] }
     def value
     Boolean validated = false
     if (command == null || !(command in (GroupCommandsMap.keySet() as List))) {
@@ -1028,7 +1061,7 @@ def zigbeeGroups(command=null, par=null) {
         return
     }
     value = GroupCommandsMap[command]?.type == 'number' ? safeToInt(par, -1) : 0
-    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) validated = true
+    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) { validated = true }
     if (validated == false && GroupCommandsMap[command]?.min != null && GroupCommandsMap[command]?.max != null) {
         log.warn "zigbeeGroups: command <b>command</b> parameter <b>${par}</b> must be within ${GroupCommandsMap[command]?.min} and  ${GroupCommandsMap[command]?.max} "
         return
@@ -1050,7 +1083,8 @@ def zigbeeGroups(command=null, par=null) {
     sendZigbeeCommands(cmds)
 }
 
-def GroupCommandsHelp(val) {
+/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
+void groupCommandsHelp(val) {
     logWarn 'GroupCommands: select one of the commands in this list!'
 }
 
@@ -1068,7 +1102,7 @@ void parseOnOffCluster(final Map descMap) {
 
     else if (descMap.attrId == '0000') {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-        final long rawValue = hexStrToUnsignedInt(descMap.value)
+        int rawValue = hexStrToUnsignedInt(descMap.value)
         sendSwitchEvent(rawValue)
     }
     else if (descMap.attrId in ['4000', '4001', '4002', '4004', '8000', '8001', '8002', '8003']) {
@@ -1097,115 +1131,87 @@ def toggle() {
     logInfo "${descriptionText}"
 }
 
-def off() {
+void off() {
     if (DEVICE_TYPE in ['Thermostat']) { thermostatOff(); return }
     if ((settings?.alwaysOn ?: false) == true) {
         logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
         return
     }
-    if (state.states == null) { state.states = [:] }
-    state.states['isDigital'] = true
-    logDebug "Switching ${device.displayName} Off"
-    def cmds = zigbee.off()
-    /*
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(0x0006, 0x00, "", [destEndpoint: 0x02])
-    }
-        else if (state.model == "TS0601") {
-            if (isDinRail() || isRTXCircuitBreaker()) {
-                cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "00")
-            }
-            else {
-                cmds = zigbee.command(0xEF00, 0x0, "00010101000100")
-            }
-        }
-        else if (isHEProblematic()) {
-            cmds = ["he cmd 0x${device.deviceNetworkId}  0x01 0x0006 0 {}","delay 200"]
-            logWarn "isHEProblematic() : sending off() : ${cmds}"
-        }
-        else if (device.endpointId == "F2") {
-            cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 0 {}","delay 200"]
-        }
-*/
+    List cmds = settings?.inverceSwitch == false ?  zigbee.off()  : zigbee.on()
+    String currentState = device.currentState('switch')?.value ?: 'n/a'
+    logDebug "off() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
-        if ((device.currentState('switch')?.value ?: 'n/a') == 'off') {
+        if (currentState == 'off') {
             runIn(1, 'refresh',  [overwrite: true])
         }
-        def value = SwitchThreeStateOpts.options[2]    // 'switching_on'
-        def descriptionText = "${value}"
+        String value = SwitchThreeStateOpts.options[2]    // 'switching_on'
+        String descriptionText = "${value}"
         if (logEnable) { descriptionText += ' (2)' }
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
     else {
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
+        if (currentState != 'off') {
+            logDebug "Switching ${device.displayName} Off"
+        }
+        else {
+            logDebug "ignoring off command for ${device.displayName} - already off"
+            return
+        }
     }
 
+    state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
 }
 
-def on() {
+void on() {
     if (DEVICE_TYPE in ['Thermostat']) { thermostatOn(); return }
-    if (state.states == null) { state.states = [:] }
-    state.states['isDigital'] = true
-    logDebug "Switching ${device.displayName} On"
-    def cmds = zigbee.on()
-/*
-    if (device.getDataValue("model") == "HY0105") {
-        cmds += zigbee.command(0x0006, 0x01, "", [destEndpoint: 0x02])
-    }
-    else if (state.model == "TS0601") {
-        if (isDinRail() || isRTXCircuitBreaker()) {
-            cmds = sendTuyaCommand("10", DP_TYPE_BOOL, "01")
-        }
-        else {
-            cmds = zigbee.command(0xEF00, 0x0, "00010101000101")
-        }
-    }
-    else if (isHEProblematic()) {
-        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"]
-        logWarn "isHEProblematic() : sending off() : ${cmds}"
-    }
-    else if (device.endpointId == "F2") {
-        cmds = ["he cmd 0x${device.deviceNetworkId} 0x01 0x0006 1 {}","delay 200"]
-    }
-*/
+    List cmds = settings?.inverceSwitch == false ?  zigbee.on()  : zigbee.off()
+    String currentState = device.currentState('switch')?.value ?: 'n/a'
+    log.debug "on() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
         if ((device.currentState('switch')?.value ?: 'n/a') == 'on') {
             runIn(1, 'refresh',  [overwrite: true])
         }
-        def value = SwitchThreeStateOpts.options[3]    // 'switching_on'
-        def descriptionText = "${value}"
+        String value = SwitchThreeStateOpts.options[3]    // 'switching_on'
+        String descriptionText = "${value}"
         if (logEnable) { descriptionText += ' (2)' }
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
     else {
-        logWarn "_THREE_STATE=${_THREE_STATE} settings?.threeStateEnable=${settings?.threeStateEnable}"
+        if (currentState != 'on') {
+            logDebug "Switching ${device.displayName} On"
+        }
+        else {
+            logDebug "ignoring on command for ${device.displayName} - already on"
+            return
+        }
     }
-
+    state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
 }
 
-def sendSwitchEvent(switchValue) {
-    def value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown'
-    def map = [:]
-    //boolean bWasChange = false
+void sendSwitchEvent(int switchValuePar) {
+    int switchValue = safeToInt(switchValuePar)
+    if (settings?.inverceSwitch == true) {
+        switchValue = (switchValue == 0x00) ? 0x01 : 0x00
+    }
+    String value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown'
+    Map map = [:]
     boolean debounce = state.states['debounce'] ?: false
-    def lastSwitch = state.states['lastSwitch'] ?: 'unknown'
+    String lastSwitch = state.states['lastSwitch'] ?: 'unknown'
     if (value == lastSwitch && (debounce || (settings.ignoreDuplicated ?: false))) {
         logDebug "Ignored duplicated switch event ${value}"
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
-        return null
-    } else {
-        logTrace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
+        return
     }
-    def isDigital = state.states['isDigital']
+    logTrace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
+    boolean isDigital = state.states['isDigital'] ?: false
     map.type = isDigital ? 'digital' : 'physical'
     if (lastSwitch != value) {
-        //bWasChange = true
         logDebug "switch state changed from <b>${lastSwitch}</b> to <b>${value}</b>"
         state.states['debounce'] = true
         state.states['lastSwitch'] = value
@@ -1429,7 +1435,7 @@ def parseOnOffAttributes(it) {
 
 def sendButtonEvent(buttonNumber, buttonState, isDigital=false) {
     def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
-    if (txtEnable) { log.info "${device.displayName } $event.descriptionText"}
+    if (txtEnable) { log.info "${device.displayName } $event.descriptionText" }
     sendEvent(event)
 }
 
@@ -1489,8 +1495,8 @@ void parseLevelControlCluster(final Map descMap) {
 
 def sendLevelControlEvent(rawValue) {
     def value = rawValue as int
-    if (value < 0) value = 0
-    if (value > 100) value = 100
+    if (value < 0) { value = 0 }
+    if (value > 100) { value = 100 }
     def map = [:]
 
     def isDigital = state.states['isDigital']
@@ -1729,24 +1735,29 @@ private void sendDelayedIllumEvent(Map eventMap) {
 void parseTemperatureCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final long value = hexStrToUnsignedInt(descMap.value)
-    handleTemperatureEvent(value / 100.0F as Float)
+    int value = hexStrToSignedInt(descMap.value)
+    handleTemperatureEvent(value / 100.0F as BigDecimal)
 }
 
-void handleTemperatureEvent( Float temperature, Boolean isDigital=false ) {
-    def eventMap = [:]
+void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
+    Map eventMap = [:]
+    BigDecimal temperature = safeToBigDecimal(temperaturePar)
     if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] }
     eventMap.name = 'temperature'
-    def Scale = location.temperatureScale
-    if (Scale == 'F') {
+    if (location.temperatureScale == 'F') {
         temperature = (temperature * 1.8) + 32
-        eventMap.unit = "\u00B0" + 'F'
+        eventMap.unit = '\u00B0F'
     }
     else {
-        eventMap.unit = "\u00B0" + 'C'
+        eventMap.unit = '\u00B0C'
     }
-    def tempCorrected = (temperature + safeToDouble(settings?.temperatureOffset ?: 0)) as Float
-    eventMap.value  =  (Math.round(tempCorrected * 10) / 10.0) as Float
+    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0))
+    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
+    BigDecimal lastTemp = device.currentValue('temperature') ?: 0
+    if (Math.abs(lastTemp - tempCorrected) < 0.001) {
+        logTrace "skipped temperature ${tempCorrected}, less than delta 0.001 (lastTemp=${lastTemp})"
+        return
+    }
     eventMap.type = isDigital == true ? 'digital' : 'physical'
     eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     if (state.states['isRefresh'] == true) {
@@ -1838,7 +1849,7 @@ void parseElectricalMeasureCluster(final Map descMap) {
     if (DEVICE_TYPE in  ['Switch']) {
         parseElectricalMeasureClusterSwitch(descMap)
     }
-    else {
+    else if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) {
         logWarn 'parseElectricalMeasureCluster is NOT implemented1'
     }
 }
@@ -1856,7 +1867,7 @@ void parseMeteringCluster(final Map descMap) {
     if (DEVICE_TYPE in  ['Switch']) {
         parseMeteringClusterSwitch(descMap)
     }
-    else {
+    else if (!executeCustomHandler('customParseMeteringCluster', descMap)) {
         logWarn 'parseMeteringCluster is NOT implemented1'
     }
 }
@@ -1925,6 +1936,9 @@ void parseAnalogInputCluster(final Map descMap) {
     }
     else if (DEVICE_TYPE in ['AqaraCube']) {
         parseAqaraCubeAnalogInputCluster(descMap)
+    }
+    else if (isZigUSB()) {
+        parseZigUSBAnlogInputCluster(descMap)
     }
     else {
         logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}"
@@ -2096,7 +2110,7 @@ void processTuyaDP(descMap, dp, dp_id, fncmd, dp_len=0) {
                 logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})"
             }
             else {
-                sendSwitchEvent(fncmd)
+                sendSwitchEvent(fncmd as int)
             }
             break
         case 0x02 :
@@ -2133,7 +2147,7 @@ private int getTuyaAttributeValue(ArrayList _data, index) {
 private sendTuyaCommand(dp, dp_type, fncmd) {
     ArrayList<String> cmds = []
     def ep = safeToInt(state.destinationEP)
-    if (ep == null || ep == 0) ep = 1
+    if (ep == null || ep == 0) { ep = 1 }
     def tuyaCmd = isFingerbot() ? 0x04 : SETDATA
 
     cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd )
@@ -2150,7 +2164,7 @@ def tuyaTest( dpCommand, dpValue, dpTypeString ) {
     def dpType   = dpTypeString == 'DP_TYPE_VALUE' ? DP_TYPE_VALUE : dpTypeString == 'DP_TYPE_BOOL' ? DP_TYPE_BOOL : dpTypeString == 'DP_TYPE_ENUM' ? DP_TYPE_ENUM : null
     def dpValHex = dpTypeString == 'DP_TYPE_VALUE' ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
 
-    if (settings?.logEnable) log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
+    if (settings?.logEnable) { log.warn "${device.displayName}  sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}" }
 
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
@@ -2160,7 +2174,7 @@ private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 
 def tuyaBlackMagic() {
     def ep = safeToInt(state.destinationEP ?: 01)
-    if (ep == null || ep == 0) ep = 1
+    if (ep == null || ep == 0) { ep = 1 }
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
 }
 
@@ -2218,8 +2232,11 @@ def initializeDevice() {
 def configureDevice() {
     ArrayList<String> cmds = []
     logInfo 'configureDevice...'
+    if (this.respondsTo('customConfigureDevice')) {
+        cmds += customConfigureDevice()
 
-    if (DEVICE_TYPE in  ['AirQuality']) { cmds += configureDeviceAirQuality() }
+    }
+    else if (DEVICE_TYPE in  ['AirQuality']) { cmds += configureDeviceAirQuality() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += configureDeviceFingerbot() }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
     else if (DEVICE_TYPE in  ['Switch'])     { cmds += configureDeviceSwitch() }
@@ -2246,7 +2263,11 @@ def refresh() {
     setRefreshRequest()    // 3 seconds
 
     // device type specific refresh handlers
-    if (DEVICE_TYPE in  ['AqaraCube'])       { cmds += refreshAqaraCube() }
+    if (this.respondsTo('customRefresh')) {
+        cmds += customRefresh()
+
+    }
+    else if (DEVICE_TYPE in  ['AqaraCube'])       { cmds += refreshAqaraCube() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ['AirQuality']) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ['Switch'])     { cmds += refreshSwitch() }
@@ -2260,7 +2281,7 @@ def refresh() {
             cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)         // battery voltage
             cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)         // battery percentage
         }
-        if (DEVICE_TYPE in  ['Plug', 'Dimmer']) {
+        if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
             cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
         }
@@ -2302,9 +2323,9 @@ void sendInfoEvent(String info=null) {
 
 void ping() {
     if (!(isAqaraTVOC_OLD())) {
-        if (state.lastTx == null ) state.lastTx = [:]
+        if (state.lastTx == null ) { state.lastTx = [:] }
         state.lastTx['pingTime'] = new Date().getTime()
-        if (state.states == null ) state.states = [:]
+        //if (state.states == null ) { state.states = [:] }
         state.states['isPing'] = true
         scheduleCommandTimeoutCheck()
         if (!isVirtual()) {
@@ -2348,7 +2369,7 @@ def virtualPong() {
  */
 void sendRttEvent( String value=null) {
     def now = new Date().getTime()
-    if (state.lastTx == null ) state.lastTx = [:]
+    if (state.lastTx == null ) { state.lastTx = [:] }
     def timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
     def descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
     if (value == null) {
@@ -2453,7 +2474,7 @@ void autoPoll() {
     logDebug 'autoPoll()...'
     checkDriverVersion()
     List<String> cmds = []
-    if (state.states == null) state.states = [:]
+    //if (state.states == null) { state.states = [:] }
     //state.states["isRefresh"] = true
 
     if (DEVICE_TYPE in  ['AirQuality']) {
@@ -2615,6 +2636,10 @@ static Double safeToDouble(val, Double defaultVal=0.0) {
     return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
+static BigDecimal safeToBigDecimal(val, BigDecimal defaultVal=0.0) {
+    return "${val}"?.isBigDecimal() ? "${val}".toBigDecimal() : defaultVal
+}
+
 void sendZigbeeCommands(ArrayList<String> cmd) {
     logDebug "sendZigbeeCommands(cmd=$cmd)"
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
@@ -2626,7 +2651,7 @@ void sendZigbeeCommands(ArrayList<String> cmd) {
     sendHubCommand(allActions)
 }
 
-def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${device.getDataValue('model') } ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString}) "}
+def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${device.getDataValue('model') } ${device.getDataValue('manufacturer') }) (${getModel()} ${location.hub.firmwareVersionString}) "}
 
 def getDeviceInfo() {
     return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>"
@@ -2735,24 +2760,26 @@ void initializeVars( boolean fullInit = false ) {
     if (state.health == null) { state.health = [:] }
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
 
-    if (fullInit || settings?.txtEnable == null) device.updateSetting('txtEnable', true)
-    if (fullInit || settings?.logEnable == null) device.updateSetting('logEnable', true)
-    if (fullInit || settings?.traceEnable == null) device.updateSetting('traceEnable', false)
-    if (fullInit || settings?.alwaysOn == null) device.updateSetting('alwaysOn', false)
-    if (fullInit || settings?.advancedOptions == null) device.updateSetting('advancedOptions', [value:false, type:'bool'])
-    if (fullInit || settings?.healthCheckMethod == null) device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum'])
-    if (fullInit || settings?.healthCheckInterval == null) device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum'])
-    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
-    if (fullInit || settings?.voltageToPercent == null) device.updateSetting('voltageToPercent', false)
+    if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
+    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', true) }
+    if (fullInit || settings?.traceEnable == null) { device.updateSetting('traceEnable', false) }
+    if (fullInit || settings?.alwaysOn == null) { device.updateSetting('alwaysOn', false) }
+    if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
+    if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
+    if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.minReportingTime == null) device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number'])
-        if (fullInit || settings?.maxReportingTime == null) device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number'])
+        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
+        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
     }
     if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.illuminanceThreshold == null) device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number'])
-        if (fullInit || settings?.illuminanceCoeff == null) device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal'])
+        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
+        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
     }
     // device specific initialization should be at the end
+    executeCustomHandler('customInitializeVars', fullInit)
+    executeCustomHandler('customInitEvents', fullInit)
     if (DEVICE_TYPE in ['AirQuality']) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ['Fingerbot'])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) }
     if (DEVICE_TYPE in ['AqaraCube'])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
@@ -2823,11 +2850,11 @@ def logTrace(msg) {
 // _DEBUG mode only
 void getAllProperties() {
     log.trace 'Properties:'
-    device.properties.each { it->
+    device.properties.each { it ->
         log.debug it
     }
     log.trace 'Settings:'
-    settings.each { it->
+    settings.each { it ->
         log.debug "${it.key} =  ${it.value}"    // https://community.hubitat.com/t/how-do-i-get-the-datatype-for-an-app-setting/104228/6?u=kkossev
     }
     log.trace 'Done'
@@ -2835,7 +2862,7 @@ void getAllProperties() {
 
 // delete all Preferences
 void deleteAllSettings() {
-    settings.each { it->
+    settings.each { it ->
         logDebug "deleting ${it.key}"
         device.removeSetting("${it.key}")
     }
@@ -2844,7 +2871,7 @@ void deleteAllSettings() {
 
 // delete all attributes
 void deleteAllCurrentStates() {
-    device.properties.supportedAttributes.each { it->
+    device.properties.supportedAttributes.each { it ->
         logDebug "deleting $it"
         device.deleteCurrentState("$it")
     }
@@ -2853,7 +2880,7 @@ void deleteAllCurrentStates() {
 
 // delete all State Variables
 void deleteAllStates() {
-    state.each { it->
+    state.each { it ->
         logDebug "deleting state ${it.key}"
     }
     state.clear()
@@ -2869,7 +2896,7 @@ void deleteAllChildDevices() {
     logDebug 'deleteAllChildDevices : not implemented!'
 }
 
-def parseTest(par) {
+void parseTest(par) {
     //read attr - raw: DF8D0104020A000029280A, dni: DF8D, endpoint: 01, cluster: 0402, size: 0A, attrId: 0000, encoding: 29, command: 0A, value: 280A
     log.warn "parseTest(${par})"
     parse(par)
@@ -2883,12 +2910,12 @@ def testJob() {
  * Calculates and returns the cron expression
  * @param timeInSeconds interval in seconds
  */
-def getCron( timeInSeconds ) {
+String getCron(int timeInSeconds) {
     //schedule("${rnd.nextInt(59)} ${rnd.nextInt(9)}/${intervalMins} * ? * * *", 'ping')
     // TODO: runEvery1Minute runEvery5Minutes runEvery10Minutes runEvery15Minutes runEvery30Minutes runEvery1Hour runEvery3Hours
     final Random rnd = new Random()
-    def minutes = (timeInSeconds / 60 ) as int
-    def hours = (minutes / 60 ) as int
+    int minutes = (timeInSeconds / 60 ) as int
+    int  hours = (minutes / 60 ) as int
     if (hours > 23) { hours = 23 }
     String cron
     if (timeInSeconds < 60) {
@@ -2905,9 +2932,23 @@ def getCron( timeInSeconds ) {
     return cron
 }
 
+// credits @thebearmay
+String formatUptime() {
+    return formatTime(location.hub.uptime)
+}
+
+String formatTime(int timeInSeconds) {
+    if (timeInSeconds == null) { return UNKNOWN }
+    int days = (timeInSeconds / 86400).toInteger()
+    int hours = ((timeInSeconds % 86400) / 3600).toInteger()
+    int minutes = ((timeInSeconds % 3600) / 60).toInteger()
+    int seconds = (timeInSeconds % 60).toInteger()
+    return "${days}d ${hours}h ${minutes}m ${seconds}s"
+}
+
 boolean isTuya() {
-    def model = device.getDataValue('model')
-    def manufacturer = device.getDataValue('manufacturer')
+    String model = device.getDataValue('model')
+    String manufacturer = device.getDataValue('manufacturer')
     if (model?.startsWith('TS') && manufacturer?.startsWith('_TZ')) {
         return true
     }
@@ -2938,56 +2979,48 @@ void updateTuyaVersion() {
 }
 
 boolean isAqara() {
-    def model = device.getDataValue('model')
-    //def manufacturer = device.getDataValue('manufacturer')
-    if (model?.startsWith('lumi')) {
-        return true
-    }
-    return false
+    return device.getDataValue('model')?.startsWith('lumi') ?: false
 }
 
-def updateAqaraVersion() {
+void updateAqaraVersion() {
     if (!isAqara()) {
         logTrace 'not Aqara'
         return
     }
-    def application = device.getDataValue('application')
+    String application = device.getDataValue('application')
     if (application != null) {
-        def str = '0.0.0_' + String.format('%04d', zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))))
+        String str = '0.0.0_' + String.format('%04d', zigbee.convertHexToInt(application.take(2)))
         if (device.getDataValue('aqaraVersion') != str) {
             device.updateDataValue('aqaraVersion', str)
             logInfo "aqaraVersion set to $str"
         }
     }
-    else {
-        return null
-    }
 }
 
-String unix2formattedDate( unixTime ) {
+String unix2formattedDate(Long unixTime) {
     try {
-        if (unixTime == null) return null
-        def date = new Date(unixTime.toLong())
+        if (unixTime == null) { return null }
+        Date date = new Date(unixTime.toLong())
         return date.format('yyyy-MM-dd HH:mm:ss.SSS', location.timeZone)
-    } catch (Exception e) {
+    } catch (e) {
         logDebug "Error formatting date: ${e.message}. Returning current time instead."
         return new Date().format('yyyy-MM-dd HH:mm:ss.SSS', location.timeZone)
     }
 }
 
-def formattedDate2unix( formattedDate ) {
+long formattedDate2unix(String formattedDate) {
     try {
-        if (formattedDate == null) return null
-        def date = Date.parse('yyyy-MM-dd HH:mm:ss.SSS', formattedDate)
+        if (formattedDate == null) { return null }
+        Date date = Date.parse('yyyy-MM-dd HH:mm:ss.SSS', formattedDate)
         return date.getTime()
-    } catch (Exception e) {
+    } catch (e) {
         logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
         return now()
     }
 }
 
-def test(par) {
-    ArrayList<String> cmds = []
+void test(String par) {
+    List<String> cmds = []
     log.warn "test... ${par}"
 
     cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]

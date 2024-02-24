@@ -4,13 +4,13 @@
       "filepath": "/C:/Work/Hubitat/Drivers/ZigUSB/ZigUSB.groovy",
       "id": 2823,
       "codeType": "driver",
-      "version": 2
+      "version": 33
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/ZigUSB/ZigUSB.groovy",
       "id": 2823,
       "codeType": "driver",
-      "version": 14
+      "version": 57
     }
   ]
 }

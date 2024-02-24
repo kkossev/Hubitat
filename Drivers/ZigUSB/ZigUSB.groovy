@@ -13,16 +13,14 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
- * For a big portions of code all credits go to Jonathan Bradshaw.
+ * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success!
  *
- * ver. 3.0.3  2024-12-12 kkossev  - (dev. branch) first test version
- *
+ *                                   TODO: 
  *                                   TODO: ZigUSB on/off (inverted)! https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
  */
 
 static String version() { "3.0.3" }
-static String timeStamp() {"2024/02/22 10:01 PM"}
+static String timeStamp() { "2024/02/24 11:36 AM" }
 
 @Field static final Boolean _DEBUG = false
 
@@ -36,6 +34,7 @@ import groovy.json.JsonOutput
 
 deviceType = "Plug"
 @Field static final String DEVICE_TYPE = "Plug"
+/* groovylint-disable-next-line NglParseError */
 #include kkossev.commonLib
 
 // @Field static final Boolean _THREE_STATE = true  // move from the commonLib here?
@@ -57,6 +56,7 @@ metadata {
         }
         capability "Actuator"
         capability "Outlet"
+        capability 'Switch'
         capability 'TemperatureMeasurement'
         capability 'PowerMeter'
         capability 'EnergyMeter'
@@ -68,7 +68,7 @@ metadata {
         }
 
         // deviceType specific capabilities, commands and attributes
-        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Plug", "Valve"])) {
+        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
             command "zigbeeGroups", [
                 [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
                 [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
@@ -76,7 +76,8 @@ metadata {
         }
         // https://github.com/xyzroe/ZigUSB
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b/src/devices/xyzroe.ts
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0007,0006", outClusters:"0000,0006", model:"ZigUSB", manufacturer:"xyzroe.cc"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0007,0006", outClusters:"0000,0006", model:"ZigUSB", manufacturer:"xyzroe.cc", deviceJoinName: "Zigbee USB power monitor and switch"
+        // ep2: current; ep3: voltage; ep4: power; ep5: energy; ep6: frequency; ep7: power factor
     }
 
     preferences {
@@ -84,7 +85,7 @@ metadata {
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
         input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
         if (advancedOptions == true || advancedOptions == true) {
-            input (name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beet </i>", defaultValue: false)
+            input (name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: false)
             input (name: "inverceSwitch", type: "bool", title: "<b>Invert the switch on/off</b>", description: "<i>ZigUSB has the on and off states inverted!</i>", defaultValue: true)
         }
     }
@@ -101,62 +102,134 @@ metadata {
 
 def isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
-def refreshPlug() {
+/**
+ * ZigUSB has a really wierd way of reporting the on/off state back to the hub...
+ */
+void customParseDefaultCommandResponse(final Map descMap) {
+    logDebug "ZigUSB:  parseDefaultCommandResponse: ${descMap}"
+    parseOnOffCluster([attrId: '0000', value: descMap.data[0]])
+}
+
+def customRefresh() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
-    logDebug "refreshPlug() : ${cmds}"
+    logDebug "customRefresh() : ${cmds}"
     return cmds
 }
 
-def initVarsPlug(boolean fullInit=false) {
-    logDebug "initVarsPlug(${fullInit})"
+boolean customInitVars(boolean fullInit=false) {
+    logDebug "customInitVars(${fullInit})"
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
-    if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", false)
+    if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", true)
     if (fullInit || settings?.inverceSwitch == null) device.updateSetting("inverceSwitch", true)
-
+    return true
 }
 
-void initEventPlug(boolean fullInit=false) {
+boolean  customInitEvents(boolean fullInit=false) {
+    return true
 }
 
-def configureDevicePlug() {
+def customConfigureDevice() {
     List<String> cmds = []
-    if (isZBMINIL2()) {
-        logDebug "configureDevicePlug() : unbind ZBMINIL2 poll control cluster"
-        // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message.
-        // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
-        // https://github.com/Koenkk/zigbee2mqtt/issues/11676
-        // https://github.com/Koenkk/zigbee2mqtt/issues/10282
-        // https://github.com/zigpy/zha-device-handlers/issues/1519
-        cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
+    cmds += configureReporting("Write", ONOFF,  "1", "30", "0", sendNow=false)    // switch state should be always reported
+    logDebug "customConfigureDevice() : ${cmds}"
+    return cmds
+}
+
+void parseZigUSBAnlogInputCluster(String description) {
+
+    Map descMap = myParseDescriptionAsMap(description)
+    if (descMap == null) {
+        logWarn "parseZigUSBAnlogInputCluster: descMap is null"
+        return
+    }
+    // descMap=[raw:1C9F02000C1E55003915AEA7401C004204562C3430, dni:1C9F, endpoint:02, cluster:000C, size:1E, attrId:0055, encoding:39, command:0A, value:40A7AE15, clusterInt:12, attrInt:85, additionalAttrs:[[value:V,40, encoding:42, attrId:001C, consumedBytes:7, attrInt:28]]]
+    Map additionalAttrs = [:]
+    if (descMap.additionalAttrs != null && descMap.additionalAttrs.size() > 0) {
+        additionalAttrs = descMap.additionalAttrs[0] ?: [:]
+    }
+    // additionalAttrs=[value:W,40, encoding:42, attrId:001C, consumedBytes:7, attrInt:28]
+    //logDebug "parseZigUSBAnlogInputCluster: additionalAttrs=${additionalAttrs}"
+    String measurementType = UNKNOWN
+    if (additionalAttrs.value != null) {
+        String value = additionalAttrs['value']
+        String firstElement = value.split(',')[0]
+        switch (firstElement) {
+            case 'C' : measurementType = TEMPERATURE; break
+            case 'V' : measurementType = VOLTAGE; break
+            case 'A' : measurementType = AMPERAGE; break
+            case 'W' : measurementType = POWER; break
+            default : break
+        }
+        logTrace "parseZigUSBAnlogInputCluster: measurementType=${measurementType}"
+    }
+
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    int  value
+    BigDecimal floatValue
+    /*
+    descMap = [raw:1C9F02000C1E550039B98D863E 1C004204  41 2C3430  dni:1C9F, endpoint:02, cluster:000C, size:1E, attrId:0055, encoding:39, command:0A, value:3E868DB9, clusterInt:12, attrInt:85
+                   1C9F 02 000C 1E 5500 39 B98D863E
+                                   ^^^^ attribute
+                                           ^^^^^^^^ value : descMap.value=3E868DB9 floatValue =  floatValue=0.2628 (Amperage??)
+
+                                   1C00 42 04 412C3430
+
+                    'C' (0x43): 'temperature'
+                    'V' (0x56): 'voltage',
+                    'A' (0x41): 'current'
+                    'W' (0x57): 'power',
+
+                    read attr - raw: 1C9F02000C1E550039 643B8F40 1C004204 57 2C3430 -> power  value=408F3B64 floatValue=4.476 (W)
+                                                        ^^^^^^^^ value
+                                raw: 1C9F02000C1E550039 91ED2C3F 1C004204 41 2C3430 -> current value=3F2CED91 floatValue=0.6755 (A)
+                                                        ^^^^^^^^ value
+                                raw: 1C9F02000C1E550039 0781A540 1C004204 56 2C3430 -> voltage value=40A58107 floatValue=5.1720004 (v)
+
+    */
+
+    switch (descMap.endpoint) {
+        case '01' : // switch
+        case '02' : // current, voltage, power, reporting interval
+            if (descMap.attrId == '001C') {
+                logDebug "parseZigUSBAnlogInputCluster: (0x001C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} "
+            }
+            else {
+                try {
+                    value = hexStrToUnsignedInt(descMap.value)
+                    floatValue = Float.intBitsToFloat(value.intValue())
+                    logDebug "parseZigUSBAnlogInputCluster: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+                    logInfo "${measurementType} is ${floatValue.setScale(3, BigDecimal.ROUND_HALF_UP)} (raw:${value})"
+                }
+                catch (Exception e) {
+                    logWarn "parseZigUSBAnlogInputCluster: EXCEPTION (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+                }
+            }
+            break
+        case '05' : // uptime, seconds
+            value = hexStrToUnsignedInt(descMap.value)
+            logDebug "uptime is ${formatTime(value)} (raw:${value})" // 14042d 3h 46m 8s (raw:1213242368)
+            break
+        case '04' : // temperature
+        default :
+            value = hexStrToUnsignedInt(descMap.value)
+            logWarn "parseZigUSBAnlogInputCluster: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+            break
 
     }
-/*
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
-
-    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200)
-    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
-    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)
-    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)
-*/
-    cmds += configureReporting("Write", ONOFF,  "1", "30", "0", sendNow=false)    // switch state should be always reported
-    logDebug "configureDevicePlug() : ${cmds}"
-    return cmds
 }
 
-void parseElectricalMeasureClusterPlug(descMap) {
+void customParseElectricalMeasureCluster(descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseElectricalMeasureClusterPlug: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+    logDebug "customParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
-void parseMeteringClusterPlug(descMap) {
+void customParseMeteringCluster(descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseMeteringClusterPlug: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+    logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
 def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
