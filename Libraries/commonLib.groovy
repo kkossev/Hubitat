@@ -34,6 +34,7 @@ library(
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-02-24 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; 
   *
+  *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
   *                                   TODO: remove the automatic capabilities selectionm for the new drivers!
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
@@ -47,7 +48,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.3' }
-String thermostatLibStamp() { '2024/02/24 9:04 AM' }
+String thermostatLibStamp() { '2024/02/24 7:35 PM' }
 
 import groovy.transform.Field
 //import hubitat.device.HubMultiAction
@@ -82,7 +83,7 @@ metadata {
 
         // common commands for all device types
         // removed from version 2.0.6    //command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
-        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: ['--- select ---'] + ConfigureOpts.keySet() as List<String>]]
+        command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
         // deviceType specific capabilities, commands and attributes
         if (deviceType in ['Device']) {
@@ -152,7 +153,7 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if (device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) {
+            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) && !isZigUSB()) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
                 input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
             }
@@ -160,21 +161,19 @@ metadata {
                 input name: 'illuminanceThreshold', type: 'number', title: '<b>Illuminance Reporting Threshold</b>', description: '<i>Illuminance reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
             }
-        }
 
-        input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
-        if (device) {  // advancedOptions == true || advancedOptions == true
-            input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
-                //if (healthCheckMethod != null && safeToInt(healthCheckMethod.value) != 0) {
+            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
+            if (advancedOptions == true) {
+                input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-            //}
-            if (device.hasCapability('Battery')) {
-                input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
+                if (device.hasCapability('Battery')) {
+                    input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
+                }
+                if ((deviceType in  ['Switch', 'Plug', 'Dimmer']) && _THREE_STATE == true) {
+                    input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+                }
+                input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
             }
-            if ((deviceType in  ['Switch', 'Dimmer']) && _THREE_STATE == true) {
-                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
-            }
-            input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
         }
     }
 }
@@ -215,7 +214,7 @@ metadata {
 ]
 
 @Field static final Map ConfigureOpts = [
-    'Configure the device only'  : [key:2, function: 'configureNow'],
+    'Configure the device'       : [key:2, function: 'configureNow'],
     'Reset Statistics'           : [key:9, function: 'resetStatistics'],
     '           --            '  : [key:3, function: 'configureHelp'],
     'Delete All Preferences'     : [key:4, function: 'deleteAllSettings'],
@@ -2230,11 +2229,11 @@ def initializeDevice() {
  * @return zigbee commands
  */
 def configureDevice() {
-    ArrayList<String> cmds = []
+    List<String> cmds = []
     logInfo 'configureDevice...'
+    
     if (this.respondsTo('customConfigureDevice')) {
         cmds += customConfigureDevice()
-
     }
     else if (DEVICE_TYPE in  ['AirQuality']) { cmds += configureDeviceAirQuality() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += configureDeviceFingerbot() }
@@ -2267,7 +2266,7 @@ def refresh() {
         cmds += customRefresh()
 
     }
-    else if (DEVICE_TYPE in  ['AqaraCube'])       { cmds += refreshAqaraCube() }
+    else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += refreshAqaraCube() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ['AirQuality']) { cmds += refreshAirQuality() }
     else if (DEVICE_TYPE in  ['Switch'])     { cmds += refreshSwitch() }

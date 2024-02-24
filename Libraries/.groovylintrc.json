@@ -16,7 +16,7 @@
         "DuplicateStringLiteral": {
             "enabled": false
         },
-        "ImplementationAsType": {
+        "ImplicitClosureParameter": {
             "enabled": false
         },
         "LineLength": {
@@ -25,15 +25,11 @@
         "MethodCount": {
             "enabled": false
         },
-        "MethodReturnTypeRequired": {
-            "enabled": false
-        },
-        "SpaceAfterMethodCallName": {
+        "UnnecessaryGetter": {
             "enabled": false
         },
         "UnusedPrivateMethod": {
             "enabled": false
         }
-    },
-    "ignore": ["Zigbee_TRV_lib_included.groovy"]
+    }
 }

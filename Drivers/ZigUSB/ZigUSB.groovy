@@ -13,14 +13,14 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success!
+ * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure(); 
  *
  *                                   TODO: 
  *                                   TODO: ZigUSB on/off (inverted)! https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
  */
 
 static String version() { "3.0.3" }
-static String timeStamp() { "2024/02/24 11:36 AM" }
+static String timeStamp() { "2024/02/24 9:52 PM" }
 
 @Field static final Boolean _DEBUG = false
 
@@ -83,14 +83,16 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
+        input name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false
+        input name: 'autoReportingTime', type: 'number', title: '<b>Automatic reporting time period</b>', description: '<i>V/A/W reporting interval, seconds (0..3600)<br>0 (zero) disables the automatic reproting!</i>', range: '0..3600', defaultValue: DEFAULT_REPORTING_TIME
         if (advancedOptions == true || advancedOptions == true) {
-            input (name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: false)
-            input (name: "inverceSwitch", type: "bool", title: "<b>Invert the switch on/off</b>", description: "<i>ZigUSB has the on and off states inverted!</i>", defaultValue: true)
+            input name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: false
+            input name: "inverceSwitch", type: "bool", title: "<b>Invert the switch on/off</b>", description: "<i>ZigUSB has the on and off states inverted!</i>", defaultValue: true
         }
     }
 }
 
+@Field static final int    DEFAULT_REPORTING_TIME = 60
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
 @Field static final String INST_POWER = "InstPower"
@@ -112,8 +114,13 @@ void customParseDefaultCommandResponse(final Map descMap) {
 
 def customRefresh() {
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
+    cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint :01], delay=200)     // switch state
+    // ANALOG_INPUT_CLUSTER attribute 0x0055 error: Unsupported COMMAND
+    //cmds += zigbee.readAttribute(0x000C, 0x0055, [destEndpoint :02], delay=200)     // current, voltage, power, reporting interval 
+    //  TEMPERATURE_MEASUREMENT_CLUSTER attribute 0x0000 error: 0x[00, 00, 8F]
+    //cmds += zigbee.readAttribute(0x0402, 0x0000, [destEndpoint :04], delay=200)     // temperature
+    // ANALOG_INPUT_CLUSTER attribute 0x0055 error: Unsupported COMMAND
+    //cmds += zigbee.readAttribute(0x000C, 0x0055, [destEndpoint :05], delay=200)     // uptime
     logDebug "customRefresh() : ${cmds}"
     return cmds
 }
@@ -123,6 +130,7 @@ boolean customInitVars(boolean fullInit=false) {
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", true)
     if (fullInit || settings?.inverceSwitch == null) device.updateSetting("inverceSwitch", true)
+    if (fullInit || settings?.autoReportingTime == null) device.updateSetting("autoReportingTime", DEFAULT_REPORTING_TIME)
     return true
 }
 
@@ -130,11 +138,28 @@ boolean  customInitEvents(boolean fullInit=false) {
     return true
 }
 
-def customConfigureDevice() {
+List<String> customConfigureDevice() {
+    logInfo "Configuring the device..."
     List<String> cmds = []
-    cmds += configureReporting("Write", ONOFF,  "1", "30", "0", sendNow=false)    // switch state should be always reported
+    int intMinTime = 1
+    int intMaxTime = (settings?.autoReportingTime as int) ?: 60
+    //cmds += configureReporting("Write", ONOFF,  "1", "30", "0", sendNow=false)    // switch state should be always reported
+    cmds += configureReporting("Write", ONOFF,  intMinTime.toString(), intMaxTime.toString(), "0", sendNow=false)    // switch state should be always reported
+    if (settings?.autoReportingTime != 0) {
+        cmds += zigbee.configureReporting(0x000C, 0x0055, DataType.UINT16, intMinTime, intMaxTime, 0, [destEndpoint: 02])   // current, voltage, power, reporting interval
+        logInfo "configuring the automatic reporting  : ${intMaxTime} seconds"
+    }
+    else {
+        cmds += zigbee.configureReporting(0x000C, 0x0055, DataType.UINT16, 0xFFFF, 0xFFFF, 0, [destEndpoint: 02])   // disable reporting
+        logInfo "configuring the automatic reporting  : DISABLED"
+    }
+    cmds += zigbee.reportingConfiguration(0x000C, 0x0055, [destEndpoint: 02], 200)
     logDebug "customConfigureDevice() : ${cmds}"
     return cmds
+}
+
+void customUpdated() {
+    logDebug "customUpdated()"
 }
 
 void parseZigUSBAnlogInputCluster(String description) {
