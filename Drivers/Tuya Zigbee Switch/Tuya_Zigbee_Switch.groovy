@@ -19,8 +19,9 @@
  * ver. 2.1.2  2023-07-23 kkossev  - Switch library;
  * ver. 2.1.3  2023-08-12 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version;
  * ver. 3.0.0  2023-11-24 kkossev  - (dev. branch) use commonLib; added AlwaysOn option; added ignore duplcated on/off events option;
- * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices; 
+ * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices;
  * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
+ * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
  *
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
  *                                   TODO: add power-on behavior option
@@ -28,8 +29,8 @@
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { "3.0.2" }
-static String timeStamp() {"2023/12/12 10:57 PM"}
+static String version() { "3.0.3" }
+static String timeStamp() {"2024/02/24 10:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -67,21 +68,20 @@ metadata {
         if (_THREE_STATE == true) {
             attribute "switch", "enum", SwitchThreeStateOpts.options.values() as List<String>
         }
-        
-        
-        // deviceType specific capabilities, commands and attributes         
+
+        // deviceType specific capabilities, commands and attributes
         if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
             command "zigbeeGroups", [
                 [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
                 [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
             ]
-        }        
+        }
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0007,0B05,FC57", outClusters:"0019", model:"ZBMINIL2", manufacturer:"SONOFF", deviceJoinName: "SONOFF ZBMINIL2" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0007,0B05,FC57", outClusters:"0019", model:"ZBMINIL2", manufacturer:"SONOFF", deviceJoinName: "SONOFF ZBMINIL2"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "TRADFRI control outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "TRADFRI control outlet"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006", outClusters:"0019,000A", model:"TS0101", manufacturer:"_TZ3000_pnzfdr9y", deviceJoinName: "SONOFF ZBMINIL2" 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0B05,FC0F", outClusters:"0019", model:"Plug Z3", manufacturer:"LEDVANCE", deviceJoinName: "Plug Z3" 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006", outClusters:"0019,000A", model:"TS0101", manufacturer:"_TZ3000_pnzfdr9y", deviceJoinName: "SONOFF ZBMINIL2"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0B05,FC0F", outClusters:"0019", model:"Plug Z3", manufacturer:"LEDVANCE", deviceJoinName: "Plug Z3"
     }
 
     preferences {
@@ -93,7 +93,7 @@ metadata {
         }
 
     }
-        
+
 }
 
 @Field static final String ONOFF = "Switch"
@@ -107,35 +107,32 @@ metadata {
 
 def isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
-def refreshSwitch() {
+List<String> customRefresh() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
-    logDebug "refreshSwitch() : ${cmds}"
+    logDebug "customRefresh() : ${cmds}"
     return cmds
 }
 
-def initVarsSwitch(boolean fullInit=false) {
-    logDebug "initVarsSwitch(${fullInit})"
+void customInitVars(boolean fullInit=false) {
+    logDebug "customInitVars(${fullInit})"
     if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
     if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", false)
-
-    
 }
 
-void initEventsSwitch(boolean fullInit=false) {
+void customInitEvents(boolean fullInit=false) {
 }
 
-
-def configureDeviceSwitch() {
+List<String> customConfigureDevice() {
     List<String> cmds = []
     if (isZBMINIL2()) {
-        logDebug "configureDeviceSwitch() : unbind ZBMINIL2 poll control cluster"
+        logDebug "customConfigureDevice() : unbind ZBMINIL2 poll control cluster"
         // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message.
         // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
-        // https://github.com/Koenkk/zigbee2mqtt/issues/11676     
-        // https://github.com/Koenkk/zigbee2mqtt/issues/10282 
-        // https://github.com/zigpy/zha-device-handlers/issues/1519    
+        // https://github.com/Koenkk/zigbee2mqtt/issues/11676
+        // https://github.com/Koenkk/zigbee2mqtt/issues/10282
+        // https://github.com/zigpy/zha-device-handlers/issues/1519
         cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
 
     }
@@ -143,36 +140,27 @@ def configureDeviceSwitch() {
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ]
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
     cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
-    
+
     cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200)
     cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
-    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)   
-    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)   
-*/    
-    cmds += configureReporting("Write", ONOFF,  "1", "65534", "0", sendNow=false)    // switch state should be always reported 
-    logDebug "configureDeviceSwitch() : ${cmds}"
-    return cmds    
-}
-
-/* parsed in the commonLib
-void parseOnOffClusterSwitch(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseOnOffClusterSwitch: (0x0006)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
-    switchEvent(value)
-}
+    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)
+    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)
 */
-
-void parseElectricalMeasureClusterSwitch(descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseElectricalMeasureClusterSwitch: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+    cmds += configureReporting("Write", ONOFF,  "1", "65534", "0", sendNow=false)    // switch state should be always reported
+    logDebug "customConfigureDevice() : ${cmds}"
+    return cmds
 }
 
-void parseMeteringClusterSwitch(descMap) {
+void customParseElectricalMeasureCluster(descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
-    logDebug "parseMeteringClusterSwitch: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+    logDebug "customParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+}
+
+void customParseMeteringCluster(descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
 def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
@@ -185,11 +173,11 @@ def configureReporting(String operation, String measurement,  String minTime="0"
         ep = 1
         epString = "01"
     }
-    
+
     logDebug "configureReporting operation=${operation}, measurement=${measurement}, minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
 
-    List<String> cmds = []      
-    
+    List<String> cmds = []
+
     switch (measurement) {
         case ONOFF :
             if (operation == "Write") {
@@ -216,7 +204,7 @@ def configureReporting(String operation, String measurement,  String minTime="0"
             }
             else if (operation == "Disable") {
                 cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, 0xFFFF, 0xFFFF, 0x0000)    // disable power automatic reporting - tested with Frient
-            }        
+            }
             cmds += zigbee.reportingConfiguration(0x0702, 0x0400, [destEndpoint :ep], 253)
             break
         case POWER :        // Active power default delta = 1
@@ -225,7 +213,7 @@ def configureReporting(String operation, String measurement,  String minTime="0"
             }
             else if (operation == "Disable") {
                 cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, 0xFFFF, 0xFFFF, 0x8000)    // disable power automatic reporting - tested with Frient
-            }        
+            }
             cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :ep], 254)
             break
         case VOLTAGE :    // RMS Voltage default delta = 1
@@ -274,6 +262,4 @@ def configureReporting(String operation, String measurement,  String minTime="0"
     }
 }
 
-
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-

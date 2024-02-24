@@ -24,6 +24,7 @@
  *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
  * ver. 3.0.5  2023-12-09 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
+ * ver. 3.0.7  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 check;
  *
  *                                   WIP: TUYA_SASWELL group ;
  *                                   TOOD: Sonoff : decode weekly shcedule responses (command 0x00)
@@ -67,8 +68,8 @@
  *                                   TODO: Aqara E1 external sensor
  */
 
-static String version() { "3.0.6" }
-static String timeStamp() {"2023/12/18 7:00 AM"}
+static String version() { "3.0.7" }
+static String timeStamp() {"2024/02/24 10:06 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -84,7 +85,7 @@ deviceType = "Thermostat"
 @Field static final String DEVICE_TYPE = "Thermostat"
 
 /* groovylint-disable-next-line NglParseError */
-# include kkossev.commonLib
+#include kkossev.commonLib
 #include kkossev.xiaomiLib
 #include kkossev.deviceProfileLib
 
@@ -360,7 +361,7 @@ metadata {
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_3yp57tby", deviceJoinName: "TUYA_SASWELL TRV"],       // not tested
                 [profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mz5y07w2", deviceJoinName: "Garza Smart TRV"]         // not tested              //https://github.com/zigpy/zha-device-handlers/issues/2486
             ],
-            commands      : ["limescaleProtect":"limescaleProtect", "printFingerprints":"printFingerprints", "resetStats":"resetStats", 'refresh':'refresh', 'refreshThermostat':'refreshThermostat', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
+            commands      : ["limescaleProtect":"limescaleProtect", "printFingerprints":"printFingerprints", "resetStats":"resetStats", 'refresh':'refresh', 'customRefresh':'customRefresh', "initialize":"initialize", "updateAllPreferences": "updateAllPreferences", "resetPreferencesToDefaults":"resetPreferencesToDefaults", "validateAndFixPreferences":"validateAndFixPreferences"],
             tuyaDPs       : [
                 [dp:8,   name:'windowOpenDetection', type:"enum", dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Window Detection</b>",  description:'<i>Open Window Detection support</i>'],      // SASWELL_WINDOW_DETECT_ATTR
                 [dp:10,  name:'antiFreeze',         type:"enum",  dt: "01", rw: "rw", min:0,     max:1 ,   defaultValue:"0",  step:1,   scale:1,  map:[0:"off", 1:"on"] ,   unit:"", title:"<b>Anti-Freeze</b>",  description:'<i>Anti-Freeze support</i>'],                      // SASWELL_ANTI_FREEZE_ATTR
@@ -527,7 +528,7 @@ void parseXiaomiClusterThermostatLib(final Map descMap) {
     result = processClusterAttributeFromDeviceProfile(descMap)
 
     if ( result == false ) {
-        logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logWarn "parseXiaomiClusterThermostatLib: received unknown Thermostat cluster (0xFCC0) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 
     return
@@ -684,7 +685,7 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
  * called from parseThermostatCluster() in the main code ...
  * -----------------------------------------------------------------------------
 */
-void parseThermostatClusterThermostat(final Map descMap) {
+void customParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     //logTrace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)
@@ -735,12 +736,12 @@ void parseThermostatClusterThermostat(final Map descMap) {
     */
 }
 
-def parseFC11ClusterThermostat(descMap) {
+def customParseFC11Cluster(descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     Boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if ( result == false ) {
-        logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logWarn "customParseFC11Cluster: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
@@ -947,8 +948,8 @@ def setThermostatMode(requestedMode) {
     return
 }
 
-def thermostatOff() { setThermostatMode("off") }    // invoked from the common library
-def thermostatOn()  { setThermostatMode("heat") }   // invoked from the common library
+void customOff() { setThermostatMode("off") }    // invoked from the common library
+void customOn()  { setThermostatMode("heat") }   // invoked from the common library
 
 def heat() { setThermostatMode("heat") }
 def auto() { setThermostatMode("auto") }
@@ -1135,23 +1136,23 @@ def refreshAqaraE1() {
 }
 
 // TODO - not actually used! pollAqara is called instead! TODO !
-def refreshThermostat() {
+List<String> customRefresh() {
     // state.states["isRefresh"] = true is already set in the commonLib
     List<String> cmds = []
     setRefreshRequest()
     if (DEVICE.refresh != null && DEVICE.refresh != []) {
-        logDebug "refreshThermostat: calling DEVICE.refresh methods: ${DEVICE.refresh}"
+        logDebug "customRefresh: calling DEVICE.refresh methods: ${DEVICE.refresh}"
         DEVICE.refresh.each {
-            logTrace "refreshThermostat: calling ${it}()"
+            logTrace "customRefresh: calling ${it}()"
             cmds += "${it}"()
         }
         return cmds
     }
     else {
-        logDebug "refreshThermostat: no refresh methods defined for device profile ${getDeviceGroup()}"
+        logDebug "customRefresh: no refresh methods defined for device profile ${getDeviceGroup()}"
     }
     if (cmds == []) { cmds = ["delay 299"] }
-    logDebug "refreshThermostat: ${cmds} "
+    logDebug "customRefresh: ${cmds} "
     return cmds
 }
 
@@ -1164,12 +1165,12 @@ def configureThermostat() {
 }
 
 // called from initializeDevice in the commonLib code
-def initializeDeviceThermostat()
+List<String> customInitializeDevice()
 {
     List<String> cmds = []
     int intMinTime = 300
     int intMaxTime = 600    // report temperature every 10 minutes !
-    logDebug "initializeDeviceThermostat() ..."
+    logDebug "customInitializeDevice() ..."
 
     if ( getDeviceGroup() == "SONOFF_TRV") {
         //cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
@@ -1236,15 +1237,15 @@ def initializeDeviceThermostat()
         cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor
     }
     else {
-        logDebug"initializeDeviceThermostat: nothing to initialize for device group ${getDeviceGroup()}"
+        logDebug"customInitializeDevice: nothing to initialize for device group ${getDeviceGroup()}"
     }
     logDebug "initializeThermostat() : ${cmds}"
     if (cmds == []) { cmds = ["delay 299",] }
     return cmds
 }
 
-void initVarsThermostat(boolean fullInit=false) {
-    logDebug "initVarsThermostat(${fullInit})"
+void customInitVars(boolean fullInit=false) {
+    logDebug "customInitVars(${fullInit})"
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }
@@ -1256,12 +1257,10 @@ void initVarsThermostat(boolean fullInit=false) {
     if (fullInit == true) {
         resetPreferencesToDefaults()
     }
-//
-
 }
 
 // called from initializeVars() in the main code ...
-void initEventsThermostat(boolean fullInit=false) {
+void customInitEvents(boolean fullInit=false) {
     if (fullInit==true) {
         String descText = "inital attribute setting"
         sendSupportedThermostatModes()
@@ -1277,7 +1276,7 @@ void initEventsThermostat(boolean fullInit=false) {
         updateDataValue("lastRunningMode", "heat")
     }
     else {
-        logDebug "initEventsThermostat: fullInit = false"
+        logDebug "customInitEvents: fullInit = ${fullInit}"
     }
 }
 

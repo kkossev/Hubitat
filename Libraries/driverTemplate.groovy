@@ -1,3 +1,4 @@
+/* groovylint-disable DuplicateStringLiteral, ImplicitReturnStatement, PublicMethodsBeforeNonPublicMethods */
 /**
  *  Zigbee Driver Template - Device Driver for Hubitat Elevation
  *
@@ -33,7 +34,7 @@ deviceType = 'Device'
 //#include kkossev.deviceProfileLib
 
 metadata {
-    definition (
+    definition(
         name: 'Zigbee Driver Name',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Foler_Name/Driver_Name_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
@@ -56,6 +57,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        /* groovylint-disable-next-line EmptyIfStatement */
         if (advancedOptions == true) {
         //input name: 'temperaturePollingInterval', type: 'enum', title: '<b>Temperature polling interval</b>', options: TrvTemperaturePollingIntervalOpts.options, defaultValue: TrvTemperaturePollingIntervalOpts.defaultValue, required: true, description: '<i>Changes how often the hub will poll the TRV for faster temperature reading updates.</i>'
         }
@@ -239,7 +241,7 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
                 }
                 break
             case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})" / Aqara TVOC
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})" / Aqara TVOC
                 break
             case 0x66:
                 logDebug "xiaomi decode E1 thermostat temperature tag: 0x${intToHexStr(tag, 1)}=${value}"
@@ -257,24 +259,24 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
  * called from parseThermostatCluster() in the main code ...
  * -----------------------------------------------------------------------------
 */
-void parseThermostatClusterThermostat(final Map descMap) {
+boolean parseThermostatClusterThermostat(final Map descMap) {
     //final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     //logTrace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    Boolean result = processClusterAttributeFromDeviceProfile(descMap)
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-
-    return
+    return result
 }
 
-def parseFC11ClusterThermostat(descMap) {
+boolean parseFC11ClusterThermostat(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
-    Boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if ( result == false ) {
         logWarn "parseFC11ClusterThermostat: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
+    return result
 }
 
 void sendHeatingSetpointEvent(temperature) {
@@ -365,6 +367,7 @@ void autoPollThermostat() {
 // called from updated() in the main code
 void updatedThermostat() {
     ArrayList<String> cmds = []
+    /* groovylint-disable-next-line ImplementationAsType */
     logDebug 'updatedThermostat: ...'
     //
     if (settings?.forcedProfile != null) {
@@ -473,9 +476,9 @@ void initVarsThermostat(boolean fullInit=false) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }
 
-    if (fullInit == true || state.lastThermostatMode == null) state.lastThermostatMode = 'unknown'
-    if (fullInit == true || state.lastThermostatOperatingState == null) state.lastThermostatOperatingState = 'unknown'
-    if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TrvTemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
+    if (fullInit == true || state.lastThermostatMode == null) { state.lastThermostatMode = 'unknown' }
+    if (fullInit == true || state.lastThermostatOperatingState == null) { state.lastThermostatOperatingState = 'unknown' }
+    if (fullInit || settings?.temperaturePollingInterval == null) { device.updateSetting('temperaturePollingInterval', [value: TrvTemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum']) }
 
     if (fullInit == true) {
         resetPreferencesToDefaults()
@@ -494,10 +497,10 @@ void initEventsThermostat(boolean fullInit=false) {
         sendEvent(name: 'thermostatFanMode', value: 'auto', isStateChange: true, description: descText)
         state.lastThermostatOperatingState = 'idle'
         sendEvent(name: 'thermostatOperatingState', value: 'idle', isStateChange: true, description: descText)
-        sendEvent(name: 'thermostatSetpoint', value:  12.3, unit: "\u00B0" + 'C', isStateChange: true, description: descText)        // Google Home compatibility
-        sendEvent(name: 'heatingSetpoint', value: 12.3, unit: "\u00B0" + 'C', isStateChange: true, description: descText)
-        sendEvent(name: 'coolingSetpoint', value: 34.5, unit: "\u00B0" + 'C', isStateChange: true, description: descText)
-        sendEvent(name: 'temperature', value: 23.4, unit: "\u00B0" + 'C', isStateChange: true, description: descText)
+        sendEvent(name: 'thermostatSetpoint', value:  12.3, unit: "\u00B0C", isStateChange: true, description: descText)        // Google Home compatibility
+        sendEvent(name: 'heatingSetpoint', value: 12.3, unit: "\u00B0C", isStateChange: true, description: descText)
+        sendEvent(name: 'coolingSetpoint', value: 34.5, unit: "\u00B0C", isStateChange: true, description: descText)
+        sendEvent(name: 'temperature', value: 23.4, unit: "\u00B0C", isStateChange: true, description: descText)
         updateDataValue('lastRunningMode', 'heat')
     }
     else {
@@ -515,7 +518,7 @@ private getDescriptionText(msg) {
 //
 // (works for BRT-100, Sonoff TRVZV)
 //
-def processDeviceEventThermostat(name, valueScaled, unitText, descText) {
+void processDeviceEventThermostat(name, valueScaled, unitText, descText) {
     logTrace "processDeviceEventThermostat(${name}, ${valueScaled}) called"
     Map eventMap = [name: name, value: valueScaled, unit: unitText, descriptionText: descText, type: 'physical', isStateChange: true]
     switch (name) {
@@ -559,7 +562,7 @@ def factoryResetThermostat() {
     return cmds
 }
 
-def testT(par) {
+void testT(par) {
     /*
     def descMap = [raw:"3A870102010A120029C409", dni:"3A87", endpoint:"01", cluster:"0201", size:"0A", attrId:"0012", encoding:"29", command:"0A", value:"09C5", clusterInt:513, attrInt:18]
     log.trace "testT(${descMap})"
@@ -573,6 +576,7 @@ def testT(par) {
     */
 
     log.trace "testT(${par}) : DEVICE.preferences = ${DEVICE.preferences}"
+    /* groovylint-disable-next-line NoDef */
     def result
     if (DEVICE != null && DEVICE.preferences != null && DEVICE.preferences != [:]) {
         (DEVICE.preferences).each { key, value ->

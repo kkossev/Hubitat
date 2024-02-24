@@ -1,3 +1,4 @@
+/* groovylint-disable PublicMethodsBeforeNonPublicMethods */
 library (
     base: "driver",
     author: "Krassimir Kossev",

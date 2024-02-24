@@ -13,14 +13,14 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure(); 
+ * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure();
  *
- *                                   TODO: 
+ *                                   TODO: thresholds!
  *                                   TODO: ZigUSB on/off (inverted)! https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
  */
 
 static String version() { "3.0.3" }
-static String timeStamp() { "2024/02/24 9:52 PM" }
+static String timeStamp() { "2024/02/24 11:58 PM" }
 
 @Field static final Boolean _DEBUG = false
 
@@ -93,6 +93,7 @@ metadata {
 }
 
 @Field static final int    DEFAULT_REPORTING_TIME = 60
+@Field static final int    MAX_POWER_LIMIT = 999
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
 @Field static final String INST_POWER = "InstPower"
@@ -102,7 +103,7 @@ metadata {
 @Field static final String FREQUENCY = "Frequency"
 @Field static final String POWER_FACTOR = "PowerFactor"
 
-def isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
+boolean isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
 /**
  * ZigUSB has a really wierd way of reporting the on/off state back to the hub...
@@ -112,11 +113,11 @@ void customParseDefaultCommandResponse(final Map descMap) {
     parseOnOffCluster([attrId: '0000', value: descMap.data[0]])
 }
 
-def customRefresh() {
+List<String> customRefresh() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint :01], delay=200)     // switch state
     // ANALOG_INPUT_CLUSTER attribute 0x0055 error: Unsupported COMMAND
-    //cmds += zigbee.readAttribute(0x000C, 0x0055, [destEndpoint :02], delay=200)     // current, voltage, power, reporting interval 
+    //cmds += zigbee.readAttribute(0x000C, 0x0055, [destEndpoint :02], delay=200)     // current, voltage, power, reporting interval
     //  TEMPERATURE_MEASUREMENT_CLUSTER attribute 0x0000 error: 0x[00, 00, 8F]
     //cmds += zigbee.readAttribute(0x0402, 0x0000, [destEndpoint :04], delay=200)     // temperature
     // ANALOG_INPUT_CLUSTER attribute 0x0055 error: Unsupported COMMAND
@@ -225,7 +226,12 @@ void parseZigUSBAnlogInputCluster(String description) {
                     value = hexStrToUnsignedInt(descMap.value)
                     floatValue = Float.intBitsToFloat(value.intValue())
                     logDebug "parseZigUSBAnlogInputCluster: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
-                    logInfo "${measurementType} is ${floatValue.setScale(3, BigDecimal.ROUND_HALF_UP)} (raw:${value})"
+                    switch (measurementType) {
+                        case VOLTAGE : sendVoltageEvent(floatValue, false); break
+                        case AMPERAGE : sendAmperageEvent(floatValue, false); break
+                        case POWER : sendPowerEvent(floatValue, false); break
+                        default : logInfo "${measurementType} is ${floatValue.setScale(3, BigDecimal.ROUND_HALF_UP)} (raw:${value})"; break
+                    }
                 }
                 catch (Exception e) {
                     logWarn "parseZigUSBAnlogInputCluster: EXCEPTION (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
@@ -245,24 +251,129 @@ void parseZigUSBAnlogInputCluster(String description) {
     }
 }
 
-void customParseElectricalMeasureCluster(descMap) {
+void customParseElectricalMeasureCluster(Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
     logDebug "customParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
-void customParseMeteringCluster(descMap) {
+void customParseMeteringCluster(Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     def value = hexStrToUnsignedInt(descMap.value)
     logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
-def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
+void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
+    Map map = [:]
+    map.name = 'voltage'
+    map.value = voltage.setScale(3, BigDecimal.ROUND_HALF_UP)
+    map.unit = 'V'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
+    final BigDecimal lastVoltage = device.currentValue('voltage') ?: 0.0
+    final BigDecimal  voltageThreshold = 0.001
+    if (Math.abs(voltage - lastVoltage) >= voltageThreshold || state.states.isRefresh == true) {
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        //runIn(1, formatAttrib, [overwrite: true])
+    }
+    else {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageThreshold} V)"
+    }
+}
+
+void sendAmperageEvent(BigDecimal amperage, boolean isDigital=false) {
+    Map map = [:]
+    map.name = 'amperage'
+    map.value = amperage.setScale(3, BigDecimal.ROUND_HALF_UP)
+    map.unit = 'A'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.states.isRefresh  == true) { map.descriptionText += ' (refresh)' }
+    final BigDecimal lastAmperage = device.currentValue('amperage') ?: 0.0
+    final BigDecimal amperageThreshold = 0.001
+    if (Math.abs(amperage - lastAmperage ) >= amperageThreshold || state.states.isRefresh  == true) {
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        //runIn(1, formatAttrib, [overwrite: true])
+    }
+    else {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageThreshold} mA)"
+    }
+}
+
+void sendPowerEvent(BigDecimal power, boolean isDigital=false) {
+    Map map = [:]
+    map.name = 'power'
+    map.value = power.setScale(2, BigDecimal.ROUND_HALF_UP)
+    map.unit = 'W'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
+    final BigDecimal lastPower = device.currentValue('power') ?: 0.0
+    final BigDecimal powerThreshold = 0.01
+    if (power  > MAX_POWER_LIMIT) {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap ${MAX_POWER_LIMIT} W)"
+        return
+    }
+    if (Math.abs(power - lastPower ) >= powerThreshold || state.states.isRefresh == true) {
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        //runIn(1, formatAttrib, [overwrite: true])
+    }
+    else {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerThreshold} W)"
+    }
+}
+
+void sendFrequencyEvent(BigDecimal frequency, boolean isDigital=false) {
+    Map map = [:]
+    map.name = 'frequency'
+    map.value = frequency.setScale(1, BigDecimal.ROUND_HALF_UP)
+    map.unit = 'Hz'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
+    final BigDecimal lastFrequency = device.currentValue('frequency') ?: 0.0
+    final BigDecimal frequencyThreshold = 0.1
+    if (Math.abs(frequency - lastFrequency) >= frequencyThreshold || state.states.isRefresh == true) {
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        //runIn(1, formatAttrib, [overwrite: true])
+    }
+    else {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${frequencyThreshold} Hz)"
+    }
+}
+
+void sendPowerFactorEvent(BigDecimal pf, boolean isDigital=false) {
+    Map map = [:]
+    map.name = 'powerFactor'
+    map.value = pf.setScale(2, BigDecimal.ROUND_HALF_UP)
+    map.unit = '%'
+    map.type = isDigital == true ? 'digital' : 'physical'
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
+    final BigDecimal lastPF = device.currentValue('powerFactor') ?: 0.0
+    final BigDecimal powerFactorThreshold = 0.01
+    if (Math.abs(pf - lastPF) >= powerFactorThreshold || state.states.isRefresh == true) {
+        logInfo "${map.descriptionText}"
+        sendEvent(map)
+        //runIn(1, formatAttrib, [overwrite: true])
+    }
+    else {
+        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${powerFactorThreshold} %)"
+    }
+}
+
+
+List<String> configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", boolean sendNow=true ) {
     int intMinTime = safeToInt(minTime)
     int intMaxTime = safeToInt(maxTime)
     int intDelta = safeToInt(delta)
     String epString = state.destinationEP
-    def ep = safeToInt(epString)
+    int ep = safeToInt(epString)
     if (ep==null || ep==0) {
         ep = 1
         epString = "01"
