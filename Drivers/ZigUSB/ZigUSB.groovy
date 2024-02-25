@@ -13,14 +13,14 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure();
+ * ver. 1.0.0  2024-02-25 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure();
  *
- *                                   TODO: thresholds!
- *                                   TODO: ZigUSB on/off (inverted)! https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
+ *                                   TODO: individual thresholds for each attribute
+ *                                   TODO: ZigUSB on/off (inverted)!
  */
 
-static String version() { "3.0.3" }
-static String timeStamp() { "2024/02/24 11:58 PM" }
+static String version() { "1.0.0" }
+static String timeStamp() { "2024/02/25 9:54 AM" }
 
 @Field static final Boolean _DEBUG = false
 
@@ -76,23 +76,25 @@ metadata {
         }
         // https://github.com/xyzroe/ZigUSB
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b/src/devices/xyzroe.ts
+        // https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b        
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0007,0006", outClusters:"0000,0006", model:"ZigUSB", manufacturer:"xyzroe.cc", deviceJoinName: "Zigbee USB power monitor and switch"
-        // ep2: current; ep3: voltage; ep4: power; ep5: energy; ep6: frequency; ep7: power factor
     }
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: '<i>Turns on debug logging for 24 hours.</i>'
         input name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false
-        input name: 'autoReportingTime', type: 'number', title: '<b>Automatic reporting time period</b>', description: '<i>V/A/W reporting interval, seconds (0..3600)<br>0 (zero) disables the automatic reproting!</i>', range: '0..3600', defaultValue: DEFAULT_REPORTING_TIME
+        input name: 'autoReportingTime', type: 'number', title: '<b>Automatic reporting time period</b>', description: '<i>V/A/W reporting interval, seconds (0..3600)<br>0 (zero) disables the automatic reporting!</i>', range: '0..3600', defaultValue: DEFAULT_REPORTING_TIME
         if (advancedOptions == true || advancedOptions == true) {
-            input name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: false
+            input name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: true
             input name: "inverceSwitch", type: "bool", title: "<b>Invert the switch on/off</b>", description: "<i>ZigUSB has the on and off states inverted!</i>", defaultValue: true
         }
     }
 }
 
-@Field static final int    DEFAULT_REPORTING_TIME = 60
+@Field static final int    DEFAULT_REPORTING_TIME = 30
+@Field static final int    DEFAULT_PRECISION = 3           // 3 decimal places
+@Field static final BigDecimal DEFAULT_DELTA = 0.001
 @Field static final int    MAX_POWER_LIMIT = 999
 @Field static final String ONOFF = "Switch"
 @Field static final String POWER = "Power"
@@ -102,8 +104,6 @@ metadata {
 @Field static final String AMPERAGE = "Amperage"
 @Field static final String FREQUENCY = "Frequency"
 @Field static final String POWER_FACTOR = "PowerFactor"
-
-boolean isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
 /**
  * ZigUSB has a really wierd way of reporting the on/off state back to the hub...
@@ -161,6 +161,13 @@ List<String> customConfigureDevice() {
 
 void customUpdated() {
     logDebug "customUpdated()"
+    List<String> cmds = customConfigureDevice()
+    sendZigbeeCommands(cmds)
+    if (settings?.autoReportingTime == 0) {
+        device.deleteCurrentState("amperage")
+        device.deleteCurrentState("voltage")
+        device.deleteCurrentState("power")
+    }
 }
 
 void parseZigUSBAnlogInputCluster(String description) {
@@ -266,13 +273,13 @@ void customParseMeteringCluster(Map descMap) {
 void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
     Map map = [:]
     map.name = 'voltage'
-    map.value = voltage.setScale(3, BigDecimal.ROUND_HALF_UP)
+    map.value = voltage.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
     map.unit = 'V'
     map.type = isDigital == true ? 'digital' : 'physical'
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
     final BigDecimal lastVoltage = device.currentValue('voltage') ?: 0.0
-    final BigDecimal  voltageThreshold = 0.001
+    final BigDecimal  voltageThreshold = DEFAULT_DELTA
     if (Math.abs(voltage - lastVoltage) >= voltageThreshold || state.states.isRefresh == true) {
         logInfo "${map.descriptionText}"
         sendEvent(map)
@@ -286,13 +293,13 @@ void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
 void sendAmperageEvent(BigDecimal amperage, boolean isDigital=false) {
     Map map = [:]
     map.name = 'amperage'
-    map.value = amperage.setScale(3, BigDecimal.ROUND_HALF_UP)
+    map.value = amperage.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
     map.unit = 'A'
     map.type = isDigital == true ? 'digital' : 'physical'
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.states.isRefresh  == true) { map.descriptionText += ' (refresh)' }
     final BigDecimal lastAmperage = device.currentValue('amperage') ?: 0.0
-    final BigDecimal amperageThreshold = 0.001
+    final BigDecimal amperageThreshold = DEFAULT_DELTA
     if (Math.abs(amperage - lastAmperage ) >= amperageThreshold || state.states.isRefresh  == true) {
         logInfo "${map.descriptionText}"
         sendEvent(map)
@@ -306,13 +313,13 @@ void sendAmperageEvent(BigDecimal amperage, boolean isDigital=false) {
 void sendPowerEvent(BigDecimal power, boolean isDigital=false) {
     Map map = [:]
     map.name = 'power'
-    map.value = power.setScale(2, BigDecimal.ROUND_HALF_UP)
+    map.value = power.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
     map.unit = 'W'
     map.type = isDigital == true ? 'digital' : 'physical'
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
     final BigDecimal lastPower = device.currentValue('power') ?: 0.0
-    final BigDecimal powerThreshold = 0.01
+    final BigDecimal powerThreshold = DEFAULT_DELTA
     if (power  > MAX_POWER_LIMIT) {
         logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap ${MAX_POWER_LIMIT} W)"
         return

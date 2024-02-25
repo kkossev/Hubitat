@@ -32,7 +32,7 @@ library(
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
-  * ver. 3.0.3  2024-02-24 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics;
+  * ver. 3.0.3  2024-02-25 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -48,7 +48,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.3' }
-String thermostatLibStamp() { '2024/02/24 7:35 PM' }
+String thermostatLibStamp() { '2024/02/25 8:47 AM' }
 
 import groovy.transform.Field
 //import hubitat.device.HubMultiAction
@@ -496,18 +496,18 @@ void parseConfigureResponse(final Map descMap) {
 void parseReadReportingConfigResponse(final Map descMap) {
     // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0006 , data=[00, 00, 00, 00, 10, 00, 00, 58, 02] (Status: Success) min=0 max=600
     // TS0121 Received Read Reporting Configuration Response (0x09) for cluster:0702 , data=[00, 00, 00, 00, 25, 3C, 00, 10, 0E, 00, 00, 00, 00, 00, 00] (Status: Success) min=60 max=3600
-    def status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
+    int status = zigbee.convertHexToInt(descMap.data[0])    // Status: Success (0x00)
     //def attr = zigbee.convertHexToInt(descMap.data[3])*256 + zigbee.convertHexToInt(descMap.data[2])    // Attribute: OnOff (0x0000)
     if (status == 0) {
         //def dataType = zigbee.convertHexToInt(descMap.data[4])    // Data Type: Boolean (0x10)
-        def min = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[5])
-        def max = zigbee.convertHexToInt(descMap.data[8] + descMap.data[7])
-        def delta = 0
+        int min = zigbee.convertHexToInt(descMap.data[6]) * 256 + zigbee.convertHexToInt(descMap.data[5])
+        int max = zigbee.convertHexToInt(descMap.data[8] + descMap.data[7])
+        int delta = 0
         if (descMap.data.size() >= 10) {
             delta = zigbee.convertHexToInt(descMap.data[10] + descMap.data[9])
         }
         else {
-            logDebug "descMap.data.size = ${descMap.data.size()}"
+            logTrace "descMap.data.size = ${descMap.data.size()}"
         }
         logDebug "Received Read Reporting Configuration Response (0x09) for cluster:${descMap.clusterId} attribute:${descMap.data[3] + descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0] == '00' ? 'Success' : '<b>Failure</b>'}) min=${min} max=${max} delta=${delta}"
     }
@@ -1150,6 +1150,7 @@ void off() {
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
+    /*
     else {
         if (currentState != 'off') {
             logDebug "Switching ${device.displayName} Off"
@@ -1159,6 +1160,7 @@ void off() {
             return
         }
     }
+    */
 
     state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
@@ -1172,7 +1174,7 @@ void on() {
     }
     List cmds = settings?.inverceSwitch == false ?  zigbee.on()  : zigbee.off()
     String currentState = device.currentState('switch')?.value ?: 'n/a'
-    log.debug "on() currentState=${currentState}"
+    logDebug "on() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
         if ((device.currentState('switch')?.value ?: 'n/a') == 'on') {
             runIn(1, 'refresh',  [overwrite: true])
@@ -1183,6 +1185,7 @@ void on() {
         sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
         logInfo "${descriptionText}"
     }
+    /*
     else {
         if (currentState != 'on') {
             logDebug "Switching ${device.displayName} On"
@@ -1192,6 +1195,7 @@ void on() {
             return
         }
     }
+    */
     state.states['isDigital'] = true
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
@@ -2715,7 +2719,7 @@ void initializeVars( boolean fullInit = false ) {
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
-    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', true) }
+    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', false) }
     if (fullInit || settings?.traceEnable == null) { device.updateSetting('traceEnable', false) }
     if (fullInit || settings?.alwaysOn == null) { device.updateSetting('alwaysOn', false) }
     if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
