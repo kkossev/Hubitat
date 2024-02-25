@@ -16,15 +16,16 @@
   *
   * ver. 0.0.0  2024-01-10 kkossev  - first version
   * ver. 0.0.1  2024-01-13 kkossev  - added 'Invert Motion' option
+  * ver. 0.0.2  2024-01-25 kkossev  - 'Invert Motion' change updates the motion state immediateltely.
   *
-  *                                   TODO:
+  *                                   TODO: 
   *
 */
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.1'
-@Field static final String matterComponentMotionStamp   = '2024/01/13 6:16 PM'
+@Field static final String matterComponentMotionVersion = '0.0.2'
+@Field static final String matterComponentMotionStamp   = '2024/02/25 11:19 PM'
 
 metadata {
     definition(name: 'Matter Generic Component Motion Sensor', namespace: 'kkossev', author: 'Krassimir Kossev') {
@@ -119,6 +120,15 @@ void updated() {
     if (logEnable) {
         log.debug settings
         runIn(86400, 'logsOff')
+    }
+    if ((state.invertMotion ?: false) != settings?.invertMotion) {
+        state.invertMotion = settings?.invertMotion
+        if (logEnable) { log.debug "${device.displayName} invertMotion: ${settings?.invertMotion}" }
+        String motion = device.currentMotion == 'active' ? 'inactive' : 'active'
+        sendEvent([name:'motion', value:motion, type: 'digital', descriptionText: "motion state inverted to ${motion}", isStateChange:true])
+    }
+    else {
+        if (logEnable) { log.debug "${device.displayName} invertMotion: no change" }
     }
 }
 

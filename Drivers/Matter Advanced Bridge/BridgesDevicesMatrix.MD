@@ -22,7 +22,7 @@ Target release date : mid of March 2024
 
 
 ### <b>Zemismart M1 Hub as Matter Bridge</b>   
-*last updated 2024/02/17*
+*last updated 2024/02/25*
 |Device Type                |         Status               |          Remarks                  |
 |:--------------------------|:----------------------------:|----------------------------------:|
 | Relays/Switches - On/Off  | working OK - tested          |                                   |
@@ -36,8 +36,8 @@ Target release date : mid of March 2024
 | Contact Sensors           | working OK - tested          | Generic Component Contact Sensor  |
 | Water Leak Sensor         | working OK - tested          | as a contact / switch             |
 | Tuya Valve on/off         | working OK - tested          | as a contact / switch             |
-| Temperature Sensor        | ????????                     |  test it!                         |
-| Humidity Sensor           | ????????                     |  test it!                         |
+| Temperature Sensor        | working OK - tested          |                                   |
+| Light Sensors             | working OK - tested          |  Tuya Light Sensor                |
 | Zemismart Curtain Motor   | working (some bugs to be fixed) | Zemismart Curtain Motor        |
 | Fingerbot                 | working OK - tested          | as contact / switch               |
 |:--------------------------|:----------------------------:|----------------------------------:|
@@ -49,13 +49,16 @@ Target release date : mid of March 2024
 | Tuya Smoke Detector       | Unknown                |   not tested / not implemented          |
 | Tuya Vibration Sensor     | Unknown                |   not tested                            |
 | TRVs                      | Unknown                |   not tested                            |
-| Light Sensors             | Unknown                |   not tested                            |
 | Light Door Lock           | Unknown                |   not tested                            |
 |:--------------------------|:----------------------------:|----------------------------------:|
-| Tuya Dimmers              | NOT working (not exposed via Matter)    | Girier TS0110F, Tuya TS0601 |
-| Thermostats               | NOT working (not exposed via Matter)    |   AVATTO thermostat         |
-|:-------------------|:--------------------------:|-------------------------------------:|
-
+| Humidity Sensor           | NOT working (fixed 40%)      |  Tuya bridge bug?                 |
+| Tuya Dimmers              | NOT working (not exposed via Matter) | Girier TS0110F, Tuya TS0601 |
+| Thermostats               | NOT working (not exposed via Matter) |   AVATTO thermostat       |
+|:--------------------------|:----------------------------:|----------------------------------:|
+* mmWave sensors that are NOT shared via the Matter Gateway: 
+* the big black radar w/ annoying Led;
+* TS0601 _TZE200_ikvncluo 
+* TS0601 _TZE204_kapvnnlk
 
 ---------------------
 
@@ -139,7 +142,7 @@ Target release date : mid of March 2024
 
 
 ## **Matter Advanced Bridge driver - device support per Bridge model matrix**
-*last updated 2024/02/20*
+*last updated 2024/02/25*
 |Matter Clusters| Matter Device Type <br>ID                    |Tuya|Aqara|Philips Hue|Switch Bot|HE Child Device Driver | Remarks |
 |:----------:|:--------------------:|:-----:|:-----:|:-----:|:-----:|:--------------:|:--------------:|
 |    --        | 4.   <b>Lighting Device Types</b>             |       |       |       |     |                |         |
@@ -159,11 +162,11 @@ Target release date : mid of March 2024
 |    --        | 7.     <b>Sensor Device Types</b>             |       |       |       |     |      --         |                          |
 |    45        | 7.1.   Contact Sensor <br>(ID: 0x0015)        |  Yes  |  Yes  |   ?   |  ?  |'Generic Component Contact Sensor'| Confirm Aqara Contact sensors are working!|
 |    45        | n/a  Water Leak Sensors<br>(ID:n/a)           |  Yes  |  No   |   ?   |  ?  |'Generic Component Contact Sensor'| as a Contact Sensor! | 
-|   0400       | 7.2    Light Sensor <br>(ID: 0x0106)          |  No   |  TODO |   ?   |  ?  | TODO              |Confirm Light sensors are working or not? |
+|   0400       | 7.2    Light Sensor <br>(ID: 0x0106)          |  Yes   |  TODO |   ?   |  ?  | TODO              |Confirm Light sensors are working or not? |
 |   0406       | 7.3    Occupancy Sensor <br>(ID: 0x0107)      |  Yes  |  Yes  |   ?   |  ?  |'Matter Generic Component Motion Sensor'|     |
 |   0402       | 7.4    Temperature Sensor <br>(ID: 0x0302)    |  Yes  |  Yes  |  Yes  | Yes |'Generic Component Omni Sensor'|      |
 |   0403       | 7.5      Pressure Sensor<br>(ID: 0x0305 )     |  No |  No |   ?   |  ?  |               |                  |
-|   0405       | 7.7       Humidity Sensor <br>(ID: 0x0307)    |  Yes  |  Yes  |   ?   | Yes |'Generic Component Omni Sensor'|       |
+|   0405       | 7.7       Humidity Sensor <br>(ID: 0x0307)    |  No  |  Yes  |   ?   | Yes |'Generic Component Omni Sensor'|       |
 |06, 08, 0300, <br>0400, 0406| 7.8        On/Off Sensor <br>(ID: 0x0850) |   ?   |   ?   |   ?   |  ?  |               | not clear what is this  |
 |5C, 0405, 0402, <br>040C      | 7.9      Smoke CO Alarm <br>(ID: 0x0076)|   No   |   No  |   ?   |  ?  |    not available        |   No support in this driver   |
 |    --        | 8       <b>Closure Device Types</b>           |       |       |       |     |   --           |           |

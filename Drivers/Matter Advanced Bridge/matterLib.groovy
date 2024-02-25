@@ -706,7 +706,7 @@ Map getAttributesMapByClusterId(String cluster) {
 
 // 2.2.5 Illuminance Measurement Cluster 0x0400
 @Field static final Map<Integer, String> IlluminanceMeasurementClusterAttributes = [
-    0x00    : 'MeasuredValue',
+    0x0000  : 'MeasuredValue',
     0x0001  : 'MinMeasuredValue',
     0x0002  : 'MaxMeasuredValue',
     0x0003  : 'Tolerance',

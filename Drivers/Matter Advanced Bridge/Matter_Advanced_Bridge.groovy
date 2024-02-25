@@ -40,23 +40,29 @@
  * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
  * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
  * ver. 0.4.0  2024-02-18 kkossev  - added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
- *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to; 
- * ver. 0.4.1  2024-02-20 kkossev  - (dev.branch) added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
- *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong! 
+ *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to;
+ * ver. 0.4.1  2024-02-20 kkossev  - added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
+ *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
+ * ver. 0.4.2  2024-02-25 kkossev  - (dev.branch) fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver; fix illuminance conversion;
  *
- *                                   TODO: [====MVP====] Publish version 0.4.1
  *
- *                                   TODO: [====MVP====] WIP - add a list of known issues and limitations on the top post - for both HE system and the driver
+ *                                   TODO: [====MVP====] Publish version 0.4.2
+ *
+ *                                   TODO: [====MVP====] add states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled
+ *                                   TODO: [ENHANCEMENT] copy the Subscriptions in device.data; if state.subscriptions is empty - use the device.data.subscriptions
+ *                                   TODO: [====MVP====] Publish version 0.4.3
+ *
+ *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
+ *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name 
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices !!!!!!!!!!!!!!!!!!
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
  *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
- *                                   TODO: [ENHANCEMENT] add minimizeStateVariables advanced option
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
  *                                   TODO: [ENHANCEMENT] add Utilities command w/ one par
  *                                   TODO: [====MVP====] Publish version 0.4.x
- * 
+ *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [====BUG====] refresh CT temperature? (returns 0 after power off/on)
@@ -70,7 +76,6 @@
  *                                   TODO: [ENHANCEMENT] add cleanStates method
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
- *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
  *                                   TODO: [====MVP====] copy DeviceType list to the child device
@@ -117,8 +122,8 @@
 #include kkossev.matterLib
 #include kkossev.matterStateMachinesLib
 
-static String version() { '0.4.1' }
-static String timeStamp() { '2023/02/20 8:46 PM' }
+static String version() { '0.4.2' }
+static String timeStamp() { '2023/02/25 11:58 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -845,16 +850,17 @@ void parseContactSensor(final Map descMap) {
 void parseIlluminanceMeasurement(final Map descMap) { // 0400
     if (descMap.cluster != '0400') { logWarn "parseIlluminanceMeasurement: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
     if (descMap.attrId == '0000') { // Illuminance
-        Double valueInt = HexUtils.hexStringToInt(descMap.value)
-        if (valueInt <= 0 || valueInt > 100000) {
+        Integer valueInt = HexUtils.hexStringToInt(descMap.value)
+        Integer valueLux = Math.pow( 10, (valueInt -1) / 10000)  as Integer
+        if (valueLux < 0 || valueLux > 100000) {
             logWarn "parseIlluminanceMeasurement: valueInt:${valueInt} is out of range"
             return
         }
         sendMatterEvent([
             name: 'illuminance',
-            value: valueInt.round(0) as int,
+            value: valueLux as int,
             unit: 'lx',
-            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)}  illuminance is ${valueInt.round(0)} lux"
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)}  illuminance is ${valueLux} lux"
         ], descMap, true)
     } else {
         logTrace "parseIlluminanceMeasurement: ${(IlluminanceMeasurementClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -1032,7 +1038,7 @@ void parseColorControl(final Map descMap) { // 0300
                     }
                 }
             }
-            // 
+            //
             sendMatterEvent([
                 name: 'colorMode',
                 value: colorMode,
@@ -1635,7 +1641,7 @@ String updateStateSubscriptionsList(String addOrRemove, Integer endpoint, Intege
         }
     }
     else if (addOrRemove == 'show') {
-        if (logEnable) { 
+        if (logEnable) {
             logInfo "updateStateSubscriptionsList(): state.subscriptions size is ${state.subscriptions?.size()}"
             logInfo "updateStateSubscriptionsList(): state.subscriptions = ${state.subscriptions}"
         }
