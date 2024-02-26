@@ -43,19 +43,15 @@
  *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to;
  * ver. 0.4.1  2024-02-20 kkossev  - added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
  *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
- * ver. 0.4.2  2024-02-25 kkossev  - (dev.branch) fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver; fix illuminance conversion;
+ * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
+ * ver. 0.4.3  2024-02-26 kkossev  - (dev.branch) added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled
  *
- *
- *                                   TODO: [====MVP====] Publish version 0.4.2
- *
- *                                   TODO: [====MVP====] add states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled
- *                                   TODO: [ENHANCEMENT] copy the Subscriptions in device.data; if state.subscriptions is empty - use the device.data.subscriptions
  *                                   TODO: [====MVP====] Publish version 0.4.3
  *
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
  *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
- *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name 
+ *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices !!!!!!!!!!!!!!!!!!
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
  *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
@@ -120,15 +116,16 @@
  */
 /* groovylint-disable-next-line NglParseError */
 #include kkossev.matterLib
+#include kkossev.matterUtilitiesLib
 #include kkossev.matterStateMachinesLib
 
-static String version() { '0.4.2' }
-static String timeStamp() { '2023/02/25 11:58 PM' }
+static String version() { '0.4.3' }
+static String timeStamp() { '2023/02/26 10:46 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
-@Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = true  // minimize the state variables
+@Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = false  // minimize the state variables
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
@@ -189,32 +186,12 @@ metadata {
         //command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'panic button: Clear all States and scheduled jobs']]
-        command 'removeAllDevices', [[name: 'panic button: Remove all child devices']]
-        command 'removeAllSubscriptions', [[name: 'panic button: remove all subscriptions']]
-
         if (_DEBUG) {
             command 'getInfo', [
                     [name:'infoType', type: 'ENUM', description: 'Bridge Info Type', constraints: ['Basic', 'Extended']],   // if the parameter name is 'type' - shows a drop-down list of the available drivers!
                     [name:'endpoint', type: 'STRING', description: 'Endpoint', constraints: ['STRING']]
             ]
             command 'identify'      // can't make it work ... :(
-            command 'readAttributeSafe', [
-                    [name:'endpoint',   type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
-                    [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
-                    [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
-            ]
-            command 'readAttribute', [
-                    [name:'endpoint',   type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
-                    [name:'cluster',    type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
-                    [name:'attribute',  type: 'STRING', description: 'Attribute', constraints: ['STRING']]
-            ]
-            command 'subscribeSingleAttribute', [
-                    [name:'addOrRemove',  type: 'ENUM',   description: 'Select',    constraints: ['add', 'remove', 'show']],
-                    [name:'endpointPar',  type: 'STRING', description: 'Endpoint',  constraints: ['STRING']],
-                    [name:'clusterPar',   type: 'STRING', description: 'Cluster',   constraints: ['STRING']],
-                    [name:'attributePar', type: 'STRING', description: 'Attribute', constraints: ['STRING']]
-            ]
-            command 'unsubscribe'
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
         // do not expose the fingerprints for now ... Let the stock driver be assigned automatically.
@@ -1213,19 +1190,6 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
 void identify() {
     String cmd
     Integer time = 10
-    //List<Map<String, String>> attributePaths = []
-    //List<Map<String, String>> attributeWriteRequests = []
-/*
-    attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
-    cmd = matter.writeAttributes(attributeWriteRequests)
-    sendToDevice(cmd)
-
-    attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x0000))     // IdentifyTime
-    //attributePaths.add(matter.attributePath(device.endpointId, 0x0003, 0x0001))     // IdentifyType
-    cmd = matter.readAttributes(attributePaths)
-    sendToDevice(cmd)
-*/
-
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(time, 2))))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
@@ -1345,19 +1309,6 @@ void requestAndCollectServerListAttributesList(Map data)
     }
 }
 
-void readAttributeSafe(String endpointPar, String clusterPar, String attrIdPar) {
-    Integer endpointInt = safeNumberToInt(endpointPar)
-    Integer clusterInt  = safeNumberToInt(clusterPar)
-    Integer attrInt     = safeNumberToInt(attrIdPar)
-    String  endpointId  = HexUtils.integerToHexString(endpointInt, 1)
-    String  clusterId   = HexUtils.integerToHexString(clusterInt, 2)
-    String  attrId      = HexUtils.integerToHexString(attrInt, 2)
-    logDebug "readAttributeSafe(endpoint:${endpointId}, cluster:${clusterId}, attribute:${attrId}) -> starting readSingeAttrStateMachine!"
-
-    readSingeAttrStateMachine([action: START, endpoint: endpointInt, cluster: clusterInt, attribute: attrInt])
-
-}
-
 /*
  *  Discover all the endpoints and clusters for the Bridge and all the Bridged Devices
  */
@@ -1379,83 +1330,9 @@ void _DiscoverAll(statePar = null) {
     discoverAllStateMachine([action: START, goToState: stateSt])
 }
 
-void collectBasicInfo(Integer endpoint = 0, Integer timePar = 1, boolean fast = false) {
-    Integer time = timePar
-    // first thing to do is to read the Bridge (ep=0) Descriptor Cluster (0x001D) attribute 0XFFFB and store the ServerList in state.bridgeDescriptor['ServerList']
-    // also, the DeviceTypeList ClientList and PartsList are stored in state.bridgeDescriptor
-    requestAndCollectAttributesValues(endpoint, cluster = 0x001D, time, fast)  // Descriptor Cluster - DeviceTypeList, ServerList, ClientList, PartsList
-
-    // next - fill in all the ServerList clusters attributes list in the fingerprint
-    time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
-    scheduleRequestAndCollectServerListAttributesList(endpoint.toString(), time, fast)
-
-    // collect the BasicInformation Cluster attributes
-    time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
-    String fingerprintName = getFingerprintName(endpoint)
-    if (state[fingerprintName] == null) {
-        logWarn "collectBasicInfo(): state.${fingerprintName} is null !"
-        state[fingerprintName]
-        return
-    }
-    List<String> serverList = state[fingerprintName]['ServerList']
-    logDebug "collectBasicInfo(): endpoint=${endpoint}, fingerprintName=${fingerprintName}, serverList=${serverList} "
-
-    if (endpoint == 0) {
-        /* groovylint-disable-next-line ConstantIfExpression */
-        if ('28' in serverList) {
-            requestAndCollectAttributesValues(endpoint, cluster = 0x0028, time, fast) // Basic Information Cluster
-            time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
-        }
-        else {
-            logWarn "collectBasicInfo(): BasicInformationCluster 0x0028 endpoint:${endpoint} is <b>not in the ServerList !</b>"
-        }
-    }
-    else {
-        if ('39' in serverList) {
-            requestAndCollectAttributesValues(endpoint, cluster = 0x0039, time, fast) // Bridged Device Basic Information Cluster
-            time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
-        }
-        else {
-            logWarn "collectBasicInfo(): BridgedDeviceBasicInformationCluster 0x0039 endpoint:${endpoint} is <b>not in the ServerList !</b>"
-        }
-    }
-    runIn(time as int, 'delayedInfoEvent', [overwrite: true, data: [info: 'Basic Bridge Discovery finished', descriptionText: '']])
-}
-
-void requestExtendedInfo(Integer endpoint = 0, Integer timePar = 15, boolean fast = false) {
-    Integer time = timePar
-    List<String> serverList = state[getFingerprintName(endpoint)]?.ServerList
-    logWarn "requestExtendedInfo(): serverList:${serverList} endpoint=${endpoint} getFingerprintName = ${getFingerprintName(endpoint)}"
-    if (serverList == null) {
-        logWarn 'getInfo(): serverList is null!'
-        return
-    }
-    serverList.each { cluster ->
-        Integer clusterInt = HexUtils.hexStringToInt(cluster)
-        if (endpoint != 0 && (clusterInt in [0x2E, 0x41])) {
-            logWarn "requestExtendedInfo(): skipping endpoint ${endpoint}, cluster:${clusterInt} (0x${cluster}) - KNOWN TO CAUSE Zemismart M1 to crash !"
-            return
-        }
-        logDebug "requestExtendedInfo(): endpointInt:${endpoint} (0x${HexUtils.integerToHexString(safeToInt(endpoint), 1)}),  clusterInt:${clusterInt} (0x${cluster}),  time:${time}"
-        requestAndCollectAttributesValues(endpoint, clusterInt, time, fast = false)
-        time += fast ? SHORT_TIMEOUT : LONG_TIMEOUT
-    }
-
-    runIn(time, 'delayedInfoEvent', [overwrite: true, data: [info: 'Extended Bridge Discovery finished', descriptionText: '']])
-    logDebug "requestExtendedInfo(): jobs scheduled for total time: ${time} seconds"
-}
-
 void readAttribute(Integer endpoint, Integer cluster, Integer attrId) {
     List<Map<String, String>> attributePaths = [matter.attributePath(endpoint as Integer, cluster as Integer, attrId as Integer)]
     sendToDevice(matter.readAttributes(attributePaths))
-}
-
-void readAttribute(String endpointPar, String clusterPar, String attrIdPar) {
-    Integer endpoint = safeNumberToInt(endpointPar)
-    Integer cluster = safeNumberToInt(clusterPar)
-    Integer attrId = safeNumberToInt(attrIdPar)
-    logDebug "readAttribute(endpoint:${endpoint}, cluster:${cluster}, attrId:${attrId})"
-    readAttribute(endpoint, cluster, attrId)
 }
 
 void configure() {
@@ -1486,6 +1363,12 @@ void updated() {
         unScheduleDeviceHealthCheck()        // unschedule the periodic job, depending on the healthMethod
         log.info 'Health Check is disabled!'
     }
+    // compare state.preferences.minimizeStateVariables with settings.minimizeStateVariables was changed and call the minimizeStateVariables()
+    if (state.preferences == null) { state.preferences = [:] }
+    if ((state.preferences['minimizeStateVariables'] ?: false) != settings?.minimizeStateVariables && settings?.minimizeStateVariables == true) {
+        minimizeStateVariables(['true'])
+    }
+    state.preferences['minimizeStateVariables'] = settings.minimizeStateVariables
 }
 
 // delete all Preferences
@@ -1581,36 +1464,8 @@ String  unSubscribeCmd() {
     return matter.unsubscribe()
 }
 
-void removeAllSubscriptions() {
-    logWarn 'removeAllSubscriptions() ...'
-    clearSubscriptionsState()
-    unsubscribe()
-    sendInfoEvent('all subsciptions are removed!', 're-discover the deices again ...')
-}
-
 void clearSubscriptionsState() {
     state.subscriptions = []
-}
-
-/**
- * Subscribes to or unsubscribes from a specific attribute in the Matter Advanced Bridge.
- *
- * @param addOrRemove The action to perform. Valid values are 'add', 'remove', or 'show'.
- * @param endpoint The endpoint of the attribute.
- * @param cluster The cluster of the attribute.
- * @param attrId The attribute ID.
- *
- * sends matter.subscribe command to the bridge!!
- */
-void subscribeSingleAttribute(String addOrRemove, String endpointPar=null, String clusterPar=null, String attrIdPar=null) {
-    Integer endpoint = safeNumberToInt(endpointPar)
-    Integer cluster = safeNumberToInt(clusterPar)
-    Integer attrId = safeNumberToInt(attrIdPar)
-    String cmd = updateStateSubscriptionsList(addOrRemove, endpoint, cluster, attrId)
-    if (cmd != null && cmd != '') {
-        logDebug "subscribeSingleAttribute(): cmd = ${cmd}"
-        sendToDevice(cmd)
-    }
 }
 
 String updateStateSubscriptionsList(String addOrRemove, Integer endpoint, Integer cluster, Integer attrId) {
@@ -1743,6 +1598,7 @@ String subscribeCmd() {
     return matter.subscribe(0, 0xFFFF, attributePaths)
 }
 
+// TODO - check if this is still needed ?
 void checkSubscriptionStatus() {
     if (state.states == null) { state.states = [:] }
     if (state.states['isUnsubscribe'] == true) {
@@ -1834,6 +1690,7 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
         logWarn "setSwitch(): deviceNumber ${deviceNumberPar} is not valid!"
         return
     }
+    /*
     String fingerprintName = getFingerprintName(deviceNumber)
     if (fingerprintName == null || state[fingerprintName] == null) {
         logWarn "setSwitch(): fingerprintName '${fingerprintName}' is not valid! (${getDeviceDisplayName(deviceNumber)})"
@@ -1852,6 +1709,8 @@ void setSwitch(String commandPar, String deviceNumberPar/*, extraPar = null*/) {
         logWarn "setSwitch(): OnOff capability is not present for ${getDeviceDisplayName(deviceNumber)} !"
         return
     }
+    */ // commented out 2024-02-26
+
     // find the command in the OnOffClusterCommands map
     Integer onOffcmd = OnOffClusterCommands.find { k, v -> v == command }?.key
     logTrace "setSwitch(): command = ${command}, onOffcmd = ${onOffcmd}, onOffCommandsList = ${onOffCommandsList}"
@@ -2580,12 +2439,17 @@ private ChildDeviceWrapper createChildDevice(String dni, Map mapping, Map d) {
 
 void clearInfoEvent()      { sendInfoEvent('clear') }
 
+String getStateDriverVersion() { return state.driverVersion }
+void setStateDriverVersion(String version) { state.driverVersion = version }
+
+@CompileStatic
 void checkDriverVersion() {
-    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+    if (getStateDriverVersion() == null || driverVersionAndTimeStamp() != getStateDriverVersion()) {
+        logDebug "updating the settings from the current driver version ${getStateDriverVersion()} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
-        state.driverVersion = driverVersionAndTimeStamp()
-        initializeVars(fullInit = false)
+        setStateDriverVersion(driverVersionAndTimeStamp())
+        final boolean fullInit = false
+        initializeVars(fullInit)
     }
 }
 
@@ -2788,7 +2652,8 @@ void resetStats() {
     state.health = [:]
     state.bridgeDescriptor  = [:]   // driver specific
     state.subscriptions = []        // driver specific, format EP_CLUSTER_ATTR
-    state.stateMachines = [:]     // driver specific
+    state.stateMachines = [:]       // driver specific
+    state.preferences = [:]         // driver specific
     state.stats['rxCtr'] = state.stats['txCtr'] = 0
     state.stats['initializeCtr'] = state.stats['duplicatedCtr'] = 0
     state.states['isDigital'] = state.states['isRefresh'] = state.states['isPing'] =  state.states['isInfo']  = false
@@ -2897,5 +2762,5 @@ void test(par) {
     s = getSubscribeOrRefreshCmdList('SUBSCRIBE_ALL')
     log.warn "getSubscribeOrRefreshCmdList=${s}"
     */
-    fingerprintsToSubscriptionsList()
+    //fingerprintsToSubscriptionsList()
 }

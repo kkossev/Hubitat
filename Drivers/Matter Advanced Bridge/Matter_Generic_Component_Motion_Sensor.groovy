@@ -18,7 +18,7 @@
   * ver. 0.0.1  2024-01-13 kkossev  - added 'Invert Motion' option
   * ver. 0.0.2  2024-01-25 kkossev  - 'Invert Motion' change updates the motion state immediateltely.
   *
-  *                                   TODO: 
+  *                                   TODO:
   *
 */
 

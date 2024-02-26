@@ -8,16 +8,16 @@ author: "Krassimir Kossev"
 Target release date : mid of March 2024
 
 ### <b>Matter Advanced Bridge Project : MVP</b>
-1. Publish and maintain a list of devices types work and which do not work for each of the Matter Bridges tested. (**status: WIP**)
-2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (**Status: WIP**)
+1. Publish and maintain a list of devices types work and which do not work for each of the Matter Bridges tested. (**status: DONE**)
+2. Publish a list of known issues and limitations of the Hubitat Matter implementation. (**Status: DONE**)
 3. Stable discovery process. (**Status: TESTING (from ver 0.4.0)**)
-4. RGB bulb bugs fixed and tested.  (**Status: TESTING (ver 0.4.1)**)
+4. RGB bulb bugs fixed and tested.  (**Status: DONE (ver 0.4.1)**)
 5. Battery level support. (**status: TODO**)
 6. Make the refresh command work in the child devices. (**Status: TODO**)
 7. Curtain Motors (WindowCovering) bugs fixed and tested.(**status: TODO**)
 8. Matter Advanced Bridge package can be installed and updated via HPM. (**status: DONE**)
 9. Help/Documentation button in driver linked to GitHub web page. (**status: TODO**)
-10. ???
+10. Performance (speed) optimizations (**Status: WIP**)
 
 
 
