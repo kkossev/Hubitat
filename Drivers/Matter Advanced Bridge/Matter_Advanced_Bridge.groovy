@@ -44,42 +44,39 @@
  * ver. 0.4.1  2024-02-20 kkossev  - added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
  *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
  * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
- * ver. 0.4.3  2024-02-26 kkossev  - (dev.branch) added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled
- *
- *                                   TODO: [====MVP====] Publish version 0.4.3
+ * ver. 0.4.3  2024-02-26 kkossev  - added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled;
+ * ver. 0.4.4  2024-02-27 kkossev  - (dev.branch) 
  *
  *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
  *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
- *                                   TODO: [====MVP====] add Data.Refresh for each child device ?
+ *                                   TODO: [ENHANCEMENT] add Data.Refresh for each child device ?
+ * 
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
- *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices !!!!!!!!!!!!!!!!!!
+ *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
  *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
- *                                   TODO: [ENHANCEMENT] add Utilities command w/ one par
+ *                                   TODO: [ENHANCEMENT] clearStatistics command/button
+ *                                   TODO: [ENHANCEMENT] DeleteDevices() to take device# parameter to delete a single device (0=all)
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
- *                                   TODO: [====BUG====] refresh CT temperature? (returns 0 after power off/on)
- *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default enabled)
+ *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
+ *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default disabled)
  *                                   TODO: [ENHANCEMENT] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
  *                                   TODO: [ENHANCEMENT] Ping the bridge at the start of the discovery process
  *                                   TODO: [ENHANCEMENT] check the 'healthStatus' attribute at the start of the Discovery process !
- *                                   TODO: [ENHANCEMENT] When deleting device, unsubscribe from all attributes
- *                                   TODO: [ENHANCEMENT] When subscribing, remove devices that are disabled !
- *                                   TODO: [ENHANCEMENT] add 'Utilities' command w/ one par
- *                                   TODO: [ENHANCEMENT] add cleanStates method
+ *                                   TODO: [ENHANCEMENT] When deleting device, unsubscribe from all attributes (+Info logs)
+ *                                   TODO: [ENHANCEMENT] When subscribing, remove from the subscribe list devices that are disabled ! (+Info logs)
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
- *                                   TODO: [====MVP====] copy DeviceType list to the child device
  *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
  *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
- *                                   TODO: [====MVP====] continue testing the Philips Hue Dimmer Switch
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add Thermostat component driver
@@ -89,19 +86,12 @@
  *                                   TODO: [====MVP====] Publish version 0.6.0
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
- *                                   TODO: [REFACTORING] move the component drivers names into a table
- *                                   TODO: [REFACTORING] substitute the tmp state with a in-memory cache
- *                                   TODO: [REFACTORING] add a temporary state to store the attributes list of the currently interviewed cluster
  *
- *                                   TODO: [ENHANCEMENT] add more info in checkSubscription(): unsubscribe() is completed Info log
- *                                   TODO: [ENHANCEMENT] check if the child device has attribute $name before sending an event to it !
  *                                   TODO: [ENHANCEMENT] add product_name: Temperature Sensor to the device name when creating devices
  *                                   TODO: [ENHANCEMENT] driverVersion to be stored in child devices states
  *                                   TODO: [ENHANCEMENT] Device Extended Info - expose as a command (needs state machine implementation) or remove the code?
  *                                   TODO: [ENHANCEMENT] option to automatically delete the child devices when missing from the PartsList
  *                                   TODO: [ENHANCEMENT] add initialized() method to the child devices (send 'unknown' events for all attributes)
- *                                   TODO: [ENHANCEMENT] clearStatistics command/button
- *                                   TODO: [ENHANCEMENT] DeleteDevices() to take device# parameter to delete a single device (0=all)
  *                                   TODO: [ENHANCEMENT] store subscription lists in Hex format
  *                                   TODO: [ENHANCEMENT] add Cluster SoftwareDiagnostics (0x0034) endpoint 0x0 attribute [0001] CurrentHeapFree = 0x00056610 (353808)
  *                                   TODO: [ENHANCEMENT] implement ping() for the child devices (requires individual states for each child device...)
@@ -111,7 +101,6 @@
  *                                   TODO: [ RESEARCH  ] check setSwitch() device# commandsList
  *                                   TODO: [ RESEARCH  ] add a Parent entry in the child devices fingerprints (PartsList)
  *                                   TODO: [ RESEARCH  ] how to  combine 2 endpoints in one device - 'Temperature and Humidity Sensor' - 2 clusters
- *                                   TODO: [ RESEARCH  ] why are the child devices  automatically disabled when shared via Hub Mesh ?
  *                                   TODO: - template -  [====MVP====] [REFACTORING] [RESEARCH] [ENHANCEMENT]
  */
 /* groovylint-disable-next-line NglParseError */
@@ -119,8 +108,8 @@
 #include kkossev.matterUtilitiesLib
 #include kkossev.matterStateMachinesLib
 
-static String version() { '0.4.3' }
-static String timeStamp() { '2023/02/26 10:46 PM' }
+static String version() { '0.4.4' }
+static String timeStamp() { '2023/02/27 7:10 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -816,7 +805,7 @@ void parseContactSensor(final Map descMap) {
         sendMatterEvent([
             name: 'contact',
             value: contactAttr,
-            descriptionText: "${getDeviceDisplayName(descMap.endpoint)} contact is ${contactAttr}"
+            descriptionText: "${getDeviceDisplayName(descMap.endpoint)} contact is ${contactAttr} (raw:${descMap.value})"
         ], descMap, true)
     } else {
         logTrace "parseContactSensor: ${(BooleanStateClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -1126,7 +1115,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
     }
     // TODO - use the child device wrapper to check the current value !!!!!!!!!!!!!!!!!!!!!
 
-    if (ignoreDuplicates == true) {
+    if (ignoreDuplicates == true && state.states['isRefresh'] == false) {
         boolean isDuplicate = false
         Object latestEvent = dw?.device?.currentState(name)
         //latestEvent.properties.each { k, v -> logWarn ("$k: $v") }
@@ -1166,7 +1155,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
         }
     }
     else {
-        logTrace "sendMatterEvent: <b>ignoreDuplicates=false</b> for event: ${eventMap.descriptionText} (value:${value})"
+        logTrace "sendMatterEvent: <b>ignoreDuplicates=false</b> or isRefresh=${state.states['isRefresh'] } for event: ${eventMap.descriptionText} (value:${value})"
     }
     if (dw != null && dw?.disabled != true) {
         // send events to child for parsing. Any filtering of duplicated events will be potentially done in the child device handler.
@@ -1885,10 +1874,26 @@ Map mapTuyaCategory(Map d) {
  * Implementation of component commands from child devices
  */
 
-// Component command to refresh device      TODO: implement this
+// Component command to refresh device
 void componentRefresh(DeviceWrapper dw) {
-    String id = dw.getDataValue('id')
-    logWarn "componentRefresh(${dw}) id=${id} (TODO: not implemented!)"
+    String id = dw.getDataValue('id')       // in hex
+    // find the id in the state.subscriptions list of lists - this is the first element of the lists 
+    List<List<Integer>> stateSubscriptionsList = state.subscriptions ?: []
+    List<List<Integer>> deviceSubscriptionsList = stateSubscriptionsList.findAll { it[0] == HexUtils.hexStringToInt(id) }
+    logDebug "componentRefresh(${dw}) id=${id} deviceSubscriptionsList=${deviceSubscriptionsList}"
+    if (deviceSubscriptionsList == null || deviceSubscriptionsList == []) {
+        logWarn "componentRefresh(${dw}) id=${id} deviceSubscriptionsList is empty!"
+        return
+    }
+    // for deviceSubscriptionsList, readAttributes
+    List<Map<String, String>> attributePaths = deviceSubscriptionsList.collect { sub ->
+        matter.attributePath(sub[0] as Integer, sub[1] as Integer, sub[2] as Integer)
+    }
+    if (!attributePaths.isEmpty()) {
+        setRefreshRequest()    // 6 seconds
+        sendToDevice(matter.readAttributes(attributePaths))
+        logDebug "componentRefresh(${dw}) id=${id} : refreshing attributePaths=${attributePaths}"
+    }
 }
 
 // Component command to ping the device
