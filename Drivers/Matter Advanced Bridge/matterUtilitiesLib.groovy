@@ -25,16 +25,17 @@ library(
   *  for the specific language governing permissions and limitations under the License.
   *
   * ver. 0.0.0  2024-02-26 kkossev  - first version
+  * ver. 0.0.1  2024-03-01 kkossev  - (dev.branch)
   *
-  *                                   TODO:
+  *                                   TODO: add resetStats 
   *
 */
 
 import groovy.transform.Field
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-@Field static final String matterUtilitiesLibVersion = '0.0.0'
-@Field static final String matterUtilitiesLibStamp   = '2024/02/26 1:15 PM'
+@Field static final String matterUtilitiesLibVersion = '0.0.1'
+@Field static final String matterUtilitiesLibStamp   = '2024/03/01 9:45 AM'
 
 metadata {
     // no capabilities
@@ -51,6 +52,7 @@ metadata {
     'removeAllDevices': 'removeAllDevices',
     'removeAllSubscriptions': 'removeAllSubscriptions',
     'minimizeStateVariables': 'minimizeStateVariables',
+    'resetStats': 'resetStats',
     'help': 'utilitiesHelp'
 ]
 
@@ -134,7 +136,7 @@ boolean utilities(String commandLine=null) {
     List<String> supportedCommandsList = UtilitiesMap.keySet()*.toLowerCase()
     List commandLineParsed = commandLine?.split(' ')
     if (commandLineParsed == null || commandLineParsed.size() == 0) {
-        logWarn "utilities: command is null or empty! supportedCommandsList=${UtilitiesMap.keySet()}"
+        logInfo "utilities: command is null or empty! supportedCommandsList=${UtilitiesMap.keySet()}"
         return false
     }
     String cmd = commandLineParsed[0]?.toLowerCase()
@@ -143,13 +145,13 @@ boolean utilities(String commandLine=null) {
     logDebug "utilities: cmd=${cmd}, parameters=${parameters}, supportedCommandsList=${UtilitiesMap.keySet()}"
     // check if the cmd is in the supportedCommandsList
     if (cmd == null || !(cmd in supportedCommandsList)) {
-        logWarn "utilities: the command <b>${(cmd ?: '')}</b> must be one of these : ${UtilitiesMap.keySet()}"
+        logInfo "utilities: the command <b>${(cmd ?: '')}</b> must be one of these : ${UtilitiesMap.keySet()}"
         return false
     }
     // find func name from the UtilitiesMap
     String func = UtilitiesMap.find { it.key.toLowerCase() == cmd }.value
     if (func == null) {
-        logWarn "utilities: the command <b>${cmd}</b> is not supported!"
+        logInfo "utilities: the command <b>${cmd}</b> is not supported!"
         return false
     }
     try {
@@ -247,4 +249,13 @@ void minimizeStateVariables(List<String> parameters) {
     state.remove('tmp')
     state.remove('stateMachines')
     stateKeys = null
+}
+
+void resetStats(List<String> parameters) {
+    logInfo "resetStats(${parameters}) ..."
+    state.stats = [:]
+    // stats : {duplicatedCtr=0, pingsMax=288, rxCtr=264, pingsMin=80, pingsAvg=135, txCtr=51, pingsOK=6, pingsFail=1, initializeCtr=5}
+    state.stats = [initializeCtr: 0, rxCtr: 0, txCtr: 0, duplicatedCtr: 0, pingsOK: 0, pingsFail: 0, pingsMin: 0, pingsMax: 0, pingsAvg: 0]
+    sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} statistics were reset!", type: 'digital'])
+
 }

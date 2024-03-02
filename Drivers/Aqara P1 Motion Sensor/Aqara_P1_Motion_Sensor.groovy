@@ -32,12 +32,13 @@
  * ver. 1.2.3 2022-12-26 kkossev  - added internalTemperature option (disabled by default); added homeKitCompatibility option to enable/disable battery 100% workaround for FP1 (HomeKit); Approach distance bug fix; battery 0% bug fix; pollPresence after hub reboot bug fix;
  *             RTCGQ13LM battery fix; added RTCGQ15LM and RTCGQ01LM; added GZCGQ01LM and GZCGQ11LM illuminance sensors for tests; refactored setDeviceName(); min. Motion Retrigger Interval limited to 2 seconds.
  * ver. 1.2.4 2023-01-26 kkossev  - renamed homeKitCompatibility option to sendBatteryEventsForDCdevices; aqaraModel bug fix
- * ver. 1.2.5 2023-01-30 kkossev  - (dev.branch) bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
- * ver. 1.3.0 2023-03-06 kkossev  - (dev.branch) regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
- * ver. 1.3.1 2023-03-15 kkossev  - (dev.branch) added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
- * ver. 1.4.0 2023-03-17 kkossev  - (dev.branch) *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
- * ver. 1.4.1 2023-04-21 kkossev  - (dev.branch) exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
- * ver. 1.4.2 2023-05-21 kkossev  - (dev.branch) lumi.sen_ill.agl01 initializetion fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
+ * ver. 1.2.5 2023-01-30 kkossev  - bug fixes for 'lumi.sen_ill.mgl01' light sensor'; setting device name bug fix;
+ * ver. 1.3.0 2023-03-06 kkossev  - regions reports decoding; on SetMotion(inactive) a Reset presence command is sent to FP1; FP1 fingerprint is temporary commented out for tests; added aqaraVersion'; Hub model (C-7 C-8) decoding
+ * ver. 1.3.1 2023-03-15 kkossev  - added RTCGQ01LM lumi.sensor_motion battery % and voltage; removed sendBatteryEventsForDCdevices option; removed lastBattery;
+ * ver. 1.4.0 2023-03-17 kkossev  - *** breaking change *** replaced presence => roomState [unoccupied,occupied]; replaced presence_type => roomActivity ; added capability 'Health Check'; added 'Works with ...'; added ping() and RTT
+ * ver. 1.4.1 2023-04-21 kkossev  - exception prevented when application string is enormously long; italic font bug fix; lumi.sen_ill.agl01 initialization and bug fixes; light sensor delta = 5 lux; removed MCCGQ14LM
+ * ver. 1.4.2 2023-05-21 kkossev  - lumi.sen_ill.agl01 initialization fixes; removed the E1 contact sensor driver code; trace logs cleanup; added reporting time configuration for the Lux sensors; Lux sensors preferences are NOT reset to defaults when paired again; removed powerSource manipulation; periodic job renamed to deviceHealthCheck()
+ * ver. 1.5.0 2024-02-29 kkossev  - (dev. branch) Groovy Lint; 
  * 
  *                                 TODO: WARN log, when the device model is not registered during the pairing !!!!!!!!
  *                                 TODO: automatic logsOff() is not working sometimes!
@@ -48,10 +49,10 @@
  *                                 TODO: fill in the aqaraVersion from SWBUILD_TAG_ID, not from HE application version !
  *                                 TODO: check why the logsoff was not scheduled on fresh install (version 1.2.4 )
  *
-*/
+ */
 
-def version() { "1.4.2" }
-def timeStamp() {"2023/05/21 10:48 PM"}
+static String version() { "1.5.0" }
+static String timeStamp() {"2024/02/29 8:50 PM"}
 
 import hubitat.device.HubAction
 import hubitat.device.Protocol
@@ -169,7 +170,6 @@ metadata {
 @Field static final Integer DEFAULT_ILLUMINANCE_MAX_TIME = 300
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 1
 
-
 @Field static final Map aqaraModels = [
     'RTCZCGQ11LM': [
         model: "lumi.motion.ac01", manufacturer: "aqara", deviceJoinName: "Aqara FP1 Human Presence Detector RTCZCGQ11LM",
@@ -213,9 +213,6 @@ metadata {
     ]
 ]
 
-
-
-
 def isRTCGQ13LM() { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.agl04']) }     // Aqara Precision motion sensor
 def isP1()        { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac02'] ) }     // Aqara P1 motion sensor (LED control)
 def isFP1()       { if (deviceSimulation) return false else return (device.getDataValue('model') in ['lumi.motion.ac01'] ) }     // Aqara FP1 Presence sensor (microwave radar)
@@ -234,7 +231,7 @@ private P1_LED_MODE_NAME(value) { value == 0 ? "Disabled" : value== 1 ? "Enabled
 
 def getSensitivityOptions() { aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.motionSensitivity?.options ?: sensitivityOptions }
 
-def parse(String description) {
+void parse(String description) {
     if (logEnable == true) log.debug "${device.displayName} parse: description is ${description}"
     checkDriverVersion()
     if (state.rxCounter != null) state.rxCounter = state.rxCounter + 1
@@ -830,9 +827,6 @@ def parseSimpleDescriptorResponse(Map descMap) {
     }
 }
 
-
-
-
 def illuminanceEvent( rawLux ) {
     if (rawLux == 0xFFFF) {
         logWarn "ignored rawLux reading ${rawLux}"
@@ -1002,14 +996,14 @@ def deviceHealthCheck() {
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
 }
 
-def ping() {
+void ping() {
     logInfo 'ping...'
     scheduleCommandTimeoutCheck()
     state.pingTime = new Date().getTime()
     sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
 }
 
-def sendRttEvent() {
+void sendRttEvent() {
     def now = new Date().getTime()
     def timeRunning = now.toInteger() - state.pingTime.toInteger()
     logInfo "RTT is ${timeRunning} (ms)"    
@@ -1036,9 +1030,9 @@ void deviceCommandTimeout() {
     }
 }
 
-def sendHealthStatusEvent(value) {
+void sendHealthStatusEvent(String value) {
     if (device.currentValue('healthStatus') != value) {
-        def descriptionText = "healthStatus changed to $value"
+        String descriptionText = "healthStatus changed to $value"
         sendEvent(name: "healthStatus", value: value, descriptionText: "${device.displayName} ${descriptionText}", type: "digital")
         if (value != 'online') {
             log.warn "${device.displayName} ${descriptionText}"
@@ -1049,7 +1043,7 @@ def sendHealthStatusEvent(value) {
     }
 }
 
-def resetPresence() {
+void resetPresence() {
     logInfo 'reset presence'
     //resetRegions()
     sendZigbeeCommands(zigbee.writeAttribute(0xFCC0, 0x0157, DataType.UINT8, 0x01, [mfgCode: 0x115F], 0))
@@ -1064,9 +1058,9 @@ void setWatchdogTimer() {
 }
 
 
-def driverVersionAndTimeStamp() {version()+' '+timeStamp()}
+static String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
 
-def checkDriverVersion() {
+void checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logInfo "Hubitat hub model is ${getModel()}. Updating the settings from driver version ${state.driverVersion} to ${driverVersionAndTimeStamp()}"
         state.comment = COMMENT_WORKS_WITH
@@ -1080,14 +1074,14 @@ def checkDriverVersion() {
     }
 }
 
-def logsOff(){
+void logsOff(){
     if (settings?.logEnable) log.info "${device.displayName} debug logging disabled..."
     device.updateSetting("logEnable",[value:"false",type:"bool"])
 }
 
 
 // called when preferences are saved
-def updated() {
+void updated() {
     logDebug "updated()..."
     checkDriverVersion()
     ArrayList<String> cmds = []
@@ -1200,52 +1194,53 @@ void setDeviceName() {
     }
 }
 
-void initializeVars( boolean fullInit = false ) {
-    if (logEnable==true) log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
+void initializeVars(boolean fullInit = false) {
+    if (logEnable==true) { log.info "${device.displayName} InitializeVars... fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})" }
     if (fullInit == true ) {
         state.clear()
         setDeviceName()
         state.driverVersion = driverVersionAndTimeStamp()
     }
-    if (fullInit == true || state.rxCounter == null) state.rxCounter = 0
-    if (fullInit == true || state.txCounter == null) state.txCounter = 0
-    if (fullInit == true || state.notPresentCounter == null) state.notPresentCounter = 0
-    if (fullInit == true || state.motionStarted == null) state.motionStarted = now()
+    if (fullInit == true || state.rxCounter == null) { state.rxCounter = 0 }
+    if (fullInit == true || state.txCounter == null) { state.txCounter = 0 }
+    if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
+    if (fullInit == true || state.motionStarted == null) { state.motionStarted = now() }
     
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting("logEnable", true)
-    if (fullInit == true || settings?.txtEnable == null) device.updateSetting("txtEnable", true)
-    if (fullInit == true || settings?.internalTemperature == null) device.updateSetting("internalTemperature", false)
-    if (fullInit == true || settings?.motionResetTimer == null) device.updateSetting("motionResetTimer", 30)
+    if (fullInit == true || settings?.logEnable == null) { device.updateSetting("logEnable", true) }
+    if (fullInit == true || settings?.txtEnable == null) { device.updateSetting("txtEnable", true) }
+    if (fullInit == true || settings?.internalTemperature == null) { device.updateSetting("internalTemperature", false) }
+    if (fullInit == true || settings?.motionResetTimer == null) { device.updateSetting("motionResetTimer", 30) }
     
     if (isLightSensor()) {
-        if (fullInit == true || settings?.illuminanceMinReportingTime == null) device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"])
-        if (fullInit == true || settings?.illuminanceMaxReportingTime == null) device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"])
-        if (fullInit == true || settings?.illuminanceThreshold == null) device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"])
+        if (fullInit == true || settings?.illuminanceMinReportingTime == null) { device.updateSetting("illuminanceMinReportingTime", [value: DEFAULT_ILLUMINANCE_MIN_TIME , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceMaxReportingTime == null) { device.updateSetting("illuminanceMaxReportingTime", [value: DEFAULT_ILLUMINANCE_MAX_TIME , type:"number"]) }
+        if (fullInit == true || settings?.illuminanceThreshold == null) { device.updateSetting("illuminanceThreshold", [value: DEFAULT_ILLUMINANCE_THRESHOLD , type:"number"]) }
     }
     
     if (isFP1()) {
         device.updateSetting("motionResetTimer", [value: 0 , type:"number"])    // no auto reset for FP1
     }
-    if (fullInit == true || settings.tempOffset == null) device.updateSetting("tempOffset", 0)    
+    if (fullInit == true || settings.tempOffset == null) { device.updateSetting("tempOffset", 0) }
     if (fullInit == true ) { powerSourceEvent() }
     
     updateAqaraVersion()
 }
 
-def installed() {
+void installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     sendHealthStatusEvent("unknown")
     aqaraBlackMagic()
 }
 
-def configure(boolean fullInit = false) {
+void configure(boolean fullInit = false) {
     log.info "${device.displayName} configure...fullInit = ${fullInit} (driver version ${driverVersionAndTimeStamp()})"
     unschedule()
-    initializeVars( fullInit )
+    initializeVars(fullInit)
     runIn( DEFAULT_POLLING_INTERVAL, "deviceHealthCheck", [overwrite: true, misfire: "ignore"])
     logWarn "<b>if no more logs, please pair the device again to HE!</b>"
     runIn( 30, "aqaraReadAttributes", [overwrite: true])
 }
+
 def initialize() {
     log.info "${device.displayName} Initialize... (driver version ${driverVersionAndTimeStamp()})"
     configure(fullInit = true)
@@ -1266,7 +1261,7 @@ void sendZigbeeCommands(List<String> cmds) {
 }
 
 // device Web UI command
-def setMotion( mode ) {
+void setMotion(final String mode) {
     switch (mode) {
         case "active" : 
             handleMotion(true, isDigital=true)
@@ -1289,8 +1284,6 @@ def setMotion( mode ) {
     }
 }
 
-
-
 String integerToHexString(BigDecimal value, Integer minBytes, boolean reverse=false) {
     return integerToHexString(value.intValue(), minBytes, reverse=reverse)
 }
@@ -1304,8 +1297,7 @@ String integerToHexString(Integer value, Integer minBytes, boolean reverse=false
     
 }
 
-
-def aqaraReadAttributes() {
+void aqaraReadAttributes() {
     List<String> cmds = []
 
     if (isT1()) {             // RTCGQ12LM Aqara T1 human body movement and illuminance sensor
@@ -1328,20 +1320,16 @@ def aqaraReadAttributes() {
     }
     else if (isLightSensorXiaomi()) {
         cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x126E], delay=201)
-        //
-                cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=202)
-                cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=203)
-
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [mfgCode: 0x115F], delay=202)
+        cmds += zigbee.readAttribute(0x0400, 0x0000, [:], delay=203)
     }
     else {
         logWarn "skipped unknown device ${device.getDataValue('manufacturer')} ${device.getDataValue('model')}"
     }    
-    
     sendZigbeeCommands( cmds )       
 }
 
-
-def aqaraBlackMagic() {
+void aqaraBlackMagic() {
     List<String> cmds = []
 
     if (isP1()) {
@@ -1378,10 +1366,9 @@ def aqaraBlackMagic() {
     }
     //cmds += activeEndpoints()
     sendZigbeeCommands( cmds )
-
 }
 
-def activeEndpoints() {
+List<String> activeEndpoints() {
     List<String> cmds = []
     cmds += ["he raw ${device.deviceNetworkId} 0 0 0x0005 {00 ${zigbee.swapOctets(device.deviceNetworkId)}} {0x0000}"] //get all the endpoints...
     String endpointIdTemp = endpointId == null ? "01" : endpointId
@@ -1413,7 +1400,7 @@ boolean isCompatible(Integer minLevel) { //check to see if the hub version meets
     return (Integer.parseInt(revision) >= minLevel)
 }
 
-def updateAqaraVersion() {
+void updateAqaraVersion() {
     def application = device.getDataValue("application") 
     if (application != null) {
         def str = "0.0.0_" + String.format("%04d", zigbee.convertHexToInt(application.substring(0, Math.min(application.length(), 2))));
@@ -1422,24 +1409,21 @@ def updateAqaraVersion() {
             logInfo "aqaraVersion set to $str"
         }
     }
-    else {
-        return null
-    }
 }
 
-def logDebug(msg) {
+void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
     }
 }
 
-def logInfo(msg) {
+void logInfo(final String msg) {
     if (settings?.txtEnable) {
         log.info "${device.displayName} " + msg
     }
 }
 
-def logWarn(msg) {
+void logWarn(final String msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
@@ -1456,43 +1440,9 @@ List<String> configureIlluminance() {
     return cmds 
 }
 
-def test( description ) {
-    
+void test(String description ) {
         List<String> cmds = []
         cmds = configureIlluminance()
         sendZigbeeCommands( cmds )
-/*    
-    log.warn "before: DynamicSettingsMap = ${DynamicSettingsMap}"
-    Random rnd = new Random()
-    //def setting = rnd.nextInt(99).toString()
-    def setting = "dynamicCommands"
-    def value = description ?: "empty"
-    DynamicSettingsMap.get(device.id).put(rnd.nextInt(99).toString(), "otherRandomParValue")
-    DynamicSettingsMap.get(device.id).put(setting, value)
-    log.warn "after: DynamicSettingsMap = ${DynamicSettingsMap}"
-    log.trace "DynamicSettingsMap dynamicCommands = ${DynamicSettingsMap.get(device.id).get(setting)}"
-*/    
-    /*
-    description = "read attr - raw: DE060100003002FF4C0600100121AA0B21A813242000000000212D002055, dni: DE06, endpoint: 01, cluster: 0000, size: 30, attrId: FF02, encoding: 4C, command: 0A, value: 0600100121AA0B21A813242000000000212D002055"
-    logWarn "test parsing ${description}"
-    parse(description)
-    */
-    /*
-    def map = aqaraModels
-    map.each{ k, v -> log.trace "${k}:${v}" }
-    log.trace "aqaraModels joinName = ${aqaraModels['RTCGQ13LM'].deviceJoinName} sensitivity(3) = ${aqaraModels['RTCGQ13LM'].motionSensitivity.options['3']}"
-    */
-    
-    // RTCZCGQ11LM:[model:lumi.motion.ac01, manufacturer:LUMI, deviceJoinName:Aqara FP1 Human Presence Detector RTCZCGQ11LM, capabilities:[motionSensor, temperatureMeasurement, battery, powerSource, signalStrength], attributes:[presence, presence_type], preferences:[motionSensitivity, approachDistance, monitoringMode, sendBatteryEventsForDCdevices], isSleepy:true, motionRetriggerInterval:[min:1, scale:0, max:200, step:1, type:Integer], motionSensitivity:[min:1, scale:0, max:3, step:1, type:Integer, options:[1:low, 2:medium, 3:high]]]
-    
-//    def ptr = aqaraModels['RTCZCGQ11LM']
-//    log.trace "aqaraModel=${device.getDataValue('aqaraModel')} sendBatteryEventsForDCdevices=${aqaraModels[device.getDataValue('aqaraModel')]?.preferences?.sendBatteryEventsForDCdevices} "
-    
 
-    //setDeviceName()
-    //log.trace "ver = ${updateAqaraVersion()}"
-    //log.trace "${device.properties.inspect()}"
-//    log.trace "getModel() = ${getModel()}"
 }
-
-

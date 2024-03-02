@@ -45,19 +45,15 @@
  *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
  * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
  * ver. 0.4.3  2024-02-26 kkossev  - added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled;
- * ver. 0.4.4  2024-02-27 kkossev  - (dev.branch) 
+ * ver. 0.4.4  2024-03-02 kkossev  - (dev.branch) added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
  *
- *                                   TODO: [====MVP====] SwitchBot WindowCovering - close command issues @Steve9123456789
- *                                   TODO: [====MVP====] componentRefresh(DeviceWrapper dw)
- *                                   TODO: [ENHANCEMENT] add Data.Refresh for each child device ?
+ *                                   TODO: [====MVP====] Publish version 0.4.4
  * 
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
- *                                   TODO: [ENHANCEMENT] do not show setRelay Info messages in the logs (supress Bridge#4345 Device#08 (OSRAM Classic A60 W clear - LIGHTIFY) switch is off)
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
- *                                   TODO: [ENHANCEMENT] clearStatistics command/button
- *                                   TODO: [ENHANCEMENT] DeleteDevices() to take device# parameter to delete a single device (0=all)
+ *                                   TODO: [ENHANCEMENT] DeleteDevice # command (utilities) (0=all)
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
@@ -78,12 +74,13 @@
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
- *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
- *                                   TODO: [====MVP====] add Thermostat component driver
  *                                   TODO: [====MVP====] Publish version 0.5.0
-
+ *
+ *                                   TODO: [====MVP====] **************************** Publish version 1.0.0 for public Beta testing - 16th of March 2024 ******************************
+ *
+ *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add support for Lock cluster 0x0101
- *                                   TODO: [====MVP====] Publish version 0.6.0
+ *                                   TODO: [====MVP====] add Thermostat component driver
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
  *
@@ -107,9 +104,10 @@
 #include kkossev.matterLib
 #include kkossev.matterUtilitiesLib
 #include kkossev.matterStateMachinesLib
+//#include matterTools.parseDescriptionAsDecodedMap
 
 static String version() { '0.4.4' }
-static String timeStamp() { '2023/02/27 7:10 PM' }
+static String timeStamp() { '2023/03/01 11:56 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -194,7 +192,7 @@ metadata {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
             input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
             input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
-            input name: 'minimizeStateVariables', type: 'bool', title: '<b>Minimize State Variables</b>', defaultValue: MINIMIZE_STATE_VARIABLES_DEFAULT, description: '<i>Minimize the state variables to save memory.</i>'
+            input name: 'minimizeStateVariables', type: 'bool', title: '<b>Minimize State Variables</b>', defaultValue: MINIMIZE_STATE_VARIABLES_DEFAULT, description: '<i>Minimize the state variables size.</i>'
         }
     }
 }
@@ -367,6 +365,7 @@ void parse(final String description) {
 
 Map myParseDescriptionAsMap(description) {
     Map descMap
+    //JvmDescMap = parseDescriptionAsDecodedMap(description)
     try {
         descMap = matter.parseDescriptionAsMap(description)
     } catch (e) {
@@ -381,6 +380,7 @@ Map myParseDescriptionAsMap(description) {
     if (descMap.value != null && descMap.value in ['1518', '1618', '1818']) {
         descMap.value = []
     }
+    //descMap.value = JvmDescMap.decodedValue.toString()
     return descMap
 }
 
@@ -2128,7 +2128,7 @@ void componentSetPosition(DeviceWrapper dw, BigDecimal positionPar) {
     sendToDevice(cmd)
 }
 
-// Component command to set position direction
+// Component command to set position direction (not used by Window Shade !)
 void componentStartPositionChange(DeviceWrapper dw, String direction) {
     logDebug "componentStartPositionChange(${dw}, ${direction})"
     switch (direction) {

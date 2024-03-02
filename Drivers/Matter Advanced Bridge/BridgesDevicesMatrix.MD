@@ -25,8 +25,8 @@ Target release date : mid of March 2024
 *last updated 2024/02/25*
 |Device Type                |         Status               |          Remarks                  |
 |:--------------------------|:----------------------------:|----------------------------------:|
-| Relays/Switches - On/Off  | working OK - tested          |                                   |
 | Plugs - On/Off            | working OK - tested          |                                   |
+| Relays/Switches - On/Off  | working OK - tested          |                                   |
 | Bulbs - On/Off            | working OK - tested          |                                   |
 | Bulbs - level control     | working OK - tested          |                                   |
 | Bulbs - CT control        | working OK - tested          |                                   |
