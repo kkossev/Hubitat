@@ -15,6 +15,7 @@
   *  for the specific language governing permissions and limitations under the License.
   *
   * ver. 0.0.0  2024-02-02 kkossev  - first version
+  * ver. 0.0.1  2024-03-03 kkossev  - (dev. branch) disabled healthStatus
   *
   *                                   TODO:
   *
@@ -22,15 +23,15 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.0'
-@Field static final String matterComponentMotionStamp   = '2024/03/02 10:04 AM'
+@Field static final String matterComponentMotionVersion = '0.0.1'
+@Field static final String matterComponentMotionStamp   = '2024/03/03 9:11 AM'
 
 metadata {
     definition(name: 'Matter Generic Component Battery', namespace: 'kkossev', author: 'Krassimir Kossev') {
         capability 'Sensor'
         capability 'Battery'
         capability 'Refresh'
-        capability 'Health Check'
+        //capability 'Health Check'
         attribute  'batteryVoltage', 'number'
         attribute  'status', 'string'
         attribute  'order', 'string'
@@ -42,7 +43,7 @@ metadata {
         attribute  'batReplacementDescription', 'string'
         attribute  'aatQuantity', 'string'
 
-        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        //attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
     }
 }
 

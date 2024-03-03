@@ -45,10 +45,14 @@
  *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
  * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
  * ver. 0.4.3  2024-02-26 kkossev  - added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled;
- * ver. 0.4.4  2024-03-02 kkossev  - (dev.branch) added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
+ * ver. 0.4.4  2024-03-02 kkossev  - added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
+ * ver. 0.4.5  2024-03-03 kkossev  - (dev.branch) WindowCovering refresh() bug patch; commented out the WindowCovering ping() command (capability 'Health Check' - not supported yet); enabled Battery / PowerSource cluster (0x002F) processing!
  *
- *                                   TODO: [====MVP====] Publish version 0.4.4
- * 
+ *                                   TODO: [====MVP====] Publish version 0.4.5
+ *
+ *                                   TODO: [====MVP====] Help/Documentation button in driver linked to GitHub web page.
+ *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
+ *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
@@ -57,7 +61,6 @@
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
- *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
  *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default disabled)
  *                                   TODO: [ENHANCEMENT] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
@@ -67,13 +70,11 @@
  *                                   TODO: [ENHANCEMENT] When subscribing, remove from the subscribe list devices that are disabled ! (+Info logs)
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
- *                                   TODO: [====MVP====] if error discovering the device name or label - still try to continue processing the attributes in the state machine
- *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
- *                                   TODO: [====MVP====] distinguish between creating and checking an existing child device
- *                                   TODO: [====MVP====] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
+ *                                   TODO: [ENHANCEMENT] if error discovering the device name or label - still try to continue processing the attributes in the state machine
+ *                                   TODO: [ENHANCEMENT] distinguish between creating and checking an existing child device
+ *                                   TODO: [ENHANCEMENT] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
- *                                   TODO: [====MVP====] continue testing the Battery / PowerSource cluster (0x002F)
  *                                   TODO: [====MVP====] Publish version 0.5.0
  *
  *                                   TODO: [====MVP====] **************************** Publish version 1.0.0 for public Beta testing - 16th of March 2024 ******************************
@@ -106,8 +107,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.4.4' }
-static String timeStamp() { '2023/03/01 11:56 PM' }
+static String version() { '0.4.5' }
+static String timeStamp() { '2023/03/03 9:33 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -216,7 +217,15 @@ metadata {
     0x0008 : [attributes: 'LevelControlClusterAttributes', commands: 'LevelControlClusterCommands', parser: 'parseLevelControlCluster',
               subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
     ],
-    //0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes'],                // PowerSource (battery) - DO NOT ENABLE -> CRASHES THE BRIDGE!?
+    0x002F : [parser: 'parsePowerSource', attributes: 'PowerSourceClusterAttributes',
+              subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]],   // Status
+                               [0x0001: [min: 0, max: 0xFFFF, delta: 0]],   // Order
+                               [0x0002: [min: 0, max: 0xFFFF, delta: 0]],   // Description
+                               [0x000B: [min: 0, max: 0xFFFF, delta: 0]],   // BatVoltage
+                               [0x000C: [min: 0, max: 0xFFFF, delta: 0]],   // BatPercentRemaining
+                               [0x000E: [min: 0, max: 0xFFFF, delta: 0]],   // BatChargeLevel
+                               [0x000F: [min: 0, max: 0xFFFF, delta: 0]]]   // BatReplacementNeeded
+    ],
     /*
     0x0039 : [attributes: 'BridgedDeviceBasicAttributes', commands: 'BridgedDeviceBasicCommands', parser: 'parseBridgedDeviceBasic',            // BridgedDeviceBasic
               subscriptions : [[0x0000: [min: 0, max: 0xFFFF, delta: 0]]]
@@ -598,12 +607,12 @@ void parsePowerSource(final Map descMap) {
             descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source ${attrName} is: ${descMap.value}"
             eventMap = [name: eventName, value: descMap.value, descriptionText: descriptionText]
             break
-        case 'BatPercentRemaining' :   // BatteryPercentageRemaining
+        case 'BatPercentRemaining' :   // BatteryPercentageRemaining 0x000C
             value = HexUtils.hexStringToInt(descMap.value)
             descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery percentage remaining is: ${value / 2}% (raw:${descMap.value})"
             eventMap = [name: 'battery', value: value / 2, descriptionText: descriptionText]
             break
-        case 'BatVoltage' :   // BatteryVoltage
+        case 'BatVoltage' :   // BatteryVoltage 0x000B
             value = HexUtils.hexStringToInt(descMap.value)
             descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery voltage is: ${value / 1000}V (raw:${descMap.value})"
             eventMap = [name: 'batteryVoltage', value: value / 1000, descriptionText: descriptionText]

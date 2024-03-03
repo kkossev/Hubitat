@@ -22,7 +22,8 @@
   * ver. 0.0.0  2022-11-28 bradsjm - original code (Tuya Cloud driver)
   * ver. 0.0.1  2024-01-14 kkossev - first version for the Matter Advanced Bridge driver
   * ver. 0.0.2  2024-02-04 kkossev - use device.displayName in logs
-  * ver. 0.0.3  2024-03-02 kkossev - (dev. branch) added refresh() command; added a timeout preference for the position change; added reverse option (normal: OPEN=100% CLOSED=0%)
+  * ver. 0.0.3  2024-03-02 kkossev - added refresh() command; added a timeout preference for the position change; added reverse option (normal: OPEN=100% CLOSED=0%)
+  * ver. 0.0.4  2024-03-02 kkossev - (dev.branch) disabled ping() command (capability 'Health Check' - not supported yet)
   *
   *                                   TODO: 
   *
@@ -30,8 +31,8 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.3'
-@Field static final String matterComponentMotionStamp   = '2024/03/02 11:55 PM'
+@Field static final String matterComponentMotionVersion = '0.0.4'
+@Field static final String matterComponentMotionStamp   = '2024/03/03 12:52 AM'
 
 @Field static final Integer OPEN   = 0      // this is the sandard!  Hubitat is inverted!
 @Field static final Integer CLOSED = 100    // this is the sandard!  Hubitat is inverted!
@@ -46,7 +47,7 @@ metadata {
                                     //           startPositionChange(direction): direction required (ENUM) - Direction for position change request ["open", "close"]
                                     //            stopPositionChange()
         capability 'Refresh'
-        capability 'Health Check'       // Commands:[ping]
+        //capability 'Health Check'       // Commands:[ping]
 
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'targetPosition', 'number'    // ZemiSmart M1 is updating this attribute, not the position :(
@@ -116,7 +117,13 @@ void processCurrentPosition(Map d) {
 void updatewindowShadeMovingStatus(int targetPosition, String type = 'digital') {
     String movementDirection
     Integer currentPosition = device.currentValue('position', true) ?: -1
-    if (logEnable) { log.debug "${device.displayName} processTargetPosition: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
+    /*
+    if (currentPosition == targetPosition) {
+        if (logEnable) { log.debug "${device.displayName} updatewindowShadeMovingStatus: currentPosition ${currentPosition} == targetPosition ${currentPosition} - windowShade ${device.currentValue('windowShade') } will not be changed!" }
+        return
+    }
+    */
+    if (logEnable) { log.debug "${device.displayName} updatewindowShadeMovingStatus: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
 
     if (targetPosition < currentPosition) {
         movementDirection = settings?.invertOpenClose ? 'closing' : 'opening'
@@ -126,7 +133,6 @@ void updatewindowShadeMovingStatus(int targetPosition, String type = 'digital') 
     }
     sendEvent(name: 'windowShade', value: movementDirection, descriptionText: movementDirection, type: type)
     if (txtEnable) { log.info "${device.displayName} windowShade is ${movementDirection}" }
-
 }
 
 void processTargetPosition(Map d) {
@@ -134,6 +140,10 @@ void processTargetPosition(Map d) {
     if (logEnable) { log.debug "${device.displayName} processTargetPosition: ${d}" }
     if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
+    if (d.descriptionText.contains('[refresh]')) {
+        if (logEnable) { log.debug "${device.displayName} processTargetPosition: [refresh] - skipping updatewindowShadeMovingStatus!" }
+        return
+    }
     updatewindowShadeMovingStatus(safeToInt(d.value), 'physical')
 }
 

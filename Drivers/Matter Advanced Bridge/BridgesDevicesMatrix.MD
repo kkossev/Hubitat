@@ -4,7 +4,7 @@ author: "Krassimir Kossev"
 ---
 
 
-*last updated 2024/03/02* <br>
+*last updated 2024/03/03* <br>
 Target release date : mid of March 2024
 
 ### <b>Matter Advanced Bridge Project : MVP</b>
@@ -12,12 +12,12 @@ Target release date : mid of March 2024
 2. ~~Publish a list of known issues and limitations of the Hubitat Matter implementation.~~ (**Status: DONE**)
 3. ~~Stable discovery process.~~ (**Status: DONE (from ver 0.4.0)**)
 4. ~~RGB bulb bugs fixed and tested.~~  (**Status: DONE (ver 0.4.1)**)
-5. Battery level support. (**status: TODO**)
+5. ~~Battery level support. (**status: TESTING~~ (ver 0.4.5)**)
 6. ~~Make the refresh command work in the child devices~~ - tests. (**Status: TESTING (ver 0.4.3)**)
 7. ~~Curtain Motors (WindowCovering) bugs fixed~~ and tested.(**status: TESTING(ver 0.4.4)**)
 8. ~~Matter Advanced Bridge package can be installed and updated via HPM.~~ (**status: DONE**)
 9. Help/Documentation button in driver linked to GitHub web page. (**status: TODO**)
-10. ~~Performance (speed) optimizations~~ - tests (**Status: TESTING**)
+10. ~~Performance (speed) optimizations~~ - (**Status: TESTING (ver 0.4.5)**)
 
 
 
