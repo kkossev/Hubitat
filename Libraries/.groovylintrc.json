@@ -25,6 +25,9 @@
         "MethodCount": {
             "enabled": false
         },
+        "MethodSize": {
+            "enabled": false
+        },
         "UnnecessaryGetter": {
             "enabled": false
         },

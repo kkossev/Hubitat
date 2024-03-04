@@ -15,7 +15,8 @@
   *  for the specific language governing permissions and limitations under the License.
   *
   * ver. 0.0.0  2024-02-02 kkossev  - first version
-  * ver. 0.0.1  2024-03-03 kkossev  - (dev. branch) disabled healthStatus
+  * ver. 0.0.1  2024-03-03 kkossev  - disabled healthStatus
+  * ver. 0.0.2  2024-03-03 kkossev  - (dev. branch) componentBatteryVersion, componentBatteryStamp bug fix; added importUrl
   *
   *                                   TODO:
   *
@@ -23,11 +24,11 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.1'
-@Field static final String matterComponentMotionStamp   = '2024/03/03 9:11 AM'
+@Field static final String matterComponentBatteryVersion = '0.0.2'
+@Field static final String matterComponentBatteryStamp   = '2024/03/04 8:13 AM'
 
 metadata {
-    definition(name: 'Matter Generic Component Battery', namespace: 'kkossev', author: 'Krassimir Kossev') {
+    definition(name: 'Matter Generic Component Battery', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Generic_Component_Battery.groovy') {
         capability 'Sensor'
         capability 'Battery'
         capability 'Refresh'

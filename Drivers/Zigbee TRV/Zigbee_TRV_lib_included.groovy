@@ -85,9 +85,6 @@ deviceType = "Thermostat"
 
 /* groovylint-disable-next-line NglParseError */
 
-
-
-
 metadata {
     definition (
         name: 'Zigbee TRVs and Thermostats',
@@ -4458,7 +4455,6 @@ library ( // library marker kkossev.xiaomiLib, line 1
  *                                   TODO:  // library marker kkossev.xiaomiLib, line 27
 */ // library marker kkossev.xiaomiLib, line 28
 
-
 def xiaomiLibVersion()   {"1.0.1"} // library marker kkossev.xiaomiLib, line 31
 def xiaomiLibStamp() {"2023/11/07 5:23 PM"} // library marker kkossev.xiaomiLib, line 32
 
@@ -4671,7 +4667,6 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) { // library marker
     } // library marker kkossev.xiaomiLib, line 240
 } // library marker kkossev.xiaomiLib, line 241
 
-
 /** // library marker kkossev.xiaomiLib, line 244
  *  Reads a specified number of little-endian bytes from a given // library marker kkossev.xiaomiLib, line 245
  *  ByteArrayInputStream and returns a BigInteger. // library marker kkossev.xiaomiLib, line 246
@@ -4714,7 +4709,6 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) { /
     return results // library marker kkossev.xiaomiLib, line 283
 } // library marker kkossev.xiaomiLib, line 284
 
-
 def refreshXiaomi() { // library marker kkossev.xiaomiLib, line 287
     List<String> cmds = [] // library marker kkossev.xiaomiLib, line 288
     if (cmds == []) { cmds = ["delay 299"] } // library marker kkossev.xiaomiLib, line 289
@@ -4743,7 +4737,6 @@ void initVarsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLi
 void initEventsXiaomi(boolean fullInit=false) { // library marker kkossev.xiaomiLib, line 312
     logDebug "initEventsXiaomi(${fullInit})" // library marker kkossev.xiaomiLib, line 313
 } // library marker kkossev.xiaomiLib, line 314
-
 
 // ~~~~~ end include (141) kkossev.xiaomiLib ~~~~~
 
@@ -5140,7 +5133,6 @@ def validateAndScaleParameterValue(Map dpMap, String val) { // library marker kk
     //logTrace "validateAndScaleParameterValue returning scaledValue=${scaledValue}" // library marker kkossev.deviceProfileLib, line 390
     return scaledValue // library marker kkossev.deviceProfileLib, line 391
 } // library marker kkossev.deviceProfileLib, line 392
-
 
 /** // library marker kkossev.deviceProfileLib, line 395
  * Sets the value of a parameter for a device. // library marker kkossev.deviceProfileLib, line 396

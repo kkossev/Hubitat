@@ -17,6 +17,7 @@
   * ver. 0.0.0  2024-01-10 kkossev  - first version
   * ver. 0.0.1  2024-01-13 kkossev  - added 'Invert Motion' option
   * ver. 0.0.2  2024-01-25 kkossev  - 'Invert Motion' change updates the motion state immediateltely.
+  * ver. 0.0.3  2024-03-04 kkossev  - added importUrl; disabled healthStatus
   *
   *                                   TODO:
   *
@@ -24,17 +25,17 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.2'
-@Field static final String matterComponentMotionStamp   = '2024/02/25 11:19 PM'
+@Field static final String matterComponentMotionVersion = '0.0.3'
+@Field static final String matterComponentMotionStamp   = '2024/03/04 8:49 AM'
 
 metadata {
-    definition(name: 'Matter Generic Component Motion Sensor', namespace: 'kkossev', author: 'Krassimir Kossev') {
+    definition(name: 'Matter Generic Component Motion Sensor', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Generic_Component_Motion_Sensor.groovy') {
         capability 'Sensor'
         capability 'MotionSensor'
         capability 'Refresh'
-        capability 'Health Check'
+        //capability 'Health Check'
 
-        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        //attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
 
         command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
     }
@@ -42,24 +43,9 @@ metadata {
 
 preferences {
     section {
-        input name: 'logEnable',
-              type: 'bool',
-              title: 'Enable debug logging',
-              required: false,
-              defaultValue: true
-
-        input name: 'txtEnable',
-              type: 'bool',
-              title: 'Enable descriptionText logging',
-              required: false,
-              defaultValue: true
-
-        input name: 'invertMotion',
-              type: 'bool',
-              title: 'Invert Motion',
-              description: '<i>Some motion sensors (mmWave radars) report active when no motion detected. Enable this option to invert the motion state.</i>',
-              required: false,
-              defaultValue: false
+        input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', required: false, defaultValue: true
+        input name: 'logEnable', type: 'bool', title: 'Enable debug logging', required: false, defaultValue: false
+        input name: 'invertMotion', type: 'bool', title: 'Invert Motion', description: '<i>Some motion sensors (mmWave radars) report active when no motion detected. Enable this option to invert the motion state.</i>', required: false, defaultValue: false
     }
 }
 

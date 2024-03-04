@@ -46,16 +46,15 @@
  * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
  * ver. 0.4.3  2024-02-26 kkossev  - added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled;
  * ver. 0.4.4  2024-03-02 kkossev  - added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
- * ver. 0.4.5  2024-03-03 kkossev  - (dev.branch) WindowCovering refresh() bug patch; commented out the WindowCovering ping() command (capability 'Health Check' - not supported yet); enabled Battery / PowerSource cluster (0x002F) processing!
+ * ver. 0.4.5  2024-03-03 kkossev  - WindowCovering refresh() bug patch; commented out the WindowCovering ping() command (capability 'Health Check' - not supported yet); enabled Battery / PowerSource cluster (0x002F) processing!
+ * ver. 0.4.6  2024-03-04 kkossev  - (dev.branch) WindowCovering unit fix; hopefully also WindowCovering close() fix; added and verified the importUrl for all libraries and component drivers;
  *
- *                                   TODO: [====MVP====] Publish version 0.4.5
+ *                                   TODO: [====MVP====] Publish version 0.4.6
  *
  *                                   TODO: [====MVP====] Help/Documentation button in driver linked to GitHub web page.
- *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers (or hide it if can not make it work)
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
- *                                   TODO: [ENHANCEMENT] add and verify importUrl for all libraries and component drivers
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
  *                                   TODO: [ENHANCEMENT] DeleteDevice # command (utilities) (0=all)
  *                                   TODO: [====MVP====] Publish version 0.4.x
@@ -70,7 +69,6 @@
  *                                   TODO: [ENHANCEMENT] When subscribing, remove from the subscribe list devices that are disabled ! (+Info logs)
  *                                   TODO: [====MVP====] Publish version 0.4.x
  *
- *                                   TODO: [ENHANCEMENT] if error discovering the device name or label - still try to continue processing the attributes in the state machine
  *                                   TODO: [ENHANCEMENT] distinguish between creating and checking an existing child device
  *                                   TODO: [ENHANCEMENT] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
  *                                   TODO: [====MVP====] Publish version 0.4.x
@@ -82,6 +80,7 @@
  *                                   TODO: [====MVP====] add support for cluster 0x003B  : 'Switch' / Button? (need to be able to subscribe to the 0x003B EVENTS !)
  *                                   TODO: [====MVP====] add support for Lock cluster 0x0101
  *                                   TODO: [====MVP====] add Thermostat component driver
+ *                                   TODO: [====MVP====] add heathStatus to the child devices custom component drivers
  *
  *                                   TODO: [REFACTORING] optimize State Machine variables and code
  *
@@ -107,8 +106,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.4.5' }
-static String timeStamp() { '2023/03/03 9:33 AM' }
+static String version() { '0.4.6' }
+static String timeStamp() { '2023/03/04 8:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
@@ -186,10 +185,10 @@ metadata {
         // fingerprint endpointId:"01", inClusters:"0003,001D", outClusters:"001E", model:"Aqara Hub E1", manufacturer:"Aqara", controllerType:"MAT"
     }
     preferences {
-        input(name:'txtEnable', type:'bool', title:'Enable descriptionText logging', defaultValue:true)
-        input(name:'logEnable', type:'bool', title:'Enable debug logging', defaultValue:DEFAULT_LOG_ENABLE)
+        input name:'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true
+        input name:'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
-        if (advancedOptions == true || advancedOptions == true) {
+        if (device && advancedOptions == true) {
             input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
             input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
             input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
@@ -910,19 +909,22 @@ void parseDoorLock(final Map descMap) { // 0101
 
 void parseWindowCovering(final Map descMap) { // 0102
     if (descMap.cluster != '0102') { logWarn "parseWindowCovering: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
+    final String unit = '%'
     if (descMap.attrId == '000B') { // TargetPositionLiftPercent100ths  - actually this is the current position !!!
         Integer valueInt = (100 - HexUtils.hexStringToInt(descMap.value) / 100.0) as int
         sendMatterEvent([
             name: 'position',
-            value: valueInt.toString(),
-            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} currentPosition  is ${valueInt} %"
+            value: valueInt/*.toString()*/,
+            unit: unit,
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} currentPosition  is ${valueInt} ${unit}"
         ], descMap, true)
     } else if (descMap.attrId == '000E') { // CurrentPositionLiftPercent100ths - actually this is the target position !!!
         Integer valueInt = (100 - HexUtils.hexStringToInt(descMap.value) / 100.0) as int
         sendMatterEvent([
             name: 'targetPosition',
-            value: valueInt.toString(),
-            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} targetPosition is ${valueInt} %"
+            value: valueInt/*.toString()*/,
+            unit: unit,
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} targetPosition is ${valueInt} ${unit}"
         ], descMap, true)
     } else if (descMap.attrId == '000A') { // OperationalStatus
         sendMatterEvent([
@@ -1102,7 +1104,8 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
     String name = eventParams['name']
     String value = eventParams['value']
     String descriptionText = eventParams['descriptionText']
-    String unut = eventParams['unit']
+    String unit = eventParams['unit']
+    logTrace "sendMatterEvent: name:${name} value:${value} descriptionText:${descriptionText} unit:${unit}"
 
     String dni = ''
     // get the dni from the descMap eddpoint
@@ -1113,7 +1116,7 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
         descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} ${name} is ${value}"
     }
     ChildDeviceWrapper dw = getChildDevice(dni) // null if dni is null for the parent device
-    Map eventMap = [name: name, value: value, descriptionText: descriptionText, unit:unit, type: 'physical']
+    Map eventMap = [name: name, value: value, descriptionText: descriptionText, unit: unit, type: 'physical']
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force the event to be sent

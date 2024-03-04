@@ -23,16 +23,17 @@
   * ver. 0.0.1  2024-01-14 kkossev - first version for the Matter Advanced Bridge driver
   * ver. 0.0.2  2024-02-04 kkossev - use device.displayName in logs
   * ver. 0.0.3  2024-03-02 kkossev - added refresh() command; added a timeout preference for the position change; added reverse option (normal: OPEN=100% CLOSED=0%)
-  * ver. 0.0.4  2024-03-02 kkossev - (dev.branch) disabled ping() command (capability 'Health Check' - not supported yet)
+  * ver. 0.0.4  2024-03-03 kkossev - disabled the ping() command (capability 'Health Check' - not supported yet)
+  * ver. 0.0.5  2024-03-04 kkossev - (dev.branch) close() bug fix @kwon2288
   *
-  *                                   TODO: 
+  *                                   TODO:
   *
 */
 
 import groovy.transform.Field
 
-@Field static final String matterComponentMotionVersion = '0.0.4'
-@Field static final String matterComponentMotionStamp   = '2024/03/03 12:52 AM'
+@Field static final String matterComponentWindowShadeVersion = '0.0.5'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/04 8:08 AM'
 
 @Field static final Integer OPEN   = 0      // this is the sandard!  Hubitat is inverted!
 @Field static final Integer CLOSED = 100    // this is the sandard!  Hubitat is inverted!
@@ -40,7 +41,7 @@ import groovy.transform.Field
 @Field static final Integer MAX_TRAVEL_TIME = 15
 
 metadata {
-    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Krassimir Kossev') {
+    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Generic_Component_Window_Shade.groovy') {
         capability 'Actuator'
         capability 'WindowShade'    // Attributes: position - NUMBER, unit:% windowShade - ENUM ["opening", "partially open", "closed", "open", "closing", "unknown"]
                                     // Commands: close(); open(); setPosition(position) position required (NUMBER) - Shade position (0 to 100);
@@ -49,7 +50,7 @@ metadata {
         capability 'Refresh'
         //capability 'Health Check'       // Commands:[ping]
 
-        attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        //attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'targetPosition', 'number'    // ZemiSmart M1 is updating this attribute, not the position :(
         attribute 'operationalStatus', 'number' // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
     }
@@ -96,7 +97,8 @@ void processCurrentPosition(Map d) {
     sendEvent(d)
     String descriptionText
     Integer currentPosition = safeToInt(d.value)
-    Integer targetPosition = device.currentValue('targetPosition') ?: -1
+    Integer targetPosition = device.currentValue('targetPosition', true) ?: 0
+    //log.trace "currentPosition: ${currentPosition}, targetPosition: ${targetPosition} (device.currentValue=${device.currentValue('targetPosition', true)})"
     if (logEnable) { log.debug "${device.displayName} processCurrentPosition: invertOpenClose: ${settings?.invertOpenClose}, targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
 
     if (isFullyClosed(currentPosition)) {
@@ -116,13 +118,7 @@ void processCurrentPosition(Map d) {
 
 void updatewindowShadeMovingStatus(int targetPosition, String type = 'digital') {
     String movementDirection
-    Integer currentPosition = device.currentValue('position', true) ?: -1
-    /*
-    if (currentPosition == targetPosition) {
-        if (logEnable) { log.debug "${device.displayName} updatewindowShadeMovingStatus: currentPosition ${currentPosition} == targetPosition ${currentPosition} - windowShade ${device.currentValue('windowShade') } will not be changed!" }
-        return
-    }
-    */
+    Integer currentPosition = device.currentValue('position', true) ?: 0
     if (logEnable) { log.debug "${device.displayName} updatewindowShadeMovingStatus: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
 
     if (targetPosition < currentPosition) {
@@ -141,6 +137,7 @@ void processTargetPosition(Map d) {
     if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
     if (d.descriptionText.contains('[refresh]')) {
+        // patch !!!!!!!!!! : (
         if (logEnable) { log.debug "${device.displayName} processTargetPosition: [refresh] - skipping updatewindowShadeMovingStatus!" }
         return
     }
@@ -190,7 +187,7 @@ void close() {
 // Component command to set position of device
 void setPosition(BigDecimal position) {
     if (logEnable) { log.debug "${device.displayName} setPosition ${position}" }
-    sendEvent(name: 'targetPosition', value: position, descriptionText: "targetPosition set to ${position}", type: 'digital')
+    sendEvent(name: 'targetPosition', value: position as int, descriptionText: "targetPosition set to ${position}", type: 'digital')
     parent?.componentSetPosition(device, position)
     updatewindowShadeMovingStatus(position.toInteger())
     startOperationTimeoutTimer()
@@ -223,7 +220,6 @@ void refresh() {
     parent?.componentRefresh(device)
 }
 
-
 // Called when the device is removed
 void uninstalled() {
     log.info "${device.displayName} driver uninstalled"
@@ -247,12 +243,12 @@ void updated() {
     }
     else {
         if (logEnable) { log.debug "${device.displayName} invertMotion: no change" }
-    }    
+    }
 }
 
 void updatewindowShade() {
     if (logEnable) { log.debug "${device.displayName} updatewindowShade" }
-    Integer currentPosition = device.currentValue('position') ?: -1
+    Integer currentPosition = device.currentValue('position') ?: 0
     if (isFullyClosed(currentPosition)) {
         descriptionText = 'closed'
         sendEvent(name: 'windowShade', value: 'closed', descriptionText: descriptionText)

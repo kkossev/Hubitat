@@ -6,7 +6,7 @@ library(
     name: 'matterUtilitiesLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/matterUtilitiesLib.groovy',
-    version: '0.0.0',
+    version: '0.0.1',
     documentationLink: ''
 )
 /*

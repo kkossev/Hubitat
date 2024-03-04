@@ -1,4 +1,3 @@
-/* groovylint-disable NglParseError */
 /**
  *  Zigbee TRVs and Thermostats - Device Driver for Hubitat Elevation
  *
@@ -24,7 +23,7 @@
  *                                   setTemperature, setHeatingSetpoint, setCoolingSetpoint - OK setPar() OK  setCommand() OK; Google Home compatibility for virtual thermostat;  BRT-100: Google Home exceptions bug fix; setHeatingSetpoint to update also the thermostatSetpoint for Google Home compatibility; added 'off' mode for BRT-100;
  * ver. 3.0.5  2023-12-09 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
- * ver. 3.0.7  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 check;
+ * ver. 3.0.7  2024-03-03 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  *
  *                                   WIP: TUYA_SASWELL group ;
  *                                   TOOD: Sonoff : decode weekly shcedule responses (command 0x00)
@@ -69,7 +68,7 @@
  */
 
 static String version() { "3.0.7" }
-static String timeStamp() {"2024/02/24 10:06 PM"}
+static String timeStamp() {"2024/03/03 10:05 PM"}
 
 @Field static final Boolean _DEBUG = false
 
