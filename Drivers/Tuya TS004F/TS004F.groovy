@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, ImplementationAsType, InsecureRandom, MethodCount, MethodParameterTypeRequired, MethodReturnTypeRequired, NoDef, NoDouble, UnnecessaryGetter, UnnecessaryTernaryExpression, VariableTypeRequired */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, ImplementationAsType, ImplicitReturnStatement, InsecureRandom, MethodCount, MethodParameterTypeRequired, MethodReturnTypeRequired, NoDouble, UnnecessaryGetter, UnnecessaryTernaryExpression, VariableTypeRequired */
 /**
  *  Tuya Scene Switch TS004F w/ healthStatus driver for Hubitat Elevation hub.
  *
@@ -48,7 +48,7 @@
  *
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
  * ver. 2.6.10 2023-12-01 kkossev    - (dev. branch) added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
- * ver. 2.7.0 2024-01-19 kkossev     - (dev. branch) Groovy lint; 
+ * ver. 2.7.0 2024-03-06 kkossev     - (dev. branch) Groovy lint; added TS0021 _TZ3210_3ulg9kpo 
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -67,8 +67,8 @@
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  */
 
-def version() { '2.7.0' }
-def timeStamp() { '2024/01/19 12:03 PM' }
+static String version() { '2.7.0' }
+static String timeStamp() { '2024/03/06 7:27 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -188,6 +188,8 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0500,0501', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_tj4pwzzm', deviceJoinName: 'Tuya SOS button'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0500,0000', outClusters: '0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_2izubafb', deviceJoinName: 'Tuya SOS button'    // @abraham
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0500,0000', outClusters: '0501,0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_pkfazisv', deviceJoinName: 'iAlarm (Meian) SOS button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
+
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,EF00,0000', outClusters: '0019,000A', model: 'TS0021', manufacturer: '_TZ3210_3ulg9kpo', deviceJoinName: 'Tuya 2 button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
     }
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE)
@@ -212,34 +214,34 @@ metadata {
     options     : [00: 'Default', 14400: 'Every 4 Hours', 28800: 'Every 8 Hours', 43200: 'Every 12 Hours', 86400: 'Every 24 Hours']
 ]
 
-def isTuya()  { device.getDataValue('model') in ['TS0601', 'TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046', 'TS0215', 'TS0215A'] }
-def isIcasa() { device.getDataValue('manufacturer') == 'icasa' }
-def isSmartKnob() { device.getDataValue('manufacturer') in ['_TZ3000_4fjiwweb', '_TZ3000_rco1yzb1', '_TZ3000_uri7ongn', '_TZ3000_ixla93vd', '_TZ3000_qja6nq5z', '_TZ3000_csflgqj2', '_TZ3000_abrsvsou'] }
-def isKonkeButton() { device.getDataValue('model') in ['3AFE280100510001', '3AFE170100510001'] }
-def isSonoff() { device.getDataValue('manufacturer') == 'eWeLink' }
-def isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
-def isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
-def needsDebouncing() { device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p']) }
-def needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
-def isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv' ] }
+boolean isTuya()  { device.getDataValue('model') in ['TS0601', 'TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046', 'TS0215', 'TS0215A', 'TS0021'] }
+boolean isIcasa() { device.getDataValue('manufacturer') == 'icasa' }
+boolean isSmartKnob() { device.getDataValue('manufacturer') in ['_TZ3000_4fjiwweb', '_TZ3000_rco1yzb1', '_TZ3000_uri7ongn', '_TZ3000_ixla93vd', '_TZ3000_qja6nq5z', '_TZ3000_csflgqj2', '_TZ3000_abrsvsou'] }
+boolean isKonkeButton() { device.getDataValue('model') in ['3AFE280100510001', '3AFE170100510001'] }
+boolean isSonoff() { device.getDataValue('manufacturer') == 'eWeLink' }
+boolean isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
+boolean isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
+boolean needsDebouncing() { device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p']) }
+boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
+boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv' ] }
 
 // Parse incoming device messages to generate events
-def parse(String description) {
+void parse(String description) {
     checkDriverVersion()
     if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 }
     setHealthStatusOnline()
     if (logEnable) { log.debug "${device.displayName} description is $description" }
-    def event = null
+    Map event = [:]
     try {
         event = zigbee.getEvent(description)
     }
     catch (e) {
         if (logEnable) { log.warn "${device.displayName } exception caught while procesing event $description" }
     }
-    def result = []
-    def buttonNumber = 0
+    Map result = [:]
+    int buttonNumber = 0
 
-    if (event) {
+    if (event != null && event != [:]) {
         if (logEnable) { log.debug "${device.displayName} Event enter: $event" }
         switch (event.name) {
             case 'battery' :
@@ -252,7 +254,7 @@ def parse(String description) {
             case 'switch' : // Konke button
                 if (isKonkeButton()) {
                     processKonkeButton(description)
-                    return null
+                    return
                 }
                 break
             default :
@@ -266,9 +268,9 @@ def parse(String description) {
         result = event
     }
     else if (description?.startsWith('catchall')) {
-        def descMap = zigbee.parseDescriptionAsMap(description)
+        Map descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) { log.debug "${device.displayName} catchall descMap: $descMap" }
-        def buttonState = 'unknown'
+        String buttonState = 'unknown'
         // when TS004F initialized in Scene switch mode!
         if (descMap.clusterInt == 0x0006 && descMap.command == 'FD') {
             if (descMap.sourceEndpoint == '03') {
@@ -296,7 +298,7 @@ def parse(String description) {
             else if (descMap.data[0] == '02') { buttonState = 'held' }
             else {
                 if (logEnable) { log.warn "${device.displayName} unkknown data in event from cluster ${descMap.clusterInt} sourceEndpoint ${descMap.sourceEndpoint} data[0] = ${descMap.data[0]}" }
-                return null
+                return
             }
         } // command == "FD"
         else if (isSonoff() && (descMap.clusterInt == 0x0006 && (descMap.command in ['00', '01', '02' ]))) {
@@ -343,7 +345,7 @@ def parse(String description) {
             }
             else {
                 if (logEnable) { log.warn "${device.displayName } unkknown event from cluster=${descMap.clusterInt } command=${descMap.command} data=${descMap?.data}" }
-                return null
+                return
             }
         }
         else if (descMap.clusterInt == 0x0006 && descMap.command == 'FC') {
@@ -363,32 +365,33 @@ def parse(String description) {
             else {
                 if (logEnable) { log.debug "${device.displayName} readAttributeResponse cluster: ${descMap.clusterId} ${descMap.data[1] + descMap.data[0]} status:${descMap.data[2]} value:${descMap?.value}" }
             }
-            return null
+            return
         }
         else if (descMap.clusterInt == 0x0006 && descMap.command == '04') { // write attribute response
             if (logEnable) { log.debug "${device.displayName} writeAttributeResponse cluster: ${descMap.clusterId} status:${descMap.data[0]}" }
-            return null
+            return
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '0013') { // device announcement
             logInfo "received device announcement, Device network ID: ${descMap.data[2] + descMap.data[1]}"
             state.stats['rejoinCtr'] = (state.stats['rejoinCtr'] ?: 0) + 1
-            return null
+            return
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '8021') { // bind response
             logInfo "received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})"
-            return null
+            return
         }
         else if (descMap?.profileId == '0000' && descMap?.clusterId == '8034') { // leave response
             logInfo "leave response cluster: ${descMap.clusterId}"
-            return null
+            return
         }
         // TODO: (on pairing new device) :  Zigbee parsed:[raw:catchall: 0000 8005 00 00 0040 00 0F4B 00 00 0000 00 00 3B004B0F0101, profileId:0000, clusterId:8005, clusterInt:32773, sourceEndpoint:00, destinationEndpoint:00, options:0040, messageType:00, dni:0F4B, isClusterSpecific:false, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:00, data:[3B, 00, 4B, 0F, 01, 01]]
-        else if (descMap.clusterId == 'EF00' && descMap.command == '01') { // check for LoraTap button events
+        else if (descMap.clusterId == 'EF00' && descMap.command in ['01', '06']) { // check for LoraTap button events command '01' or Tuya TS0021 2 button command '06'
             if (descMap.data.size() == 10 && descMap.data[2] == '0A') {
-                def value = zigbee.convertHexToInt(descMap?.data[9])
-                def descText = "battery is ${value} %"
+                int value = zigbee.convertHexToInt(descMap?.data[9])
+                String descText = "battery is ${value} %"
                 if (txtEnable) { log.info "${device.displayName} ${descText}" }
-                return createEvent(name: 'battery', value: value, unit: '%', descriptionText: descText, type: 'physical')
+                sendEvent(createEvent(name: 'battery', value: value, unit: '%', descriptionText: descText, type: 'physical'))
+                return
             }
             else if (descMap.data.size() == 7 && descMap.data[2] >= '01' && descMap.data[2] <= '06') {
                 buttonNumber = zigbee.convertHexToInt(descMap.data[2])
@@ -414,7 +417,7 @@ def parse(String description) {
                     if (logEnable) { log.warn "${device.displayName } ignored event for button ${state.lastButtonNumber } - still in the debouncing time period!" }
                     runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])    // restart the debouncing timer again
                     if (logEnable) { log.debug "${device.displayName } restarted debouncing timer ${DEBOUNCE_TIME }ms for button ${buttonNumber} (lastButtonNumber=${state.lastButtonNumber})" }
-                    return null
+                    return
                 }
             }
             state.lastButtonNumber = buttonNumber
@@ -423,7 +426,7 @@ def parse(String description) {
             if (logEnable) { log.warn "${device.displayName } UNHANDLED event for button ${buttonNumber },  lastButtonNumber=${state.lastButtonNumber}" }
         }
         if (buttonState != 'unknown' && buttonNumber != 0) {
-            def descriptionText = "button $buttonNumber was $buttonState"
+            String descriptionText = "button $buttonNumber was $buttonState"
             event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
             if (txtEnable) { log.info "${device.displayName } $descriptionText" }
         }
@@ -436,7 +439,7 @@ def parse(String description) {
         }
     } // if catchall
     else {
-        def descMap = zigbee.parseDescriptionAsMap(description)
+        Map descMap = zigbee.parseDescriptionAsMap(description)
         if (logEnable) { log.debug "${device.displayName} raw: descMap: $descMap" }
         //log.trace "${device.displayName} descMap.cluster=${descMap.cluster} descMap.attrId=${descMap.attrId} descMap.command=${descMap.command} "
         if (descMap.cluster == '0006' && descMap.attrId == '8004') {
@@ -454,21 +457,24 @@ def parse(String description) {
         }
         else if (descMap?.cluster == '0000' && descMap?.command in ['01']) { // Basic Cluster responses
             if (logEnable) { log.debug "${device.displayName} skipping Basic cluster ${descMap?.cluster} response" }
-            return null
+            return
         }
         else {
             if (logEnable) { log.debug "${device.displayName } did not parse descMap: $descMap" }
         }
     }
-    return result
+    if (result != null && result != [:] ) {
+        sendEvent(result)
+    }
+    return
 }
 
 @Field static final Integer BUTTON_I = 8
 @Field static final Integer BUTTON_O = 7
 
-def processIcasa( descMap ) {
-    buttonNumber = 0
-    buttonState = 'unknown'
+List processIcasa(final Map descMap) {
+    int buttonNumber = 0
+    String buttonState = 'unknown'
     //log.trace "descMap=${descMap}"
     if (descMap?.clusterId == '0006') {
         switch (descMap?.command) {
@@ -520,14 +526,13 @@ def processIcasa( descMap ) {
     else {
         if (logEnable) { log.warn "${device.displayName} unprocessed ICASA cluster ${decMap?.clusterId} message ${descMap}" }
     }
-
     return [buttonNumber, buttonState]
 }
 
-def processKonkeButton( description ) {
-    def buttonNumber = 0
-    def buttonState = 'unknown'
-    def descMap = zigbee.parseDescriptionAsMap(description)
+void processKonkeButton( description ) {
+    int buttonNumber = 0
+    String buttonState = 'unknown'
+    Map descMap = zigbee.parseDescriptionAsMap(description)
     if (logEnable) { log.debug "${device.displayName} KonkeButton descMap: $descMap" }
     if (descMap.cluster != '0006' ) {
         return
@@ -551,16 +556,15 @@ def processKonkeButton( description ) {
     }
     state.lastButtonNumber = buttonNumber
     buttonEvent(buttonNumber, buttonState)
-    return
 }
 
 /* groovylint-disable-next-line EmptyMethod */
-def refresh() {
+void refresh() {
 }
 
-def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
+static String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
 
-def checkDriverVersion() {
+void checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         if (txtEnable == true) { log.debug "${device.displayName} updating the settings from the current driver version ${(state.driverVersion ?: 'UNKNOWN')} to the new version ${driverVersionAndTimeStamp()}" }
         initializeVars( fullInit = false )
@@ -569,7 +573,7 @@ def checkDriverVersion() {
     }
 }
 
-void initializeVars(boolean fullInit = false ) {
+void initializeVars(boolean fullInit = false) {
     if (settings?.txtEnable) { log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}" }
     if (fullInit == true ) {
         state.clear()
@@ -585,18 +589,18 @@ void initializeVars(boolean fullInit = false ) {
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
 }
 
-def configure() {
+void configure() {
     if (logEnable) { log.debug "${device.displayName} Configuring device model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} ..." }
     initialize()
 }
 
-def installed() {
+void installed() {
     logInfo 'installed()...'
     initializeVars( fullInit = true )
     initialize()
 }
 
-def initialize() {
+void initialize() {
     if (/*true*/ isTuya()) {
         tuyaMagic()
     }
@@ -622,8 +626,8 @@ def initialize() {
     }
 
     // determine the number of the buttons and the supported button actions (values) depending on the model/manufactuer
-    def numberOfButtons = 4
-    def supportedValues = ['pushed', 'double', 'held']
+    int numberOfButtons = 4
+    List<String> supportedValues = ['pushed', 'double', 'held']
     if (isSOSbutton()) {
         numberOfButtons = 1
         supportedValues = ['pushed']
@@ -631,7 +635,7 @@ def initialize() {
     else if ((device.getDataValue('model') in ['TS0041', '3AFE280100510001', '3AFE170100510001']) || (device.getDataValue('manufacturer') in ['_TZ3000_ja5osu5g', 'eWeLink'])) {
         numberOfButtons = 1
     }
-    else if (device.getDataValue('model') == 'TS0042') {
+    else if (device.getDataValue('model') in ['TS0042', 'TS0021']) {
         numberOfButtons = 2
     }
     else if (device.getDataValue('model') == 'TS0043') {
@@ -685,49 +689,49 @@ def initialize() {
     scheduleDeviceHealthCheck()
 }
 
-def updated() {
+void updated() {
     if (logEnable) { log.debug "${device.displayName } updated()" }
     scheduleDeviceHealthCheck()
 }
 
-def buttonDebounce(button) {
+void buttonDebounce(button) {
     if (logEnable) { log.debug "${device.displayName} debouncing timer for button ${state.lastButtonNumber} expired." }
     state.lastButtonNumber = 0
 }
 
-def switchToSceneMode() {
+void switchToSceneMode() {
     if (logEnable) { log.debug "${device.displayName} Switching TS004F into Scene mode" }
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01))
 }
 
-def switchToDimmerMode() {
+void switchToDimmerMode() {
     if (logEnable) { log.debug "${device.displayName} Switching TS004F into Dimmer mode" }
     sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
 }
 
-def buttonEvent(buttonNumber, buttonState, isDigital=false) {
-    def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
+void buttonEvent(buttonNumber, final String buttonState, final boolean isDigital=false) {
+    Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
     if (txtEnable) { log.info "${device.displayName} $event.descriptionText" }
     sendEvent(event)
 }
 
-def push(buttonNumber) {
+void push(buttonNumber) {
     buttonEvent(buttonNumber, 'pushed', isDigital = true)
 }
 
-def doubleTap(buttonNumber) {
+void doubleTap(buttonNumber) {
     buttonEvent(buttonNumber, 'doubleTapped', isDigital = true)
 }
 
-def hold(buttonNumber) {
+void hold(buttonNumber) {
     buttonEvent(buttonNumber, 'held', isDigital = true)
 }
 
-def release(buttonNumber) {
+void release(buttonNumber) {
     buttonEvent(buttonNumber, 'released', isDigital = true)
 }
 
-def switchMode( mode ) {
+void switchMode(final String mode) {
     if (mode == 'dimmer') {
         switchToDimmerMode()
     }
@@ -736,16 +740,18 @@ def switchMode( mode ) {
     }
 }
 
+/* groovylint-disable-next-line NoDef */
 Integer safeToInt(val, Integer defaultVal=0) {
     return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
 }
 
+/* groovylint-disable-next-line NoDef */
 Double safeToDouble(val, Double defaultVal=0.0) {
     return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
-def tuyaMagic() {
-    ArrayList<String> cmd = []
+void tuyaMagic() {
+    List<String> cmd = []
     cmd += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay = 200)    // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, Unknown 0xfffe
     /*
     cmd +=  "raw 0x0000  {10 00 00 04 00 00 00 01 00 05 00 07 00 FE FF}"
@@ -790,7 +796,7 @@ void scheduleDeviceHealthCheck() {
 }
 
 // called every 3 hours
-def deviceHealthCheck() {
+void deviceHealthCheck() {
     state.notPresentCounter = (state.notPresentCounter ?: 0) + 1
     if (state.notPresentCounter > healthStatusCountTreshold) {
         if (!(device.currentValue('healthStatus', true) in ['offline'])) {
@@ -803,7 +809,7 @@ def deviceHealthCheck() {
     }
 }
 
-def setHealthStatusOnline() {
+void setHealthStatusOnline() {
     state.notPresentCounter = 0
     if (!(device.currentValue('healthStatus', true) in ['online'])) {
         setHealthStatusValue('online')
@@ -811,33 +817,33 @@ def setHealthStatusOnline() {
     }
 }
 
-def setHealthStatusValue(value) {
+void setHealthStatusValue(final String value) {
     sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
-def ping() {
+void ping() {
     if (logEnable) { log.debug 'ping() is not implemented' }
 }
 
-def logDebug(msg) {
+void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
     }
 }
 
-def logInfo(msg) {
+void logInfo(final String msg) {
     if (settings?.txtEnable) {
         log.info "${device.displayName} " + msg
     }
 }
 
-def logWarn(msg) {
+void logWarn(final String msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
 }
 
-def test(String description) {
+void test(String description) {
     log.warn "test: ${description}"
     parse(description)
 // TODO: add Centralite / Iris buttons : https://raw.githubusercontent.com/chalford-st/SmartThingsPublic/master/devicetypes/smartthings/zigbee-button.src/zigbee-button.groovy
