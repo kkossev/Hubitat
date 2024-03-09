@@ -24,7 +24,8 @@
   * ver. 0.0.2  2024-02-04 kkossev - use device.displayName in logs
   * ver. 0.0.3  2024-03-02 kkossev - added refresh() command; added a timeout preference for the position change; added reverse option (normal: OPEN=100% CLOSED=0%)
   * ver. 0.0.4  2024-03-03 kkossev - disabled the ping() command (capability 'Health Check' - not supported yet)
-  * ver. 0.0.5  2024-03-04 kkossev - (dev.branch) close() bug fix @kwon2288
+  * ver. 0.0.5  2024-03-04 kkossev - close() bug fix @kwon2288
+  * ver. 0.0.6  2024-03-09 kkossev - (dev.branch) added Battery capability; added batteryVoltage; added invertPosition and targetAsCurrentPosition preferences;
   *
   *                                   TODO:
   *
@@ -32,56 +33,66 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentWindowShadeVersion = '0.0.5'
-@Field static final String matterComponentWindowShadeStamp   = '2024/03/04 8:08 AM'
+@Field static final String matterComponentWindowShadeVersion = '0.0.6'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/09 11:28 PM'
 
-@Field static final Integer OPEN   = 0      // this is the sandard!  Hubitat is inverted!
-@Field static final Integer CLOSED = 100    // this is the sandard!  Hubitat is inverted!
+@Field static final Integer OPEN   = 0      // this is the standard!  Hubitat is inverted?
+@Field static final Integer CLOSED = 100    // this is the standard!  Hubitat is inverted?
 @Field static final Integer POSITION_DELTA = 5
 @Field static final Integer MAX_TRAVEL_TIME = 15
 
 metadata {
-    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Generic_Component_Window_Shade.groovy') {
+    definition(name: 'Matter Generic Component Window Shade', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/Matter_Generic_Component_Window_Shade.groovy', singleThreaded: true) {
         capability 'Actuator'
         capability 'WindowShade'    // Attributes: position - NUMBER, unit:% windowShade - ENUM ["opening", "partially open", "closed", "open", "closing", "unknown"]
                                     // Commands: close(); open(); setPosition(position) position required (NUMBER) - Shade position (0 to 100);
                                     //           startPositionChange(direction): direction required (ENUM) - Direction for position change request ["open", "close"]
                                     //            stopPositionChange()
         capability 'Refresh'
+        capability 'Battery'
         //capability 'Health Check'       // Commands:[ping]
 
         //attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'targetPosition', 'number'    // ZemiSmart M1 is updating this attribute, not the position :(
         attribute 'operationalStatus', 'number' // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
+        attribute 'batteryVoltage', 'number'
     }
 }
 
 preferences {
     section {
-        input name: 'txtEnable', type: 'bool', title: 'Enable descriptionText logging', required: false, defaultValue: true
-        input name: 'logEnable', type: 'bool', title: 'Enable debug logging',           required: false, defaultValue: false
-        input name: 'maxTravelTime', type: 'number', title: 'Maximum travel time (Seconds)', required: false, defaultValue: MAX_TRAVEL_TIME
-        input name: 'invertOpenClose', type: 'bool', title: 'Reverse Open and Close', required: false, defaultValue: true
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', required: false, defaultValue: true
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>',           required: false, defaultValue: false
+        input name: 'maxTravelTime', type: 'number', title: '<b>Maximum travel time</b>', description: '<i>The maximum time to fully open or close (Seconds)</i>', required: false, defaultValue: MAX_TRAVEL_TIME
+        input name: 'deltaPosition', type: 'number', title: '<b>Position delta</b>', description: '<i>The maximum error step reaching the target position</i>', required: false, defaultValue: POSITION_DELTA
+        input name: 'substituteOpenClose', type: 'bool', title: '<b>Substitute Open/Close w/ setPosition</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
+        input name: 'invertPosition', type: 'bool', title: '<b>Reverse Position Reports</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
+        input name: 'targetAsCurrentPosition', type: 'bool', title: '<b>Reverse Target and Current Position</b>', description: '<i>Non-standard Zemismart motors</i>', required: false, defaultValue: false
     }
 }
 
-int getFullyOpen()   { return settings?.invertOpenClose ? CLOSED : OPEN }
-int getFullyClosed() { return settings?.invertOpenClose ? OPEN : CLOSED }
-boolean isFullyOpen(int position)   { return Math.abs(position - getFullyOpen()) < POSITION_DELTA }
-boolean isFullyClosed(int position) { return Math.abs(position - getFullyClosed()) < POSITION_DELTA }
+int getDelta() { return settings?.deltaPosition != null ? settings?.deltaPosition as int : POSITION_DELTA }
+//int getFullyOpen()   { return settings?.invertOpenClose ? CLOSED : OPEN }
+//int getFullyClosed() { return settings?.invertOpenClose ? OPEN : CLOSED }
+//int getFullyOpen()   { return settings?.invertPosition ? CLOSED : OPEN }
+//int getFullyClosed() { return settings?.invertPosition ? OPEN : CLOSED }
+int getFullyOpen()   { return  OPEN }
+int getFullyClosed() { return CLOSED }
+boolean isFullyOpen(int position)   { return Math.abs(position - getFullyOpen()) < getDelta() }
+boolean isFullyClosed(int position) { return Math.abs(position - getFullyClosed()) < getDelta() }
 
 // parse commands from parent
 void parse(List<Map> description) {
-    if (logEnable) { log.debug description }
+    if (logEnable) { log.debug "parse: ${description}" }
     description.each { d ->
         if (d.name == 'position') {
-            processCurrentPosition(d)
+            processCurrentPositionBridgeEvent(d)
         }
         else if (d.name == 'targetPosition') {
-            processTargetPosition(d)
+            processTargetPositionBridgeEvent(d)
         }
         else if (d.name == 'operationalStatus') {
-            processOperationalStatus(d)
+            processOperationalStatusBridgeEvent(d)
         }
         else {
             if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
@@ -90,63 +101,123 @@ void parse(List<Map> description) {
     }
 }
 
-void processCurrentPosition(Map d) {
-    stopOperationTimeoutTimer()
-    if (logEnable) { log.debug "${device.displayName} processCurrentPosition: ${d}" }
-    if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
-    sendEvent(d)
-    String descriptionText
-    Integer currentPosition = safeToInt(d.value)
-    Integer targetPosition = device.currentValue('targetPosition', true) ?: 0
-    //log.trace "currentPosition: ${currentPosition}, targetPosition: ${targetPosition} (device.currentValue=${device.currentValue('targetPosition', true)})"
-    if (logEnable) { log.debug "${device.displayName} processCurrentPosition: invertOpenClose: ${settings?.invertOpenClose}, targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
-
-    if (isFullyClosed(currentPosition)) {
-        descriptionText = 'closed'
-        sendEvent(name: 'windowShade', value: 'closed', descriptionText: descriptionText)
-    }
-    else if (isFullyOpen(currentPosition)) {
-        descriptionText = 'open'
-        sendEvent(name: 'windowShade', value: 'open', descriptionText: descriptionText)
-    }
-    else {
-        descriptionText = 'partially open'
-        sendEvent(name: 'windowShade', value: 'partially open', descriptionText: descriptionText)
-    }
-    if (txtEnable) { log.info "${device.displayName} windowShade is ${descriptionText}" }
+int invertPositionIfNeeded(int position) {
+    int value =  (settings?.invertPosition ?: false) ? (100 - position) as Integer : position
+    if (value < 0)   { value = 0 }
+    if (value > 100) { value = 100 }
+    return value
 }
 
-void updatewindowShadeMovingStatus(int targetPosition, String type = 'digital') {
-    String movementDirection
-    Integer currentPosition = device.currentValue('position', true) ?: 0
-    if (logEnable) { log.debug "${device.displayName} updatewindowShadeMovingStatus: targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
-
-    if (targetPosition < currentPosition) {
-        movementDirection = settings?.invertOpenClose ? 'closing' : 'opening'
+void processCurrentPositionBridgeEvent(final Map d) {
+    Map map = new HashMap(d)
+    //stopOperationTimeoutTimer()
+    if (settings?.targetAsCurrentPosition == true) {
+        map.name = 'targetPosition'
+        if (logEnable) { log.debug "${device.displayName} processCurrentPositionBridgeEvent: targetAsCurrentPosition is true -> <b>processing as targetPosition ${map.value} !</b>" }
+        processTargetPosition(map)
     }
     else {
-        movementDirection = settings?.invertOpenClose ? 'opening' : 'closing'
+        if (logEnable) { log.debug "${device.displayName} processCurrentPositionBridgeEvent: currentPosition reported is ${map.value}" }
+        processCurrentPosition(map)
     }
-    sendEvent(name: 'windowShade', value: movementDirection, descriptionText: movementDirection, type: type)
-    if (txtEnable) { log.info "${device.displayName} windowShade is ${movementDirection}" }
 }
 
-void processTargetPosition(Map d) {
+void processCurrentPosition(final Map d) {
+    Map map = new HashMap(d)
     stopOperationTimeoutTimer()
-    if (logEnable) { log.debug "${device.displayName} processTargetPosition: ${d}" }
-    if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
-    sendEvent(d)
-    if (d.descriptionText.contains('[refresh]')) {
-        // patch !!!!!!!!!! : (
-        if (logEnable) { log.debug "${device.displayName} processTargetPosition: [refresh] - skipping updatewindowShadeMovingStatus!" }
+    // we may have the currentPosition reported inverted !
+    map.value = invertPositionIfNeeded(d.value as int)
+    if (logEnable) { log.debug "${device.displayName} processCurrentPosition: ${map.value} (was ${d.value})" }
+    map.name = 'position'
+    map.unit = '%'
+    map.descriptionText = "${device.displayName} position is ${map.value}%"
+    if (map.isRefresh) {
+        map.descriptionText += ' [refresh]'
+    }
+    if (txtEnable) { log.info "${map.descriptionText}" }
+    sendEvent(map)
+    updateWindowShadeStatus(map.value as int, device.currentValue('targetPosition') as int, /*isFinal =*/ true, /*isDigital =*/ false)
+}
+
+void updateWindowShadeStatus(int currentPositionPar, int targetPositionPar, Boolean isFinal, Boolean isDigital) {
+    String value = 'unknown'
+    String descriptionText = 'unknown'
+    String type = isDigital ? 'digital' : 'physical'
+    //log.trace "updateWindowShadeStatus: position = ${device.currentValue('position')}, targetPosition = ${device.currentValue('targetPosition')}"
+    log.trace "updateWindowShadeStatus: currentPositionPar = ${currentPositionPar}, targetPositionPar = ${targetPositionPar}"
+    Integer currentPosition = currentPositionPar as int
+    Integer targetPosition = targetPositionPar as int
+
+    if (isFinal == true) {
+        if (isFullyClosed(currentPosition)) {
+            value = 'closed'
+        }
+        else if (isFullyOpen(currentPosition)) {
+            value = 'open'
+        }
+        else {
+            value = 'partially open'
+        }
+    }
+    else {
+        if (targetPosition < currentPosition) {
+            value =  'opening'
+        }
+        else if (targetPosition > currentPosition) {
+            value = 'closing'
+        }
+        else {
+            value = 'stopping'
+        }
+    }
+    descriptionText = "${device.displayName} windowShade is ${value} [${type}]"
+    sendEvent(name: 'windowShade', value: value, descriptionText: descriptionText, type: type)
+    if (logEnable) { log.debug "${device.displayName} updateWindowShadeStatus: isFinal: ${isFinal}, substituteOpenClose: ${settings?.substituteOpenClose}, targetPosition: ${targetPosition}, currentPosition: ${currentPosition}, windowShade: ${device.currentValue('windowShade')}" }
+    if (txtEnable) { log.info "${descriptionText}" }
+}
+
+void sendWindowShadeEvent(String value, String descriptionText) {
+    sendEvent(name: 'windowShade', value: value, descriptionText: descriptionText)
+    if (txtEnable) { log.info "${device.displayName} windowShade is ${value}" }
+}
+
+void processTargetPositionBridgeEvent(final Map d) {
+    Map map = new HashMap(d)
+    stopOperationTimeoutTimer()
+    if (logEnable) { log.debug "${device.displayName} processTargetPositionBridgeEvent: ${d}" }
+    if (settings?.targetAsCurrentPosition) {
+        if (logEnable) { log.debug "${device.displayName} processTargetPositionBridgeEvent: targetAsCurrentPosition is true" }
+        map.name = 'position'
+        processCurrentPosition(map)
         return
     }
-    updatewindowShadeMovingStatus(safeToInt(d.value), 'physical')
+    processTargetPosition(map)
 }
 
-void processOperationalStatus(Map d) {
+void processTargetPosition(final Map d) {
+    log.trace "processTargetPosition: value: ${d.value}"
+    Map map = new HashMap(d)
+    map.value = invertPositionIfNeeded(d.value as int)
+    map.descriptionText = "${device.displayName} targetPosition is ${map.value}%"
+    if (map.isRefresh) {
+        map.descriptionText += ' [refresh]'
+    }
+    map.name = 'targetPosition'
+    map.unit = '%'
+    if (logEnable) { log.debug "${device.displayName} processTargetPosition: ${map.value} (was ${d.value})" }
+    if (txtEnable) { log.info "${map.descriptionText}" }
+    //
+    //stopOperationTimeoutTimer()
+    sendEvent(map)
+    if (!map.isRefresh) {
+        // skip upddating the windowShade status on targetPosition refresh
+        updateWindowShadeStatus(device.currentValue('position') as int, map.value as int, /*isFinal =*/ false, /*isDigital =*/ false)
+    }
+}
+
+void processOperationalStatusBridgeEvent(Map d) {
     stopOperationTimeoutTimer()
-    if (logEnable) { log.debug "${device.displayName} processOperationalStatus: ${d}" }
+    if (logEnable) { log.debug "${device.displayName} processOperationalStatusBridgeEvent: ${d}" }
     if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
     sendEvent(d)
 }
@@ -158,38 +229,42 @@ void installed() {
 
 // Component command to open device
 void open() {
-    sendEvent(name: 'windowShade', value: 'opening', descriptionText: 'opening', type: 'digital')
-    sendEvent(name: 'targetPosition', value: getFullyOpen(), descriptionText: "targetPosition set to ${getFullyOpen()}", type: 'digital')
     if (txtEnable) { log.info "${device.displayName} opening" }
-    if (settings?.invertOpenClose == false) {
+    sendEvent(name: 'targetPosition', value: OPEN, descriptionText: "targetPosition set to ${OPEN}", type: 'digital')
+    if (settings?.substituteOpenClose == false) {
         parent?.componentOpen(device)
     }
     else {
-        parent?.componentClose(device)
+        setPosition(getFullyOpen())
     }
     startOperationTimeoutTimer()
+    sendWindowShadeEvent('opening', "${device.displayName} windowShade is opening")
 }
 
 // Component command to close device
 void close() {
-    sendEvent(name: 'windowShade', value: 'closing', descriptionText: 'closing', type: 'digital')
-    sendEvent(name: 'targetPosition', value: getFullyClosed(), descriptionText: "targetPosition set to ${getFullyClosed()}", type: 'digital')
-    if (txtEnable) { log.info "${device.displayName} closing" }
-    if (settings?.invertOpenClose == false) {
+    if (logEnable) { log.debug "${device.displayName} closing [digital]" }
+    sendEvent(name: 'targetPosition', value: CLOSED, descriptionText: "targetPosition set to ${CLOSED}", type: 'digital')
+    if (settings?.substituteOpenClose == false) {
+        if (logEnable) { log.debug "${device.displayName} sending componentClose() command to the parent" }
         parent?.componentClose(device)
     }
     else {
-        parent?.componentOpen(device)
+        if (logEnable) { log.debug "${device.displayName} sending componentSetPosition(${getFullyClosed()}) command to the parent" }
+        setPosition(getFullyClosed())
     }
     startOperationTimeoutTimer()
+    sendWindowShadeEvent('closing', "${device.displayName} windowShade is closing [digital]")
 }
 
 // Component command to set position of device
-void setPosition(BigDecimal position) {
-    if (logEnable) { log.debug "${device.displayName} setPosition ${position}" }
-    sendEvent(name: 'targetPosition', value: position as int, descriptionText: "targetPosition set to ${position}", type: 'digital')
-    parent?.componentSetPosition(device, position)
-    updatewindowShadeMovingStatus(position.toInteger())
+void setPosition(BigDecimal targetPosition) {
+    if (txtEnable) { log.info "${device.displayName} setting target position ${targetPosition}% (current position is ${device.currentValue('position')})" }
+    sendEvent(name: 'targetPosition', value: targetPosition as int, descriptionText: "targetPosition set to ${targetPosition}", type: 'digital')
+    updateWindowShadeStatus(device.currentValue('position') as int, targetPosition as int, isFinal = false, isDigital = true)
+    BigDecimal componentTargetPosition = invertPositionIfNeeded(targetPosition as int)
+    if (logEnable) { log.debug "inverted componentTargetPosition: ${componentTargetPosition}" }
+    parent?.componentSetPosition(device, componentTargetPosition)
     startOperationTimeoutTimer()
 }
 
@@ -217,6 +292,9 @@ void ping() {
 
 // Component command to refresh the device
 void refresh() {
+    if (txtEnable) { log.info "${device.displayName} refreshing ..." }
+    state.standardOpenClose = 'OPEN = 0% CLOSED = 100%'
+    state.driverVersion = matterComponentWindowShadeVersion + ' (' + matterComponentWindowShadeStamp + ')'
     parent?.componentRefresh(device)
 }
 
@@ -232,34 +310,27 @@ void updated() {
         log.debug settings
         runIn(86400, 'logsOff')
     }
-    if ((state.invertOpenClose ?: false) != settings?.invertOpenClose) {
-        state.invertOpenClose = settings?.invertOpenClose
-        if (logEnable) { log.debug "${device.displayName} invertOpenClose: ${settings?.invertOpenClose}" }
+    if ((state.substituteOpenClose ?: false) != settings?.substituteOpenClose) {
+        state.substituteOpenClose = settings?.substituteOpenClose
+        if (logEnable) { log.debug "${device.displayName} substituteOpenClose: ${settings?.substituteOpenClose}" }
+        /*
         String currentOpenClose = device.currentWindowShade
         String newOpenClose = currentOpenClose == 'open' ? 'closed' : currentOpenClose == 'closed' ? 'open' : currentOpenClose
         if (currentOpenClose != newOpenClose) {
             sendEvent([name:'windowShade', value: newOpenClose, type: 'digital', descriptionText: "windowShade state inverted to ${newOpenClose}", isStateChange:true])
         }
+        */
     }
     else {
         if (logEnable) { log.debug "${device.displayName} invertMotion: no change" }
     }
-}
-
-void updatewindowShade() {
-    if (logEnable) { log.debug "${device.displayName} updatewindowShade" }
-    Integer currentPosition = device.currentValue('position') ?: 0
-    if (isFullyClosed(currentPosition)) {
-        descriptionText = 'closed'
-        sendEvent(name: 'windowShade', value: 'closed', descriptionText: descriptionText)
-    }
-    else if (isFullyOpen(currentPosition)) {
-        descriptionText = 'open'
-        sendEvent(name: 'windowShade', value: 'open', descriptionText: descriptionText)
+    //
+    if ((state.invertPosition ?: false) != settings?.invertPosition) {
+        state.invertPosition = settings?.invertPosition
+        if (logEnable) { log.debug "${device.displayName} invertPosition: ${settings?.invertPosition}" }
     }
     else {
-        descriptionText = 'partially open'
-        sendEvent(name: 'windowShade', value: 'partially open', descriptionText: descriptionText)
+        if (logEnable) { log.debug "${device.displayName} invertPosition: no change" }
     }
 }
 
@@ -268,9 +339,9 @@ BigDecimal scale(int value, int fromLow, int fromHigh, int toLow, int toHigh) {
 }
 
 void startOperationTimeoutTimer() {
-    if (logEnable) { log.debug "${device.displayName} startOperationTimeoutTimer" }
-    int travelTime = Math.abs(device.currentValue('position', true) - device.currentValue('targetPosition', true))
-    Integer scaledTimerValue = scale(travelTime, 0, 100, 1, settings?.maxTravelTime as int) + 0.5
+    int travelTime = Math.abs(device.currentValue('position') - device.currentValue('targetPosition'))
+    Integer scaledTimerValue = scale(travelTime, 0, 100, 1, settings?.maxTravelTime as int) + 1.5
+    if (logEnable) { log.debug "${device.displayName} startOperationTimeoutTimer: ${scaledTimerValue} seconds" }
     runIn(scaledTimerValue, 'operationTimeoutTimer', [overwrite: true])
 }
 
@@ -281,7 +352,7 @@ void stopOperationTimeoutTimer() {
 
 void operationTimeoutTimer() {
     if (logEnable) { log.warn "${device.displayName} operationTimeout!" }
-    updatewindowShade()
+    updateWindowShadeStatus(device.currentValue('position'), device.currentValue('targetPosition'), /*isFinal =*/ true, /*isDigital =*/ true)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */

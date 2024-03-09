@@ -48,30 +48,36 @@
  * ver. 0.4.4  2024-03-02 kkossev  - added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
  * ver. 0.4.5  2024-03-03 kkossev  - WindowCovering refresh() bug patch; commented out the WindowCovering ping() command (capability 'Health Check' - not supported yet); enabled Battery / PowerSource cluster (0x002F) processing!
  * ver. 0.4.6  2024-03-04 kkossev  - (dev.branch) WindowCovering unit fix; hopefully also WindowCovering close() fix; added and verified the importUrl for all libraries and component drivers;
+ * ver. 0.5.0  2024-03-09 kkossev  - (dev.branch) WindowCovering driver refactoring; WindowCovering: added battery attributes; WindowCovering: added a bunch of new options; Minimize State Variables by default is true;
+ *                                   documented the WindowCovering settings - https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-Window-Covering
  *
- *                                   TODO: [====MVP====] Publish version 0.4.6
+ *                                   TODO: [====MVP====] Publish version 0.5.0
  *
+ *                                   TODO: [====MVP====] 
  *                                   TODO: [====MVP====] Help/Documentation button in driver linked to GitHub web page.
  *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
+ *                                   TODO: [ENHANCEMENT] add parse command
+ *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
  *                                   TODO: [ENHANCEMENT] DeleteDevice # command (utilities) (0=all)
- *                                   TODO: [====MVP====] Publish version 0.4.x
+ *                                   TODO: [ENHANCEMENT] reSubscribe # command (utilities) (0=all)
+ *                                   TODO: [ENHANCEMENT] battery processing for WindowCovering
+ *                                   TODO: [====MVP====] Publish version 0.5.x
  *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
- *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
  *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default disabled)
  *                                   TODO: [ENHANCEMENT] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
  *                                   TODO: [ENHANCEMENT] Ping the bridge at the start of the discovery process
  *                                   TODO: [ENHANCEMENT] check the 'healthStatus' attribute at the start of the Discovery process !
  *                                   TODO: [ENHANCEMENT] When deleting device, unsubscribe from all attributes (+Info logs)
  *                                   TODO: [ENHANCEMENT] When subscribing, remove from the subscribe list devices that are disabled ! (+Info logs)
- *                                   TODO: [====MVP====] Publish version 0.4.x
+ *                                   TODO: [====MVP====] Publish version 0.5.x
  *
  *                                   TODO: [ENHANCEMENT] distinguish between creating and checking an existing child device
  *                                   TODO: [ENHANCEMENT] When a bridged device is deleted - ReSubscribe() to first delete all subscriptions and then re-discover all the devices, capabilities and subscribe to the known attributes
- *                                   TODO: [====MVP====] Publish version 0.4.x
+ *                                   TODO: [====MVP====] Publish version 0.5.x
  *
  *                                   TODO: [====MVP====] Publish version 0.5.0
  *
@@ -106,13 +112,13 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.4.6' }
-static String timeStamp() { '2023/03/04 8:57 AM' }
+static String version() { '0.5.0' }
+static String timeStamp() { '2023/03/09 11:28 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
-@Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = false  // minimize the state variables
+@Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = true  // minimize the state variables
 @Field static final String  DEVICE_TYPE = 'MATTER_BRIDGE'
 @Field static final Boolean STATE_CACHING = false            // enable/disable state caching
 @Field static final Integer CACHING_TIMER = 60               // state caching time in seconds
@@ -909,29 +915,26 @@ void parseDoorLock(final Map descMap) { // 0101
 
 void parseWindowCovering(final Map descMap) { // 0102
     if (descMap.cluster != '0102') { logWarn "parseWindowCovering: unexpected cluster:${descMap.cluster} (attrId:${descMap.attrId})"; return }
-    final String unit = '%'
-    if (descMap.attrId == '000B') { // TargetPositionLiftPercent100ths  - actually this is the current position !!!
-        Integer valueInt = (100 - HexUtils.hexStringToInt(descMap.value) / 100.0) as int
-        sendMatterEvent([
-            name: 'position',
-            value: valueInt/*.toString()*/,
-            unit: unit,
-            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} currentPosition  is ${valueInt} ${unit}"
-        ], descMap, true)
-    } else if (descMap.attrId == '000E') { // CurrentPositionLiftPercent100ths - actually this is the target position !!!
-        Integer valueInt = (100 - HexUtils.hexStringToInt(descMap.value) / 100.0) as int
+    if (descMap.attrId == '000B') { // TargetPositionLiftPercent100ths
+        Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 100) as int
         sendMatterEvent([
             name: 'targetPosition',
-            value: valueInt/*.toString()*/,
-            unit: unit,
-            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} targetPosition is ${valueInt} ${unit}"
-        ], descMap, true)
+            value: valueInt,
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} <b>targetPosition</b> is reported as ${valueInt} <i>(to be re-processed in the child driver!)</i>"
+        ], descMap, ignoreDuplicates = false)
+    } else if (descMap.attrId == '000E') { // CurrentPositionLiftPercent100ths
+        Integer valueInt = (HexUtils.hexStringToInt(descMap.value) / 100) as int
+        sendMatterEvent([
+            name: 'position',
+            value: valueInt,
+            descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} <b>position</b> is is reported as ${valueInt} <i>(to be re-processed in the child driver!)</i>"
+        ], descMap, ignoreDuplicates = false)
     } else if (descMap.attrId == '000A') { // OperationalStatus
         sendMatterEvent([
             name: 'operationalStatus',
             value: descMap.value,
             descriptionText: "${getDeviceDisplayName(descMap?.endpoint)} operationalStatus is ${descMap.value}"
-        ], descMap, true)
+        ], descMap, ignoreDuplicates = false)
     }
     else {
         logTrace "parseWindowCovering: ${(WindowCoveringClusterAttributes[descMap.attrInt] ?: GlobalElementsAttributes[descMap.attrInt] ?: UNKNOWN)} = ${descMap.value}"
@@ -1120,10 +1123,12 @@ void sendMatterEvent(final Map<String, String> eventParams, Map descMap = [:], i
     if (state.states['isRefresh'] == true) {
         eventMap.descriptionText += ' [refresh]'
         eventMap.isStateChange = true   // force the event to be sent
+        eventMap.isRefresh = true
     }
     if (state.states['isDiscovery'] == true) {
         eventMap.descriptionText += ' [discovery]'
         eventMap.isStateChange = true   // force the event to be sent
+        eventMap.isDiscovery = true
     }
     // TODO - use the child device wrapper to check the current value !!!!!!!!!!!!!!!!!!!!!
 
@@ -1889,7 +1894,7 @@ Map mapTuyaCategory(Map d) {
 // Component command to refresh device
 void componentRefresh(DeviceWrapper dw) {
     String id = dw.getDataValue('id')       // in hex
-    // find the id in the state.subscriptions list of lists - this is the first element of the lists 
+    // find the id in the state.subscriptions list of lists - this is the first element of the lists
     List<List<Integer>> stateSubscriptionsList = state.subscriptions ?: []
     List<List<Integer>> deviceSubscriptionsList = stateSubscriptionsList.findAll { it[0] == HexUtils.hexStringToInt(id) }
     logDebug "componentRefresh(${dw}) id=${id} deviceSubscriptionsList=${deviceSubscriptionsList}"
@@ -2126,7 +2131,7 @@ private int miredHexToCt(final String mired) {
     return miredInt > 0 ? (1000000 / miredInt) as int : 0
 }
 
-// Component command to set position
+// Component command to set position  (used by Window Shade)
 void componentSetPosition(DeviceWrapper dw, BigDecimal positionPar) {
     if (!dw.hasCommand('setPosition')) { logError "componentSetPosition(${dw}) driver '${dw.typeName}' does not have command 'setPosition' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
@@ -2135,7 +2140,8 @@ void componentSetPosition(DeviceWrapper dw, BigDecimal positionPar) {
     if (position > 100) { position = 100 }
     logDebug "Setting position ${position} for device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString((100 - position) * 100, 2))))
+    //cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString((100 - position) * 100, 2))))
+    cmdFields.add(matter.cmdField(0x05, 0x00, zigbee.swapOctets(HexUtils.integerToHexString(position * 100, 2))))
     cmd = matter.invoke(deviceNumber, 0x0102, 0x05, cmdFields)  // 0x0102 = Window Covering Cluster, 0x05 = GoToLiftPercentage
     sendToDevice(cmd)
 }
@@ -2195,9 +2201,17 @@ void componentLock(DeviceWrapper dw) {
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
     logInfo "sending Lock command to device# ${deviceNumber} (${dw.getDataValue('id')}) ${dw}"
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentLock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
+
     List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(0x12, 0x00, "0000"))
-    String cmd = matter.invoke(deviceNumber, 0x0101, 0x00, cmdFields) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
+    cmdFields.add(matter.cmdField(DataType.STRING_OCTET8, 0x00, ""))
+    //String cmd = matter.invoke(deviceNumber, 0x0101, 0x00, cmdFields) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
+    String cmd = matter.invoke(deviceNumber, 0x0101, 0x00) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
+
+    /*
+    List<Map<String, String>> attrWriteRequests = [matter.attributeWriteRequest(deviceNumber, 0x0101, 0x0000, DataType.UINT8, '10')]
+    String cmd = matter.writeAttributes(attrWriteRequests)
+    */
+
     logDebug "componentLock(): sending command '${cmd}'"
     sendToDevice(cmd)
 }
