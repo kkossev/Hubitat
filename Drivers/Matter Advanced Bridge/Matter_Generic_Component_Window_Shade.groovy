@@ -34,7 +34,7 @@
 import groovy.transform.Field
 
 @Field static final String matterComponentWindowShadeVersion = '0.0.6'
-@Field static final String matterComponentWindowShadeStamp   = '2024/03/09 11:28 PM'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/09 11:56 PM'
 
 @Field static final Integer OPEN   = 0      // this is the standard!  Hubitat is inverted?
 @Field static final Integer CLOSED = 100    // this is the standard!  Hubitat is inverted?
@@ -143,8 +143,7 @@ void updateWindowShadeStatus(int currentPositionPar, int targetPositionPar, Bool
     String value = 'unknown'
     String descriptionText = 'unknown'
     String type = isDigital ? 'digital' : 'physical'
-    //log.trace "updateWindowShadeStatus: position = ${device.currentValue('position')}, targetPosition = ${device.currentValue('targetPosition')}"
-    log.trace "updateWindowShadeStatus: currentPositionPar = ${currentPositionPar}, targetPositionPar = ${targetPositionPar}"
+    //log.trace "updateWindowShadeStatus: currentPositionPar = ${currentPositionPar}, targetPositionPar = ${targetPositionPar}"
     Integer currentPosition = currentPositionPar as int
     Integer targetPosition = targetPositionPar as int
 
@@ -167,7 +166,13 @@ void updateWindowShadeStatus(int currentPositionPar, int targetPositionPar, Bool
             value = 'closing'
         }
         else {
-            value = 'stopping'
+            //value = 'stopping'
+            if (isFullyClosed(currentPosition)) {
+                value = 'closed'
+            }
+            else if (isFullyOpen(currentPosition)) {
+                value = 'open'
+            }            
         }
     }
     descriptionText = "${device.displayName} windowShade is ${value} [${type}]"
@@ -195,7 +200,7 @@ void processTargetPositionBridgeEvent(final Map d) {
 }
 
 void processTargetPosition(final Map d) {
-    log.trace "processTargetPosition: value: ${d.value}"
+    //log.trace "processTargetPosition: value: ${d.value}"
     Map map = new HashMap(d)
     map.value = invertPositionIfNeeded(d.value as int)
     map.descriptionText = "${device.displayName} targetPosition is ${map.value}%"
