@@ -228,10 +228,10 @@
 	},
     {
       "id":"7f4e2c19-5159-44bd-a2bf-afb8432c3de4",
-      "name":"Matter Advanced Bridge (ALPHA testing)",
-      "category":"Integrations",
-      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/packageManifest.json",
-      "description":"Matter Advanced Bridge - ALPHA tests",
+      "name": "Matter Advanced Bridge (ALPHA testing)",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Matter%20Advanced%20Bridge/packageManifest.json",
+      "description": "Matter Advanced Bridge - nearing BETA tests. Supports Tuya, Aqara, Philps Hue and Switchbot Matter bridges.",
       "tags":[
         "Tools & Utilities"
        ]
