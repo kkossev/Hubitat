@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Matter Advanced Bridge/Matter_Advanced_Bridge.groovy",
       "codeType": "driver",
       "id": 2764,
-      "version": 1035
+      "version": 1047
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Matter Advanced Bridge/Matter_Generic_Component_Motion_Sensor.groovy",
@@ -16,7 +16,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Matter Advanced Bridge/Matter_Generic_Component_Window_Shade.groovy",
       "codeType": "driver",
       "id": 2766,
-      "version": 198
+      "version": 203
     },
     {
       "filepath": "/c:/Work/Hubitat/Drivers/Matter Advanced Bridge/matterLib.groovy",
@@ -52,7 +52,7 @@
       "filepath": "/c:/Work/Hubitat/Drivers/Matter Advanced Bridge/matterUtilitiesLib.groovy",
       "codeType": "library",
       "id": 162,
-      "version": 28
+      "version": 29
     }
   ]
 }

@@ -1,5 +1,4 @@
-/* groovylint-disable CouldBeSwitchStatement, DuplicateNumberLiteral, MethodParameterTypeRequired, NoDef, StaticMethodsBeforeInstanceMethods, UnnecessaryElseStatement, UnnecessaryGetter, VariableTypeRequired */
-/* groovylint-disable-next-line CompileStatic */
+/* groovylint-disable CouldBeSwitchStatement, DuplicateNumberLiteral, MethodCount, MethodParameterTypeRequired, NoDef, StaticMethodsBeforeInstanceMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessarySetter, VariableTypeRequired */
 /*
   *  ''Matter Generic Component Window Shade' - component driver for Matter Advanced Bridge
   *
@@ -25,7 +24,8 @@
   * ver. 0.0.3  2024-03-02 kkossev - added refresh() command; added a timeout preference for the position change; added reverse option (normal: OPEN=100% CLOSED=0%)
   * ver. 0.0.4  2024-03-03 kkossev - disabled the ping() command (capability 'Health Check' - not supported yet)
   * ver. 0.0.5  2024-03-04 kkossev - close() bug fix @kwon2288
-  * ver. 0.0.6  2024-03-09 kkossev - (dev.branch) added Battery capability; added batteryVoltage; added invertPosition and targetAsCurrentPosition preferences;
+  * ver. 0.0.6  2024-03-09 kkossev - added Battery capability; added batteryVoltage; added invertPosition and targetAsCurrentPosition preferences;
+  * ver. 0.0.7  2024-03-10 kkossev - (dev.branch) added help info and community link (credits @jtp10181)
   *
   *                                   TODO:
   *
@@ -33,8 +33,8 @@
 
 import groovy.transform.Field
 
-@Field static final String matterComponentWindowShadeVersion = '0.0.6'
-@Field static final String matterComponentWindowShadeStamp   = '2024/03/09 11:56 PM'
+@Field static final String matterComponentWindowShadeVersion = '0.0.7'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/10 9:58 PM'
 
 @Field static final Integer OPEN   = 0      // this is the standard!  Hubitat is inverted?
 @Field static final Integer CLOSED = 100    // this is the standard!  Hubitat is inverted?
@@ -61,6 +61,7 @@ metadata {
 
 preferences {
     section {
+	    input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', required: false, defaultValue: true
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>',           required: false, defaultValue: false
         input name: 'maxTravelTime', type: 'number', title: '<b>Maximum travel time</b>', description: '<i>The maximum time to fully open or close (Seconds)</i>', required: false, defaultValue: MAX_TRAVEL_TIME
@@ -368,4 +369,20 @@ private void logsOff() {
 
 static Integer safeToInt(val, Integer defaultVal=0) {
     return "${val}"?.isInteger() ? "${val}".toInteger() : defaultVal
+}
+
+@Field static final String DRIVER = 'Matter Advanced Bridge'
+@Field static final String COMPONENT = 'Matter Generic Component Window Shade'
+@Field static final String WIKI   = 'Get help on GitHub Wiki page:'
+@Field static final String COMM_LINK =   "https://community.hubitat.com/t/project-nearing-beta-release-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009"
+@Field static final String GITHUB_LINK = "https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-Window-Covering"
+// credits @jtp10181
+String fmtHelpInfo(String str) {
+	String info = "${DRIVER} v${parent?.version()}<br> ${COMPONENT} v${matterComponentWindowShadeVersion}"
+	String prefLink = "<a href='${GITHUB_LINK}' target='_blank'>${WIKI}<br><div style='font-size: 70%;'>${info}</div></a>"
+    String topStyle = "style='font-size: 18px; padding: 1px 12px; border: 2px solid green; border-radius: 6px; color: green;'"
+    String topLink = "<a ${topStyle} href='${COMM_LINK}' target='_blank'>${str}<br><div style='font-size: 14px;'>${info}</div></a>"
+
+	return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
+		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
 }

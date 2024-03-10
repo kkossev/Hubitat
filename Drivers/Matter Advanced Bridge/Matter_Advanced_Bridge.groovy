@@ -15,55 +15,25 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * Thanks to Hubitat for publishing the sample Matter driver https://github.com/hubitat/HubitatPublic/blob/master/examples/drivers/thirdRealityMatterNightLight.groovy
+ * The full revisions history is available at https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-revisions-history
  *
  * ver. 0.0.0  2023-12-29 kkossev  - Inital version;
- * ver. 0.0.1  2024-01-05 kkossev  - Linter; Discovery OK; published for alpha- testing.
- * ver. 0.0.2  2024-01-07 kkossev  - Refresh() reads the subscribed attributes; added command 'Device Label'; VendorName, ProductName, Reachable for child devices; show the device label in the event logs if set; added a test command 'setSwitch' on/off/toggle + device#;
- * ver. 0.0.3  2024-01-11 kkossev  - Child devices : deviceCount, mapTuyaCategory(d); added 'Matter_Generic_Component_Motion_Sensor.groovy', 'Matter_Generic_Component_Window_Shade.groovy' and 'matterLib.groovy'; Hubitat Bundle package;
- *                                   A1 Bridge Discovery now uses the short version; added logTrace() and logError() methods; setSwitch and setLabel commands visible in _DEBUG mode only
- * ver. 0.0.4  2024-01-14 kkossev  - added 'Matter Generic Component Switch' component driver; cluster 0x0102 (WindowCovering) attributes decoding - position, targetPosition, windowShade; add cluster 0x0102 commands processing; logTrace is  switched off after 30 minutes; filtered duplicated On/Off events in the Switch component driver;
- *                                   disabled devices are not processed to avoid spamming the debug logs; initializeCtr attribute; Default Bridge healthCheck method is set to periodic polling every 1 hour; added new removeAllSubscriptions() command; added 'Invert Motion' option to the Motion Sensor component driver @iEnam
- * ver. 0.0.5  2024-01-20 kkossev  - added endpointsCount; subscribe to [endpoint:00, cluster:001D, attrId:0003 - PartsList = the number of the parts list entries]; refactoring: parseGlobalElements(); discovery process bugs fixes; debug is false by default; changeed the steps sequence (first create devices, last subscribe to the attributes); temperature sensor omni component bug fix;
- * ver. 0.0.6  2024-01-27 kkossev  - DiscoverAll() button (state machine) replaces all old manual discovery buttons; removed setLabel and setSwitch test command;
- * ver. 0.0.7  2024-01-28 kkossev  - code cleanup; bug fix -do not send events to the bridge device if the child device does not exist; discoverAll debug options bug fix; deviceCount, endpointsCount, nodeLabelbug fixes; refresh() button on the Bridge device fixed; multiple subscribe entries bug fix;
- *                                   Bulbs are assigned 'Generic Component Dimmer'; cluster 08 partial processing - componentSetLevel() implementation; added subscribing to more than attribute per endpoint; Celsius to Fahrenheit conversion for temperature sensors
- * ver. 0.1.0  2024-02-03 kkossev  - added Contact Sensor processing; added Thermostat cluster 0x0201 attributes decoding (only); nodeLabel null checks; rounded the humidity to the neares integer value;
- *                                   versions renamed from major ver. 0.x.x; added a compatibility table matrix for Aqara devices on the top post; vibration sensors are processed as motion sensors; added Generic Component Battery
- * ver. 0.1.1  2024-02-03 kkossev  - softwareVersionString bug fix; disabled the processing of the PowerSource cluster and creating child devices for it; state['subscriptions'] list is cleared at the beginning of DiscoverAll();
- * ver. 0.2.0  2024-02-04 kkossev  -  refactored the matter messages parsing method using a lookup map; bug fix: duplicated attrList entries; bug fix: deviceCount and initializeCtr nit updated; bug fix : healhCheck schedued job was lost on resubscribe()
- *                                   added cluster 0x0101 DoorLock decoding; lock and unlock commands (not tested!)
- * ver. 0.2.1  2024-02-07 kkossev  - added temperature and humidity valid values checking; change: When creating new child devices, the Device Name is set to 'Bridge #4407 Device#08 (Humidity Sensor)' as exaple, Device Label is left empty; bugfix: device labels in logs @fanmanrules;
- *                                   implemented componentStartLevelChange(), componentStopLevelChange(), componentSetColorTemperature; use 'Generic Component CT' driver instead of dimmer for bulbs; added colorTemperature and colorName for CT bulbs; @CompileStatic experiments...
- * ver. 0.2.2  2024-02-10 kkossev  - bugfix: null pointers checks exceptions; increased the discovery timeouts (the number of the retries); all states are cleared at the start of teh discovery process;  bugfix: CT/RGB bulbs reinitialization;
- * ver. 0.2.3  2024-02-11 kkossev  - lock/unlock commands disabled (not working for now); RGBW bulbs: hue, saturation; setColor, colorMode in CT mode;  healthStatus offline when polling was not working;
- * ver. 0.2.4  2024-02-11 kkossev  - bugfix: setLevel duration and setColorTemperature level parameters were not working; ignored duplicated events on main driver level;
- * ver. 0.2.5  2024-02-12 kkossev  - exception processing while checking for duplicate events.
- * ver. 0.3.0  2024-02-13 kkossev  - added reading of all supported clusters 0xFFFB attribute during DeviceDiscovery for each child device; subscribing to 0x0300 attributes; colorMode and colorName fixes; setColor turns the bulb on; RGBW bulbs to be assigned 'Generic Component RGBW' driver; debug logs are disabled in discovery mode
- * ver. 0.4.0  2024-02-18 kkossev  - added a compatibility matrix table for Tuya-Aqara-Hue-SwitchBot Matter bridges on the top post; added ERROR info messages during the discovery process; increased timeouts; created a MVP list and published it on the top post; refactored the refresh() command for all child devices to use the same subscription list;
- *                                   major refactoring of the attributes subscription process; minReportTime is different for each attribute and cluster; converted the SupportedMatterClusters to Map that includes the known attributes to be subscribed to;
- * ver. 0.4.1  2024-02-20 kkossev  - added illuminance cluster support (Aqara T1 Light Sensor); the FeatureMap of each supported cluster is stored in the state figngerprint variable; The bundle is made available on HPM; bugfix: colorName was sent wrongly in the event description for CT bulbs;
- *                                   bugFix: Hue bridge colorName bug fix; note: PhilipsHue does not report colorMode change back when changed from another system!; note: Aqara LED Strip T1 colorMode reporting is wrong!
- * ver. 0.4.2  2024-02-25 kkossev  - fixed the illuminance lux reading conversion;  invertMotion changes the motion state immediately; added a list of known issues and limitations on the top post - for both HE system and the driver;
- * ver. 0.4.3  2024-02-26 kkossev  - added utilities() command; loose checks for the OnOff commands; states cleanup (remove fingerprintXX, leave Subscriptions) when minimizeStateVariables advanced option is enabled;
- * ver. 0.4.4  2024-03-02 kkossev  - added refresh() for component devices; global refresh() from the parent device registers events for all child devices!; added clearStats command; SwitchBot/Zemismart WindowCovering - bug fixes @Steve9123456789
- * ver. 0.4.5  2024-03-03 kkossev  - WindowCovering refresh() bug patch; commented out the WindowCovering ping() command (capability 'Health Check' - not supported yet); enabled Battery / PowerSource cluster (0x002F) processing!
- * ver. 0.4.6  2024-03-04 kkossev  - (dev.branch) WindowCovering unit fix; hopefully also WindowCovering close() fix; added and verified the importUrl for all libraries and component drivers;
- * ver. 0.5.0  2024-03-09 kkossev  - (dev.branch) WindowCovering driver refactoring; WindowCovering: added battery attributes; WindowCovering: added a bunch of new options; Minimize State Variables by default is true;
+ * ........
+ * ver. 0.5.0  2024-03-09 kkossev  - WindowCovering driver refactoring; WindowCovering: added battery attributes; WindowCovering: added a bunch of new options; Minimize State Variables by default is true;
  *                                   documented the WindowCovering settings - https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-Window-Covering
+ * ver. 0.5.1  2024-03-10 kkossev  - (dev.branch) Help/Documentation button in the driver linked to GitHub Wiki page and HE Community thread;
  *
- *                                   TODO: [====MVP====] Publish version 0.5.0
+ *                                   TODO: [====MVP====] Publish version 0.5.1
  *
- *                                   TODO: [====MVP====] 
- *                                   TODO: [====MVP====] Help/Documentation button in driver linked to GitHub web page.
- *                                   TODO: [====BUG====] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] add parse command
+ *                                   TODO: [ENHANCEMENT] add WindowCovering presets (default, Zemismart 1)
+ *                                   TODO: [ENHANCEMENT] bugfix: DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
  *                                   TODO: [ENHANCEMENT] DeleteDevice # command (utilities) (0=all)
  *                                   TODO: [ENHANCEMENT] reSubscribe # command (utilities) (0=all)
- *                                   TODO: [ENHANCEMENT] battery processing for WindowCovering
  *                                   TODO: [====MVP====] Publish version 0.5.x
  *
  *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
@@ -112,10 +82,12 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.5.0' }
-static String timeStamp() { '2023/03/09 11:28 PM' }
+static String version() { '0.5.1' }
+static String timeStamp() { '2023/03/10 8:52 AM' }
 
 @Field static final Boolean _DEBUG = false
+@Field static final String  COMM_LINK =   "https://community.hubitat.com/t/project-nearing-beta-release-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009"
+@Field static final String  GITHUB_LINK = "https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge"
 @Field static final Boolean DEFAULT_LOG_ENABLE = false
 @Field static final Boolean DO_NOT_TRACE_FFFX = true         // don't trace the FFFx global attributes
 @Field static final Boolean MINIMIZE_STATE_VARIABLES_DEFAULT = true  // minimize the state variables
@@ -191,6 +163,7 @@ metadata {
         // fingerprint endpointId:"01", inClusters:"0003,001D", outClusters:"001E", model:"Aqara Hub E1", manufacturer:"Aqara", controllerType:"MAT"
     }
     preferences {
+	    input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
         input name:'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true
         input name:'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE
         input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
@@ -1431,6 +1404,8 @@ void initialize() {
     log.warn 'initialize()...'
     unschedule()
     if (state.states == null) { state.states = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.stats == null)  { state.stats = [:] }
     state.states['isInfo'] = false
     Integer timeSinceLastSubscribe   = (now() - (state.lastTx['subscribeTime']   ?: 0)) / 1000
     Integer timeSinceLastUnsubscribe = (now() - (state.lastTx['unsubscribeTime'] ?: 0)) / 1000
@@ -2762,6 +2737,21 @@ void logError(msg) { if (settings.txtEnable)   { log.error "${device.displayName
 void logDebug(msg) { if (settings.logEnable)   { log.debug "${device.displayName} " + msg } }
 void logWarn(msg)  { if (settings.logEnable)   { log.warn  "${device.displayName} " + msg } }
 void logTrace(msg) { if (settings.traceEnable) { log.trace "${device.displayName} " + msg } }
+
+@Field static final String DRIVER = 'Matter Advanced Bridge'
+@Field static final String WIKI   = 'Get help on GitHub Wiki page:'
+
+// credits @jtp10181
+String fmtHelpInfo(String str) {
+	String info = "${DRIVER} v${version()}"
+	String prefLink = "<a href='${GITHUB_LINK}' target='_blank'>${WIKI}<br><div style='font-size: 70%;'>${info}</div></a>"
+    String topStyle = "style='font-size: 18px; padding: 1px 12px; border: 2px solid green; border-radius: 6px; color: green;'"
+    String topLink = "<a ${topStyle} href='${COMM_LINK}' target='_blank'>${str}<br><div style='font-size: 14px;'>${info}</div></a>"
+
+	return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
+		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
+}
+
 
 void parseTest(par) {
     log.warn "parseTest(${par})"

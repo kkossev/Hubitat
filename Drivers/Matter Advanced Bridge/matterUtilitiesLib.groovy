@@ -27,7 +27,7 @@ library(
   * ver. 0.0.0  2024-02-26 kkossev  - first version
   * ver. 0.0.1  2024-03-01 kkossev  - (dev.branch)
   *
-  *                                   TODO: add resetStats 
+  *                                   TODO: add resetStats
   *
 */
 
@@ -257,5 +257,4 @@ void resetStats(List<String> parameters) {
     // stats : {duplicatedCtr=0, pingsMax=288, rxCtr=264, pingsMin=80, pingsAvg=135, txCtr=51, pingsOK=6, pingsFail=1, initializeCtr=5}
     state.stats = [initializeCtr: 0, rxCtr: 0, txCtr: 0, duplicatedCtr: 0, pingsOK: 0, pingsFail: 0, pingsMin: 0, pingsMax: 0, pingsAvg: 0]
     sendMatterEvent([name: 'initializeCtr', value: state.stats['initializeCtr'], descriptionText: "${device.displayName} statistics were reset!", type: 'digital'])
-
 }
