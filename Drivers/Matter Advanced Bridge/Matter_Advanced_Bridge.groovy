@@ -21,11 +21,10 @@
  * ........
  * ver. 0.5.0  2024-03-09 kkossev  - WindowCovering driver refactoring; WindowCovering: added battery attributes; WindowCovering: added a bunch of new options; Minimize State Variables by default is true;
  *                                   documented the WindowCovering settings - https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-Window-Covering
- * ver. 0.5.1  2024-03-10 kkossev  - (dev.branch) Help/Documentation button in the driver linked to GitHub Wiki page and HE Community thread;
- * ver. 0.5.2  2024-03-11 kkossev  - (dev.branch) added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; fixed an exception in the same driver; battery attributes name changes;
- *                                   removed the _DiscoverAll options;
+ * ver. 0.5.1  2024-03-10 kkossev  - Help/Documentation button in the driver linked to GitHub Wiki page and HE Community thread;
+ * ver. 0.5.2  2024-03-11 kkossev  - added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; fixed an exception in the same driver; battery attributes name changes; removed the _DiscoverAll options;
+ * ver. 0.5.3  2024-03-11 kkossev  - (dev.branch) Window Shade driver exception bug fixed
  *
- *                                   TODO: [====MVP====] Publish version 0.5.2
  *
  *                                   TODO: [ENHANCEMENT] add WindowCovering presets (default, Zemismart 1)
  *                                   TODO: [ENHANCEMENT] check why the DeviceType is not populated to child device data ?
@@ -83,8 +82,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.5.2' }
-static String timeStamp() { '2023/03/11 10:36 PM' }
+static String version() { '0.5.3' }
+static String timeStamp() { '2023/03/11 11:35 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  COMM_LINK =   "https://community.hubitat.com/t/project-nearing-beta-release-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009"

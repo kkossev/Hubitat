@@ -26,7 +26,8 @@
   * ver. 0.0.5  2024-03-04 kkossev - close() bug fix @kwon2288
   * ver. 0.0.6  2024-03-09 kkossev - added Battery capability; added batteryVoltage; added invertPosition and targetAsCurrentPosition preferences;
   * ver. 0.0.7  2024-03-10 kkossev - added help info and community link (credits @jtp10181)
-  * ver. 0.0.8  2024-03-11 kkossev - (dev.branch) added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; battery attributes corrections;
+  * ver. 0.0.8  2024-03-11 kkossev - added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; battery attributes corrections;
+  * ver. 0.0.8  2024-03-11 kkossev - (dev.branch) another exception bug fix;
   *
   *                                   TODO:
 */
@@ -34,7 +35,7 @@
 import groovy.transform.Field
 
 @Field static final String matterComponentWindowShadeVersion = '0.0.8'
-@Field static final String matterComponentWindowShadeStamp   = '2024/03/11 9:20 PM'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/11 11:22 PM'
 
 @Field static final Boolean _DEBUG = true
 
@@ -376,7 +377,7 @@ void stopOperationTimeoutTimer() {
 
 void operationTimeoutTimer() {
     if (logEnable) { log.warn "${device.displayName} operationTimeout!" }
-    updateWindowShadeStatus(device.currentValue('position'), device.currentValue('targetPosition'), /*isFinal =*/ true, /*isDigital =*/ true)
+    updateWindowShadeStatus(device.currentValue('position') as int, device.currentValue('targetPosition') as int, /*isFinal =*/ true, /*isDigital =*/ true)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
