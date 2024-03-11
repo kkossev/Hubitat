@@ -62,7 +62,7 @@ metadata {
         attribute 'silentMode', 'enum', ['off', 'on']   // disable all logging and events while in color animation mode
         command 'getInfo'
         command 'toggle'
-        //command 'identify'  // can't make it work ... :(
+        command 'identify'  // can't make it work ... :(
         //command 'unsubscribe'
         //command 'subscribe'
         command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
@@ -498,15 +498,18 @@ void toggle() {
 }
 
 void identify() {
+    /*
     List<Map<String, String>> attributeWriteRequests = []
     attributeWriteRequests.add(matter.attributeWriteRequest(device.endpointId, 0x0003, 0x0000, 0x05, '0101'))
     String cmd = matter.writeAttributes(attributeWriteRequests)
     sendToDevice(cmd)
+    */
 
     List<Map<String, String>> cmdFields = []
     cmdFields.add(matter.cmdField(0x05, 0x00, '0101'))
     cmd = matter.invoke(device.endpointId, 0x0003, 0x0000, cmdFields)
     sendToDevice(cmd)
+    
 }
 
 void setLevel(Object value) {
