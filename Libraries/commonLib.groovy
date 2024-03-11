@@ -1,4 +1,4 @@
-/* groovylint-disable ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryObjectReferences, VariableName */
+/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -32,7 +32,7 @@ library(
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
-  * ver. 3.0.3  2024-03-03 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics;
+  * ver. 3.0.3  2024-03-04 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -48,16 +48,17 @@ library(
 */
 
 String commonLibVersion() { '3.0.3' }
-String thermostatLibStamp() { '2024/03/03 11:58 PM' }
+String thermostatLibStamp() { '2024/03/04 9:56 PM' }
 
 import groovy.transform.Field
-//import hubitat.device.HubMultiAction
-//import hubitat.device.Protocol
-//import hubitat.helper.HexUtils
+import hubitat.device.HubMultiAction
+import hubitat.device.Protocol
+import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
-//import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
+import java.math.BigDecimal
 
 @Field static final Boolean _THREE_STATE = true
 
@@ -98,16 +99,16 @@ metadata {
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'AirQuality', 'Thermostat', 'AqaraCube', 'Radar']) {
+        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'Thermostat', 'AqaraCube']) {
             capability 'Sensor'
         }
-        if (deviceType in  ['Device', 'MotionSensor', 'Radar']) {
+        if (deviceType in  ['Device', 'MotionSensor']) {
             capability 'MotionSensor'
         }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Fingerbot', 'Dimmer', 'Bulb', 'IRBlaster']) {
+        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Fingerbot', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
-        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'Fingerbot', 'ButtonDimmer', 'AqaraCube', 'IRBlaster']) {
+        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'Fingerbot', 'ButtonDimmer', 'AqaraCube']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
         }
@@ -132,17 +133,14 @@ metadata {
         if (deviceType in  ['Device', 'Fingerbot']) {
             capability 'Momentary'
         }
-        if (deviceType in  ['Device', 'THSensor', 'AirQuality', 'Thermostat']) {
+        if (deviceType in  ['Device', 'THSensor', 'Thermostat']) {
             capability 'TemperatureMeasurement'
         }
-        if (deviceType in  ['Device', 'THSensor', 'AirQuality']) {
+        if (deviceType in  ['Device', 'THSensor']) {
             capability 'RelativeHumidityMeasurement'
         }
-        if (deviceType in  ['Device', 'LightSensor', 'Radar']) {
+        if (deviceType in  ['Device', 'LightSensor']) {
             capability 'IlluminanceMeasurement'
-        }
-        if (deviceType in  ['AirQuality']) {
-            capability 'AirQuality'            // Attributes: airQualityIndex - NUMBER, range:0..500
         }
 
         // trap for Hubitat F2 bug
@@ -1770,8 +1768,9 @@ void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) 
     BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0))
     eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
     BigDecimal lastTemp = device.currentValue('temperature') ?: 0
-    if (Math.abs(lastTemp - tempCorrected) < 0.001) {
-        logTrace "skipped temperature ${tempCorrected}, less than delta 0.001 (lastTemp=${lastTemp})"
+    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}"
+    if (Math.abs(lastTemp - tempCorrected) < 0.1) {
+        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})"
         return
     }
     eventMap.type = isDigital == true ? 'digital' : 'physical'
@@ -1815,20 +1814,21 @@ void parseHumidityCluster(final Map descMap) {
     handleHumidityEvent(value / 100.0F as BigDecimal)
 }
 
-void handleHumidityEvent(BigDecimal humidity, Boolean isDigital=false) {
+void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
     Map eventMap = [:]
+    BigDecimal humidity = safeToBigDecimal(humidityPar)
     if (state.stats != null) { state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    BigDecimal humidityAsDouble = safeToBigDecimal(humidity) + safeToBigDecimal(settings?.humidityOffset ?: 0)
-    if (humidityAsDouble <= 0.0 || humidityAsDouble > 100.0) {
-        logWarn "ignored invalid humidity ${humidity} (${humidityAsDouble})"
+    humidity +=  safeToBigDecimal(settings?.humidityOffset ?: 0)
+    if (humidity <= 0.0 || humidity > 100.0) {
+        logWarn "ignored invalid humidity ${humidity} (${humidityPar})"
         return
     }
-    eventMap.value = Math.round(humidityAsDouble)
+    eventMap.value = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
     eventMap.name = 'humidity'
     eventMap.unit = '% RH'
     eventMap.type = isDigital == true ? 'digital' : 'physical'
     //eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${humidityAsDouble.round(1)} ${eventMap.unit}"
+    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
     Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000)
     Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
     Integer timeRamaining = (minTime - timeElapsed) as Integer
@@ -1982,13 +1982,8 @@ void parseFC11Cluster(final Map descMap) {
     }
 }
 
-// -------------------------------------------------------------------------------------------------------------------------
-
 void parseE002Cluster(final Map descMap) {
-    if (DEVICE_TYPE in ['Radar'])     { parseE002ClusterRadar(descMap) }
-    else {
-        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"
-    }
+    logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
 }
 
 /*
@@ -2062,7 +2057,6 @@ void parseTuyaCluster(final Map descMap) {
 }
 
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    if (DEVICE_TYPE in ['Radar'])         { processTuyaDpRadar(descMap, dp, dp_id, fncmd); return }
     if (DEVICE_TYPE in ['Fingerbot'])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }
     // check if the method  method exists
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
@@ -2171,10 +2165,6 @@ List<String> initializeDevice() {
     if (this.respondsTo('customInitializeDevice')) {
         return customInitializeDevice()
     }
-
-    if (DEVICE_TYPE in  ['AirQuality'])          { return initializeDeviceAirQuality() }
-    else if (DEVICE_TYPE in  ['IRBlaster'])      { return initializeDeviceIrBlaster() }
-    else if (DEVICE_TYPE in  ['Radar'])          { return initializeDeviceRadar() }
     else if (DEVICE_TYPE in  ['ButtonDimmer'])   { return initializeDeviceButtonDimmer() }
 
     // not specific device type - do some generic initializations
@@ -2191,27 +2181,25 @@ List<String> initializeDevice() {
 
 /**
  * configures the device
- * Invoked from updated()
+ * Invoked from configure()
  * @return zigbee commands
  */
-def configureDevice() {
+List<String> configureDevice() {
     List<String> cmds = []
     logInfo 'configureDevice...'
 
     if (this.respondsTo('customConfigureDevice')) {
         cmds += customConfigureDevice()
     }
-    else if (DEVICE_TYPE in  ['AirQuality']) { cmds += configureDeviceAirQuality() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += configureDeviceFingerbot() }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
-    else if (DEVICE_TYPE in  ['IRBlaster'])  { cmds += configureDeviceIrBlaster() }
-    else if (DEVICE_TYPE in  ['Radar'])      { cmds += configureDeviceRadar() }
     else if (DEVICE_TYPE in  ['ButtonDimmer']) { cmds += configureDeviceButtonDimmer() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     if ( cmds == null || cmds == []) {
         cmds = ['delay 277',]
     }
-    sendZigbeeCommands(cmds)
+    // sendZigbeeCommands(cmds) changed 03/04/2024
+    return cmds
 }
 
 /*
@@ -2232,9 +2220,6 @@ void refresh() {
     }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += refreshAqaraCube() }
     else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += refreshFingerbot() }
-    else if (DEVICE_TYPE in  ['AirQuality']) { cmds += refreshAirQuality() }
-    else if (DEVICE_TYPE in  ['IRBlaster'])  { cmds += refreshIrBlaster() }
-    else if (DEVICE_TYPE in  ['Radar'])      { cmds += refreshRadar() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
         // generic refresh handling, based on teh device capabilities
@@ -2249,7 +2234,7 @@ void refresh() {
         if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
         }
-        if (DEVICE_TYPE in  ['THSensor', 'AirQuality']) {
+        if (DEVICE_TYPE in  ['THSensor']) {
             cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
             cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
         }
@@ -2437,7 +2422,7 @@ void autoPoll() {
     List<String> cmds = []
     //if (state.states == null) { state.states = [:] }
     //state.states["isRefresh"] = true
-
+    // TODO !!!!!!!!
     if (DEVICE_TYPE in  ['AirQuality']) {
         cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
@@ -2457,11 +2442,11 @@ void updated() {
     unschedule()
 
     if (settings.logEnable) {
-        logTrace settings
+        logTrace(settings.toString())
         runIn(86400, logsOff)
     }
     if (settings.traceEnable) {
-        logTrace settings
+        logTrace(settings.toString())
         runIn(1800, traceOff)
     }
 
@@ -2482,10 +2467,6 @@ void updated() {
     if (this.respondsTo('customUpdated')) {
         customUpdated()
     }
-    if (DEVICE_TYPE in ['AirQuality'])  { updatedAirQuality() }
-    if (DEVICE_TYPE in ['IRBlaster'])   { updatedIrBlaster() }
-
-    //configureDevice()    // sends Zigbee commands  // commented out 11/18/2023
 
     sendInfoEvent('updated')
 }
@@ -2534,8 +2515,8 @@ void loadAllDefaults() {
     deleteAllStates()
     deleteAllChildDevices()
     initialize()
-    configure()
-    updated() // calls  also   configureDevice()
+    configure()     // calls  also   configureDevice()
+    updated() 
     sendInfoEvent('All Defaults Loaded! F5 to refresh')
 }
 
@@ -2744,11 +2725,8 @@ void initializeVars( boolean fullInit = false ) {
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
-    if (DEVICE_TYPE in ['AirQuality']) { initVarsAirQuality(fullInit) }
     if (DEVICE_TYPE in ['Fingerbot'])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) }
     if (DEVICE_TYPE in ['AqaraCube'])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ['IRBlaster'])  { initVarsIrBlaster(fullInit); initEventsIrBlaster(fullInit) }      // none
-    if (DEVICE_TYPE in ['Radar'])      { initVarsRadar(fullInit);     initEventsRadar(fullInit) }          // none
     if (DEVICE_TYPE in ['ButtonDimmer']) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) }
     if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 

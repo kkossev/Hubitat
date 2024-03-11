@@ -25,16 +25,18 @@
   * ver. 0.0.4  2024-03-03 kkossev - disabled the ping() command (capability 'Health Check' - not supported yet)
   * ver. 0.0.5  2024-03-04 kkossev - close() bug fix @kwon2288
   * ver. 0.0.6  2024-03-09 kkossev - added Battery capability; added batteryVoltage; added invertPosition and targetAsCurrentPosition preferences;
-  * ver. 0.0.7  2024-03-10 kkossev - (dev.branch) added help info and community link (credits @jtp10181)
+  * ver. 0.0.7  2024-03-10 kkossev - added help info and community link (credits @jtp10181)
+  * ver. 0.0.8  2024-03-11 kkossev - (dev.branch) added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; battery attributes corrections;
   *
   *                                   TODO:
-  *
 */
 
 import groovy.transform.Field
 
-@Field static final String matterComponentWindowShadeVersion = '0.0.7'
-@Field static final String matterComponentWindowShadeStamp   = '2024/03/10 9:58 PM'
+@Field static final String matterComponentWindowShadeVersion = '0.0.8'
+@Field static final String matterComponentWindowShadeStamp   = '2024/03/11 9:20 PM'
+
+@Field static final Boolean _DEBUG = true
 
 @Field static final Integer OPEN   = 0      // this is the standard!  Hubitat is inverted?
 @Field static final Integer CLOSED = 100    // this is the standard!  Hubitat is inverted?
@@ -53,9 +55,24 @@ metadata {
         //capability 'Health Check'       // Commands:[ping]
 
         //attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
-        attribute 'targetPosition', 'number'    // ZemiSmart M1 is updating this attribute, not the position :(
-        attribute 'operationalStatus', 'number' // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
+        attribute 'targetPosition', 'number'            // ZemiSmart M1 is updating this attribute, not the position :(
+        attribute 'operationalStatus', 'number'         // 'enum', ['unknown', 'open', 'closed', 'opening', 'closing', 'partially open']
+
         attribute 'batteryVoltage', 'number'
+        attribute 'batStatus', 'string'             // Aqara E1 blinds
+        attribute 'batOrder', 'string'              // Aqara E1 blinds
+        attribute 'batDescription', 'string'        // Aqara E1 blinds
+        attribute 'batTimeRemaining', 'string'
+        attribute 'batChargeLevel', 'string'            // Aqara E1 blinds
+        attribute 'batReplacementNeeded', 'string'      // Aqara E1 blinds
+        attribute 'batReplaceability', 'string'
+        attribute 'batReplacementDescription', 'string'
+        attribute 'batQuantity', 'string'
+
+
+        if (_DEBUG) {
+            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
+        }        
     }
 }
 
@@ -86,17 +103,18 @@ boolean isFullyClosed(int position) { return Math.abs(position - getFullyClosed(
 void parse(List<Map> description) {
     if (logEnable) { log.debug "parse: ${description}" }
     description.each { d ->
-        if (d.name == 'position') {
+        if (d?.name == 'position') {
             processCurrentPositionBridgeEvent(d)
         }
-        else if (d.name == 'targetPosition') {
+        else if (d?.name == 'targetPosition') {
             processTargetPositionBridgeEvent(d)
         }
-        else if (d.name == 'operationalStatus') {
+        else if (d?.name == 'operationalStatus') {
             processOperationalStatusBridgeEvent(d)
         }
         else {
-            if (d.descriptionText && txtEnable) { log.info "${device.displayName} ${d.descriptionText}" }
+            if (d?.descriptionText && txtEnable) { log.info "${d.descriptionText}" }
+            log.trace "parse: ${d}"
             sendEvent(d)
         }
     }
@@ -203,7 +221,7 @@ void processTargetPositionBridgeEvent(final Map d) {
 void processTargetPosition(final Map d) {
     //log.trace "processTargetPosition: value: ${d.value}"
     Map map = new HashMap(d)
-    map.value = invertPositionIfNeeded(d.value as int)
+    map.value = invertPositionIfNeeded(safeToInt(d.value))
     map.descriptionText = "${device.displayName} targetPosition is ${map.value}%"
     if (map.isRefresh) {
         map.descriptionText += ' [refresh]'
@@ -385,4 +403,31 @@ String fmtHelpInfo(String str) {
 
 	return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
 		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
+}
+
+void parseTest(description) {
+    log.warn "parseTest: ${description}"
+    //String str = "name:position, value:0, descriptionText:Bridge#4266 Device#32 (tuya CURTAIN) position is is reported as 0 (to be re-processed in the child driver!) [refresh], unit:null, type:physical, isStateChange:true, isRefresh:true"
+    String str = description
+    // Split the string into key-value pairs
+    List<String> pairs = str.split(', ')
+    Map map = [:]
+    pairs.each { pair ->
+        // Split each pair into a key and a value
+        List<String> keyValue = pair.split(':')
+        String key = keyValue[0]
+        String value = keyValue[1..-1].join(':') // Join the rest of the elements in case the value contains colons
+        // Try to convert the value to a boolean or integer if possible
+        if (value == 'true' || value == 'false' || value == true || value == false) {
+            value = Boolean.parseBoolean(value)
+        } else if (value.isInteger()) {
+            value = Integer.parseInt(value)
+        } else if (value == 'null') {
+            value = null
+        }
+        // Add the key-value pair to the map
+        map[key] = value
+    }
+    log.debug map
+    parse([map])
 }

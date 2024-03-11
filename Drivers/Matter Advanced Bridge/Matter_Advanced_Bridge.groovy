@@ -22,21 +22,22 @@
  * ver. 0.5.0  2024-03-09 kkossev  - WindowCovering driver refactoring; WindowCovering: added battery attributes; WindowCovering: added a bunch of new options; Minimize State Variables by default is true;
  *                                   documented the WindowCovering settings - https://github.com/kkossev/Hubitat/wiki/Matter-Advanced-Bridge-%E2%80%90-Window-Covering
  * ver. 0.5.1  2024-03-10 kkossev  - (dev.branch) Help/Documentation button in the driver linked to GitHub Wiki page and HE Community thread;
+ * ver. 0.5.2  2024-03-11 kkossev  - (dev.branch) added parseTest(map as string) _DEBUg command in the 'Matter Generic Component Window Shade' driver; fixed an exception in the same driver; battery attributes name changes;
+ *                                   removed the _DiscoverAll options;
  *
- *                                   TODO: [====MVP====] Publish version 0.5.1
+ *                                   TODO: [====MVP====] Publish version 0.5.2
  *
- *                                   TODO: [ENHANCEMENT] add parse command
  *                                   TODO: [ENHANCEMENT] add WindowCovering presets (default, Zemismart 1)
- *                                   TODO: [ENHANCEMENT] bugfix: DeviceType is not populated to child device data ?
+ *                                   TODO: [ENHANCEMENT] check why the DeviceType is not populated to child device data ?
  *                                   TODO: [ENHANCEMENT] copy DeviceType list to the child device
  *                                   TODO: [ENHANCEMENT] product_name: Temperature Sensor to be added to the device name
  *                                   TODO: [ENHANCEMENT] use NodeLabel as device label when creating child devices (when available - Hue bridge) !
  *                                   TODO: [ENHANCEMENT] add showChildEvents advanced option
  *                                   TODO: [ENHANCEMENT] DeleteDevice # command (utilities) (0=all)
  *                                   TODO: [ENHANCEMENT] reSubscribe # command (utilities) (0=all)
- *                                   TODO: [====MVP====] Publish version 0.5.x
+ *                                   TODO: [ENHANCEMENT] hide Zemismart M1 getSubscribeCmdList(): cluster 0x001D is not in the SupportedMatterClusters list!
+ *                                   TODO: [====MVP====] Publish version 0.5.3
  *
- *                                   TODO: [====BUG====] bugfix: Why cluster 0x56 BooleanState attribbutes 0xFFFB are not filled in the state varable?
  *                                   TODO: [ENHANCEMENT] add an optoon to print the child device logs on the main driver logs (default disabled)
  *                                   TODO: [ENHANCEMENT] add to the device name the product type (e.g. 'Sontact Sensor', 'Battery') when creating devices (Aqara P2 contact sensor)
  *                                   TODO: [ENHANCEMENT] Ping the bridge at the start of the discovery process
@@ -82,8 +83,8 @@
 #include kkossev.matterStateMachinesLib
 //#include matterTools.parseDescriptionAsDecodedMap
 
-static String version() { '0.5.1' }
-static String timeStamp() { '2023/03/10 8:52 AM' }
+static String version() { '0.5.2' }
+static String timeStamp() { '2023/03/11 10:36 PM' }
 
 @Field static final Boolean _DEBUG = false
 @Field static final String  COMM_LINK =   "https://community.hubitat.com/t/project-nearing-beta-release-zemismart-m1-matter-bridge-for-tuya-zigbee-devices-matter/127009"
@@ -147,7 +148,7 @@ metadata {
             'ready'
         ]
 
-        command '_DiscoverAll',  [[name:'Discover All', type: 'ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']]]
+        command '_DiscoverAll',  [[name:'Discover all bridged devices!' /*', type:ENUM', description: 'Type', constraints: ['All', 'BasicInfo', 'PartsList', 'ChildDevices', 'Subscribe']*/]]
         //command 'initialize', [[name: 'Invoked automatically during the hub reboot, do not click!']]
         command 'reSubscribe', [[name: 're-subscribe to the Matter controller events']]
         command 'loadAllDefaults', [[name: 'panic button: Clear all States and scheduled jobs']]
@@ -159,7 +160,7 @@ metadata {
             command 'identify'      // can't make it work ... :(
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
         }
-        // do not expose the fingerprints for now ... Let the stock driver be assigned automatically.
+        // do not expose the known Matter Bridges fingerprints for now ... Let the stock driver be assigned automatically.
         // fingerprint endpointId:"01", inClusters:"0003,001D", outClusters:"001E", model:"Aqara Hub E1", manufacturer:"Aqara", controllerType:"MAT"
     }
     preferences {
@@ -581,22 +582,34 @@ void parsePowerSource(final Map descMap) {
     Map eventMap = [:]
     String eventName = attrName[0].toLowerCase() + attrName[1..-1]  // change the attribute name first letter to lower case
     switch (attrName) {
-        case ['Status', 'Order', 'Description', 'BatTimeRemaining', 'BatChargeLevel', 'BatReplacementNeeded', 'BatReplaceability', 'BatReplacementDescription', 'BatQuantity'] :
-            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source ${attrName} is: ${descMap.value}"
+        case ['BatTimeRemaining', 'BatChargeLevel', 'BatReplacementNeeded', 'BatReplaceability', 'BatReplacementDescription', 'BatQuantity'] :
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source ${attrName} is ${descMap.value}"
             eventMap = [name: eventName, value: descMap.value, descriptionText: descriptionText]
             break
         case 'BatPercentRemaining' :   // BatteryPercentageRemaining 0x000C
             value = HexUtils.hexStringToInt(descMap.value)
-            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery percentage remaining is: ${value / 2}% (raw:${descMap.value})"
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery percentage remaining is ${value / 2}% (raw:${descMap.value})"
             eventMap = [name: 'battery', value: value / 2, descriptionText: descriptionText]
             break
         case 'BatVoltage' :   // BatteryVoltage 0x000B
             value = HexUtils.hexStringToInt(descMap.value)
-            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery voltage is: ${value / 1000}V (raw:${descMap.value})"
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Battery voltage is ${value / 1000}V (raw:${descMap.value})"
             eventMap = [name: 'batteryVoltage', value: value / 1000, descriptionText: descriptionText]
             break
+        case 'Status' :  // PowerSourceStatus 0x0000
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source status is ${descMap.value}"
+            eventMap = [name: 'powerSourceStatus', value: descMap.value, descriptionText: descriptionText]
+            break
+        case 'Order' :   // PowerSourceOrder 0x0001
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source order is ${descMap.value}"
+            eventMap = [name: 'powerSourceOrder', value: descMap.value, descriptionText: descriptionText]
+            break
+        case 'Description' :   // PowerSourceDescription 0x0002
+            descriptionText = "${getDeviceDisplayName(descMap?.endpoint)} Power source description is ${descMap.value}"
+            eventMap = [name: 'powerSourceDescription', value: descMap.value, descriptionText: descriptionText]
+            break
         default :
-            logInfo "Power source ${attrName} is: ${descMap.value} (unprocessed)"
+            logInfo "Power source ${attrName} is ${descMap.value} (unprocessed)"
             break
     }
     if (eventMap != [:]) {
@@ -1296,7 +1309,7 @@ void _DiscoverAll(statePar = null) {
     Integer stateSt = DISCOVER_ALL_STATE_INIT
     state.stateMachines = [:]
     // ['All', 'BasicInfo', 'PartsList']]
-    if (statePar == 'All') { stateSt = DISCOVER_ALL_STATE_INIT }
+    if (statePar == null || statePar == 'All') { stateSt = DISCOVER_ALL_STATE_INIT }
     else if (statePar == 'BasicInfo') { stateSt = DISCOVER_ALL_STATE_BRIDGE_BASIC_INFO_ATTR_LIST }
     else if (statePar == 'PartsList') { stateSt = DISCOVER_ALL_STATE_GET_PARTS_LIST_START }
     else if (statePar == 'ChildDevices') { stateSt = DISCOVER_ALL_STATE_SUPPORTED_CLUSTERS_START }
@@ -1326,7 +1339,7 @@ void updated() {
     checkDriverVersion()
     logInfo "debug logging is: ${logEnable == true} description logging is: ${txtEnable == true}"
     if (settings.logEnable)   { runIn(86400, logsOff) }   // 24 hours
-    if (settings.traceEnable) { logTrace settings; runIn(20000, traceOff) }   // 1800 = 30 minutes
+    if (settings.traceEnable) { logTrace settings; runIn(1800, traceOff) }   // 1800 = 30 minutes
 
     final int healthMethod = (settings.healthCheckMethod as Integer) ?: 0
     if (healthMethod == 1 || healthMethod == 2) {                            //    [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
@@ -1392,7 +1405,7 @@ void loadAllDefaults() {
     deleteAllCurrentStates()
     deleteAllScheduledJobs()
     deleteAllStates()
-    deleteAllChildDevices()
+    //deleteAllChildDevices()
     initializeVars(fullInit = true)
     //initialize()
     //configure()
@@ -1726,15 +1739,6 @@ void refresh() {
     logInfo'refresh() ...'
     checkDriverVersion()
     setRefreshRequest()    // 6 seconds
-    /*
-    String cmd = refreshCmd()
-    if (cmd != null && cmd != '') {
-        sendToDevice(cmd)
-    }
-    else {
-        logWarn 'refresh(): cmd is null!'
-    }
-    */
     List<String> cmdsList = getSubscribeOrRefreshCmdList('REFRESH_ALL')
     if (cmdsList != null && cmdsList != []) {
         logDebug "refresh(): cmdsList = ${cmdsList}"
@@ -2170,7 +2174,7 @@ void componentSetCoolingSetpoint(DeviceWrapper dw, BigDecimal temperature) {
 void componentLock(DeviceWrapper dw) {
     String id = dw.getDataValue('id')
     logWarn "componentLock(${dw}) id=${id} TODO: not implemented!<br>Use virtual switch to control the lock via Apple Home..."
-    return
+    //return
 
     if (!dw.hasCommand('lock')) { logError "componentLock(${dw}) driver '${dw.typeName}' does not have command 'lock' in ${dw.supportedCommands}"; return }
     Integer deviceNumber = HexUtils.hexStringToInt(dw.getDataValue('id'))
@@ -2178,7 +2182,8 @@ void componentLock(DeviceWrapper dw) {
     if (deviceNumber == null || deviceNumber <= 0 || deviceNumber > 255) { logWarn "componentLock(): deviceNumber ${deviceNumberPar} is not valid!"; return }
 
     List<Map<String, String>> cmdFields = []
-    cmdFields.add(matter.cmdField(DataType.STRING_OCTET8, 0x00, ""))
+    //cmdFields.add(matter.cmdField(DataType.STRING_OCTET8, 0x00, ""))
+    cmdFields.add(matter.cmdField(DataType.STRING_OCTET8, 0x00))
     //String cmd = matter.invoke(deviceNumber, 0x0101, 0x00, cmdFields) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
     String cmd = matter.invoke(deviceNumber, 0x0101, 0x00) // 0x0101 = DoorLock Cluster, 0x00 = LockDoor
 
@@ -2739,7 +2744,7 @@ void logWarn(msg)  { if (settings.logEnable)   { log.warn  "${device.displayName
 void logTrace(msg) { if (settings.traceEnable) { log.trace "${device.displayName} " + msg } }
 
 @Field static final String DRIVER = 'Matter Advanced Bridge'
-@Field static final String WIKI   = 'Get help on GitHub Wiki page:'
+@Field static final String WIKI   = 'Wiki page:'
 
 // credits @jtp10181
 String fmtHelpInfo(String str) {
