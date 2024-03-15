@@ -233,7 +233,7 @@
       "location": "https://raw.githubusercontent.com/kkossev/Hubitat---Matter-Advanced-Bridge/main/packageManifest.json",
       "description": "Matter Advanced Bridge (RELEASE candidate)",
       "tags":[
-        "Tools & Utilities"
+        "Tools & Utilities", "Matter"
        ]
     }
   ]
