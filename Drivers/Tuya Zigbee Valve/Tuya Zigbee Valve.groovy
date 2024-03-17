@@ -1,4 +1,4 @@
-/* groovylint-disable IfStatementBraces, NoDouble */
+/* groovylint-disable NoDouble, ParameterName, StaticMethodsBeforeInstanceMethods */
 /**
  *  Tuya Zigbee Valve driver for Hubitat Elevation
  *
@@ -33,7 +33,9 @@
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - (dev.brahnch) code linting
+ *  ver. 1.3.0 2024-03-17 kkossev - (dev.brahnch) more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
  *
+ *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
  *                                  TODO: clear the old states on update; add rejoinCtr;
  */
@@ -41,8 +43,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.2.6' }
-String timeStamp() { '2023/07/28 7:28 AM' }
+String version() { '1.3.0' }
+String timeStamp() { '2024/03/17 10:43 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -69,7 +71,7 @@ metadata {
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
 
-        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX)', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX and TS0049)', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
 
@@ -105,9 +107,86 @@ metadata {
         if (advancedOptions == true) {
             input(name: 'forcedProfile', type: 'enum', title: '<b>Device Profile</b>', description: '<i>Forcely change the Device Profile, if the valve model/manufacturer was not recognized automatically.<br>Warning! Manually setting a device profile may not always work!</i>',  options: getDeviceProfiles())
             input(name: 'autoSendTimer', type: 'bool', title: '<b>Send the timeout timer automatically</b>', description: '<i>Send the configured timeout value on every open and close command <b>(GiEX)</b></i>', defaultValue: true)
+            input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
         }
     }
 }
+
+
+String getModelGroup()          { return state.deviceProfile ?: 'UNKNOWN' }
+Set<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
+boolean isConfigurable(String model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
+String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: modelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
+boolean isConfigurable()         { return isConfigurable(getModelGroup()) }
+boolean isGIEX()                 { return getModelGroup().contains('GIEX') }    // GiEX valve device
+boolean isSASWELL()              { return getModelGroup().contains('SASWELL') }
+boolean isLIDL()                 { return getModelGroup().contains('LIDL') }
+boolean isTS0001()               { return getModelGroup().contains('TS0001') }
+boolean isTS0011()               { return getModelGroup().contains('TS0011') }
+boolean isTS0049()               { return getModelGroup().contains('TS0049') }
+boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() }
+
+// Constants
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
+@Field static final Integer DEFAULT_POLLING_INTERVAL = 15
+@Field static final Integer DEFAULT_AUTOOFF_TIMER = 60
+@Field static final Integer MAX_AUTOOFF_TIMER = 86400
+@Field static final Integer DEFAULT_CAPACITY = 99
+@Field static final Integer MAX_CAPACITY = 999
+@Field static final Integer DEBOUNCING_TIMER = 300
+@Field static final Integer DIGITAL_TIMER = 3000
+@Field static final Integer REFRESH_TIMER = 3000
+@Field static final Integer COMMAND_TIMEOUT = 10
+@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
+@Field static String UNKNOWN = 'UNKNOWN'
+
+// WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
+
+@Field static final Map waterModeOptions = [
+    '0': 'duration',
+    '1': 'capacity'
+]
+
+@Field static final Map powerOnBehaviourOptions = [
+    '0': 'closed',
+    '1': 'open',
+    '2': 'last state'
+]
+
+@Field static final Map switchTypeOptions = [
+    '0': 'toggle',
+    '1': 'state',
+    '2': 'momentary'
+]
+
+@Field static final Map timerStateOptions = [
+    '0': 'disabled',
+    '1': 'active (on)',
+    '2': 'enabled (off)'
+]
+
+@Field static final Map weatherDelayOptions = [
+    '0': 'disabled',
+    '1': '24h',
+    '2': '48h',
+    '3': '72h'
+]
+
+@Field static final Map batteryStateOptions = [
+    '0': 'low',
+    '1': 'middle',
+    '2': 'high'
+]
+
+@Field static final Map smartWeatherOptions = [
+    '0': 'sunny',
+    '1': 'clear',
+    '2': 'cloud',
+    '3': 'cloudy',
+    '4': 'rainy',
+    '5': 'snow',
+    '6': 'fog'
+]
 
 // TODO : change 'model' to 'models' list; combine TS0001_VALVE_ONOFF TS0011_VALVE_ONOFF TS011F_VALVE_ONOFF in one profile;
 @Field static final Map deviceProfilesV2 = [
@@ -230,6 +309,24 @@ metadata {
             ]
     ],
 
+    'TS0049_IRRIGATION_VALVE'    : [
+            model         : 'TS0049',     // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1435490104
+            manufacturers : ['_TZ3210_0jxeoadc', '_TZ3000_hwnphliv'],   // https://github.com/Koenkk/zigbee2mqtt/issues/15124
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3210_0jxeoadc'],     // https://www.amazon.com.au/dp/B0BX47V4YB
+                [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_hwnphliv'],     // not tested // (FrankEver model FK-WT03W)
+                [profileId:'0104', endpointId:'01', inClusters:'EF00,0000', outClusters:'0019,000A', model:'TS0049', manufacturer:'_TZ3000_srldgdxz']      // 
+            ],
+            deviceJoinName: 'SasweTS0049ll Zigbee Irrigation Valve',
+            capabilities  : ['valve': true, 'battery': true],
+            configuration : ['battery': false],
+            attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
+            tuyaCommands  : ['switch': '0x65'],
+            preferences   : [
+                'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
+            ]
+    ],
+
     'UNKNOWN'      : [                // TODO: _TZE200_5uodvhgc https://github.com/sprut/Hub/issues/1316 https://www.youtube.com/watch?v=lpL6xAYuBHk
         model         : 'UNKNOWN',
         manufacturers : [],
@@ -241,95 +338,8 @@ metadata {
     ]
 ]
 
-def getModelGroup()          { return state.deviceProfile ?: 'UNKNOWN' }
-def getDeviceProfiles()      { deviceProfilesV2.keySet() }
-def isConfigurable(model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
-String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: modelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
-def isConfigurable()         { def model = getModelGroup(); return isConfigurable(model) }
-def isGIEX()                 { return getModelGroup().contains('GIEX') }    // GiEX valve device
-def isSASWELL()              { return getModelGroup().contains('SASWELL') }
-def isLIDL()                 { return getModelGroup().contains('LIDL') }
-def isTS0001()                { return getModelGroup().contains('TS0001') }
-def isTS0011()                { return getModelGroup().contains('TS0011') }
-def isBatteryPowered()       { return isGIEX() || isSASWELL() }
 
-// Constants
-@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3
-@Field static final Integer DEFAULT_POLLING_INTERVAL = 15
-@Field static final Integer DEFAULT_AUTOOFF_TIMER = 60
-@Field static final Integer MAX_AUTOOFF_TIMER = 86400
-@Field static final Integer DEFAULT_CAPACITY = 99
-@Field static final Integer MAX_CAPACITY = 999
-@Field static final Integer DEBOUNCING_TIMER = 300
-@Field static final Integer DIGITAL_TIMER = 3000
-@Field static final Integer REFRESH_TIMER = 3000
-@Field static final Integer COMMAND_TIMEOUT = 10
-@Field static final Integer MAX_PING_MILISECONDS = 10000    // rtt more than 10 seconds will be ignored
-@Field static String UNKNOWN = 'UNKNOWN'
-
-// WaterMode  for _TZE200_sh1btabb : duration=0 / capacity=1
-
-@Field static final Map waterModeOptions = [
-    '0': 'duration',
-    '1': 'capacity'
-]
-
-@Field static final Map powerOnBehaviourOptions = [
-    '0': 'closed',
-    '1': 'open',
-    '2': 'last state'
-]
-
-@Field static final Map switchTypeOptions = [
-    '0': 'toggle',
-    '1': 'state',
-    '2': 'momentary'
-]
-
-@Field static final Map timerStateOptions = [
-    '0': 'disabled',
-    '1': 'active (on)',
-    '2': 'enabled (off)'
-]
-
-@Field static final Map weatherDelayOptions = [
-    '0': 'disabled',
-    '1': '24h',
-    '2': '48h',
-    '3': '72h'
-]
-
-@Field static final Map batteryStateOptions = [
-    '0': 'low',
-    '1': 'middle',
-    '2': 'high'
-]
-
-@Field static final Map smartWeatherOptions = [
-    '0': 'sunny',
-    '1': 'clear',
-    '2': 'cloud',
-    '3': 'cloudy',
-    '4': 'rainy',
-    '5': 'snow',
-    '6': 'fog'
-]
-
-/*
-def getCLUSTER_TUYA()       { 0xEF00 }
-def getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
-def getSETDATA()            { 0x00 }
-def getSETTIME()            { 0x24 }
-
-// tuya DP type
-def getDP_TYPE_RAW()        { '01' }    // [ bytes ]
-def getDP_TYPE_BOOL()       { '01' }    // [ 0/1 ]
-def getDP_TYPE_VALUE()      { '02' }    // [ 4 byte value ]
-def getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
-def getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
-def getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
-*/
-def parse(String description) {
+void parse(String description) {
     checkDriverVersion()
     state.stats['RxCtr'] = (state.stats['RxCtr'] ?: 0) + 1
     state.lastRx['parseTime'] = new Date().getTime()
@@ -340,13 +350,13 @@ def parse(String description) {
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return null
     }
-    def event = [:]
+    Map event = [:]
     try {
         event = zigbee.getEvent(description)
     }
     catch (e) {
-        logDebug "exception caught while parsing description:  ${description}"
-    //return null
+        logDebug "exception ${e} caught while parsing event: ${description}"
+        return
     }
     if (event) {
         if (event.name ==  'switch') {
@@ -356,17 +366,15 @@ def parse(String description) {
         else {
             if (txtEnable) { log.warn "${device.displayName } received <b>unhandled event</b> ${event.name } = $event.value" }
         }
-    //return null //event
     }
     else {
-        //List result = []
-        def descMap = [:]
+        Map descMap = [:]
         try {
             descMap = zigbee.parseDescriptionAsMap(description)
         }
         catch (e) {
-            logDebug "exception caught while parsing descMap: ${descMap}"
-        //return null
+            logDebug "exception ${e} caught while parsing description: ${descMap}"
+            return
         }
         if (logEnable == true) { log.debug "${device.displayName } Desc Map: $descMap" }
         if (descMap.attrId != null) {
@@ -383,30 +391,30 @@ def parse(String description) {
                 }
                 else if (it.cluster == '0000' && it.attrId in ['0001', 'FFE0', 'FFE1', 'FFE2', 'FFE4', 'FFFE', 'FFDF']) {
                     if (it.attrId == '0001') {
-                        if (logEnable) log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})"
-                        def now = new Date().getTime()
+                        if (logEnable) { log.debug "${device.displayName} Tuya check-in message (attribute ${it.attrId} reported: ${it.value})" }
+                        Long now = new Date().getTime()
                         if (state.lastTx == null) { state.lastTx = [:] }
-                        def timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
+                        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
                         if (timeRunning < MAX_PING_MILISECONDS) {
                             sendRttEvent()
                         }
                     }
                     else {
-                        if (logEnable) log.debug "${device.displayName} Tuya specific attribute ${it.attrId} reported: ${it.value}"    // not tested
+                        if (logEnable) { log.debug "${device.displayName} Tuya specific attribute ${it.attrId} reported: ${it.value}" }    // not tested
                     }
                 }
                 else if (it.cluster == '0000') {
                     if (it.attrId == '0000') {
-                        if (logEnable) log.debug "${device.displayName} zclVersion is :  ${it.value}"
+                        if (logEnable) { log.debug "${device.displayName} zclVersion is :  ${it.value}" }
                     }
                     else if (it.attrId == '0004') {
-                        if (logEnable) log.debug "${device.displayName} Manufacturer is :  ${it.value}"
+                        if (logEnable) { log.debug "${device.displayName} Manufacturer is :  ${it.value}" }
                     }
                     else if (it.attrId == '0005') {
-                        if (logEnable) log.debug "${device.displayName} Model is :  ${it.value}"
+                        if (logEnable) { log.debug "${device.displayName} Model is :  ${it.value}" }
                     }
                     else {
-                        if (logEnable) log.debug "${device.displayName} Cluster 0000 attribute ${it.attrId} reported: ${it.value}"
+                        if (logEnable) { log.debug "${device.displayName} Cluster 0000 attribute ${it.attrId} reported: ${it.value}" }
                     }
                 }
                 else if (it.cluster == '0006') {
@@ -427,7 +435,7 @@ def parse(String description) {
                     }
                 }
                 else {
-                    if (logEnable == true) log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}"
+                    if (logEnable == true) { log.warn "${device.displayName} Unprocessed attribute report: cluster=${it.cluster} attrId=${it.attrId} value=${it.value} status=${it.status} data=${descMap.data}" }
                 }
             } // for each attribute
         } // if attribute report
@@ -438,29 +446,28 @@ def parse(String description) {
             parseZHAcommand(descMap)
         }
         else {
-            if (logEnable == true)  log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            if (logEnable == true)  { log.warn "${device.displayName} Unprocesed unknown command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
         }
-    //return null //result
     } // descMap
 }
 
-void sendSwitchEvent(switchValue) {
-    def value = (switchValue == null) ? 'unknown' : (switchValue == 'on') ? 'open' : (switchValue == 'off') ? 'closed' : 'unknown'
+void sendSwitchEvent(final String switchValue) {
+    Map map = [:]
+    String value = (switchValue == null) ? 'unknown' : (switchValue == 'on') ? 'open' : (switchValue == 'off') ? 'closed' : 'unknown'
     // Removed unused variable
     // def bWasChange = false
     //boolean bWasChange = false
     boolean debounce   = state.states['debounce'] ?: false
-    def lastSwitch = state.states['lastSwitch'] ?: 'unknown'
+    String lastSwitch = state.states['lastSwitch'] ?: 'unknown'
     if (debounce == true && value == lastSwitch) {    // some devices send only catchall events, some only readattr reports, but some will fire both...
         if (logEnable) { log.debug "${device.displayName } Ignored duplicated switch event for model ${getModelGroup() }" }
         runInMillis(DEBOUNCING_TIMER, switchDebouncingClear, [overwrite: true])
         return
     }
-    /* groovylint-disable-next-line EmptyElseBlock */
     else {
-    //log.trace "value=${value}  lastSwitch=${state.states['lastSwitch']}"
+        logDebug "sendSwitchEvent: value=${value}  lastSwitch=${state.states['lastSwitch']}"
     }
-    def isDigital = state.states['isDigital']
+    boolean isDigital = state.states['isDigital'] ?: true
     map.type = isDigital == true ? 'digital' : 'physical'
     if (lastSwitch != value) {
         //bWasChange = true
@@ -494,64 +501,64 @@ void sendSwitchEvent(switchValue) {
 void parseZDOcommand(Map descMap) {
     switch (descMap.clusterId) {
         case '0006' :
-            if (logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})"
+            if (logEnable) { log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
             break
         case '0013' : // device announcement
             logInfo "Received device announcement, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2] + descMap.data[1]}, Capability Information: ${descMap.data[11]})"
             state.stats['rejoinCtr'] = (state.stats['rejoinCtr'] ?: 0) + 1
             break
         case '8001' :  // Device and Service Discovery - IEEE_addr_rsp
-            if (logEnable) log.info "${device.displayName} Received Device and Service Discovery - IEEE_addr_rsp, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2] + descMap.data[1]}, Capability Information: ${descMap.data[11]})"
+            if (logEnable) { log.info "${device.displayName} Received Device and Service Discovery - IEEE_addr_rsp, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2] + descMap.data[1]}, Capability Information: ${descMap.data[11]})" }
             break
             break
         case '8004' : // simple descriptor response
-            if (logEnable) log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+            if (logEnable) { log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}" }
             parseSimpleDescriptorResponse(descMap)
             break
         case '8005' : // endpoint response
-            if (logEnable) log.info "${device.displayName} Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}"
+            if (logEnable) { log.info "${device.displayName} Received endpoint response: cluster: ${descMap.clusterId} (endpoint response) endpointCount = ${ descMap.data[4]}  endpointList = ${descMap.data[5]}" }
             break
         case '8021' : // bind response
-            if (logEnable) log.info "${device.displayName} Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})"
+            if (logEnable) { log.info "${device.displayName} Received bind response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})" }
             break
         case '8038' : // Management Network Update Notify
-            if (logEnable) log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}"
+            if (logEnable) { log.info "${device.displayName} Received Management Network Update Notify, data=${descMap.data}" }
             break
         default :
-            if (logEnable) log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            if (logEnable) { log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
     }
 }
 
 void parseSimpleDescriptorResponse(Map descMap) {
-    //log.info "${device.displayName} Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
-    if (logEnable == true) log.info "${device.displayName} Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}"
-    def inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
-    def inputClusterList = ''
+    logDebug "Received simple descriptor response, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}"
+    if (logEnable == true) { log.info "${device.displayName} Endpoint: ${descMap.data[5]} Application Device:${descMap.data[9]}${descMap.data[8]}, Application Version:${descMap.data[10]}" }
+    int inputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[11])
+    String inputClusterList = ''
     if (inputClusterCount != 0) {
         for (int i in 1..inputClusterCount) {
             inputClusterList += descMap.data[13 + (i - 1) * 2] + descMap.data[12 + (i - 1) * 2] + ','
         }
         inputClusterList = inputClusterList.substring(0, inputClusterList.length() - 1)
-        if (logEnable == true) log.info "${device.displayName} endpoint ${descMap.data[5]} Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}"
+        if (logEnable == true) { log.info "${device.displayName} endpoint ${descMap.data[5]} Input Cluster Count: ${inputClusterCount} Input Cluster List : ${inputClusterList}" }
         if (descMap.data[5] == device.endpointId) {
             if (getDataValue('inClusters') != inputClusterList)  {
-                if (logEnable == true) log.warn "${device.displayName} inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!"
+                if (logEnable == true) { log.warn "${device.displayName} inClusters=${getDataValue('inClusters')} differs from inputClusterList:${inputClusterList} - will be updated!" }
                 updateDataValue('inClusters', inputClusterList)
             }
         }
     }
 
-    def outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12 + inputClusterCount * 2])
+    int outputClusterCount = hubitat.helper.HexUtils.hexStringToInt(descMap.data[12 + inputClusterCount * 2])
     String outputClusterList = ''
     if (outputClusterCount != 0) {
         for (int i in 1..outputClusterCount) {
             outputClusterList += descMap.data[14 + inputClusterCount * 2 + (i - 1) * 2] + descMap.data[13 + inputClusterCount * 2 + (i - 1) * 2] + ','
         }
         outputClusterList = outputClusterList.substring(0, outputClusterList.length() - 1)
-        if (logEnable == true) log.info "${device.displayName} endpoint ${descMap.data[5]} Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}"
+        if (logEnable == true) { log.info "${device.displayName} endpoint ${descMap.data[5]} Output Cluster Count: ${outputClusterCount} Output Cluster List : ${outputClusterList}" }
         if (descMap.data[5] == device.endpointId) {
             if (getDataValue('outClusters') != outputClusterList)  {
-                if (logEnable == true) log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!"
+                if (logEnable == true) { log.warn "${device.displayName} outClusters=${getDataValue('outClusters')} differs from outputClusterList:${outputClusterList} -  will be updated!" }
                 updateDataValue('outClusters', outputClusterList)
             }
             else { log.warn "device.outClusters = ${device.outClusters } outputClusterList = ${outputClusterList }" }
@@ -563,23 +570,22 @@ void parseZHAcommand(Map descMap) {
     switch (descMap.command) {
         case '01' : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
         case '02' : // version 1.0.2
-            def status = descMap.data[2]
-            def attrId = descMap.data[1] + descMap.data[0]
+            String status = descMap.data[2]
+            String attrId = descMap.data[1] + descMap.data[0]
             if (status == '86') {
-                if (logEnable == true) log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}  descMap = ${descMap}"
+                if (logEnable == true) { log.warn "${device.displayName} Read attribute response: unsupported Attributte ${attrId} cluster ${descMap.clusterId}  descMap = ${descMap}" }
             }
             else {
                 switch (descMap.clusterId) {
                     case 'EF00' :
                         //if (logEnable==true) log.debug "${device.displayName} Tuya cluster read attribute response: code ${status} Attributte ${attrId} cluster ${descMap.clusterId} data ${descMap.data}"
-                        def cmd = descMap.data[2]
-                        def value = getAttributeValue(descMap.data)
-                        if (logEnable == true) log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()"
-                        //def map = [:]
+                        String cmd = descMap.data[2]
+                        int value = getAttributeValue(descMap.data)
+                        if (logEnable == true) { log.trace "${device.displayName} Tuya cluster cmd=${cmd} value=${value} ()" }
                         switch (cmd) {
                             case '01' :   // WaterMode  for GiEX : duration=0 / capacity=1
                                 if (isGIEX()) {
-                                    def str = waterModeOptions[safeToInt(value).toString()]
+                                    String str = waterModeOptions[safeToInt(value).toString()]
                                     logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'     // TODO - Send to device ?
                                     sendEvent(name: 'waterMode', value: str, type: 'physical')
                                 }
@@ -597,7 +603,7 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '02' : // isGIEX() - WaterValveState   1=on 0 = 0ff        // _TZE200_sh1btabb WaterState # off=0 / on=1
-                                def timerState = timerStateOptions[value.toString()]
+                                String timerState = timerStateOptions[value.toString()]
                                 logInfo "Water Valve State (dp=${cmd}) is ${timerState} (${value})"
                                 sendSwitchEvent(value == 0 ? 'off' : 'on')
                                 sendEvent(name: 'timerState', value: timerState, type: 'physical')
@@ -637,14 +643,14 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '08' : // battery_state batteryStateOptions
-                                def valueString = batteryStateOptions[safeToInt(value).toString()]
+                                String valueString = batteryStateOptions[safeToInt(value).toString()]
                                 logInfo "battery_state (${cmd}) is: ${valueString} (${value})"
                                 break
                             case '09' : // accumulated_usage_time (0..2592000, seconds)
                                 logInfo "accumulated_usage_time (${cmd}) is: ${value} seconds"
                                 break
                             case '0A' : // (10) weather_delay //   0 -> disabled; 1 -> "24h"; 2 -> "48h";  3 -> "72h"
-                                def valueString = weatherDelayOptions[safeToInt(value).toString()]
+                                String valueString = weatherDelayOptions[safeToInt(value).toString()]
                                 logInfo "weatherDelay (${cmd}) is: ${valueString} (${value})"
                                 sendEvent(name: 'weatherDelay', value: valueString, type: 'physical')
                                 break
@@ -659,13 +665,13 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '0C' : // (12) SASWELL ("work_state") state 0-disabled 1-active on (open) 2-enabled off (closed) ? or auto/manual/idle ?
-                                def valueString = timerStateOptions[safeToInt(value).toString()]
+                                String valueString = timerStateOptions[safeToInt(value).toString()]
                                 logInfo "timer_state (work state) (${cmd}) is: ${valueString} (${value})"
                                 sendEvent(name: 'timerState', value: valueString, type: 'physical')
                                 break
                             case '0D' : // (13) "smart_weather" for SASWELL or relay status for others?
                                 if (isSASWELL()) {
-                                    def valueString = smartWeatherOptions[safeToInt(value).toString()]
+                                    String valueString = smartWeatherOptions[safeToInt(value).toString()]
                                     logInfo "smart_weather (${cmd}) is: ${valueString} (${value})"
                                 }
                                 else {
@@ -690,59 +696,102 @@ void parseZHAcommand(Map descMap) {
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
                             case '65' : // (101) WaterValveIrrigationStartTime for GiEX and LIDL?   // IrrigationStartTime       # (string) ex: "08:12:26"
-                                def str = getAttributeString(descMap.data)
-                                logInfo "IrrigationStartTime (${cmd}) is: ${str}"
-                                sendEvent(name: 'irrigationStartTime', value: str, type: 'physical')
+                                if (isTS0049()) {   // TS0049 valve on/off
+                                    String switchValue = value == 0 ? 'off' : 'on'
+                                    logInfo "TS0049 Valve (dp=${cmd}) switch is ${switchValue} ${value})"
+                                    sendSwitchEvent(switchValue)                                }
+                                else {
+                                    String str = getAttributeString(descMap.data)
+                                    logInfo "IrrigationStartTime (${cmd}) is: ${str}"
+                                    sendEvent(name: 'irrigationStartTime', value: str, type: 'physical')
+                                }
                                 break
                             case '66' : // (102) WaterValveIrrigationEndTime  for GiEX    // IrrigationStopTime        # (string) ex: "08:13:36"
-                                def str = getAttributeString(descMap.data)
-                                logInfo "IrrigationEndTime (${cmd}) is: ${str}"
-                                sendEvent(name: 'irrigationEndTime', value: str, type: 'physical')
+                                if (isTS0049()) {
+                                    String switchValue = value == 0 ? 'off' : 'on'
+                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${switchValue} ${value})"
+                                }
+                                else {
+                                    String str = getAttributeString(descMap.data)
+                                    logInfo "IrrigationEndTime (${cmd}) is: ${str}"
+                                    sendEvent(name: 'irrigationEndTime', value: str, type: 'physical')
+                                }
                                 break
                             case '67' : // (103) WaterValveCycleIrrigationNumTimes  for GiEX        // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
-                                logInfo "CycleIrrigationNumTimes (${cmd}) is: ${value}"
+                                if (isTS0049()) {
+                                    String switchValue = value == 0 ? 'off' : 'on'
+                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${switchValue} ${value})"
+                                }
+                                else {
+                                    if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationNumTimes (${cmd}) is: ${value}" }
+                                }
                                 break
                             case '68' : // (104) WaterValveIrrigationTarget for GiEX        // IrrigationTarget   for _TZE200_sh1btabb       # duration in minutes or capacity in Liters (depending on mode)
                                 logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
                                 break
                             case '69' : // (105) WaterValveCycleIrrigationInterval for GiEX      // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
-                                if (txtEnable == true) log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}"
+                                if (isTS0049()) {
+                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                }
+                                else {
+                                    if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}" }
+                                }
                                 break
                             case '6A' : // (106) WaterValveCurrentTempurature            // CurrentTemperature        # (value ignored because isn't a valid tempurature reading.  Misdocumented and usage unclear)
-                                if (txtEnable == true) log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}"        // ignore!
+                                if (isTS0049()) {
+                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                }
+                                else {
+                                    if (txtEnable == true) { log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}" }       // ignore!
+                                }
                                 break
                             case '6B' : // (107) - LIDL time schedile                    // https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-868509538
                                 logInfo "Lidl  LIDL time schedile (${cmd}) is: ${value}"
                                 break
                             case '6C' : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (isGIEX()) {
-                                    logInfo "GiEX Battery (${cmd}) is: ${value}"
+                                    logInfo "GiEX Battery (${cmd}) is: ${value} %"
                                     sendBatteryEvent(value)
                                 } else {    // Lidl
                                     logInfo "LIDL frost state (${cmd}) is: ${value}"
                                 }
                                 break
-                            case '6D' : // LIDL frost reset
-                                logInfo "LIDL reset frost alarmcommand (${cmd}) is: ${value}"    // to be sent to the device! TODO: reset frost alarm : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084774734 - command 0x6D ?TYPE_ENUM value 01
+                            case '6D' : // (109) LIDL frost reset
+                                if (isTS0049()) {
+                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                }
+                                else {
+                                    logInfo "LIDL reset frost alarmcommand (${cmd}) is: ${value}"    // to be sent to the device! TODO: reset frost alarm : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084774734 - command 0x6D ?TYPE_ENUM value 01
+                                }
                                 break
                             case '6F' : // (111) WaterValveWaterConsumed for GiEX       // WaterConsumed             # water consumed (Litres)
-                                if (txtEnable == true) log.info "${device.displayName} WaterConsumed (${cmd}) is: ${value} (Litres)"
-                                sendEvent(name: 'waterConsumed', value: value, type: 'physical')
+                                if (isTS0049()) {   // TS0049 irrigation time
+                                    logInfo "TS0049 irrigation time (${cmd}) is: ${value} minutes"
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')
+                                }
+                                else {
+                                    logInfo "WaterConsumed (${cmd}) is: ${value} (Litres)"
+                                    sendEvent(name: 'waterConsumed', value: value, type: 'physical')
+                                }
                                 break
                             case '72' : // (114) WaterValveLastIrrigationDuration for GiEX   LastIrrigationDuration    # (string) Ex: "00:01:10,0"
-                                def str = getAttributeString(descMap.data)
-                                if (txtEnable == true) log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}"
+                                String str = getAttributeString(descMap.data)
+                                if (txtEnable == true) { log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}" }
                                 sendEvent(name: 'lastIrrigationDuration', value: str, type: 'physical')
                                 break
+                            case '73' : // (115) TS0049 battery
+                                logInfo "TS0049 battery (${cmd}) is: ${value} %"
+                                sendBatteryEvent(value)
+                                break
                             case 'D1' : // cycle timer
-                                if (txtEnable == true) log.info "${device.displayName} cycle timer (${cmd}) is: ${value}"
+                                if (txtEnable == true) { log.info "${device.displayName} cycle timer (${cmd}) is: ${value}" }
                                 break
                             case 'D2' : // random timer
-                                if (txtEnable == true) log.info "${device.displayName} cycle timer (${cmd}) is: ${value}"
+                                if (txtEnable == true) { log.info "${device.displayName} cycle timer (${cmd}) is: ${value}" }
                                 break
                             default :
-                                if (logEnable == true) log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}"
-                                if (logEnable == true) log.warn "map= ${descMap}"
+                                if (logEnable == true) { log.warn "Tuya unknown attribute: ${descMap.data[0]}${descMap.data[1]}=${descMap.data[2]}=${descMap.data[3]}${descMap.data[4]} data.size() = ${descMap.data.size()} value: ${value}}" }
+                                if (logEnable == true) { log.warn "map= ${descMap}" }
                                 break
                         } // EF00 command swotch
                         break
@@ -764,7 +813,7 @@ void parseZHAcommand(Map descMap) {
                         break
 
                     default :
-                        if (logEnable == true) log.warn "${device.displayName} Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}"
+                        if (logEnable == true) { log.warn "${device.displayName} Read attribute response: unknown status code ${status} Attributte ${attrId} cluster ${descMap.clusterId}" }
                         break
                 } // switch (descMap.clusterId)
             }  //command is read attribute response 01 or 02 (supported)
@@ -778,36 +827,36 @@ void parseZHAcommand(Map descMap) {
             // Status: Unreportable Attribute (0x8c)
             break
         case '0B' : // ZCL Default Response
-            def status = descMap.data[1]
+            String status = descMap.data[1]
             if (status != '00') {
                 switch (descMap.clusterId) {
                     case '0006' : // Switch state
-                        if (logEnable == true) log.warn "${device.displayName} standard ZCL Switch state is not supported."
+                        if (logEnable == true) { log.warn "${device.displayName} standard ZCL Switch state is not supported." }
                         break
                     default :
-                        if (logEnable == true) log.info "${device.displayName} Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})"
+                        if (logEnable == true) { log.info "${device.displayName} Received ZCL Default Response to Command ${descMap.data[0]} for cluster:${descMap.clusterId} , data=${descMap.data} (Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})" }
                         break
                 }
             }
             break
         case '11' :    // Tuya specific
-            if (logEnable == true) log.info "${device.displayName} Tuya specific command: cluster=${descMap.clusterId} command=${descMap.command} data=${descMap.data}"
+            if (logEnable == true) { log.info "${device.displayName} Tuya specific command: cluster=${descMap.clusterId} command=${descMap.command} data=${descMap.data}" }
             break
         case '24' :    // Tuya time sync
             //log.trace "Tuya time sync"
             if (descMap?.clusterInt == 0xEF00 && descMap?.command == '24') {        //getSETTIME
-                if (settings?.logEnable) log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}"
+                if (settings?.logEnable) { log.debug "${device.displayName} time synchronization request from device, descMap = ${descMap}" }
                 def offset = 0
                 try {
                     offset = location.getTimeZone().getOffset(new Date().getTime())
                 //if (settings?.logEnable) log.debug "${device.displayName} timezone offset of current location is ${offset}"
                 }
                 catch (e) {
-                    if (settings?.logEnable) log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+                    if (settings?.logEnable) { log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero" }
                 }
                 def cmds = zigbee.command(0xEF00, 0x24, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
-                if (settings?.logEnable) log.trace "${device.displayName} now is: ${now()}"  // KK TODO - convert to Date/Time string!
-                if (settings?.logEnable) log.debug "${device.displayName} sending time data : ${cmds}"
+                if (settings?.logEnable) { log.trace "${device.displayName} now is: ${now()}" } // KK TODO - convert to Date/Time string!
+                if (settings?.logEnable) { log.debug "${device.displayName} sending time data : ${cmds}" }
                 cmds.each {
                     sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
                 }
@@ -815,7 +864,7 @@ void parseZHAcommand(Map descMap) {
             }
             break
         default :
-            if (logEnable == true) log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}"
+            if (logEnable == true) { log.warn "${device.displayName} Unprocessed global command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
     }
 }
 
@@ -855,17 +904,23 @@ String getAttributeString(ArrayList _data) {
 void close() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
+    if (settings?.threeStateEnable == true) {
+        sendEvent(name: 'valve', value: 'closing', descriptionText: 'sent a command to close the valve', type: 'digital')
+        logInfo "closing ..."
+    }
     scheduleCommandTimeoutCheck()
-    //def cmds
-    ArrayList<String> cmds = []
+    List<String> cmds = []
     if (isGIEX()) {
         Short paramVal = 0
-        def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
+        String dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
-        if (logEnable) log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}"
+        if (logEnable) { log.debug "${device.displayName} closing WaterIrrigationValve cmds = ${cmds}" }
     }
     else if (getModelGroup().contains('TS0601')) {
         cmds = sendTuyaCommand('01', DP_TYPE_BOOL, '00')
+    }
+    else if (getModelGroup().contains('TS0049')) {
+        cmds = sendTuyaCommand('65', DP_TYPE_BOOL, '00')
     }
     else {
         cmds = zigbee.off()    // for all models that support the standard Zigbee OnOff cluster
@@ -878,16 +933,23 @@ void close() {
 void open() {
     if (state.states == null) { state.states = [:] }
     state.states['isDigital'] = true
+    if (settings?.threeStateEnable == true) {
+        sendEvent(name: 'valve', value: 'opening', descriptionText: 'sent a command to open the valve', type: 'digital')
+        logInfo "opening ..."
+    }
     scheduleCommandTimeoutCheck()
     ArrayList<String> cmds = []
     if (isGIEX()) {
         Short paramVal = 1
         def dpValHex = zigbee.convertToHexString(paramVal as int, 2)
         cmds = sendTuyaCommand('02', DP_TYPE_BOOL, dpValHex)
-        if (logEnable) log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}"
+        if (logEnable) { log.debug "${device.displayName} opening WaterIrrigationValve cmds = ${cmds}" }
     }
     else if (getModelGroup().contains('TS0601')) {
         cmds = sendTuyaCommand('01', DP_TYPE_BOOL, '01')
+    }
+    else if (getModelGroup().contains('TS0049')) {
+        cmds = sendTuyaCommand('65', DP_TYPE_BOOL, '01')
     }
     else {
         cmds =  zigbee.on()
@@ -901,7 +963,7 @@ void open() {
     sendZigbeeCommands(cmds)
 }
 
-void sendBatteryEvent(roundedPct, isDigital=false) {
+void sendBatteryEvent(int roundedPct, boolean isDigital=false) {
     sendEvent(name: 'battery', value: roundedPct, unit: '%', type:  isDigital == true ? 'digital' : 'physical', isStateChange: true)
     if (isDigital == false) {
         if (state.states == null) { state.states = [:] }
@@ -909,9 +971,9 @@ void sendBatteryEvent(roundedPct, isDigital=false) {
     }
 }
 
-void clearIsDigital()        { if (state.states == null) { state.states = [:] }; state.states['isDigital'] = false }
-void switchDebouncingClear() { if (state.states == null) { state.states = [:] }; state.states['debounce']  = false }
-void isRefreshRequestClear() { if (state.states == null) { state.states = [:] }; state.states['isRefresh'] = false }
+void clearIsDigital()        { if (state.states == null) { state.states = [:] } ; state.states['isDigital'] = false }
+void switchDebouncingClear() { if (state.states == null) { state.states = [:] } ; state.states['debounce']  = false }
+void isRefreshRequestClear() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 
 void ping() {
     logInfo 'ping...'
@@ -922,10 +984,10 @@ void ping() {
 }
 
 void sendRttEvent(String value=null) {
-    def now = new Date().getTime()
+    Long now = new Date().getTime()
     if (state.lastTx == null) { state.lastTx = [:] }
-    def timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
-    def descriptionText = "Round-trip time is ${timeRunning} ms"
+    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    String descriptionText = "Round-trip time is ${timeRunning} ms"
     if (value == null) {
         logInfo "${descriptionText}"
         sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
@@ -944,6 +1006,9 @@ void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 void deviceCommandTimeout() {
     logWarn 'no response received (sleepy device or offline?)'
     sendRttEvent('timeout')
+    if ((device.currentValue('valve') ?: 'unknown') in ['opening', 'closing']) {
+        sendEvent(name: 'valve', value: 'unknown', type: 'digital')
+    }
 }
 
 // refresh()
@@ -981,7 +1046,7 @@ void refresh() {
     }
 }
 
-def tuyaBlackMagic() {
+List<String> tuyaBlackMagic() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x0000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay = 150) // Cluster: Basic, attributes: Man.name, ZLC ver, App ver, Model Id, Power Source, attributeReportingStatus
     cmds += zigbee.writeAttribute(0x0000, 0xffde, 0x20, 0x0d, [:], delay = 50)
@@ -995,7 +1060,7 @@ def tuyaBlackMagic() {
        *  from updated() when preferencies are saved
 */
 void configure() {
-    if (txtEnable == true) log.info "${device.displayName} configure().."
+    if (txtEnable == true) { log.info "${device.displayName} configure().." }
     List<String> cmds = []
     cmds += tuyaBlackMagic()
     // changed in version 1.2.2 - refresh() is not called here! (executes instantly, returns null)
@@ -1010,12 +1075,14 @@ void configure() {
             logInfo 'press F5 to refresh the page'
         }
     }
+    /* Throws an exception !!
     if (getPowerSource() != (device.currentValue('powerSource') ?: 'unknown')) {
         sendEvent(name: 'powerSource', value: getPowerSource(), type: 'digital')
     }
+    */
 
     if (settings?.powerOnBehaviour != null) {
-        def modeName =  powerOnBehaviourOptions.find { it.key == settings?.powerOnBehaviour }
+        Map.Entry modeName =  powerOnBehaviourOptions.find { it.key == settings?.powerOnBehaviour }
         if (modeName != null) {
             // TODO - skip it for the battery powered irrigation timers? (Response cluster: E001 status:86)
             logDebug "setting powerOnBehaviour to ${modeName.value} (${settings?.powerOnBehaviour})"
@@ -1034,7 +1101,7 @@ void configure() {
 }
 
 // called from  initializeVars( fullInit = true)
-def setDeviceNameAndProfile(model=null, manufacturer=null) {
+def setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     String deviceName
     def currentModelMap = null
     def deviceModel        = model != null ? model : device.getDataValue('model')
@@ -1120,37 +1187,39 @@ void initializeVars(boolean fullInit = true) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
 
-    if (fullInit == true || state.states['lastSwitch'] == null) state.states['lastSwitch'] = 'unknown'
-    if (fullInit == true || state.states['notPresentCtr'] == null) state.states['notPresentCtr']  = 0
-    if (fullInit == true || settings?.logEnable == null) device.updateSetting('logEnable', true)
-    if (fullInit == true || settings?.txtEnable == null) device.updateSetting('txtEnable', true)
-    if (fullInit == true || settings?.powerOnBehaviour == null) device.updateSetting('powerOnBehaviour', [value:'2', type:'enum'])    // last state
-    if (fullInit == true || settings?.switchType == null) device.updateSetting('switchType', [value:'0', type:'enum'])                // toggle
-    if (fullInit == true || settings?.advancedOptions == null) device.updateSetting('advancedOptions', [value:false, type:'bool'])                // toggle
-    if (fullInit == true || settings?.autoOffTimer == null) device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number'])
-    if (fullInit == true || settings?.autoSendTimer == null) device.updateSetting('autoSendTimer', (isGIEX() ? true : false))
+    if (fullInit == true || state.states['lastSwitch'] == null) { state.states['lastSwitch'] = 'unknown' }
+    if (fullInit == true || state.states['notPresentCtr'] == null)  { state.states['notPresentCtr']  = 0 }
+    if (fullInit == true || settings?.logEnable == null)  { device.updateSetting('logEnable', true) }
+    if (fullInit == true || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
+    if (fullInit == true || settings?.powerOnBehaviour == null) { device.updateSetting('powerOnBehaviour', [value:'2', type:'enum']) }   // last state
+    if (fullInit == true || settings?.switchType == null) { device.updateSetting('switchType', [value:'0', type:'enum']) }               // toggle
+    if (fullInit == true || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }               // toggle
+    if (fullInit == true || settings?.autoOffTimer == null) { device.updateSetting('autoOffTimer', [value: DEFAULT_AUTOOFF_TIMER, type: 'number']) }
+    if (fullInit == true || settings?.autoSendTimer == null) { device.updateSetting('autoSendTimer', (isGIEX() ? true : false)) }
+    if (fullInit == true || settings?.threeStateEnable == null) { device.updateSetting('threeStateEnable', false) }
+    
 
     if (isBatteryPowered()) {
-        if (state.states['lastBattery'] == null) state.states['lastBattery'] = '100'
+        if (state.states['lastBattery'] == null) { state.states['lastBattery'] = '100' }
     }
-    if (device.currentValue('healthStatus') == null) sendHealthStatusEvent('unknown')
+    if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
 
     updateTuyaVersion()
 
-    def mm = device.getDataValue('model')
+    String mm = device.getDataValue('model')
     if (mm != null) {
-        if (logEnable == true) log.trace " model = ${mm}"
+        if (logEnable == true) { log.trace " model = ${mm}" }
     }
     else {
-        if (txtEnable == true) log.warn ' Model not found, please re-pair the device!'
+        if (txtEnable == true) { log.warn ' Model not found, please re-pair the device!' }
     }
-    def ep = device.getEndpointId()
+    String ep = device.getEndpointId()
     if (ep  != null) {
         //state.destinationEP = ep
-        if (logEnable == true) log.trace " destinationEP = ${ep}"
+        if (logEnable == true) { log.trace " destinationEP = ${ep}" }
     }
     else {
-        if (txtEnable == true) log.warn ' Destination End Point not found, please re-pair the device!'
+        if (txtEnable == true) { log.warn ' Destination End Point not found, please re-pair the device!' }
     //state.destinationEP = "01"    // fallback
     }
 }
@@ -1170,7 +1239,7 @@ void checkDriverVersion() {
 }
 
 void logInitializeRezults() {
-    if (logEnable == true) log.info "${device.displayName} Initialization finished"
+    if (logEnable == true) { log.info "${device.displayName} Initialization finished" }
 }
 
 // NOT called when the driver is initialized as a new device, because the Initialize capability is NOT declared!
@@ -1188,12 +1257,12 @@ void installed() {
     log.info "${device.displayName} installed() model ${device.getDataValue('model')} manufacturer ${device.getDataValue('manufacturer')} driver version ${driverVersionAndTimeStamp()}"
     initializeVars()
     runIn(5, initialize, [overwrite: true])
-    if (logEnable == true) log.debug 'calling initialize() after 5 seconds...'
+    if (logEnable == true) { log.debug 'calling initialize() after 5 seconds...' }
 // HE will autoomaticall call configure() method here
 }
 
 void uninstalled() {
-    if (logEnable == true) log.info "${device.displayName} Uninstalled()..."
+    if (logEnable == true) { log.info "${device.displayName} Uninstalled()..." }
     unschedule()     //Unschedule any existing schedules
 }
 
@@ -1217,7 +1286,7 @@ void setHealthStatusOnline() {
 
 void deviceHealthCheck() {
     if (state.states == null) { state.states = [:] }
-    def ctr = state.states['notPresentCtr'] ?: 0
+    int ctr = state.states['notPresentCtr'] ?: 0
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
         if ((device.currentValue('healthStatus', true) ?: 'unknown') != 'offline') {
             logWarn 'not present!'
@@ -1237,7 +1306,7 @@ void deviceHealthCheck() {
     state.states['notPresentCtr'] = ctr + 1
 }
 
-void sendHealthStatusEvent(value) {
+void sendHealthStatusEvent(String value) {
     sendEvent(name: 'healthStatus', value: value, descriptionText: "${device.displayName} healthStatus set to $value")
 }
 
@@ -1263,7 +1332,7 @@ boolean isTuyaE00xCluster( String description ) {
     }
     // try to parse ...
     //logDebug "Tuya cluster: E000 or E001 - try to parse it..."
-    def descMap = [:]
+    Map descMap = [:]
     try {
         descMap = zigbee.parseDescriptionAsMap(description)
         logDebug "TuyaE00xCluster Desc Map: ${descMap}"
@@ -1313,19 +1382,19 @@ Double safeToDouble(val, Double defaultVal=0.0) {
     return "${val}"?.isDouble() ? "${val}".toDouble() : defaultVal
 }
 
-def logDebug(msg) {
+void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
     }
 }
 
-def logInfo(msg) {
+void logInfo(final String msg) {
     if (settings?.txtEnable) {
         log.info "${device.displayName} " + msg
     }
 }
 
-def logWarn(msg) {
+void logWarn(final String msg) {
     if (settings?.logEnable) {
         log.warn "${device.displayName} " + msg
     }
@@ -1374,9 +1443,9 @@ https://github.com/simonbaudart/zha-device-handlers/blob/cae7400682fc2a1ffcb697e
 
 */
 
-void setIrrigationTimer( timer ) {
+void setIrrigationTimer(BigDecimal timer) {
     //ArrayList<String> cmds = []
-    def timerSec = safeToInt(timer, -1)
+    int timerSec = safeToInt(timer, -1)
     if (timerSec < 0 || timerSec > MAX_AUTOOFF_TIMER) {
         logWarn "timer must be withing 0 and ${MAX_AUTOOFF_TIMER} seconds"
         return
@@ -1388,25 +1457,27 @@ void setIrrigationTimer( timer ) {
 }
 
 void sendIrrigationDuration() {
-    ArrayList<String> cmds = []
-    def dpValHex = zigbee.convertToHexString((settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER) as Integer, 8)
+    List<String> cmds = []
+    String dpValHex = zigbee.convertToHexString((settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER) as Integer, 8)
     if (isSASWELL()) {
         String autoOffTime = '00010B020004' + dpValHex
         cmds = zigbee.command(0xEF00, 0x0, autoOffTime)
     } else if (isGIEX()) {
         cmds = sendTuyaCommand('68', DP_TYPE_VALUE, dpValHex)
     }
+    else if (isTS0049()) {
+        cmds = sendTuyaCommand('6F', DP_TYPE_VALUE, dpValHex)
+    }
     else {
-        logWarn 'sendIrrigationDuration is avaiable for GiEX or SASWELL valves only'
+        logWarn 'sendIrrigationDuration is not avaiable!'
         return
     }
     logDebug "sendIrrigationDuration = ${settings?.autoOffTimer ?: DEFAULT_AUTOOFF_TIMER} : ${cmds}"
     sendZigbeeCommands(cmds)
 }
 
-void setIrrigationCapacity( litres ) {
-    //ArrayList<String> cmds = []
-    def value = safeToInt(litres, -1)
+void setIrrigationCapacity(BigDecimal litres) {
+    int value = safeToInt(litres, -1)
     if (value < 0 || value > MAX_CAPACITY) {
         logWarn "irrigation capacity must be withing 0 and ${MAX_CAPACITY} litres"
         return
@@ -1418,9 +1489,9 @@ void setIrrigationCapacity( litres ) {
 }
 
 void sendIrrigationCapacity() {
-    ArrayList<String> cmds = []
+    List<String> cmds = []
     if (isGIEX()) {
-        def dpValHex = zigbee.convertToHexString(settings?.irrigationCapacity as int, 8)
+        String dpValHex = zigbee.convertToHexString(settings?.irrigationCapacity as int, 8)
         cmds = sendTuyaCommand('68', DP_TYPE_VALUE, dpValHex)
         logDebug "sendIrrigationCapacity= ${settings?.irrigationCapacity} : ${cmds}"
         sendZigbeeCommands( cmds )
@@ -1429,9 +1500,9 @@ void sendIrrigationCapacity() {
     }
 }
 
-void setIrrigationMode( mode ) {
-    ArrayList<String> cmds = []
-    def dpValHex
+void setIrrigationMode(String mode) {
+    List<String> cmds = []
+    String dpValHex
     switch (mode)  {
         case 'duration':
             dpValHex = '00'
@@ -1448,10 +1519,10 @@ void setIrrigationMode( mode ) {
     sendZigbeeCommands( cmds )
 }
 
-def testTuyaCmd( dpCommand, dpValue, dpTypeString ) {
+void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
     //ArrayList<String> cmds = []
-    def dpType   = dpTypeString == 'DP_TYPE_VALUE' ? DP_TYPE_VALUE : dpTypeString == 'DP_TYPE_BOOL' ? DP_TYPE_BOOL : dpTypeString == 'DP_TYPE_ENUM' ? DP_TYPE_ENUM : null
-    def dpValHex = dpTypeString == 'DP_TYPE_VALUE' ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
+    String dpType   = dpTypeString == 'DP_TYPE_VALUE' ? DP_TYPE_VALUE : dpTypeString == 'DP_TYPE_BOOL' ? DP_TYPE_BOOL : dpTypeString == 'DP_TYPE_ENUM' ? DP_TYPE_ENUM : null
+    String dpValHex = dpTypeString == 'DP_TYPE_VALUE' ? zigbee.convertToHexString(dpValue as int, 8) : dpValue
     log.warn " sending TEST command=${dpCommand} value=${dpValue} ($dpValHex) type=${dpType}"
     sendZigbeeCommands( sendTuyaCommand(dpCommand, dpType, dpValHex) )
 }
@@ -1498,28 +1569,28 @@ void testX() {
 
 // private methods
 
-private getCLUSTER_TUYA()       { 0xEF00 }
-private getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
-private getSETDATA()            { 0x00 }
-private getSETTIME()            { 0x24 }
+static int getCLUSTER_TUYA()       { 0xEF00 }
+static int getTUYA_ELECTRICIAN_PRIVATE_CLUSTER() { 0xE001 }
+static int getSETDATA()            { 0x00 }
+static int getSETTIME()            { 0x24 }
 
 // tuya DP type
-private getDP_TYPE_RAW()        { '01' }    // [ bytes ]
-private getDP_TYPE_BOOL()       { '01' }    // [ 0/1 ]
-private getDP_TYPE_VALUE()      { '02' }    // [ 4 byte value ]
-private getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
-private getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
-private getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
+static String getDP_TYPE_RAW()        { '01' }    // [ bytes ]
+static String getDP_TYPE_BOOL()       { '01' }    // [ 0/1 ]
+static String getDP_TYPE_VALUE()      { '02' }    // [ 4 byte value ]
+static String getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
+static String getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
+static String getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
 
-private getPACKET_ID() {
+String getPACKET_ID() {
     return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
-private sendTuyaCommand(dp, dp_type, fncmd) {
-    ArrayList<String> cmds = []
+List<String> sendTuyaCommand(String dp, String dp_type, fncmd) {
+    List<String> cmds = []
     //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
-    if (settings?.logEnable) log.trace "${device.displayName} sendTuyaCommand = ${cmds}"
+    if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
     if (state.stats == null) { state.stats = [:] }
     state.stats['TxCtr'] = state.stats['TxCtr'] != null ? state.stats['TxCtr'] + 1 : 1
     return cmds

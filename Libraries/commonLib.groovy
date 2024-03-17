@@ -32,7 +32,7 @@ library(
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
-  * ver. 3.0.3  2024-03-04 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type;
+  * ver. 3.0.3  2024-03-17 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -2516,7 +2516,7 @@ void loadAllDefaults() {
     deleteAllChildDevices()
     initialize()
     configure()     // calls  also   configureDevice()
-    updated() 
+    updated()
     sendInfoEvent('All Defaults Loaded! F5 to refresh')
 }
 
@@ -2714,6 +2714,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
+    if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
+    
     if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
         if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
