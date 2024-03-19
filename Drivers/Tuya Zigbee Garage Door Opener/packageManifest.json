@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Garage Door Opener",
   "author": "Krassimir Kossev",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2022-07-06",
-  "releaseNotes": "1.0.4 2022-07-06 - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;\n1.0.3 2022-06-26 - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default\n1.0.2 2022-06-20 - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.\n1.0.0 2022-06-18 - first release version\n",
+  "dateReleased": "2023-10-09",
+  "releaseNotes": "1.0.5 2023-10-09 - added _TZE204_nklqjk62 fingerprint\n1.0.4 2022-07-06 - on() command opens the door if it was closed, off() command closes the door if it was open; 'contact is open/closed' info and warning logs are shown only on contact state change;\n1.0.3 2022-06-26 - fixed new device exceptions bug; warnings in Debug logs only; Debug logs are off by default\n1.0.2 2022-06-20 - ignore Open command if the sensor is open; ignore Close command if the sensor is closed.\n1.0.0 2022-06-18 - first release version\n",
   "documentationLink": "https://community.hubitat.com/t/tuya-zigbee-garage-door-opener/95579/26?u=kkossev",
   "communityLink": "https://community.hubitat.com/t/tuya-zigbee-garage-door-opener/95579/30",
   "drivers": [
