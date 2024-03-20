@@ -1,3 +1,4 @@
+/* groovylint-disable NglParseError, CompileStatic, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, LineLength, MethodCount, MethodReturnTypeRequired, PublicMethodsBeforeNonPublicMethods, ReturnNullFromCatchBlock, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter */
 /**
  * Tuya Advanced Zigbee RGBW Bulb with healthStatus driver for Hubitat
  *
@@ -15,15 +16,16 @@
  * This driver is based on @bradsjm code https://github.com/bradsjm/hubitat-public/blob/development/PhilipsHue/Philips-Hue-Zigbee-Bulb-RGBW.groovy
  *
  * ver. 1.0.0  2023-04-14 kkossev  - Initial test version : Hubitat 'F2 bug' workaround; commented out Philips Hue specific commands; trap for Hubitat F2 bug
- * ver. 1.0.1  2023-04-24 kkossev  - (dev.branch) added Lidl _TZ3000_9cpuaca6 ;
+ * ver. 1.0.1  2023-04-24 kkossev  - (dev.branch) added Lidl TS0505A _TZ3000_9cpuaca6 ;
+ * ver. 1.1.0  2024-03-20 kkossev  - (dev.branch) added _TZ3210_rcggc0ys _TZ3210_4zinq6io _TZ3210_3lbtuxgp; removed Philips Hue specific commands; added doNotDisturb mode preference
  *
- *                                   TODO: 
+ *                                   TODO: ping() rtt measurements
  */
 
-def version() { "1.0.1" }
-def timeStamp() {"2023/04/24 7:18 AM"}
+static String version()   { '1.1.0' }
+static String timeStamp() { '2023/03/20 10:35 PM' }
 
-@Field static final Boolean _DEBUG = true
+@Field static final boolean _DEBUG = false
 
 import groovy.json.JsonOutput
 import groovy.transform.Field
@@ -87,8 +89,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,1000,0008,0300,EF00,0000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_qqjaziws", deviceJoinName: "Tuya LED Strip"  // https://community.hubitat.com/t/anyone-used-this-tuya-led-strip-controller-with-success/55593/21?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300,EF00", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3210_zexrfbzd", deviceJoinName: "Tuya Bulb"       // https://community.hubitat.com/t/zigbee-bulb-paired-as-device/107530/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300,EF00", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_cmaky9gq", deviceJoinName: "Ikuu LED Strip"  // https://community.hubitat.com/t/mercator-ikuu/70404/191?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,1000,0008,0300,EF00,0000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3210_rcggc0ys", deviceJoinName: "MOES GU10"       // https://community.hubitat.com/t/tuya-zigbee-bulb/115563/51?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0003,0004,0005,0006,1000,0008,0300,EF00,0000", outClusters:"0019,000A", model:"TS0501B", manufacturer:"_TZ3210_4zinq6io", deviceJoinName: "Zemismart LED Strip (one color)"       // https://community.hubitat.com/t/tuya-zigbee-bulb/115563/51?u=kkossev
 
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_9cpuaca6", deviceJoinName: "Ikuu LED Strip"  // https://community.hubitat.com/t/mercator-ikuu/70404/191?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000", outClusters:"0019,000A", model:"TS0505B", manufacturer:"_TZ3000_9cpuaca6", deviceJoinName: "Ikuu LED Strip"        // https://community.hubitat.com/t/mercator-ikuu/70404/191?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000", outClusters:"0019,000A", model:"TS0505A", manufacturer:"_TZ3000_9cpuaca6", deviceJoinName: 'Livarno Lux mood light RGB+CCT'    // https://github.com/JohanBendz/com.tuya.zigbee/issues/47
+
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000,EF00,FC11,FC57", outClusters:"0019", model:"Z102LG03-1", manufacturer:"eWeLink", deviceJoinName: "eWeLink Zigbee Bulb"
         
         // trap for Hubitat F2 bug
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
@@ -97,6 +104,9 @@ metadata {
     }
 
     preferences {
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: '<i>Turns on debug logging for 30 minutes.</i>'
+
         input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: \
              '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
         input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: \
@@ -112,8 +122,8 @@ metadata {
 
         input name: 'flashEffect', type: 'enum', title: '<b>Flash effect</b>', options: IdentifyEffectNames.values(), defaultValue: 'Blink', required: true, description: \
              '<i>Changes the effect used when the <b>flash</b> command is used.</i>'
-        input name: 'powerRestore', type: 'enum', title: '<b>Power restore mode</b>', options: PowerRestoreOpts.options, defaultValue: PowerRestoreOpts.defaultValue, description: \
-             '<i>Changes what happens when power to the bulb is restored.</i>'
+        input name: 'powerRestore', type: 'enum', title: '<b>Power restore mode</b>', options: PowerRestoreOpts.options, defaultValue: PowerRestoreOpts.defaultValue, description: '<i>Changes what happens when power to the bulb is restored.</i>'
+        input name: 'doNotDisturb', type: 'enum', title: '<b>Do Not Disturb mode</b>', options: DoNotDisturbOpts.options, defaultValue: DoNotDisturbOpts.defaultValue, description: '<i>Enables/disables the DND mode - two consecutive switches to turn on the light.</i>'
 
         input name: 'groupbinding1', type: 'number', title: '<b>Group Bind # 1</b>', range: '-1..65527', description: \
              '<i>Specify first Zigbee group number to bind light to.</i>'
@@ -127,12 +137,10 @@ metadata {
         input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: \
              '<i>Changes how often the hub pings the bulb to check health.</i>'
 
-        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: \
-             '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: \
-             '<i>Turns on debug logging for 30 minutes.</i>'
     }
 }
+
+// https://github.com/Koenkk/zigbee-herdsman/blob/0408bcc7196a520f6314c9bb5e18e377d54a8667/src/zcl/definition/cluster.ts#L2198-L2458 
 
 @Field static final String VERSION = '1.07 (2023-04-08)'
 
@@ -154,6 +162,12 @@ List<String> configure() {
         log.info "configure: setting power restore state to 0x${intToHexStr(settings.powerRestore as Integer)}"
         cmds += zigbee.writeAttribute(zigbee.ON_OFF_CLUSTER, POWER_RESTORE_ID, DataType.ENUM8, settings.powerRestore as Integer, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
         cmds += zigbee.writeAttribute(zigbee.COLOR_CONTROL_CLUSTER, 0x4010, DataType.UINT16, 0xFFFF, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
+    }
+    if (settings.doNotDisturb != null) {
+        log.info "configure: setting Tuya DND moode to 0x${intToHexStr(settings.doNotDisturb as Integer)}"
+        // https://github.com/Koenkk/zigbee-herdsman/blob/0408bcc7196a520f6314c9bb5e18e377d54a8667/src/zcl/definition/cluster.ts#L2198-L2458
+        String mode = settings.doNotDisturb == 0 ? '00' : '01'
+        cmds += zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, 0xFA, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS, "${mode}")
     }
 
     // Add to specified groups (if group is null then remove from previous group if any)
@@ -365,10 +379,10 @@ List<String> refresh() {
     cmds += zigbee.readAttribute(zigbee.COLOR_CONTROL_CLUSTER, [0x400B, 0x400C], [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
 
     // Get device type and supported effects
-    cmds += zigbee.readAttribute(PHILIPS_PRIVATE_CLUSTER, [0x01, 0x11], [mfgCode: PHILIPS_VENDOR], DELAY_MS)
+    //cmds += zigbee.readAttribute(PHILIPS_PRIVATE_CLUSTER, [0x01, 0x11], [mfgCode: PHILIPS_VENDOR], DELAY_MS)
 
     // Refresh other attributes
-    cmds += hueStateRefresh(DELAY_MS)
+    //cmds += hueStateRefresh(DELAY_MS)
     cmds += colorRefresh(DELAY_MS)
 
     // Get group membership
@@ -464,6 +478,7 @@ List<String> setColorXy(final BigDecimal colorX, final BigDecimal colorY, final 
  * @param number effect number
  * @return List of zigbee commands
  */
+ /* Philips Hue specific
 List<String> setEffect(final BigDecimal number) {
     logDebug "setEfect not supported (yet)!"
     return ''
@@ -484,6 +499,7 @@ List<String> setEffect(final BigDecimal number) {
     return zigbee.command(PHILIPS_PRIVATE_CLUSTER, 0x00, [mfgCode: PHILIPS_VENDOR], 0, "2100 01 ${effectHex}") +
         ifPolling { hueStateRefresh(0) }
 }
+*/
 
 /**
  * Set Enhanced Hue Command.
@@ -567,6 +583,7 @@ List<String> setLevel(final Object value, final Object transitionTime = null) {
  * Set Next Effect Command
  * @return List of zigbee commands
  */
+ /* Philips Hue specific
 List<String> setNextEffect() {
     if (settings.txtEnable) {
         log.info 'setNextEffect'
@@ -577,11 +594,13 @@ List<String> setNextEffect() {
     }
     return setEffect(number)
 }
+*/
 
 /**
  * Set Previous Effect Command
  * @return List of zigbee commands
  */
+ /* Philips Hue specific
 List<String> setPreviousEffect() {
     if (settings.txtEnable) {
         log.info 'setPreviousEffect'
@@ -592,6 +611,7 @@ List<String> setPreviousEffect() {
     }
     return setEffect(number)
 }
+*/
 
 /**
  * Set Saturation Command
@@ -743,6 +763,9 @@ void updated() {
  * @param description Zigbee message in hex format
  */
 void parse(final String description) {
+    if (settings.logEnable) {
+        log.debug "parse: ${description}"
+    }
     final Map descMap = zigbee.parseDescriptionAsMap(description)
     sendHealthStatusEvent('online')
     unschedule('deviceCommandTimeout')
@@ -1267,9 +1290,11 @@ private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer
  * @param delayMs delay in milliseconds between each attribute read
  * @return list of commands to be sent to the device
  */
+ /* Philips Hue specific
 private List<String> hueStateRefresh(final int delayMs = 2000) {
     return zigbee.readAttribute(PHILIPS_PRIVATE_CLUSTER, HUE_PRIVATE_STATE_ID, [mfgCode: PHILIPS_VENDOR], delayMs)
 }
+*/
 
 /**
  * If the device is polling, delay the execution of the provided commands
@@ -1397,11 +1422,11 @@ private void sendColorTempEvent(final String rawValue) {
     if (state.ct.low && value < state.ct.low) {
         return
     }
-    final String descriptionText = "color temperature was set to ${value}°K"
+    final String descriptionText = "color temperature was set to ${value}Â°K"
     if (device.currentValue('colorTemperature') as Integer != value && settings.txtEnable) {
         log.info descriptionText
     }
-    sendEvent(name: 'colorTemperature', value: value, descriptionText: descriptionText, unit: '°K')
+    sendEvent(name: 'colorTemperature', value: value, descriptionText: descriptionText, unit: 'Â°K')
 }
 
 /**
@@ -1550,6 +1575,11 @@ private List<String> setLevelPrivate(final Object value, final Integer rate = 0,
 @Field static final Map PowerRestoreOpts = [
     defaultValue: 0xFF,
     options     : [0x00: 'Off', 0x01: 'On', 0xFF: 'Last State']
+]
+
+@Field static final Map DoNotDisturbOpts = [
+    defaultValue: 0x00,
+    options     : [0x00: 'Disabled', 0x01: 'Enabled']
 ]
 
 @Field static final Map TransitionOpts = [
@@ -1795,9 +1825,9 @@ private getDP_TYPE_STRING()     { "03" }    // [ N byte string ]
 private getDP_TYPE_ENUM()       { "04" }    // [ 0-255 ]
 private getDP_TYPE_BITMAP()     { "05" }    // [ 1,2,4 bytes ] as bits
 
-private sendTuyaCommand(dp, dp_type, fncmd) {
+private List<String> sendTuyaCommand(String dp, String dp_type, String fncmd) {
     ArrayList<String> cmds = []
-    def ep = safeToInt(state.destinationEP)
+    int ep = safeToInt(state.destinationEP)
     if (ep==null || ep==0) ep = 1
     
     cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [destEndpoint :ep], PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
@@ -1806,13 +1836,14 @@ private sendTuyaCommand(dp, dp_type, fncmd) {
 }
 
 private getPACKET_ID() {
-    return randomPacketId()
+    return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
-def tuyaBlackMagic() {
+List<String> tuyaBlackMagic() {
     
-    def ep = safeToInt(state.destinationEP ?: 01)
+    int ep = safeToInt(state.destinationEP ?: 01)
     if (ep==null || ep==0) ep = 1
     
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay=200)
 }
+
