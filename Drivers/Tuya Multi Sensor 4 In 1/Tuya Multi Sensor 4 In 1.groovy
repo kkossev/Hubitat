@@ -67,7 +67,7 @@
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
- * ver. 1.8.0  2024-03-22 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
+ * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -100,7 +100,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/22 11:58 PM' }
+static String timeStamp() { '2024/03/23 1:13 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -213,8 +213,8 @@ metadata {
             input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
         }
 
-        // itterate over DEVICE.preferences map and inputIt all!
-        (DEVICE.preferences).each { key, value ->
+        // itterate over DEVICE?.preferences map and inputIt all!
+        (DEVICE?.preferences).each { key, value ->
             if (inputIt(key) != null) {
                 input inputIt(key)
             }
@@ -1071,7 +1071,8 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             // uses IAS for occupancy!
             tuyaDPs:        [
                 [dp:101, name:'illuminance',        type:'number',  rw: 'ro', min:0,  max:10000, scale:1,   unit:'lx'],        // https://github.com/Koenkk/zigbee-herdsman-converters/issues/6001
-                [dp:103, name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0,  defVal:0.0, scale:10,  unit:'meters'],
+                [dp:103, name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0,  defVal:0.0, scale:10,  unit:'meters']
+                /*
                 [dp:104, name:'unknown 104 0x68',            type:'number',  rw: 'ro'],    //68
                 [dp:105, name:'unknown 105 0x69',            type:'number',  rw: 'ro'],    //69
                 [dp:109, name:'unknown 109 0x6D',            type:'number',  rw: 'ro'],    //6D
@@ -1082,6 +1083,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:116, name:'unknown 116 0x74',            type:'number',  rw: 'ro'],    //74
                 [dp:118, name:'unknown 118 0x76',            type:'number',  rw: 'ro'],    //76
                 [dp:119, name:'unknown 119 0x77',            type:'number',  rw: 'ro']     //77
+                */
             ],
             spammyDPsToIgnore : [103],
             spammyDPsToNotTrace : [103],
@@ -1203,6 +1205,8 @@ SmartLife   radarSensitivity staticDetectionSensitivity
 
 ]
 
+
+
 // ---------------------------------- deviceProfilesV2 helper functions --------------------------------------------
 
 /**
@@ -1229,14 +1233,14 @@ String getProfileKey(final String valueStr) {
  */
 Map getPreferencesMap(final String param, boolean debug=false) {
     Map foundMap = [:]
-    if (!(param in DEVICE.preferences)) {
+    if (!(param in DEVICE?.preferences)) {
         if (debug) { log.warn "getPreferencesMap: preference ${param} not defined for this device!" }
         return [:]
     }
     /* groovylint-disable-next-line NoDef */
     def preference
     try {
-        preference = DEVICE.preferences["$param"]
+        preference = DEVICE?.preferences["$param"]
         if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference}"
         if (preference in [true, false]) {
             // find the preference in the tuyaDPs map
@@ -1246,13 +1250,13 @@ Map getPreferencesMap(final String param, boolean debug=false) {
         if (preference.isNumber()) {
             // find the preference in the tuyaDPs map
             int dp = safeToInt(preference)
-            Map dpMaps   =  DEVICE.tuyaDPs
+            Map dpMaps   =  DEVICE?.tuyaDPs
             foundMap = dpMaps.find { it.dp == dp }
         }
         else { // cluster:attribute
-            if (debug) log.trace "${DEVICE.attributes}"
-            //def dpMaps   =  DEVICE.tuyaDPs
-            foundMap = DEVICE.attributes.find { it.at == preference }
+            if (debug) log.trace "${DEVICE?.attributes}"
+            //def dpMaps   =  DEVICE?.tuyaDPs
+            foundMap = DEVICE?.attributes.find { it.at == preference }
         }
     // TODO - could be also 'true' or 'false' ...
     } catch (Exception e) {
@@ -1475,11 +1479,11 @@ void parse(String description) {
             String powerSourceReported = powerSourceOpts.options[descMap?.value as int]
             logInfo "reported Power source <b>${powerSourceReported}</b> (${descMap?.value})"
             // the powerSource reported by the device is very often not correct ...
-            if (DEVICE.device?.powerSource != null) {
-                powerSourceReported = DEVICE.device?.powerSource
+            if (DEVICE?.device?.powerSource != null) {
+                powerSourceReported = DEVICE?.device?.powerSource
                 logDebug "forcing the powerSource to <b>${powerSourceReported}</b>"
             }
-            else if (is4in1() || ((DEVICE.device?.type == 'radar') || isHumanPresenceSensorAIR() || isBlackPIRsensor()))  {     // for radars force powerSource 'dc'
+            else if (is4in1() || ((DEVICE?.device?.type == 'radar') || isHumanPresenceSensorAIR() || isBlackPIRsensor()))  {     // for radars force powerSource 'dc'
                 powerSourceReported = powerSourceOpts.options[04]    // force it to dc !
             }
             powerSourceEvent(powerSourceReported)
@@ -1730,7 +1734,7 @@ void processTuyaCluster(final Map descMap) {
     else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11') {
         // dont'know what command "11" means, it is sent by the square black radar when powered on. Will use it to restore the LED on/off configuration :)
         logDebug "Tuya <b>descMap?.command = ${descMap?.command}</b> descMap.data = ${descMap?.data}"
-        if (('indicatorLight' in DEVICE.preferences))  {
+        if (('indicatorLight' in DEVICE?.preferences))  {
             if (settings?.indicatorLight != null) {
                 ArrayList<String> cmds = []
                 int value = safeToInt(indicatorLight.value)
@@ -1773,7 +1777,7 @@ void updateStateTuyaDPs(Map descMap, int dp, int dp_id, int fncmd, int dp_len) {
     if (state.tuyaDPs["$dp"] == null) {
         // new dp in the list
         state.tuyaDPs["$dp"] = upd
-        List tuyaDPsSorted = (state.tuyaDPs.sort { a, b -> return (a.key as int <=> b.key as int) })        // HE sorts the state Map elements as String ...
+        Map tuyaDPsSorted = (state.tuyaDPs.sort { a, b -> return (a.key as int <=> b.key as int) })        // HE sorts the state Map elements as String ...
         state.tuyaDPs = tuyaDPsSorted
     }
     else {
@@ -1811,7 +1815,7 @@ boolean isSpammyDPsToIgnore(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     Integer dp =  zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToIgnore
+    List spammyList = deviceProfilesV2[getDeviceGroup()]?.spammyDPsToIgnore
     return (spammyList != null && (dp in spammyList) && ((settings?.ignoreDistance ?: false) == true))
 }
 
@@ -1824,7 +1828,7 @@ boolean isSpammyDPsToNotTrace(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     Integer dp = zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceGroup()].spammyDPsToNotTrace
+    List spammyList = deviceProfilesV2[getDeviceGroup()]?.spammyDPsToNotTrace
     return (spammyList != null && (dp in spammyList))
 }
 
@@ -1972,10 +1976,10 @@ int preProc(final Map foundItem, final int fncmd_orig) {
 boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final int dp_id, final int fncmd_orig, final int dp_len) {
     int fncmd = fncmd_orig
     if (state.deviceProfile == null)  { return false }
-    //if (!(DEVICE.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
+    //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs as Map
+    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile]?.tuyaDPs as Map
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null
@@ -2473,10 +2477,10 @@ void powerSourceEvent(final String state = null) {
         ps = state
     }
     else {
-        if (DEVICE.device?.powerSource != null) {
-            ps = DEVICE.device?.powerSource
+        if (DEVICE?.device?.powerSource != null) {
+            ps = DEVICE?.device?.powerSource
         }
-        else if (!('Battery' in DEVICE.capabilities)) {
+        else if (!('Battery' in DEVICE?.capabilities)) {
             ps = 'dc'
         }
         else {
@@ -2541,7 +2545,7 @@ void updated() {
     }
     // sensitivity for PIR devices
     if (settings?.sensitivity != null) {
-        if ((DEVICE.device?.type == 'PIR') && (('sensitivity' in DEVICE.preferences) && (DEVICE.preferences.sensitivity != false))) {
+        if ((DEVICE?.device?.type == 'PIR') && (('sensitivity' in DEVICE?.preferences) && (DEVICE?.preferences.sensitivity != false))) {
             int val = settings?.sensitivity as int
             if (isIAS()) {
                 if (val != null) {
@@ -2561,7 +2565,7 @@ void updated() {
 
     // keep time for PIR devices
     if (settings?.keepTime != null) {
-        if ((DEVICE.device?.type == 'PIR') && (('keepTime' in DEVICE.preferences) && (DEVICE.preferences.keepTime != false))) {
+        if ((DEVICE?.device?.type == 'PIR') && (('keepTime' in DEVICE?.preferences) && (DEVICE?.preferences.keepTime != false))) {
             if (isIAS() && (settings?.keepTime != null)) {
                 cmds += sendKeepTimeIAS(settings?.keepTime)
                 logDebug "changing IAS Keep Time to : ${keepTime4in1Opts.options[settings?.keepTime as int]} (${settings?.keepTime})"
@@ -2589,18 +2593,18 @@ void updated() {
         cmds += zigbee.readAttribute(0x0406, 0x0020, [:], delay = 201)
         cmds += zigbee.readAttribute(0x0406, 0x0022, [:], delay = 201)
     }
-    else if (DEVICE.device?.type in ['radar', 'PIR']) {
+    else if (DEVICE?.device?.type in ['radar', 'PIR']) {
         // Itterates through all settings
         cmds += updateAllPreferences()
     }
     //
-    if ('DistanceMeasurement' in DEVICE.capabilities) {
+    if ('DistanceMeasurement' in DEVICE?.capabilities) {
         if (settings?.ignoreDistance == true) {
             device.deleteCurrentState('distance')
         }
     }
     //
-    if (('indicatorLight' in DEVICE.preferences)) {    // BlackSquareRadar          TODO !!
+    if (('indicatorLight' in DEVICE?.preferences)) {    // BlackSquareRadar          TODO !!
         if (indicatorLight != null) {
             int value = safeToInt(indicatorLight.value)
             String dpValHex = zigbee.convertToHexString(value as int, 2)
@@ -2616,7 +2620,7 @@ void updated() {
     //log.warn "cmds=${cmds} length=${cmds?.size()}"
     if (cmds != null && cmds != [null]) {
         for (int i = 0; i < cmds?.size(); i++) {
-            if (cmds[i] != null) totalSize += cmds[i].size()
+            if (cmds[i] != null) totalSize += cmds[i]?.size()
         }
     }
     if (totalSize >= 7) {
@@ -2806,12 +2810,12 @@ void initializeVars(boolean fullInit = false) {
     if (fullInit == true || settings.humidityOffset == null) device.updateSetting('humidityOffset', [value:0.0, type:'decimal'])
     if (fullInit == true || settings.luxOffset == null) device.updateSetting('luxOffset', [value:1.0, type:'decimal'])
     if (fullInit == true || settings.luxThreshold == null) device.updateSetting('luxThreshold', [value:5, type:'number'])
-    if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold  == false)) {
+    if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences?.luxThreshold  == false)) {
         logDebug 'setting luxThreshold to 0'
         device.updateSetting('luxThreshold', [value:0, type:'number'])
     }
     else {
-        logDebug "luxThreshold is not set to 0 (luxThreshold=${DEVICE?.preferences.luxThreshold}, IlluminanceMeasurement=${DEVICE?.capabilities?.IlluminanceMeasurement})"
+        logDebug "luxThreshold is not set to 0 (luxThreshold=${DEVICE?.preferences?.luxThreshold}, IlluminanceMeasurement=${DEVICE?.capabilities?.IlluminanceMeasurement})"
     }
     if (fullInit == true || settings.illuminanceCoeff == null) device.updateSetting('illuminanceCoeff', [value:1.0, type:'decimal'])
     if (fullInit == true || settings.parEvents == null) device.updateSetting('parEvents', true)
@@ -2870,29 +2874,29 @@ void configure() {
         cmds += configureSiHAS()
     }
     else  {
-        if ('0x0001' in DEVICE.configuration) {    // Power Configuration cluster
+        if ('0x0001' in DEVICE?.configuration) {    // Power Configuration cluster
             logDebug "configuring the battery reporting... (min=${intMinTime}, max=${intMaxTime}, delta=0x02)"
             cmds += zigbee.configureReporting(0x0001, 0x20, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay = 226)  // TEST - seems to be overwritten by the next line configuration?
             cmds += zigbee.configureReporting(0x0001, 0x21, DataType.UINT8, intMinTime, intMaxTime, 0x02, [:], delay = 225)  // delta 0x02 = 1% change battery percentage remaining
             cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 228)    // try also battery voltage
             cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 227)    // battery percentage   - SONOFF GW configures and reads only attr 0x0021 !
         }
-        if ('0x0500' in DEVICE.configuration) {
+        if ('0x0500' in DEVICE?.configuration) {
             cmds += zigbee.configureReporting(0x0500, 0x0002, 0x19, 0, 3600, 0x00, [:], delay = 227)
         }
-        if ('0x0400' in DEVICE.configuration) {
+        if ('0x0400' in DEVICE?.configuration) {
             cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0400 {${device.zigbeeId}} {}", 'delay 229', ]
         }
-        if ('0x0402' in DEVICE.configuration) {
+        if ('0x0402' in DEVICE?.configuration) {
             cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0402 {${device.zigbeeId}} {}", 'delay 229', ]
         }
-        if ('0x0405' in DEVICE.configuration) {
+        if ('0x0405' in DEVICE?.configuration) {
             cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0405 {${device.zigbeeId}} {}", 'delay 229', ]
         }
-        if ('0x0406' in DEVICE.configuration) {
+        if ('0x0406' in DEVICE?.configuration) {
             cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0406 {${device.zigbeeId}} {}", 'delay 229', ]    // OWON and SONOFF motion/occupancy cluster
         }
-        if ('0xFC11' in DEVICE.configuration) {
+        if ('0xFC11' in DEVICE?.configuration) {
             cmds += zigbee.configureReporting(0xFC11, 0x2001, DataType.UINT16, 0, 1440, 0x01, [:], delay = 230)  // attribute 2001 - ??
         }
     }
@@ -3104,11 +3108,11 @@ void formatAttrib() {
     String attrStr = ''
     attrStr += addToAttr('status', 'healthStatus')
     attrStr += addToAttr('motion', 'motion')
-    if (DEVICE.capabilities?.DistanceMeasurement == true && settings?.ignoreDistance == false) { attrStr += addToAttr('distance', 'distance') }
-    if (DEVICE.capabilities?.Battery == true) { attrStr += addToAttr('battery', 'battery') }
-    if (DEVICE.capabilities?.IlluminanceMeasurement == true) { attrStr += addToAttr('illuminance', 'illuminance') }
-    if (DEVICE.capabilities?.TemperatureMeasurement == true) { attrStr += addToAttr('temperature', 'temperature') }
-    if (DEVICE.capabilities?.RelativeHumidityMeasurement == true) { attrStr += addToAttr('humidity', 'humidity')  }
+    if (DEVICE?.capabilities?.DistanceMeasurement == true && settings?.ignoreDistance == false) { attrStr += addToAttr('distance', 'distance') }
+    if (DEVICE?.capabilities?.Battery == true) { attrStr += addToAttr('battery', 'battery') }
+    if (DEVICE?.capabilities?.IlluminanceMeasurement == true) { attrStr += addToAttr('illuminance', 'illuminance') }
+    if (DEVICE?.capabilities?.TemperatureMeasurement == true) { attrStr += addToAttr('temperature', 'temperature') }
+    if (DEVICE?.capabilities?.RelativeHumidityMeasurement == true) { attrStr += addToAttr('humidity', 'humidity')  }
     attrStr = attrStr.substring(0, attrStr.length() - 3)    // remove the ',  '
     updateAttr('all', attrStr)
     if (attrStr.length() > 64) {
@@ -3293,16 +3297,16 @@ int getScaledPreferenceValue(String preference, Map dpMap) {
 // called from updated() method
 // TODO !!!!!!!!!! - refactor it !!!  IAS settings do not use Tuya DPs !!!
 List<String> updateAllPreferences() {
-    logDebug "updateAllPreferences: preferences=${DEVICE.preferences}"
+    logDebug "updateAllPreferences: preferences=${DEVICE?.preferences}"
     List<String> cmds = []
-    if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
+    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
         logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceGroup()}"
         return []
     }
     Integer dpInt = 0
     /* groovylint-disable-next-line NoDef */
     def scaledValue    // int or String for enums
-    (DEVICE.preferences).each { name, dp ->
+    (DEVICE?.preferences).each { name, dp ->
         dpInt = safeToInt(dp, -1)
         if (dpInt <= 0) {
             // this is the IAS and other non-Tuya DPs preferences ....
@@ -3408,20 +3412,20 @@ List<String> radarCommand(String command, String DPcommand, String DPType) {
 
 /**
  * Sends a command to the device.
- * @param command The command to send. Must be one of the commands defined in the DEVICE.commands map.
+ * @param command The command to send. Must be one of the commands defined in the DEVICE?.commands map.
  * @param val The value to send with the command.
  * @return void
  */
 void sendCommand(final String command=null, String val=null) {
     //logDebug "sending command ${command}(${val}))"
     ArrayList<String> cmds = []
-    Map supportedCommandsMap = DEVICE.commands
+    Map supportedCommandsMap = DEVICE?.commands
     if (supportedCommandsMap?.isEmpty()) {
         logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
-    List supportedCommandsList =  DEVICE.commands?.keySet() as List
+    List supportedCommandsList =  DEVICE?.commands?.keySet() as List
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
         logInfo "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
@@ -3430,7 +3434,7 @@ void sendCommand(final String command=null, String val=null) {
     /* groovylint-disable-next-line NoDef */
     def func
     try {
-        func = DEVICE.commands.find { it.key == command }.value
+        func = DEVICE?.commands.find { it.key == command }.value
         if (val != null) {
             cmds = "${func}"(val)
             logInfo "executed <b>$func</b>($val)"
@@ -3458,7 +3462,7 @@ List<String> getValidParsPerModel() {
     List<String> validPars = []
     if (DEVICE?.preferences != null && DEVICE?.preferences != [:]) {
         // use the preferences to validate the parameters
-        validPars = DEVICE.preferences.keySet().toList()
+        validPars = DEVICE?.preferences.keySet().toList()
     }
     return validPars
 }
@@ -3574,7 +3578,7 @@ void setPar(String par=null, String val=null) {
         }
         logDebug "parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${tuyaValue} type=${dpMap.type}"
         // search for set function
-        String capitalizedFirstChar = par[0].toUpperCase() + par[1..-1]
+        String capitalizedFirstChar = par[0]?.toUpperCase() + par[1..-1]
         String setFunction = "set${capitalizedFirstChar}"
         // check if setFunction method exists
         if (!this.respondsTo(setFunction)) {
@@ -3691,7 +3695,7 @@ def getDeviceNameAndProfile(String model=null, String manufacturer=null) {
         profileMap.fingerprints.each { fingerprint ->
             if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                 deviceProfile = profileName
-                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile].deviceJoinName ?: UNKNOWN
+                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile]?.deviceJoinName ?: UNKNOWN
                 logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                 return [deviceName, deviceProfile]
             }
@@ -3716,7 +3720,7 @@ void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     if (deviceName != NULL && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
-        device.updateSetting('forcedProfile', [value:deviceProfilesV2[deviceProfile].description, type:'enum'])
+        device.updateSetting('forcedProfile', [value:deviceProfilesV2[deviceProfile]?.description, type:'enum'])
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
@@ -3744,13 +3748,13 @@ void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
 Map inputIt(String param, boolean debug=false) {
     Map input = [:]
     Map foundMap = [:]
-    if (!(param in DEVICE.preferences)) {
+    if (!(param in DEVICE?.preferences)) {
         if (debug) log.warn "inputIt: preference ${param} not defined for this device!"
         return [:]
     }
     Map preference
     try {
-        preference = DEVICE.preferences["$param"]
+        preference = DEVICE?.preferences["$param"]
     }
     catch (e) {
         if (debug) log.warn "inputIt: exception ${e} caught while parsing preference ${param} value ${preference}"
@@ -3861,7 +3865,7 @@ List<String> getSettableParsList() {
     }
     // put a map in the SettableParsFieldMap for the device.id if it doesn't exist, containing the settable parameters
     Map settableParsMap = [:]
-    settableParsMap['pars'] = DEVICE.preferences
+    settableParsMap['pars'] = DEVICE?.preferences
     SettableParsFieldMap.put(device?.id, settableParsMap)
     List<String> result = SettableParsFieldMap.get(device?.id).pars.keySet().toList()
     log.warn "stored ${SettableParsFieldMap.get(device?.id)}"
@@ -3870,8 +3874,8 @@ List<String> getSettableParsList() {
 */
 
 void validateAndFixPreferences() {
-    //logDebug "validateAndFixPreferences: preferences=${DEVICE.preferences}"
-    if (DEVICE.preferences == null || DEVICE.preferences == [:]) {
+    //logDebug "validateAndFixPreferences: preferences=${DEVICE?.preferences}"
+    if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
         logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}"
         return
     }
@@ -3882,7 +3886,7 @@ void validateAndFixPreferences() {
     /* groovylint-disable-next-line NoDef */
     def newValue
     String settingType
-    DEVICE.preferences.each {
+    DEVICE?.preferences.each {
         Map foundMap = getPreferencesMap(it.key)
         if (foundMap?.isEmpty()) {
             logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
