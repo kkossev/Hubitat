@@ -67,7 +67,7 @@
  * ver. 1.6.7  2023-11-09 kkossev  - (dev. branch) divideBy10 fix for TS0601_IJXVKHD0_RADAR; added new TS0202_MOTION_IAS_CONFIGURABLE group
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
- * ver. 1.8.0  2024-03-18 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fix;
+ * ver. 1.8.0  2024-03-22 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -100,7 +100,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/18 1:12 PM' }
+static String timeStamp() { '2024/03/22 11:58 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1179,6 +1179,8 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             ],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': true],
             preferences   : ['motionReset':true],
+            commands      : ['resetSettings':'resetSettings', 'resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences' \
+            ],
             //fingerprints  : [
             //    [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406", outClusters:"0003", model:"model", manufacturer:"manufacturer"]
             //],
@@ -1432,7 +1434,7 @@ void parse(String description) {
         else if (descMap.cluster == '0406')  {    // OWON and SONOFF
             if (descMap.attrId == '0000') {
                 int raw = Integer.parseInt(descMap.value, 16)
-                handleMotion(raw & 0x01)
+                handleMotion(raw ? true : false) 
             }
             else if (descMap.attrId == '0020') {
                 int value = zigbee.convertHexToInt(descMap.value)
@@ -1504,7 +1506,7 @@ void parse(String description) {
                 logInfo "IAS Zone Type repot is '${ZONE_TYPE[value]}' (${value})"
             } else if (descMap?.attrId == '0002') {
                 logDebug "IAS Zone status repoted: descMap=${descMap} value= ${Integer.parseInt(descMap?.value, 16)}"
-                handleMotion(Integer.parseInt(descMap?.value, 16))
+                handleMotion(Integer.parseInt(descMap?.value, 16) ? true : false)
             } else if (descMap?.attrId == '0010') {
                 logDebug "IAS Zone Address received (bitmap = ${descMap?.value})"
             } else if (descMap?.attrId == '0011') {
@@ -1708,7 +1710,7 @@ void processTuyaCluster(final Map descMap) {
         }
     }
     else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {
-        try {
+        //try {
             //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
             int dp      = zigbee.convertHexToInt(descMap?.data[2])           // "dp" field describes the action/message of a command frame
             int dp_id   = zigbee.convertHexToInt(descMap?.data[3])           // "dp_identifier" is device dependant
@@ -1717,11 +1719,13 @@ void processTuyaCluster(final Map descMap) {
 
             updateStateTuyaDPs(descMap, dp, dp_id, fncmd, dp_len)
             processTuyaDP(descMap, dp, dp_id, fncmd, dp_len)
-        }
+        //}
+        /*
         catch (e) {
             logWarn "<b>catched exception</b> ${e} while processing descMap: ${descMap}"
             return
         }
+        */
     } // Tuya commands '01' and '02'
     else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11') {
         // dont'know what command "11" means, it is sent by the square black radar when powered on. Will use it to restore the LED on/off configuration :)
@@ -1971,7 +1975,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
     //if (!(DEVICE.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs
+    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile].tuyaDPs as Map
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null
@@ -2081,7 +2085,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
         //if (!doNotTrace) { logDebug "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
         switch (name) {
             case 'motion' :
-                handleMotion(motionActive = fncmd)
+                handleMotion(fncmd ? true : false)
                 break
             case 'temperature' :
                 temperatureEvent(fncmd / getTemperatureDiv())
@@ -2123,7 +2127,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
     switch (dp) {
         case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence state for almost of the radars
             logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
-            handleMotion(motionActive = fncmd)
+            handleMotion(fncmd ? true : false)
             break
         case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
             logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -2157,7 +2161,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
         case 0x65 :    // (101)
             //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
             logDebug "motion event 0x65 fncmd = ${fncmd}"
-            handleMotion(motionActive = fncmd)
+            handleMotion(fncmd ? true : false)
             break
         case 0x66 :     // (102)
             if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1
@@ -2308,17 +2312,17 @@ void parseIasReport(Map descMap) {
             log.debug "alarm1 = $alarm1, alarm2 = $alarm2, tamper = $tamper, battery = $battery, supervisionReports = $supervisionReports, restoreReports = $restoreReports, trouble = $trouble, ac = $ac, test = $test, batteryDefect = $batteryDefect"
         }
     }
-    handleMotion(zs.alarm1)
+    handleMotion(zs.alarm1 ? true : false)
 }
 
 void parseIasMessage(final String description) {
     // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
     Map zs = zigbee.parseZoneStatusChange(description)
     if (zs.alarm1Set == true) {
-        handleMotion(motionActive = true)
+        handleMotion(true)
     }
     else {
-        handleMotion(motionActive = false)
+        handleMotion(false)
     }
 }
 
@@ -3417,7 +3421,7 @@ void sendCommand(final String command=null, String val=null) {
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
-    List supportedCommandsList =  DEVICE.commands.keySet() as List
+    List supportedCommandsList =  DEVICE.commands?.keySet() as List
     // check if the command is defined in the DEVICE commands map
     if (command == null || !(command in supportedCommandsList)) {
         logInfo "sendCommand: the command <b>${(command ?: '')}</b> must be one of these : ${supportedCommandsList}"
