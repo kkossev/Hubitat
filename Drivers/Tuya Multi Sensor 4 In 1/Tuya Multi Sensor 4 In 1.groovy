@@ -100,7 +100,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/23 9:06 AM' }
+static String timeStamp() { '2024/03/23 10:13 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -108,8 +108,8 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = false
-@Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy onese
+@Field static final Boolean _DEBUG = true
+@Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 
 metadata {
     definition(name: 'Tuya Multi Sensor 4 In 1', namespace: 'kkossev', author: 'Krassimir Kossev', importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya%20Multi%20Sensor%204%20In%201.groovy', singleThreaded: true ) {
@@ -213,10 +213,11 @@ metadata {
             input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
         }
 
-        // itterate over DEVICE?.preferences map and inputIt all!
+        // itterate over DEVICE.preferences map and inputIt all!
         (DEVICE?.preferences).each { key, value ->
-            if (inputIt(key) != null) {
-                input inputIt(key)
+            Map map = inputIt(key)
+            if (map != null && map != [:]) {
+                input map
             }
         }
 
@@ -1480,7 +1481,7 @@ void parse(String description) {
         else if (descMap.cluster == '0406')  {    // OWON and SONOFF
             if (descMap.attrId == '0000') {
                 int raw = Integer.parseInt(descMap.value, 16)
-                handleMotion(raw ? true : false) 
+                handleMotion(raw ? true : false)
             }
             else if (descMap.attrId == '0020') {
                 int value = zigbee.convertHexToInt(descMap.value)
@@ -1658,7 +1659,9 @@ Map myParseDescriptionAsMap(final String description) {
 
 void parseZDOcommand(final Map descMap) {
     switch (descMap.clusterId) {
-        // TODO - add ZDO 0005
+        case '0005' :
+            if (settings?.logEnable) log.info "${device.displayName} Received Active Endpoints Request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})"
+            break
         case '0006' :
             if (settings?.logEnable) log.info "${device.displayName} Received match descriptor request, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})"
             break
@@ -1758,13 +1761,13 @@ void processTuyaCluster(final Map descMap) {
     else if ((descMap?.clusterInt == CLUSTER_TUYA) && (descMap?.command == '01' || descMap?.command == '02' || descMap?.command == '06')) {
         //try {
             //def transid = zigbee.convertHexToInt(descMap?.data[1])           // "transid" is just a "counter", a response will have the same transid as the command
-            int dp      = zigbee.convertHexToInt(descMap?.data[2])           // "dp" field describes the action/message of a command frame
-            int dp_id   = zigbee.convertHexToInt(descMap?.data[3])           // "dp_identifier" is device dependant
-            int fncmd   = getTuyaAttributeValue(descMap?.data)               //
-            int dp_len  = zigbee.convertHexToInt(descMap?.data[5])           // the length of the DP - 1 or 4 ... This is NOT the DP type!!
+        int dp      = zigbee.convertHexToInt(descMap?.data[2])           // "dp" field describes the action/message of a command frame
+        int dp_id   = zigbee.convertHexToInt(descMap?.data[3])           // "dp_identifier" is device dependant
+        int fncmd   = getTuyaAttributeValue(descMap?.data)               //
+        int dp_len  = zigbee.convertHexToInt(descMap?.data[5])           // the length of the DP - 1 or 4 ... This is NOT the DP type!!
 
-            updateStateTuyaDPs(descMap, dp, dp_id, fncmd, dp_len)
-            processTuyaDP(descMap, dp, dp_id, fncmd, dp_len)
+        updateStateTuyaDPs(descMap, dp, dp_id, fncmd, dp_len)
+        processTuyaDP(descMap, dp, dp_id, fncmd, dp_len)
         //}
         /*
         catch (e) {
@@ -2443,11 +2446,11 @@ int getSecondsInactive() {
 }
 
 void temperatureEvent(BigDecimal temperature) {
-    def map = [:] 
-    map.name = "temperature"
-    map.unit = "\u00B0"+"${location.temperatureScale}"
-    map.value = convertTemperatureIfNeeded(temperature, "C", precision=1)
-    map.type = "physical"
+    Map map = [:]
+    map.name = 'temperature'
+    map.unit = "\u00B0${location.temperatureScale}"
+    map.value = convertTemperatureIfNeeded(temperature, 'C', precision = 1)
+    map.type = 'physical'
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     map.isStateChange = true
     logInfo "${map.descriptionText}"
@@ -2456,15 +2459,15 @@ void temperatureEvent(BigDecimal temperature) {
 }
 
 void humidityEvent(BigDecimal humidity) {
-    def map = [:] 
-    map.name = "humidity"
+    Map map = [:]
+    map.name = 'humidity'
     map.value = humidity as int
-    map.unit = "% RH"
-    map.type = "physical"
+    map.unit = '% RH'
+    map.type = 'physical'
     map.isStateChange = true
     map.descriptionText = "${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"
     logInfo "${map.descriptionText}"
-    sendEvent(map)    
+    sendEvent(map)
     runIn(1, formatAttrib, [overwrite: true])
 }
 
@@ -3502,7 +3505,8 @@ List<String> getValidParsPerModel() {
 int validateAndScaleParameterValue(Map dpMap, String val) {
     /* groovylint-disable-next-line NoDef */
     def value = null    // validated value - integer, floar
-    int scaledValue = null
+    /* groovylint-disable-next-line NoDef */
+    def scaledValue = null
     logDebug "validateAndScaleParameterValue dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case 'number' :
@@ -3566,7 +3570,8 @@ int validateAndScaleParameterValue(Map dpMap, String val) {
  * @param val The value to set the parameter to.
  * @return Nothing.
  */
-void setPar(String par=null, String val=null) {
+/* groovylint-disable-next-line NoDef */
+void setPar(String par=null, val=null) {
     if (DEVICE?.preferences != null && DEVICE?.preferences != [:]) {
         // new method
         logDebug "setPar new method: setting parameter ${par} to ${val}"
@@ -3768,14 +3773,16 @@ void testTuyaCmd(String dpCommand, String dpValue, String dpTypeString) {
     sendZigbeeCommands(sendTuyaCommand(dpCommand, dpType, dpValHex))
 }
 
-Map inputIt(String param, boolean debug=false) {
+Map inputIt(String paramPar, boolean debug = false) {
+    String param = paramPar.trim()
     Map input = [:]
     Map foundMap = [:]
     if (!(param in DEVICE?.preferences)) {
         if (debug) log.warn "inputIt: preference ${param} not defined for this device!"
         return [:]
     }
-    Map preference
+    /* groovylint-disable-next-line NoDef */
+    def preference
     try {
         preference = DEVICE?.preferences["$param"]
     }
@@ -3980,30 +3987,6 @@ void validateAndFixPreferences() {
 
 /* groovylint-disable-next-line UnusedMethodParameter */
 void test(String val) {
-    /*
-    def result = inputIt( val, debug=true )
+    Map result = inputIt( val.trim(), debug=true )
     logWarn "test inputIt(${val}) = ${result}"
-    */
-    log.trace settings
-    resetPreferencesToDefaults(true)
-    log.trace settings
-    /*
-    settings.each { k, v ->
-        String settingName = k
-        // remove  [ and ] from the setting name
-        settingName = settingName.replaceAll("\\[|\\]", "")
-        logWarn "settings ${k} = ${v}   settingName = ${settingName}"
-        logWarn "settings ${k} = ${v} type = ${getSettingType('advancedOptions')}"
-
-    }
-*/
-/*
-    settings.each { k, v ->
-        def x = device.getSettingType(k)
-        log.info ("settings ${k} = ${v} (${x})")
-    }
-*/
-//validateAndFixPreferences()
-//resetPreferencesToDefaults(true)
-//getPreferencesMap( "motionReset", true)
 }
