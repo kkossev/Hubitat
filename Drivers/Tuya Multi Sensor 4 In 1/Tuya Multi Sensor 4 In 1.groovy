@@ -100,7 +100,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/23 1:13 AM' }
+static String timeStamp() { '2024/03/23 9:06 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -281,33 +281,33 @@ Map getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 @Field static final Integer defaultPollingInterval = 3600
 @Field static final Integer DEFAULT_REPORTING_4IN1 = 5    // time in minutes
 
-String getDeviceGroup()     { state.deviceProfile ?: 'UNKNOWN' }
-Map getDEVICE()          { deviceProfilesV2[getDeviceGroup()] }
+String getDeviceProfile()     { state.deviceProfile ?: 'UNKNOWN' }
+Map getDEVICE()          { deviceProfilesV2[getDeviceProfile()] }
 List<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
 List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
-boolean is4in1() { return getDeviceGroup().contains('TS0202_4IN1') }
-boolean is3in1() { return getDeviceGroup().contains('TS0601_3IN1') }
-boolean is2in1() { return getDeviceGroup().contains('TS0601_2IN1') }
-boolean isMotionSwitch() { return getDeviceGroup().contains('TS0202_MOTION_SWITCH') }
+boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
+boolean is3in1() { return getDeviceProfile().contains('TS0601_3IN1') }
+boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }
+boolean isMotionSwitch() { return getDeviceProfile().contains('TS0202_MOTION_SWITCH') }
 boolean isIAS()  { DEVICE?.device?.isIAS == true  }
 BigDecimal getTemperatureDiv() {  isSiHAS() ? 100.0 : 10.0 } // temperatureEvent
 BigDecimal getHumidityDiv()    {  isSiHAS() ? 100.0 : 1.0 }   // humidityEvent
 
-boolean isZY_M100Radar()               { return getDeviceGroup().contains('TS0601_TUYA_RADAR') }
-boolean isBlackPIRsensor()             { return getDeviceGroup().contains('TS0601_PIR_PRESENCE') }
-boolean isBlackSquareRadar()           { return getDeviceGroup().contains('TS0601_BLACK_SQUARE_RADAR') }
-boolean isHumanPresenceSensorAIR()     { return getDeviceGroup().contains('TS0601_PIR_AIR') }           // isHumanPresenceSensorScene() removed in version 1.6.1
-boolean isYXZBRB58radar()              { return getDeviceGroup().contains('TS0601_YXZBRB58_RADAR') }
-boolean isSXM7L9XAradar()              { return getDeviceGroup().contains('TS0601_SXM7L9XA_RADAR') }
-boolean isIJXVKHD0radar()              { return getDeviceGroup().contains('TS0601_IJXVKHD0_RADAR') }
-boolean isHL0SS9OAradar()              { return getDeviceGroup().contains('TS0225_HL0SS9OA_RADAR') }
-boolean is2AAELWXKradar()              { return getDeviceGroup().contains('TS0225_2AAELWXK_RADAR') }    // same as HL0SS9OA, but another set of DPs
-boolean isSBYX0LM6radar()              { return getDeviceGroup().contains('TS0601_SBYX0LM6_RADAR') }
-boolean isLINPTECHradar()              { return getDeviceGroup().contains('TS0225_LINPTECH_RADAR') }
-boolean isEGNGMRZHradar()              { return getDeviceGroup().contains('TS0225_EGNGMRZH_RADAR') }
-boolean isKAPVNNLKradar()              { return getDeviceGroup().contains('TS0601_KAPVNNLK_RADAR') }
-boolean isSONOFF()                     { return getDeviceGroup().contains('SONOFF_SNZB-06P_RADAR') }
-boolean isSiHAS()                      { return getDeviceGroup().contains('SIHAS_USM-300Z_4_IN_1') }
+boolean isZY_M100Radar()               { return getDeviceProfile().contains('TS0601_TUYA_RADAR') }
+boolean isBlackPIRsensor()             { return getDeviceProfile().contains('TS0601_PIR_PRESENCE') }
+boolean isBlackSquareRadar()           { return getDeviceProfile().contains('TS0601_BLACK_SQUARE_RADAR') }
+boolean isHumanPresenceSensorAIR()     { return getDeviceProfile().contains('TS0601_PIR_AIR') }           // isHumanPresenceSensorScene() removed in version 1.6.1
+boolean isYXZBRB58radar()              { return getDeviceProfile().contains('TS0601_YXZBRB58_RADAR') }
+boolean isSXM7L9XAradar()              { return getDeviceProfile().contains('TS0601_SXM7L9XA_RADAR') }
+boolean isIJXVKHD0radar()              { return getDeviceProfile().contains('TS0601_IJXVKHD0_RADAR') }
+boolean isHL0SS9OAradar()              { return getDeviceProfile().contains('TS0225_HL0SS9OA_RADAR') }
+boolean is2AAELWXKradar()              { return getDeviceProfile().contains('TS0225_2AAELWXK_RADAR') }    // same as HL0SS9OA, but another set of DPs
+boolean isSBYX0LM6radar()              { return getDeviceProfile().contains('TS0601_SBYX0LM6_RADAR') }
+boolean isLINPTECHradar()              { return getDeviceProfile().contains('TS0225_LINPTECH_RADAR') }
+boolean isEGNGMRZHradar()              { return getDeviceProfile().contains('TS0225_EGNGMRZH_RADAR') }
+boolean isKAPVNNLKradar()              { return getDeviceProfile().contains('TS0601_KAPVNNLK_RADAR') }
+boolean isSONOFF()                     { return getDeviceProfile().contains('SONOFF_SNZB-06P_RADAR') }
+boolean isSiHAS()                      { return getDeviceProfile().contains('SIHAS_USM-300Z_4_IN_1') }
 
 // TODO - check if DPs are declared in the device profiles and remove this function
 boolean isChattyRadarReport(final Map descMap) {
@@ -1205,7 +1205,40 @@ SmartLife   radarSensitivity staticDetectionSensitivity
 
 ]
 
-
+@Field static final Map deviceProfilesV3 = [
+    'UNKNOWN_RADAR'       : [                        // the Device Profile key (shown in the State Variables)
+            description   : 'Unknown Tuya Radar',        // the Device Profile description (shown in the Preferences)
+            models        : ['UNKNOWN'],             // used to match a Device profile if the individuak fingerprints do not match
+            device        : [
+                type: 'radar',         // 'PIR' or 'radar'
+                isIAS:false,                          // define it for PIR sensors only!
+                powerSource: 'dc',                   // determines the powerSource value - can be 'battery', 'dc', 'mains'
+                isSleepy:false                       // determines the update and ping behaviour
+            ],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'Battery': false],
+            preferences   : ['motionReset':true],
+            commands      : ['resetSettings':'resetSettings', 'resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences' \
+            ],
+            //fingerprints  : [
+            //    [profileId:"0104", endpointId:"01", inClusters:"0000,0003,0406", outClusters:"0003", model:"model", manufacturer:"manufacturer"]
+            //],
+            tuyaDPs:        [
+                [
+                    dp:1,
+                    name:'motion',
+                    type:'enum',
+                    rw: 'ro',
+                    min:0,
+                    max:1,
+                    map:[0:'inactive', 1:'active'],
+                    description:'Motion state'
+                ]
+            ],
+            deviceJoinName: 'Unknown Tuya Radar',        // used during the inital pairing, if no individual fingerprint deviceJoinName was found
+            configuration : ['battery': false],
+            batteries     : 'unknown'
+    ]
+]
 
 // ---------------------------------- deviceProfilesV2 helper functions --------------------------------------------
 
@@ -1214,12 +1247,21 @@ SmartLife   radarSensitivity staticDetectionSensitivity
  * @param valueStr The profile description to search for.
  * @return The profile key if found, otherwise null.
  */
+ /*
 String getProfileKey(final String valueStr) {
     String key = null
     deviceProfilesV2.each {  profileName, profileMap ->
         if (profileMap.description == valueStr) {
             key = profileName
         }
+    }
+    return key
+}
+*/
+String getProfileKey(final String valueStr) {
+    String key = deviceProfilesV2.find { _, profileMap -> profileMap.description == valueStr }?.key
+    if (key == null) {
+        key = deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key
     }
     return key
 }
@@ -1399,7 +1441,7 @@ void parse(String description) {
         }
         //
         if (!isSpammyDPsToNotTrace(descMap) || (_TRACE_ALL == true)) {
-            logDebug "parse: (${device.getDataValue('manufacturer')}, ${(getDeviceGroup())}, ${driverVersionAndTimeStamp()}) descMap = ${descMap} description = ${description}"
+            logDebug "parse: (${device.getDataValue('manufacturer')}, ${(getDeviceProfile())}, ${driverVersionAndTimeStamp()}) descMap = ${descMap} description = ${description}"
         }
         //
         if (descMap.clusterInt == 0x0001 && descMap.commandInt != 0x07 && descMap?.value) {
@@ -1815,7 +1857,7 @@ boolean isSpammyDPsToIgnore(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     Integer dp =  zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceGroup()]?.spammyDPsToIgnore
+    List spammyList = deviceProfilesV2[getDeviceProfile()]?.spammyDPsToIgnore as List
     return (spammyList != null && (dp in spammyList) && ((settings?.ignoreDistance ?: false) == true))
 }
 
@@ -1828,7 +1870,7 @@ boolean isSpammyDPsToNotTrace(Map descMap) {
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
     Integer dp = zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceGroup()]?.spammyDPsToNotTrace
+    List spammyList = deviceProfilesV2[getDeviceProfile()]?.spammyDPsToNotTrace as List
     return (spammyList != null && (dp in spammyList))
 }
 
@@ -2401,32 +2443,29 @@ int getSecondsInactive() {
 }
 
 void temperatureEvent(BigDecimal temperature) {
-    [:].with {
-        name = 'temperature'
-        unit = "\u00B0${location.temperatureScale}"
-        value = convertTemperatureIfNeeded(temperature, 'C', precision = 1)
-        type = 'physical'
-        descriptionText = "${name} is ${value} ${unit}"
-        isStateChange = true
-        logInfo "${descriptionText}"
-        sendEvent(this)
-        runIn(1, formatAttrib, [overwrite: true])
-    }
+    def map = [:] 
+    map.name = "temperature"
+    map.unit = "\u00B0"+"${location.temperatureScale}"
+    map.value = convertTemperatureIfNeeded(temperature, "C", precision=1)
+    map.type = "physical"
+    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
+    map.isStateChange = true
+    logInfo "${map.descriptionText}"
+    sendEvent(map)
+    runIn(1, formatAttrib, [overwrite: true])
 }
 
 void humidityEvent(BigDecimal humidity) {
-    // Removed unused variable declaration
-    [:].with {
-        name = 'humidity'
-        value = humidity as int
-        unit = '% RH'
-        type = 'physical'
-        isStateChange = true
-        descriptionText = "${name} is ${Math.round((humidity) * 10) / 10} ${unit}"
-        logInfo "${descriptionText}"
-        sendEvent(this)
-        runIn(1, formatAttrib, [overwrite: true])
-    }
+    def map = [:] 
+    map.name = "humidity"
+    map.value = humidity as int
+    map.unit = "% RH"
+    map.type = "physical"
+    map.isStateChange = true
+    map.descriptionText = "${map.name} is ${Math.round((humidity) * 10) / 10} ${map.unit}"
+    logInfo "${map.descriptionText}"
+    sendEvent(map)    
+    runIn(1, formatAttrib, [overwrite: true])
 }
 
 void illuminanceEvent(BigDecimal rawLux) {
@@ -2446,22 +2485,6 @@ void illuminanceEventLux(BigDecimal lux) {
     }
     runIn(1, formatAttrib, [overwrite: true])
 }
-
-/*
-void occupancyEvent(raw) {
-    logDebug "occupancyEvent: raw=${raw}"
-    [:].with {
-        name = 'occupancy'
-        value = raw ? 'occupied' : 'unoccupied'
-        unit = ''
-        type = 'physical'
-        isStateChange = true
-        descriptionText = "${name} state is ${value}"
-        logInfo "${descriptionText}"
-        sendEvent(this)
-    }
-}
-*/
 
 void buttonEvent(String action, int buttonNumber=1) {
     logInfo "button $buttonNumber was $action"
@@ -3300,7 +3323,7 @@ List<String> updateAllPreferences() {
     logDebug "updateAllPreferences: preferences=${DEVICE?.preferences}"
     List<String> cmds = []
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
-        logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceGroup()}"
+        logDebug "updateAllPreferences: no preferences defined for device profile ${getDeviceProfile()}"
         return []
     }
     Integer dpInt = 0
@@ -3421,7 +3444,7 @@ void sendCommand(final String command=null, String val=null) {
     ArrayList<String> cmds = []
     Map supportedCommandsMap = DEVICE?.commands
     if (supportedCommandsMap?.isEmpty()) {
-        logInfo "sendCommand: no commands defined for device profile ${getDeviceGroup()} !"
+        logInfo "sendCommand: no commands defined for device profile ${getDeviceProfile()} !"
         return
     }
     // TODO: compare ignoring the upper/lower case of the command.
@@ -3876,7 +3899,7 @@ List<String> getSettableParsList() {
 void validateAndFixPreferences() {
     //logDebug "validateAndFixPreferences: preferences=${DEVICE?.preferences}"
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) {
-        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceGroup()}"
+        logDebug "validateAndFixPreferences: no preferences defined for device profile ${getDeviceProfile()}"
         return
     }
     int validationFailures = 0
