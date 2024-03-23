@@ -100,7 +100,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/23 10:13 AM' }
+static String timeStamp() { '2024/03/23 10:19 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -108,7 +108,7 @@ import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 
 metadata {
