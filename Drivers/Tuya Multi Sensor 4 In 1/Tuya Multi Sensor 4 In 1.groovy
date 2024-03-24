@@ -1135,7 +1135,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     ],
 
     // isSONOFF()
-    'SONOFF_SNZB-06P_RADAR' : [
+    'SONOFF_SNZB-06P_RADAR' : [ // https://github.com/Koenkk/zigbee-herdsman-converters/blob/14dffaa06511876d096aa72e669df4b032f4cf33/src/devices/sonoff.ts#L675 
             description   : 'SONOFF SNZB-06P RADAR',
             models        : ['SONOFF'],
             device        : [type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
