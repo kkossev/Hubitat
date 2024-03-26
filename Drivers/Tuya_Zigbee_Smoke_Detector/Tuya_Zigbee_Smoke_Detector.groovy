@@ -20,6 +20,7 @@
  *  ver. 1.1.0 2023-04-07 kkossev - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;
  *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
  *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
+ *  ver. 1.1.3 2024-03-26 hubivlad - added _TZE200_rccxox8p
  *
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
@@ -31,8 +32,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-def version() { "1.1.2" }
-def timeStamp() {"2022/08/01 9:35 AM"}
+def version() { "1.1.3" }
+def timeStamp() {"2024/03/26 10:15 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -79,6 +80,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ux5v4dbd"    // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_ytibqbra"    // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_dnz6yvl2"    // not tested
+    	ingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A",     model:"TS0601", manufacturer:"_TZE200_rccxox8p"    // being tested by hubivlad
   
     }
     
