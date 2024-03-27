@@ -1,10 +1,10 @@
 {
   "packageName": "Tuya Zigbee Smoke Detector",
   "author": "Krassimir Kossev",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "minimumHEVersion": "2.2.7",
-  "dateReleased": "2023-08-02",
-  "releaseNotes": "1.1.2 2023-08-01 - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2\n1.1.1 2023-04-29 - ping() exception bug fix\n1.1.0 2023-04-07 - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;\n1.0.3 2022-12-15 - added _TZE200_e2bedvo9\n1.0.2 2022-11-17 - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button\n1.0.1 2022-10-31 - added _TZE200_uebojraa\n1.0.0 2022-10-29 - inital version for _TZE200_ntcy3xu1",
+  "dateReleased": "2024-03-26",
+  "releaseNotes": "1.1.3 2024-03-26 hubivlad - added _TZE200_rccxox8p\n1.1.2 2023-08-01 - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2\n1.1.1 2023-04-29 - ping() exception bug fix\n1.1.0 2023-04-07 - extended tuyaMagic (hopefully activates check-in every 4 hours); added capability 'Health Check'; added ping() command and rtt measurement;\n1.0.3 2022-12-15 - added _TZE200_e2bedvo9\n1.0.2 2022-11-17 - notPresentCounter set to 12 hours; states set to 'unknown' on device creation; added Clear Detected Tested buttons; removed Configure button\n1.0.1 2022-10-31 - added _TZE200_uebojraa\n1.0.0 2022-10-29 - inital version for _TZE200_ntcy3xu1",
   "documentationLink": "https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159/2?u=kkossev",
   "communityLink": "https://community.hubitat.com/t/beta-tuya-zigbee-smoke-detector/104159",  
   "drivers": [
