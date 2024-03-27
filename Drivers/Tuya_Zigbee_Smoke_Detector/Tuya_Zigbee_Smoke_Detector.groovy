@@ -21,7 +21,9 @@
  *  ver. 1.1.1 2023-04-29 kkossev - ping() exception bug fix
  *  ver. 1.1.2 2023-08-01 kkossev - added _TZE200_m9skfctm _TZE200_dq1mfjug _TZE200_ux5v4dbd _TZE200_ytibqbra _TZE200_dnz6yvl2
  *  ver. 1.1.3 2023-11-19 kkossev - (dev. branch) fixed _TZE200_m9skfctm battery reporting; fix RTT negative values bug
+ *  ver. 1.1.3 2024-03-26 hubivlad -(main branch) added _TZE200_rccxox8p
  *  ver. 1.2.0 2024-02-20 kkossev - (dev. branch) Groovy lint; added TZE204_ntcy3xu1
+ *  ver. 1.2.1 2024-03-27 kkossev - (dev. branch) merged main branch ver. 1.1.3 commit by hubivlad
  *
  *            TODO: re-send the powerSource event on every check-in, so that HE Active state is refreshed ...
  *            TODO: more tuyaMagic, if the periodic check-in patch doesn't work.
@@ -32,10 +34,8 @@
 import groovy.json.*
 import groovy.transform.Field
 
-//import hubitat.zigbee.zcl.DataType
-
-def version() { '1.2.0' }
-def timeStamp() { '2024/02/20 11:30 AM' }
+def version() { '1.2.1' }
+def timeStamp() { '2024/03/27 7:24 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -83,6 +83,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ux5v4dbd'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_ytibqbra'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_dnz6yvl2'    // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A',     model:'TS0601', manufacturer:'_TZE200_rccxox8p'    // being tested by hubivlad
     }
 
     preferences {
