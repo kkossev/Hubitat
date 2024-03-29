@@ -1,4 +1,4 @@
-/* groovylint-disable NglParseError, ImplicitReturnStatement, InsecureRandom, MethodReturnTypeRequired, MethodSize, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnusedImport, VariableName */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.3',
+    version: '3.0.4',
     documentationLink: ''
 )
 /*
@@ -33,6 +33,7 @@ library(
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
+  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; 
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -47,8 +48,8 @@ library(
  *
 */
 
-String commonLibVersion() { '3.0.3' }
-String thermostatLibStamp() { '2024/03/04 9:56 PM' }
+String commonLibVersion() { '3.0.4' }
+String thermostatLibStamp() { '2024/03/29 10:56 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -93,7 +94,7 @@ metadata {
                 command 'getAllProperties',       [[name: 'Get All Properties']]
             }
         }
-        if (_DEBUG || (deviceType in ['Dimmer', 'ButtonDimmer', 'Switch', 'Valve'])) {
+        if (_DEBUG || (deviceType in ['Dimmer', 'Switch', 'Valve'])) {
             command 'zigbeeGroups', [
                 [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
@@ -105,32 +106,32 @@ metadata {
         if (deviceType in  ['Device', 'MotionSensor']) {
             capability 'MotionSensor'
         }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Fingerbot', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
-        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'Fingerbot', 'ButtonDimmer', 'AqaraCube']) {
+        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'AqaraCube']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
         }
         if (deviceType in  ['Thermostat']) {
             capability 'Thermostat'
         }
-        if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Fingerbot', 'Bulb']) {
+        if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Bulb']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
             }
         }
-        if (deviceType in ['Dimmer', 'ButtonDimmer', 'Bulb']) {
+        if (deviceType in ['Dimmer', 'Bulb']) {
             capability 'SwitchLevel'
         }
-        if (deviceType in  ['Button', 'ButtonDimmer', 'AqaraCube']) {
+        if (deviceType in  ['AqaraCube']) {
             capability 'PushableButton'
             capability 'DoubleTapableButton'
             capability 'HoldableButton'
             capability 'ReleasableButton'
         }
-        if (deviceType in  ['Device', 'Fingerbot']) {
+        if (deviceType in  ['Device']) {
             capability 'Momentary'
         }
         if (deviceType in  ['Device', 'THSensor', 'Thermostat']) {
@@ -168,7 +169,7 @@ metadata {
                 if (device.hasCapability('Battery')) {
                     input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
                 }
-                if ((deviceType in  ['Switch', 'Plug', 'Dimmer']) && _THREE_STATE == true) {
+                if ((deviceType in  ['Switch', 'Plug', 'Dimmer', 'Fingerbot']) && _THREE_STATE == true) {
                     input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
                 }
                 input name: 'traceEnable', type: 'bool', title: '<b>Enable trace logging</b>', defaultValue: false, description: '<i>Turns on detailed extra trace logging for 30 minutes.</i>'
@@ -232,7 +233,7 @@ boolean isChattyDeviceReport(final String description)  { return false /*(descri
 boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
-boolean isFingerbot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy'] }
+boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
 boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
@@ -824,7 +825,7 @@ void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=fals
     map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
     map.isStateChange = true
     //
-    int latestBatteryEvent = safeToInt(device.latestState('battery', skipCache=true))
+    Object latestBatteryEvent = device.currentState('battery')
     Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now()
     //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}"
     int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
@@ -870,11 +871,11 @@ void parseIdentityCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void parseScenesCluster(final Map descMap) {
-    if (DEVICE_TYPE in ['ButtonDimmer']) {
-        parseScenesClusterButtonDimmer(descMap)
+    if (this.respondsTo('customParseScenesCluster')) {
+        customParseScenesCluster(descMap)
     }
     else {
-        logWarn "unprocessed ScenesCluste attribute ${descMap.attrId}"
+        logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}"
     }
 }
 
@@ -1100,11 +1101,9 @@ void groupCommandsHelp(val) {
 */
 
 void parseOnOffCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
-    if (DEVICE_TYPE in ['ButtonDimmer']) {
-        parseOnOffClusterButtonDimmer(descMap)
+    if (this.respondsTo('customParseOnOffCluster')) {
+        customParseOnOffCluster(descMap)
     }
-
     else if (descMap.attrId == '0000') {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
         int rawValue = hexStrToUnsignedInt(descMap.value)
@@ -1145,7 +1144,7 @@ void off() {
         logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
         return
     }
-    List cmds = settings?.inverceSwitch == false ?  zigbee.off()  : zigbee.on()
+    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "off() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -1180,7 +1179,7 @@ void on() {
         customOn()
         return
     }
-    List cmds = settings?.inverceSwitch == false ?  zigbee.on()  : zigbee.off()
+    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "on() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -1211,7 +1210,7 @@ void on() {
 
 void sendSwitchEvent(int switchValuePar) {
     int switchValue = safeToInt(switchValuePar)
-    if (settings?.inverceSwitch == true) {
+    if (settings?.inverceSwitch != null && settings?.inverceSwitch == true) {
         switchValue = (switchValue == 0x00) ? 0x01 : 0x00
     }
     String value = (switchValue == null) ? 'unknown' : (switchValue == 0x00) ? 'off' : (switchValue == 0x01) ? 'on' : 'unknown'
@@ -1247,6 +1246,9 @@ void sendSwitchEvent(int switchValuePar) {
     logInfo "${map.descriptionText}"
     sendEvent(map)
     clearIsDigital()
+    if (this.respondsTo('customSwitchEventPostProcesing')) {
+        customSwitchEventPostProcesing(map)
+    }    
 }
 
 @Field static final Map powerOnBehaviourOptions = [
@@ -1456,12 +1458,13 @@ void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=fal
 
 void push() {                // Momentary capability
     logDebug 'push momentary'
-    if (DEVICE_TYPE in ['Fingerbot'])     { pushFingerbot(); return }
+    if (this.respondsTo('customPush')) { customPush(); return }
     logWarn "push() not implemented for ${(DEVICE_TYPE)}"
 }
 
 void push(int buttonNumber) {    //pushableButton capability
-    if (DEVICE_TYPE in ['Fingerbot'])     { pushFingerbot(buttonNumber); return }
+    logDebug "push button $buttonNumber"
+    if (this.respondsTo('customPush')) { customPush(buttonNumber); return }
     sendButtonEvent(buttonNumber, 'pushed', isDigital = true)
 }
 
@@ -1493,8 +1496,8 @@ void sendSupportedButtonValuesEvent(supportedValues) {
 */
 void parseLevelControlCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
-    if (DEVICE_TYPE in ['ButtonDimmer']) {
-        parseLevelControlClusterButtonDimmer(descMap)
+    if (this.respondsTo('customParseLevelControlCluster')) {
+        customParseLevelControlCluster(descMap)
     }
     else if (DEVICE_TYPE in ['Bulb']) {
         parseLevelControlClusterBulb(descMap)
@@ -1661,7 +1664,10 @@ private List<String> setLevelPrivate(final Object value, final Integer rate = 0,
  */
 void setLevel(final Object value, final Object transitionTime = null) {
     logInfo "setLevel (${value}, ${transitionTime})"
-    if (DEVICE_TYPE in  ['ButtonDimmer']) { setLevelButtonDimmer(value, transitionTime); return }
+    if (this.respondsTo('customSetLevel')) {
+        customSetLevel(value, transitionTime)
+        return
+    }
     if (DEVICE_TYPE in  ['Bulb']) { setLevelBulb(value, transitionTime); return }
     final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
     scheduleCommandTimeoutCheck()
@@ -1947,9 +1953,8 @@ void handleMultistateInputEvent(int value, boolean isDigital=false) {
 */
 
 void parseWindowCoveringCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
-    if (DEVICE_TYPE in  ['ButtonDimmer']) {
-        parseWindowCoveringClusterButtonDimmer(descMap)
+    if (this.respondsTo('customParseWindowCoveringCluster')) {
+        customParseWindowCoveringCluster(descMap)
     }
     else {
         logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}"
@@ -2046,7 +2051,7 @@ void parseTuyaCluster(final Map descMap) {
             int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
             int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            logDebug "dp_id=${dp_id} dp=${dp} fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             processTuyaDP( descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
         }
@@ -2057,7 +2062,11 @@ void parseTuyaCluster(final Map descMap) {
 }
 
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    if (DEVICE_TYPE in ['Fingerbot'])     { processTuyaDpFingerbot(descMap, dp, dp_id, fncmd); return }
+    if (this.respondsTo(customProcessTuyaDp)) {
+        if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
+            return
+        }
+    }
     // check if the method  method exists
     if (this.respondsTo(processTuyaDPfromDeviceProfile)) {
         if (processTuyaDPfromDeviceProfile(descMap, dp, dp_id, fncmd, dp_len) == true) {    // sucessfuly processed the new way - we are done.  version 3.0
@@ -2165,8 +2174,6 @@ List<String> initializeDevice() {
     if (this.respondsTo('customInitializeDevice')) {
         return customInitializeDevice()
     }
-    else if (DEVICE_TYPE in  ['ButtonDimmer'])   { return initializeDeviceButtonDimmer() }
-
     // not specific device type - do some generic initializations
     if (DEVICE_TYPE in  ['THSensor']) {
         cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
@@ -2191,9 +2198,7 @@ List<String> configureDevice() {
     if (this.respondsTo('customConfigureDevice')) {
         cmds += customConfigureDevice()
     }
-    else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += configureDeviceFingerbot() }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
-    else if (DEVICE_TYPE in  ['ButtonDimmer']) { cmds += configureDeviceButtonDimmer() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     if ( cmds == null || cmds == []) {
         cmds = ['delay 277',]
@@ -2219,7 +2224,6 @@ void refresh() {
         cmds += customRefresh()
     }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += refreshAqaraCube() }
-    else if (DEVICE_TYPE in  ['Fingerbot'])  { cmds += refreshFingerbot() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
         // generic refresh handling, based on teh device capabilities
@@ -2436,7 +2440,7 @@ void autoPoll() {
  * Invoked by Hubitat when the driver configuration is updated
  */
 void updated() {
-    logInfo 'updated...'
+    logInfo 'updated()...'
     checkDriverVersion()
     logInfo"driver version ${driverVersionAndTimeStamp()}"
     unschedule()
@@ -2532,7 +2536,7 @@ void configureNow() {
 List<String> configure() {
     List<String> cmds = []
     logInfo 'configure...'
-    logDebug settings
+    logDebug "configure(): settings: $settings"
     cmds += tuyaBlackMagic()
     if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()
@@ -2610,7 +2614,7 @@ String getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationEP())]
 
 void checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
-        logDebug "updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
         initializeVars(fullInit = false)
@@ -2715,7 +2719,7 @@ void initializeVars( boolean fullInit = false ) {
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
-    
+
     if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
         if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
@@ -2727,9 +2731,7 @@ void initializeVars( boolean fullInit = false ) {
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
-    if (DEVICE_TYPE in ['Fingerbot'])  { initVarsFingerbot(fullInit); initEventsFingerbot(fullInit) }
     if (DEVICE_TYPE in ['AqaraCube'])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
-    if (DEVICE_TYPE in ['ButtonDimmer']) { initVarsButtonDimmer(fullInit);     initEventsButtonDimmer(fullInit) }
     if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
     final String mm = device.getDataValue('model')
