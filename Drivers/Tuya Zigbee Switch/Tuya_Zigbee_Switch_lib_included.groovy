@@ -1,6 +1,5 @@
-/* groovylint-disable CompileStatic, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, NglParseError, ParameterName, UnusedImport */
 /**
- *  Tuya Zigbee Fingerbot - Device Driver for Hubitat Elevation
+ *  Tuya Zigbee Switch - Device Driver for Hubitat Elevation
  *
  *  https://community.hubitat.com/t/dynamic-capabilities-commands-and-attributes-for-drivers/98342
  *
@@ -16,20 +15,22 @@
  * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
- * ver. 2.0.3  2023-06-10 kkossev  - Tuya Zigbee Fingerbot
- * ver. 2.1.0  2023-07-15 kkossev  - Fingerbot driver
- * ver. 2.1.2  2023-07-23 kkossev  - Fingerbot library;
- * ver. 2.1.3  2023-08-28 kkossev  - Added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;
- * ver. 2.1.4  2023-08-28 kkossev  - Added capability PushableButton for Fingerbot; sendTuyCommand independent from the particular Fingerboot fingerprint;
- *             2023-09-13 kkossev  - Added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot
- * ver. 3.0.4  2024-03-29 kkossev  - (dev. branch) Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
- *                                   push() toggles on/off;
+ * ver. 2.0.4  2023-06-29 kkossev  - Tuya Zigbee Switch;
+ * ver. 2.1.2  2023-07-23 kkossev  - Switch library;
+ * ver. 2.1.3  2023-08-12 kkossev  - ping() improvements; added ping OK, Fail, Min, Max, rolling average counters; added clearStatistics(); added updateTuyaVersion() updateAqaraVersion(); added HE hub model and platform version;
+ * ver. 3.0.0  2023-11-24 kkossev  - (dev. branch) use commonLib; added AlwaysOn option; added ignore duplcated on/off events option;
+ * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices;
+ * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
+ * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
  *
- *                                   TODO:
+ *                                   TODO: add toggle() command; initialize 'switch' to unknown
+ *                                   TODO: add power-on behavior option
+ *                                   TODO: add 'allStatus' attribute
+ *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.0.4' }
-static String timeStamp() { '2024/03/29 11:50 PM' }
+static String version() { "3.0.3" }
+static String timeStamp() {"2024/02/24 10:47 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -41,300 +42,224 @@ import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
+deviceType = "Switch"
+@Field static final String DEVICE_TYPE = "Switch"
 
 
-deviceType = 'Fingerbot'
-@Field static final String DEVICE_TYPE = 'Fingerbot'
+// @Field static final Boolean _THREE_STATE = true  // move from the commonLib here?
 
 metadata {
-    definition(
-        name: 'Tuya Zigbee Fingerbot',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
-        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
+    definition (
+        name: 'Tuya Zigbee Switch',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Switch/Tuya_Zigbee_Switch_lib_included.groovy',
+        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
-        capability 'Actuator'
-        capability 'Battery'
-        capability 'Switch'
-        capability "PushableButton"
-        capability 'Momentary'
-
-        attribute 'batteryVoltage', 'number'
+        if (_DEBUG) {
+            command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
+            command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
+            command "tuyaTest", [
+                [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
+                [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
+                [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
+            ]
+        }
+        capability "Actuator"
+        capability "Switch"
         if (_THREE_STATE == true) {
-            attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
+            attribute "switch", "enum", SwitchThreeStateOpts.options.values() as List<String>
         }
 
-        attribute 'fingerbotMode', 'enum', FingerbotModeOpts.options.values() as List<String>
-        attribute 'direction', 'enum', FingerbotDirectionOpts.options.values() as List<String>
-        attribute 'touchButton', 'enum', FingerbotButtonOpts.options.values() as List<String>
-        attribute 'pushTime', 'number'
-        attribute 'dnPosition', 'number'
-        attribute 'upPosition', 'number'
-
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0006,EF00,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3210_dse8ogfy', deviceJoinName: 'Tuya Zigbee Fingerbot'
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0006,EF00,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3210_j4pdtz9v', deviceJoinName: 'Moes Zigbee Fingerbot'        // https://community.hubitat.com/t/release-tuya-zigbee-fingerbot/118719/38?u=kkossev
-
-        preferences {
-            input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-            input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-            input name: 'fingerbotMode', type: 'enum', title: '<b>Fingerbot Mode</b>', options: FingerbotModeOpts.options, defaultValue: FingerbotModeOpts.defaultValue, required: true, description: '<i>Push or Switch.</i>'
-            input name: 'direction', type: 'enum', title: '<b>Fingerbot Direction</b>', options: FingerbotDirectionOpts.options, defaultValue: FingerbotDirectionOpts.defaultValue, required: true, description: '<i>Finger movement direction.</i>'
-            input name: 'pushTime', type: 'number', title: '<b>Push Time</b>', description: '<i>The time that the finger will stay in down position in Push mode, seconds</i>', required: true, range: '0..255', defaultValue: 1
-            input name: 'upPosition', type: 'number', title: '<b>Up Postition</b>', description: '<i>Finger up position, (0..50), percent</i>', required: true, range: '0..50', defaultValue: 0
-            input name: 'dnPosition', type: 'number', title: '<b>Down Postition</b>', description: '<i>Finger down position (51..100), percent</i>', required: true, range: '51..100', defaultValue: 100
-            input name: 'fingerbotButton', type: 'enum', title: '<b>Fingerbot Button</b>', options: FingerbotButtonOpts.options, defaultValue: FingerbotButtonOpts.defaultValue, required: true, description: '<i>Disable or enable the Fingerbot touch button</i>'
+        // deviceType specific capabilities, commands and attributes
+        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
+            command "zigbeeGroups", [
+                [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
+                [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
+            ]
         }
+
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0007,0B05,FC57", outClusters:"0019", model:"ZBMINIL2", manufacturer:"SONOFF", deviceJoinName: "SONOFF ZBMINIL2"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "TRADFRI control outlet"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "TRADFRI control outlet"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006", outClusters:"0019,000A", model:"TS0101", manufacturer:"_TZ3000_pnzfdr9y", deviceJoinName: "SONOFF ZBMINIL2"
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0B05,FC0F", outClusters:"0019", model:"Plug Z3", manufacturer:"LEDVANCE", deviceJoinName: "Plug Z3"
     }
-}
 
-boolean isFingerbotFingerot()  { (device?.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3210_dse8ogfy', '_TZ3210_j4pdtz9v'] }  // added 03/29/2024
-
-@Field static final Map FingerbotModeOpts = [
-    defaultValue: 0,
-    options     : [0: 'push', 1: 'switch']
-]
-@Field static final Map FingerbotDirectionOpts = [
-    defaultValue: 0,
-    options     : [0: 'normal', 1: 'reverse']
-]
-@Field static final Map FingerbotButtonOpts = [
-    defaultValue: 1,
-    options     : [0: 'disabled', 1: 'enabled']
-]
-
-void customPush() {
-    String currentState = device.currentState('switch')?.value ?: 'n/a'
-    logDebug "customPush() currentState=${currentState} fingerbotMode = ${FingerbotModeOpts.options[settings?.fingerbotMode as int]} (${settings?.fingerbotMode as int})"
-    if ((settings?.fingerbotMode as int) == 0) { // push
-        customOn()
-    } 
-    else { // switch
-        if (currentState == 'on') {
-            customOff()
-        } else {
-            customOn()
+    preferences {
+        input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        input (name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false)
+        if (advancedOptions == true || advancedOptions == true) {
+            input (name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beet </i>", defaultValue: false)
         }
+
     }
+
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedMethodParameter */
-void customPush(buttonNumber) {    //pushableButton capability
-    customPush()
-}
+@Field static final String ONOFF = "Switch"
+@Field static final String POWER = "Power"
+@Field static final String INST_POWER = "InstPower"
+@Field static final String ENERGY = "Energy"
+@Field static final String VOLTAGE = "Voltage"
+@Field static final String AMPERAGE = "Amperage"
+@Field static final String FREQUENCY = "Frequency"
+@Field static final String POWER_FACTOR = "PowerFactor"
 
-void customSwitchEventPostProcesing(final Map event) {
-    if (event.name == 'switch' && event.value == 'on' && (settings?.fingerbotMode as int) == 0) {   // push mode
-        int duration = settings?.pushTime ?: 1
-        logDebug "customSwitchEventPostProcesing() auto switching off after ${duration} seconds"
-        runIn(duration, 'autoOff', [overwrite: true])
-    }
-    else {
-        logDebug "customSwitchEventPostProcesing() - skipped event=${event}"
-    }
-}
-
-void autoOff() {
-    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
-    String currentState = device.currentState('switch')?.value ?: 'n/a'
-    logDebug "autoOff() currentState=${currentState}"
-    String descriptionText = "switch is auto off (push mode)"
-    sendEvent(name: 'switch', value: 'off', descriptionText: descriptionText, type: 'digital', isStateChange: true)
-    logInfo "${descriptionText}"
-}
-
-
-void customOff() {
-    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
-    String currentState = device.currentState('switch')?.value ?: 'n/a'
-    logDebug "customOff() currentState=${currentState}"
-    if (_THREE_STATE == true && settings?.threeStateEnable == true) {
-        if (currentState == 'off') {
-            runIn(1, 'refresh',  [overwrite: true])
-        }
-        String value = SwitchThreeStateOpts.options[2]    // 'switching_on'
-        String descriptionText = "${value}"
-        if (logEnable) { descriptionText += ' (2)' }
-        sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
-        logInfo "${descriptionText}"
-    }
-    state.states['isDigital'] = true
-    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
-    sendZigbeeCommands(cmds)
-}
-
-void customOn() {
-    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
-    String currentState = device.currentState('switch')?.value ?: 'n/a'
-    logDebug "customOn() currentState=${currentState}"
-    if (_THREE_STATE == true && settings?.threeStateEnable == true) {
-        if ((device.currentState('switch')?.value ?: 'n/a') == 'on') {
-            runIn(1, 'refresh',  [overwrite: true])
-        }
-        String value = SwitchThreeStateOpts.options[3]    // 'switching_on'
-        String descriptionText = "${value}"
-        if (logEnable) { descriptionText += ' (2)' }
-        sendEvent(name: 'switch', value: value, descriptionText: descriptionText, type: 'digital', isStateChange: true)
-        logInfo "${descriptionText}"
-    }
-    state.states['isDigital'] = true
-    runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
-    sendZigbeeCommands(cmds)
-}
-
-
-List<String> customConfigureDevice() {
-    List<String> cmds = []
-
-    final int mode = settings.fingerbotMode != null ? (settings.fingerbotMode as int) : FingerbotModeOpts.defaultValue
-    logDebug "setting fingerbotMode to ${FingerbotModeOpts.options[mode as int]} (${mode})"
-    cmds = sendTuyaCommand('65', DP_TYPE_BOOL, zigbee.convertToHexString(mode as int, 2) )
-
-    final int duration = settings.pushTime != null ? (settings.pushTime as int) : 1
-    logDebug "setting pushTime to ${duration} seconds)"
-    cmds += sendTuyaCommand('67', DP_TYPE_VALUE, zigbee.convertToHexString(duration as int, 8) )
-
-    final int dnPos = settings.dnPosition != null ? (settings.dnPosition as int) : 100
-    logDebug "setting dnPosition to ${dnPos} %"
-    cmds += sendTuyaCommand('66', DP_TYPE_VALUE, zigbee.convertToHexString(dnPos as int, 8) )
-
-    final int upPos = settings.upPosition != null ? (settings.upPosition as int) : 0
-    logDebug "setting upPosition to ${upPos} %"
-    cmds += sendTuyaCommand('6A', DP_TYPE_VALUE, zigbee.convertToHexString(upPos as int, 8) )
-
-    final int dir = settings.direction != null ? (settings.direction as int) : FingerbotDirectionOpts.defaultValue
-    logDebug "setting fingerbot direction to ${FingerbotDirectionOpts.options[dir]} (${dir})"
-    cmds += sendTuyaCommand('68', DP_TYPE_BOOL, zigbee.convertToHexString(dir as int, 2) )
-
-    int button = settings.fingerbotButton != null ? (settings.fingerbotButton as int) : FingerbotButtonOpts.defaultValue
-    logDebug "setting fingerbotButton to ${FingerbotButtonOpts.options[button as int]} (${button})"
-    cmds += sendTuyaCommand('6B', DP_TYPE_BOOL, zigbee.convertToHexString(button as int, 2) )
-
-    logDebug "configureDeviceFingerbot() : ${cmds}"
-    return cmds
-}
-
-void customUpdated() {
-    logDebug "customUpdated()"
-    List<String> cmds = customConfigureDevice()
-    sendZigbeeCommands(cmds)
-}
-
-void customInitializeVars(boolean fullInit=false) {
-    logDebug "customInitializeVars(${fullInit})"
-    if (fullInit || settings?.fingerbotMode == null) { device.updateSetting('fingerbotMode', [value: FingerbotModeOpts.defaultValue.toString(), type: 'enum']) }
-    if (fullInit || settings?.pushTime == null) { device.updateSetting('pushTime', [value:1, type:'number']) }
-    if (fullInit || settings?.upPosition == null) { device.updateSetting('upPosition', [value:0, type:'number']) }
-    if (fullInit || settings?.dnPosition == null) { device.updateSetting('dnPosition', [value:100, type:'number']) }
-    if (fullInit || settings?.direction == null) { device.updateSetting('direction', [value: FingerbotDirectionOpts.defaultValue.toString(), type: 'enum']) }
-    if (fullInit || settings?.fingerbotButton == null) { device.updateSetting('fingerbotButton', [value: FingerbotButtonOpts.defaultValue.toString(), type: 'enum']) }
-    if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', true) }
-}
-
-/* groovylint-disable-next-line EmptyMethod, UnusedMethodParameter */
-void customInitEvents(boolean fullInit=false) {
-/*  not needed?
-    sendNumberOfButtonsEvent(1)
-    sendSupportedButtonValuesEvent("pushed")
-*/
-}
-
-/*
-Switch1             1
-Mode                101
-Degree of declining    code: 102
-Duration             103
-Switch Reverse        104
-Battery Power        105
-Increase            106
-Tact Switch         107
-Click                 108
-Custom Program        109
-Producion Test        110
-Sports Statistics    111
-Custom Timing        112
-*/
-
-/* groovylint-disable-next-line UnusedMethodParameter */
-boolean customProcessTuyaDp(final Map descMap, int dp, int dp_id, int fncmd, final int dp_len=0) {
-    // added 02/29/2024 - filter command 0x06 !
-    if (descMap.command == '06') {
-        logDebug "customProcessTuyaDp: filtered command ${descMap.command}!"
-        return true // ignore, no further processing
-    }
-    switch (dp) {
-        case 0x01 : // on/off
-            logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            sendSwitchEvent(fncmd)
-            break
-        case 0x04 : // battery
-            sendBatteryPercentageEvent(fncmd)
-            break
-
-        case 0x65 : // (101)
-            String value = FingerbotModeOpts.options[fncmd as int]
-            String descriptionText = "Fingerbot mode is ${value} (${fncmd})"
-            sendEvent(name: 'fingerbotMode', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x66 : // (102)
-            int value = fncmd as int
-            String descriptionText = "Fingerbot Down Position is ${value} %"
-            sendEvent(name: 'dnPosition', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x67 : // (103)
-            int value = fncmd as int
-            String descriptionText = "Fingerbot push time (duration) is ${value} seconds"
-            sendEvent(name: 'pushTime', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x68 : // (104)
-            String value = FingerbotDirectionOpts.options[fncmd as int]
-            String descriptionText = "Fingerbot switch direction is ${value} (${fncmd})"
-            sendEvent(name: 'direction', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x69 : // (105)
-            logDebug "Fingerbot Battery Power is ${fncmd}"
-            sendBatteryPercentageEvent(fncmd)
-            break
-        case 0x6A : // (106)
-            int value = fncmd as int
-            String descriptionText = "Fingerbot Up Position is ${value} %"
-            sendEvent(name: 'upPosition', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x6B : // (107)
-            String value = FingerbotButtonOpts.options[fncmd as int]
-            String descriptionText = "Fingerbot Touch Button is ${value} (${fncmd})"
-            sendEvent(name: 'touchButton', value: value, descriptionText: descriptionText, type: 'physical')
-            logInfo "${descriptionText}"
-            break
-        case 0x6C : // (108)
-            logInfo "Fingerbot Click is ${fncmd}"
-            break
-        case 0x6D : // (109)
-            logInfo "Fingerbot Custom Program is ${fncmd}"
-            break
-        case 0x6E : // (110)
-            logInfo "Fingerbot Producion Test is ${fncmd}"
-            break
-        case 0x6F : // (111)
-            logInfo "Fingerbot Sports Statistics is ${fncmd}"
-            break
-        case 0x70 : // (112)
-            logInfo "Fingerbot Custom Timing is ${fncmd}"
-            break
-        default :
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            return false
-    }
-    return true
-}
+def isZBMINIL2()   { /*true*/(device?.getDataValue('model') ?: 'n/a') in ['ZBMINIL2'] }
 
 List<String> customRefresh() {
     List<String> cmds = []
-    logDebug "customRefresh() (n/a) : ${cmds} "
+    cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay=200)
+    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
+    logDebug "customRefresh() : ${cmds}"
     return cmds
+}
+
+void customInitVars(boolean fullInit=false) {
+    logDebug "customInitVars(${fullInit})"
+    if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
+    if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", false)
+}
+
+void customInitEvents(boolean fullInit=false) {
+}
+
+List<String> customConfigureDevice() {
+    List<String> cmds = []
+    if (isZBMINIL2()) {
+        logDebug "customConfigureDevice() : unbind ZBMINIL2 poll control cluster"
+        // Unbind genPollCtrl (0x0020) to prevent device from sending checkin message.
+        // Zigbee-herdsmans responds to the checkin message which causes the device to poll slower.
+        // https://github.com/Koenkk/zigbee2mqtt/issues/11676
+        // https://github.com/Koenkk/zigbee2mqtt/issues/10282
+        // https://github.com/zigpy/zha-device-handlers/issues/1519
+        cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
+
+    }
+/*
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0000 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0001 {${device.zigbeeId}} {}", "delay 251", ]
+
+    cmds += zigbee.readAttribute(0xFCC0, 0x0009, [mfgCode: 0x115F], delay=200)
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay=200)
+    cmds += zigbee.readAttribute(0xFCC0, 0x0148, [mfgCode: 0x115F], delay=200)
+    cmds += zigbee.readAttribute(0xFCC0, 0x0149, [mfgCode: 0x115F], delay=200)
+*/
+    cmds += configureReporting("Write", ONOFF,  "1", "65534", "0", sendNow=false)    // switch state should be always reported
+    logDebug "customConfigureDevice() : ${cmds}"
+    return cmds
+}
+
+void customParseElectricalMeasureCluster(descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    logDebug "customParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+}
+
+void customParseMeteringCluster(descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    def value = hexStrToUnsignedInt(descMap.value)
+    logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
+}
+
+def configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", Boolean sendNow=true ) {
+    int intMinTime = safeToInt(minTime)
+    int intMaxTime = safeToInt(maxTime)
+    int intDelta = safeToInt(delta)
+    String epString = state.destinationEP
+    def ep = safeToInt(epString)
+    if (ep==null || ep==0) {
+        ep = 1
+        epString = "01"
+    }
+
+    logDebug "configureReporting operation=${operation}, measurement=${measurement}, minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
+
+    List<String> cmds = []
+
+    switch (measurement) {
+        case ONOFF :
+            if (operation == "Write") {
+                cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${epString} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
+                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]
+            }
+            else if (operation == "Disable") {
+                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 65535 65535 {}", "delay 251", ]    // disable switch automatic reporting
+            }
+            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [destEndpoint :ep], 251)    // read it back
+            break
+        case ENERGY :    // default delta = 1 Wh (0.001 kWh)
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, (intDelta*getEnergyDiv() as int))
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, 0xFFFF, 0xFFFF, 0x0000)    // disable energy automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :ep], 252)
+            break
+        case INST_POWER :        // 0x702:0x400
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, intMinTime, intMaxTime, (intDelta*getPowerDiv() as int))
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, 0xFFFF, 0xFFFF, 0x0000)    // disable power automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0702, 0x0400, [destEndpoint :ep], 253)
+            break
+        case POWER :        // Active power default delta = 1
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, (intDelta*getPowerDiv() as int) )   // bug fixes in ver  1.6.0 - thanks @guyee
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, 0xFFFF, 0xFFFF, 0x8000)    // disable power automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :ep], 254)
+            break
+        case VOLTAGE :    // RMS Voltage default delta = 1
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getVoltageDiv() as int))
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable voltage automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :ep], 255)
+            break
+        case AMPERAGE :    // RMS Current default delta = 100 mA = 0.1 A
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getCurrentDiv() as int))
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable amperage automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :ep], 256)
+            break
+        case FREQUENCY :    // added 03/27/2023
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getFrequencyDiv() as int))
+            }
+            else if (operation == "Disable") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable frequency automatic reporting - tested with Frient
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0300, [destEndpoint :ep], 257)
+            break
+        case POWER_FACTOR : // added 03/27/2023
+            if (operation == "Write") {
+                cmds += zigbee.configureReporting(0x0B04, 0x0510,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getPowerFactorDiv() as int))
+            }
+            cmds += zigbee.reportingConfiguration(0x0B04, 0x0510, [destEndpoint :ep], 258)
+            break
+        default :
+            break
+    }
+    if (cmds != null) {
+        if (sendNow == true) {
+            sendZigbeeCommands(cmds)
+        }
+        else {
+            return cmds
+        }
+    }
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
