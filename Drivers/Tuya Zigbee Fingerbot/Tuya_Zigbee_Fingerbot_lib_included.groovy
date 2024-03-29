@@ -29,7 +29,7 @@
  */
 
 static String version() { '3.0.4' }
-static String timeStamp() { '2024/03/29 11:47 PM' }
+static String timeStamp() { '2024/03/29 11:50 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -122,7 +122,7 @@ void customPush(buttonNumber) {    //pushableButton capability
 }
 
 void customSwitchEventPostProcesing(final Map event) {
-    if (event.name == 'switch' && event.value == 'on') {
+    if (event.name == 'switch' && event.value == 'on' && (settings?.fingerbotMode as int) == 0) {   // push mode
         int duration = settings?.pushTime ?: 1
         logDebug "customSwitchEventPostProcesing() auto switching off after ${duration} seconds"
         runIn(duration, 'autoOff', [overwrite: true])
@@ -391,7 +391,7 @@ library( // library marker kkossev.commonLib, line 2
 */ // library marker kkossev.commonLib, line 49
 
 String commonLibVersion() { '3.0.4' } // library marker kkossev.commonLib, line 51
-String thermostatLibStamp() { '2024/03/29 10:56 PM' } // library marker kkossev.commonLib, line 52
+String thermostatLibStamp() { '2024/03/29 11:50 PM' } // library marker kkossev.commonLib, line 52
 
 import groovy.transform.Field // library marker kkossev.commonLib, line 54
 import hubitat.device.HubMultiAction // library marker kkossev.commonLib, line 55
