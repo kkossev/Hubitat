@@ -49,7 +49,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.4' }
-String thermostatLibStamp() { '2024/03/29 10:56 PM' }
+String thermostatLibStamp() { '2024/03/29 11:50 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
