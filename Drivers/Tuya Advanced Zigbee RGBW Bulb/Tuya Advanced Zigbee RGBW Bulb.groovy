@@ -18,12 +18,13 @@
  * ver. 1.0.0  2023-04-14 kkossev  - Initial test version : Hubitat 'F2 bug' workaround; commented out Philips Hue specific commands; trap for Hubitat F2 bug
  * ver. 1.0.1  2023-04-24 kkossev  - (dev.branch) added Lidl TS0505A _TZ3000_9cpuaca6 ;
  * ver. 1.1.0  2024-03-20 kkossev  - (dev.branch) added _TZ3210_rcggc0ys _TZ3210_4zinq6io _TZ3210_3lbtuxgp; removed Philips Hue specific commands; added doNotDisturb mode preference
+ * ver. 1.1.1  2024-03-29 kkossev  - (dev.branch)
  *
  *                                   TODO: ping() rtt measurements
  */
 
-static String version()   { '1.1.0' }
-static String timeStamp() { '2023/03/20 10:35 PM' }
+static String version()   { '1.1.1' }
+static String timeStamp() { '2023/03/29 7:15 AM' }
 
 @Field static final boolean _DEBUG = false
 
@@ -164,7 +165,7 @@ List<String> configure() {
         cmds += zigbee.writeAttribute(zigbee.COLOR_CONTROL_CLUSTER, 0x4010, DataType.UINT16, 0xFFFF, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS)
     }
     if (settings.doNotDisturb != null) {
-        log.info "configure: setting Tuya DND moode to 0x${intToHexStr(settings.doNotDisturb as Integer)}"
+        log.info "configure: setting Tuya DND mode to 0x${intToHexStr(settings.doNotDisturb as Integer)}"
         // https://github.com/Koenkk/zigbee-herdsman/blob/0408bcc7196a520f6314c9bb5e18e377d54a8667/src/zcl/definition/cluster.ts#L2198-L2458
         String mode = settings.doNotDisturb == 0 ? '00' : '01'
         cmds += zigbee.command(zigbee.COLOR_CONTROL_CLUSTER, 0xFA, [destEndpoint:safeToInt(getDestinationEP())], DELAY_MS, "${mode}")

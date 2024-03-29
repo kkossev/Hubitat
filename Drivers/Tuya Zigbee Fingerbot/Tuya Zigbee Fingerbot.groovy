@@ -29,7 +29,7 @@
  */
 
 static String version() { '3.0.4' }
-static String timeStamp() { '2024/03/29 11:47 PM' }
+static String timeStamp() { '2024/03/29 11:49 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -122,7 +122,7 @@ void customPush(buttonNumber) {    //pushableButton capability
 }
 
 void customSwitchEventPostProcesing(final Map event) {
-    if (event.name == 'switch' && event.value == 'on') {
+    if (event.name == 'switch' && event.value == 'on' && (settings?.fingerbotMode as int) == 0) {   // push mode
         int duration = settings?.pushTime ?: 1
         logDebug "customSwitchEventPostProcesing() auto switching off after ${duration} seconds"
         runIn(duration, 'autoOff', [overwrite: true])
