@@ -33,7 +33,7 @@ library(
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; 
+  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -49,7 +49,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.4' }
-String thermostatLibStamp() { '2024/03/29 11:50 PM' }
+String commonLibStamp() { '2024/03/29 11:56 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -100,21 +100,18 @@ metadata {
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'Thermostat', 'AqaraCube']) {
+        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'AqaraCube']) {
             capability 'Sensor'
         }
         if (deviceType in  ['Device', 'MotionSensor']) {
             capability 'MotionSensor'
         }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Thermostat', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
         if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'AqaraCube']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
-        }
-        if (deviceType in  ['Thermostat']) {
-            capability 'Thermostat'
         }
         if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Bulb']) {
             capability 'Switch'
@@ -134,7 +131,7 @@ metadata {
         if (deviceType in  ['Device']) {
             capability 'Momentary'
         }
-        if (deviceType in  ['Device', 'THSensor', 'Thermostat']) {
+        if (deviceType in  ['Device', 'THSensor']) {
             capability 'TemperatureMeasurement'
         }
         if (deviceType in  ['Device', 'THSensor']) {
@@ -2804,7 +2801,7 @@ void getAllProperties() {
     log.trace 'Done'
 }
 
-// delete all Preferences
+// delete all Preferences 
 void deleteAllSettings() {
     settings.each { it ->
         logDebug "deleting ${it.key}"

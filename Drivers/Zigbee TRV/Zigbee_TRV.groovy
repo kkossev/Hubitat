@@ -25,10 +25,12 @@
  * ver. 3.0.5  2023-12-09 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
+ * ver. 3.0.8  2024-03-30 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB
  *
- *                                   WIP: TUYA_SASWELL group ;
- *                                   TOOD: Sonoff : decode weekly shcedule responses (command 0x00)
- *                                   TOOD: Aqara : dev:42172023-12-14 06:48:22.925errorjava.lang.NumberFormatException: For input string: "03281A052101000A21E2CC0D231E0A00001123010000006520006629D809672940066823000000006920646A2000" on line 473 (method parse)
+ *                                   TODO: Test VRT-100
+ *                                   TODO: Test Aqara TRV
+ *                                   TODO: Sonoff : decode weekly shcedule responses (command 0x00)
+ *                                   TODO: Aqara : dev:42172023-12-14 06:48:22.925errorjava.lang.NumberFormatException: For input string: "03281A052101000A21E2CC0D231E0A00001123010000006520006629D809672940066823000000006920646A2000" on line 473 (method parse)
  *                                   TODO: BRT-100 : what is emergencyHeatingTime and boostTime ?
  *                                   TODO: initializeDeviceThermostat() - configure in the device profile !
  *                                   TODO: partial match for the fingerprint (model if Tuya, manufacturer for the rest)
@@ -69,18 +71,17 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.0.7' }
+static String version() { '3.0.8' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/03/04 2:45 PM' }
+static String timeStamp() { '2024/03/30 12:52 PM' }
 
 @Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
-//import hubitat.device.HubMultiAction
-//import hubitat.device.Protocol
-import hubitat.helper.HexUtils
-//import hubitat.zigbee.zcl.DataType
-//import java.util.concurrent.ConcurrentHashMap
+import hubitat.device.HubMultiAction
+import hubitat.device.Protocol
+import hubitat.zigbee.zcl.DataType
+import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
@@ -99,6 +100,7 @@ metadata {
         capability 'Actuator'
         capability 'Refresh'
         capability 'Sensor'
+        capability 'Battery'
         capability 'Temperature Measurement'
         capability 'Thermostat'                 // needed for HomeKit
         capability 'ThermostatHeatingSetpoint'
@@ -109,7 +111,8 @@ metadata {
         capability 'ThermostatFanMode'
 
         // TODO - add all other models attributes possible values
-        attribute 'battery', 'number'                               // Aqara, BRT-100
+        //attribute 'battery', 'number'                               // Aqara, BRT-100
+        attribute 'batteryVoltage', 'number'
         attribute 'boostTime', 'number'                             // BRT-100
         attribute 'calibrated', 'enum', ['false', 'true']           // Aqara E1
         attribute 'calibrationTemp', 'number'                       // BRT-100, Sonoff
@@ -460,9 +463,11 @@ metadata {
             description   : 'GENERIC TRV',
             device        : [type: 'TRV', powerSource: 'battery', isSleepy:false],
             capabilities  : ['ThermostatHeatingSetpoint': true, 'ThermostatOperatingState': true, 'ThermostatSetpoint':true, 'ThermostatMode':true],
-            preferences   : [],
+            preferences   : [:],
             fingerprints  : [],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences',
+                            'getDeviceNameAndProfile':'getDeviceNameAndProfile'
+            ],
             tuyaDPs       : [:],
             attributes    : [
                 [at:'0x0201:0x0000',  name:'temperature',              type:'decimal', dt: '0x21', rw: 'ro', min:5.0,  max:35.0, step:0.5, scale:100,  unit:'°C', title: '<b>Temperature</b>',                   description:'<i>Measured temperature</i>'],
@@ -688,8 +693,8 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
  * -----------------------------------------------------------------------------
 */
 void customParseThermostatCluster(final Map descMap) {
-    //final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    //logTrace "zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -740,7 +745,7 @@ void customParseThermostatCluster(final Map descMap) {
 
 void customParseFC11Cluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
-    logTrace "zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    logTrace "customParseFC11Cluster: zigbee received Thermostat 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
     boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
     if (result == false) {
         logWarn "customParseFC11Cluster: received unknown Thermostat cluster (0xFC11) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -766,7 +771,6 @@ void setHeatingSetpoint(final BigDecimal temperaturePar ) {
         //logDebug "0.5 C correction of the heating setpoint${temperature}"
         log.trace "tempDouble = ${tempDouble}"
         tempDouble = (tempDouble * 2).setScale(0, RoundingMode.HALF_UP) / 2
-
     }
     else {
         if (temperature != (temperature as int)) {
@@ -832,12 +836,11 @@ void setCoolingSetpoint(temperature) {
  */
 void setThermostatMode(final String requestedMode) {
     String mode = requestedMode
-    //List<String> cmds = []
     boolean result = false
-    def nativelySupportedModes = getAttributesMap('thermostatMode')?.map?.values() ?: []
-    def systemModes = getAttributesMap('systemMode')?.map?.values() ?: []
-    def ecoModes = getAttributesMap('ecoMode')?.map?.values() ?: []
-    def emergencyHeatingModes = getAttributesMap('emergencyHeating')?.map?.values() ?: []
+    List nativelySupportedModes = getAttributesMap('thermostatMode')?.map?.values() ?: []
+    List systemModes = getAttributesMap('systemMode')?.map?.values() ?: []
+    List ecoModes = getAttributesMap('ecoMode')?.map?.values() ?: []
+    List emergencyHeatingModes = getAttributesMap('emergencyHeating')?.map?.values() ?: []
 
     logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModes}"
 
@@ -1156,7 +1159,7 @@ List<String> customRefresh() {
         }
         return cmds
     }
-    logDebug "customRefresh: no refresh methods defined for device profile ${getDeviceGroup()}"
+    logDebug "customRefresh: no refresh methods defined for device profile ${getDeviceProfile()}"
     if (cmds == []) { cmds = ['delay 299'] }
     logDebug "customRefresh: ${cmds} "
     return cmds
@@ -1177,7 +1180,7 @@ List<String> customInitializeDevice() {
     //int intMaxTime = 600    // report temperature every 10 minutes !
     logDebug 'customInitializeDevice() ...'
 
-    if ( getDeviceGroup() == 'SONOFF_TRV') {
+    if ( getDeviceProfile() == 'SONOFF_TRV') {
         //cmds = ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 5f 11 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
         //cmds =   ["he raw 0x${device.deviceNetworkId} 0 0 0x8002 {40 00 00 00 00 40 8f 86 12 52 52 00 41 2c 52 00 00} {0x0000}", "delay 200",]
 
@@ -1227,7 +1230,7 @@ List<String> customInitializeDevice() {
             },
     */
     }
-    else if (getDeviceGroup == 'AQARA_E1_TRV' ) {
+    else if (getDeviceProfile() == 'AQARA_E1_TRV' ) {
         logDebug 'configuring cluster 0x0201 ...'
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0201 {${device.zigbeeId}} {}", 'delay 251', ]
         //cmds += zigbee.configureReporting(0x0201, 0x0012, 0x29, intMinTime as int, intMaxTime as int, 0x01, [:], delay=541)
@@ -1242,15 +1245,15 @@ List<String> customInitializeDevice() {
         cmds +=  zigbee.reportingConfiguration(0x0201, 0x001C, [:], 552)    // read it back - doesn't wor
     }
     else {
-        logDebug"customInitializeDevice: nothing to initialize for device group ${getDeviceGroup()}"
+        logDebug"customInitializeDevice: nothing to initialize for device group ${getDeviceProfile()}"
     }
     logDebug "initializeThermostat() : ${cmds}"
     if (cmds == []) { cmds = ['delay 299',] }
     return cmds
 }
 
-void customInitVars(final boolean fullInit=false) {
-    logDebug "customInitVars(${fullInit})"
+void customInitializeVars(final boolean fullInit=false) {
+    logDebug "customInitializeVars(${fullInit})"
     if (state.deviceProfile == null) {
         setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
     }

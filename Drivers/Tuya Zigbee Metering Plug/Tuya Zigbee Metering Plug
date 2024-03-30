@@ -59,7 +59,7 @@
  *  ver. 1.8.0 2023-09-03 kkossev - added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
  *  ver. 1.9.0 2024-01-18 kkossev - Groovy Linting; added TS0601 _TZE204_81yrt3lo Bidirectional energy meter with 80A current clamp (PJ-1203A); added TS0601 _TZE200_rks0sgb7 (one channel only!)
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
- *  ver. 1.9.2 2024-03-30 kkossev - (dev. branch) more Groovy Linting; TODO: added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
+ *  ver. 1.9.2 2024-03-30 kkossev - (dev. branch) more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
