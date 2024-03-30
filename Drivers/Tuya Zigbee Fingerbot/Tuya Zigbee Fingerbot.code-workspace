@@ -4,6 +4,9 @@
 			"path": "."
 		},
 		{
+			"path": "../../Libraries/.hubitat"
+		},
+		{
 			"path": "../../Libraries"
 		}
 	],
