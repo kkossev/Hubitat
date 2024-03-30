@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryGetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryGetter, UnnecessaryPublicModifier, UnusedImport */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -7,7 +7,7 @@ library(
     name: 'deviceProfileLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
-    version: '3.0.4',
+    version: '3.1.0',
     documentationLink: ''
 )
 /*
@@ -27,12 +27,13 @@ library(
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
+ * ver. 3.1.0  2024-03-31 kkossev  - (dev. branch) deviceProfilesV3
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
-static String deviceProfileLibVersion()   { '3.0.4' }
-static String deviceProfileLibStamp() { '2024/03/30 12:30 PM' }
+static String deviceProfileLibVersion()   { '3.1.0' }
+static String deviceProfileLibStamp() { '2024/03/31 12:24 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -75,10 +76,10 @@ metadata {
 }
 
 String getDeviceProfile()    { state.deviceProfile ?: 'UNKNOWN' }
-Map getDEVICE()              { deviceProfilesV2[getDeviceProfile()] }
-Set getDeviceProfiles()      { deviceProfilesV2.keySet() }
-List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
-// ---------------------------------- deviceProfilesV2 helper functions --------------------------------------------
+Map getDEVICE()              { deviceProfilesV3[getDeviceProfile()] }
+Set getDeviceProfiles()      { deviceProfilesV3.keySet() }
+List<String> getDeviceProfilesMap()   { deviceProfilesV3.values().description as List<String> }
+// ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 
 /**
  * Returns the profile key for a given profile description.
@@ -87,7 +88,7 @@ List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as
  */
 
 String getProfileKey(final String valueStr) {
-    String key = deviceProfilesV2.find { _, profileMap -> profileMap.description == valueStr }?.key
+    String key = deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key
     if (key == null) {
         key = deviceProfilesV3.find { _, profileMap -> profileMap.description == valueStr }?.key
     }
@@ -101,20 +102,20 @@ String getProfileKey(final String valueStr) {
  * @return returns either tuyaDPs or attributes map, depending on where the preference (param) is found
  * @return empty map [:] if param is not defined for this device.
  */
-Map getPreferencesMap(final String param, boolean debug=false) {
+Map getPreferencesMapByName(final String param, boolean debug=false) {
     Map foundMap = [:]
     if (!(param in DEVICE?.preferences)) {
-        if (debug) { log.warn "getPreferencesMap: preference ${param} not defined for this device!" }
+        if (debug) { log.warn "getPreferencesMapByName: preference ${param} not defined for this device!" }
         return [:]
     }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preference
     try {
         preference = DEVICE?.preferences["$param"]
-        if (debug) { log.debug "getPreferencesMap: preference ${param} found. value is ${preference}" }
+        if (debug) { log.debug "getPreferencesMapByName: preference ${param} found. value is ${preference}" }
         if (preference in [true, false]) {
             // find the preference in the tuyaDPs map
-            logDebug "getPreferencesMap: preference ${param} is boolean"
+            logDebug "getPreferencesMapByName: preference ${param} is boolean"
             return [:]     // no maps for predefined preferences !
         }
         if (safeToInt(preference, -1) > 0) {             //if (preference instanceof Number) {
@@ -129,10 +130,10 @@ Map getPreferencesMap(final String param, boolean debug=false) {
         }
     // TODO - could be also 'true' or 'false' ...
     } catch (e) {
-        if (debug) { log.warn "getPreferencesMap: exception ${e} caught when getting preference ${param} !" }
+        if (debug) { log.warn "getPreferencesMapByName: exception ${e} caught when getting preference ${param} !" }
         return [:]
     }
-    if (debug) { log.debug "getPreferencesMap: foundMap = ${foundMap}" }
+    if (debug) { log.debug "getPreferencesMapByName: foundMap = ${foundMap}" }
     return foundMap
 }
 
@@ -186,7 +187,7 @@ void resetPreferencesToDefaults(boolean debug=false) {
             return // continue
         }
         // find the individual preference map
-        parMap = getPreferencesMap(parName, false)
+        parMap = getPreferencesMapByName(parName, false)
         if (parMap?.isEmpty()) {
             logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
             return // continue
@@ -813,7 +814,7 @@ Map inputIt(String paramPar, boolean debug = false) {
     }
 
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
-    foundMap = getPreferencesMap(param)
+    foundMap = getPreferencesMapByName(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
     if (foundMap?.isEmpty()) {
         if (debug) { log.warn "inputIt: map not found for param '${param}'!" }
@@ -867,11 +868,11 @@ List<String> getDeviceNameAndProfile(String model=null, String manufacturer=null
     String deviceProfile      = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
-    deviceProfilesV2.each { profileName, profileMap ->
+    deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints.each { fingerprint ->
             if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                 deviceProfile = profileName
-                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile].deviceJoinName ?: UNKNOWN
+                deviceName = fingerprint.deviceJoinName ?: deviceProfilesV3[deviceProfile].deviceJoinName ?: UNKNOWN
                 logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
                 return [deviceName, deviceProfile]
             }
@@ -896,7 +897,7 @@ void setDeviceNameAndProfile(String model=null, String manufacturer=null) {
     if (deviceName != NULL && deviceName != UNKNOWN) {
         device.setName(deviceName)
         state.deviceProfile = deviceProfile
-        device.updateSetting('forcedProfile', [value:deviceProfilesV2[deviceProfile]?.description, type:'enum'])
+        device.updateSetting('forcedProfile', [value:deviceProfilesV3[deviceProfile]?.description, type:'enum'])
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was set to : <b>deviceProfile=${deviceProfile} : deviceName=${deviceName}</b>"
     } else {
         logInfo "device model ${dataValueModel} manufacturer ${dataValueManufacturer} was not found!"
@@ -943,23 +944,27 @@ void initEventsDeviceProfile(boolean fullInit=false) {
 //          false - the processing can continue
 //
 boolean isSpammyDPsToIgnore(Map descMap) {
+    //log.trace "isSpammyDPsToIgnore: ${state.deviceProfile == 'TS0225_LINPTECH_RADAR'} ${descMap.cluster == 'E002'} ${descMap.attrId == 'E00A'} ${settings?.ignoreDistance == true}"
+    if (state.deviceProfile == 'TS0225_LINPTECH_RADAR' && descMap.cluster == 'E002' && descMap.attrId == 'E00A' && settings?.ignoreDistance == true) { return true }
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
-    Integer dp =  zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceProfile()]?.spammyDPsToIgnore as List
+    int dp =  zigbee.convertHexToInt(descMap.data[2])
+    List spammyList = deviceProfilesV3[getDeviceProfile()]?.spammyDPsToIgnore as List
     return (spammyList != null && (dp in spammyList) && ((settings?.ignoreDistance ?: false) == true))
 }
 
 //
-// called from processTuyaDP(), processTuyaDPfromDeviceProfile()
+// called from processTuyaDP(), processTuyaDPfromDeviceProfile(), isChattyDeviceReport()
 // returns: true  - do not generate Debug log messages if the chatty DP is defined in the spammyDPsToNotTrace element of the active Device Profule
 //          false - debug logs can be generated
 //
 boolean isSpammyDPsToNotTrace(Map descMap) {
+    //log.trace "isSpammyDPsToNotTrace: ${state.deviceProfile == 'TS0225_LINPTECH_RADAR'} ${descMap.cluster == 'E002'} ${descMap.attrId == 'E00A'} ${settings?.ignoreDistance == true}"
+    if (state.deviceProfile == 'TS0225_LINPTECH_RADAR' && descMap.cluster == 'E002' && descMap.attrId == 'E00A' && settings?.ignoreDistance == true) { return true }
     if (!(descMap?.clusterId == 'EF00' && (descMap?.command in ['01', '02']))) { return false }
     if (descMap?.data?.size <= 2) { return false }
-    Integer dp = zigbee.convertHexToInt(descMap.data[2])
-    List spammyList = deviceProfilesV2[getDeviceProfile()]?.spammyDPsToNotTrace as List
+    int dp = zigbee.convertHexToInt(descMap.data[2])
+    List spammyList = deviceProfilesV3[getDeviceProfile()]?.spammyDPsToNotTrace as List
     return (spammyList != null && (dp in spammyList))
 }
 
@@ -1028,7 +1033,7 @@ List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, 
 }
 
 //
-// called from processTuyaDPfromDeviceProfile()
+// called from process TuyaDP from DeviceProfile()
 // compares the value of the DP foundItem against a Preference with the same name
 // returns: (two results!)
 //    isEqual : true  - if the Tuya DP value equals to the DP calculated value (no need to update the preference)
@@ -1066,8 +1071,8 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, fncmd, bool
     return [isEqual, hubitatEventValue]
 }
 
-int preProc(final Map foundItem, int fncmd_orig) {
-    int fncmd = fncmd_orig
+Integer preProc(final Map foundItem, int fncmd_orig) {
+    Integer fncmd = fncmd_orig
     if (foundItem == null) { return fncmd }
     if (foundItem.preProc == null) { return fncmd }
     String preProcFunction = foundItem.preProc
@@ -1079,10 +1084,10 @@ int preProc(final Map foundItem, int fncmd_orig) {
     }
     // execute the preProc function
     try {
-        fncmd = "$preProcFunction"(fncmd_orig) as int
+        fncmd = "$preProcFunction"(fncmd_orig)
     }
     catch (e) {
-        logWarn "preProc: Exception '${e}'caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd}))"
+        logWarn "preProc: Exception '${e}' caught while processing <b>$preProcFunction</b>(<b>$fncmd_orig</b>) (val=${fncmd}))"
         return fncmd_orig
     }
     //logDebug "setFunction result is ${fncmd}"
@@ -1108,7 +1113,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
     //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile]?.tuyaDPs as Map
+    Map tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs as Map
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null
@@ -1133,7 +1138,7 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
     if (state.deviceProfile == null)  { logTrace "<b>state.deviceProfile is missing!<b>"; return false }
 
-    List<Map> attribMap = deviceProfilesV2[state.deviceProfile]?.attributes
+    List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
 
     Map foundItem = null
@@ -1171,8 +1176,15 @@ boolean processFoundItem(final Map foundItem, int value) {
     // added 10/31/2023 - preProc the attribute value if needed
     if (foundItem.preProc != null) {
         /* groovylint-disable-next-line ParameterReassignment */
-        value = preProc(foundItem, value)
-        logDebug "<b>preProc</b> changed ${foundItem.name} value to ${value}"
+        Integer preProcValue = preProc(foundItem, value)
+        if (preProcValue == null) { 
+            logDebug "preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!"
+            return true 
+        }
+        if (preProcValue != value) {
+            logDebug "<b>preProc</b> changed ${foundItem.name} value to ${preProcValue}"
+            value = preProcValue as int
+        }
     }
     else {
         logTrace "no preProc for ${foundItem.name} : ${foundItem}"
@@ -1384,7 +1396,7 @@ boolean validateAndFixPreferences(boolean debug=false) {
 }
 
 void printFingerprints() {
-    deviceProfilesV2.each { profileName, profileMap ->
+    deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints?.each { fingerprint ->
             logInfo fingerprint
         }

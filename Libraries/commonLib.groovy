@@ -33,7 +33,7 @@ library(
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix;
+  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -49,7 +49,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.4' }
-String commonLibStamp() { '2024/03/29 11:56 PM' }
+String commonLibStamp() { '2024/03/29 9:46 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -225,7 +225,6 @@ metadata {
 
 boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
 /* groovylint-disable-next-line UnusedMethodParameter */
-boolean isChattyDeviceReport(final String description)  { return false /*(description?.contains("cluster: FC7E")) */ }
 //def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
@@ -240,19 +239,19 @@ boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] 
  */
 void parse(final String description) {
     checkDriverVersion()
-    if (!isChattyDeviceReport(description)) { logDebug "parse: ${description}" }
     if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats = [:] }
     unschedule('deviceCommandTimeout')
     setHealthStatusOnline()
 
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {
         logDebug "parse: zone status: $description"
-        /* groovylint-disable-next-line ConstantIfExpression */
-        if (true /*isHL0SS9OAradar() && _IGNORE_ZCL_REPORTS == true*/) {    // TODO!
-            logDebug 'ignored IAS zone status'
-            return
+        if (this.respondsTo('parseIasMessage')) {
+            parseIasMessage(description)
         }
-        parseIasMessage(description)    // TODO!
+        else {
+            logDebug 'ignored IAS zone status'
+        }
+        return
     }
     else if (description?.startsWith('enroll request')) {
         logDebug "parse: enroll request: $description"
@@ -261,6 +260,7 @@ void parse(final String description) {
         String cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
+        return
     }
     if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
         return
@@ -275,7 +275,8 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
-    if (!isChattyDeviceReport(description)) { logDebug "parse: descMap = ${descMap} description=${description }" }
+    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }
+    if (isSpammyDeviceReport(descMap)) { return }
     //
     //final String clusterName = clusterLookup(descMap.clusterInt)
     //final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
@@ -379,6 +380,22 @@ void parse(final String description) {
             }
             break
     }
+}
+
+boolean isChattyDeviceReport(final Map descMap)  {
+    if (_TRACE_ALL == true) { return false }
+    if (this.respondsTo('isSpammyDPsToNotTrace')) {
+        return isSpammyDPsToNotTrace(descMap)
+    }
+    return false
+}
+
+boolean isSpammyDeviceReport(final Map descMap) {
+    if (_TRACE_ALL == true) { return false }
+    if (this.respondsTo('isSpammyDPsToIgnore')) {
+        return isSpammyDPsToIgnore(descMap)
+    }
+    return false
 }
 
 /**
@@ -1985,7 +2002,12 @@ void parseFC11Cluster(final Map descMap) {
 }
 
 void parseE002Cluster(final Map descMap) {
-    logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
+    if (this.respondsTo('customParseE002Cluster')) {
+        customParseE002Cluster(descMap)
+    }
+    else {    
+        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
+    }
 }
 
 /*
@@ -2049,7 +2071,7 @@ void parseTuyaCluster(final Map descMap) {
             int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
             logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
-            processTuyaDP( descMap, dp, dp_id, fncmd)
+            processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
         }
     }
@@ -2059,7 +2081,9 @@ void parseTuyaCluster(final Map descMap) {
 }
 
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
+    log.trace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
     if (this.respondsTo(customProcessTuyaDp)) {
+        logTrace "customProcessTuyaDp exists, calling it..."
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return
         }
@@ -2070,30 +2094,7 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             return
         }
     }
-    switch (dp) {
-        case 0x01 : // on/off
-            if (DEVICE_TYPE in  ['LightSensor']) {
-                logDebug "LightSensor BrightnessLevel = ${tuyaIlluminanceOpts[fncmd as int]} (${fncmd})"
-            }
-            else {
-                sendSwitchEvent(fncmd as int)
-            }
-            break
-        case 0x02 :
-            if (DEVICE_TYPE in  ['LightSensor']) {
-                handleIlluminanceEvent(fncmd)
-            }
-            else {
-                logDebug "Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            }
-            break
-        case 0x04 : // battery
-            sendBatteryPercentageEvent(fncmd)
-            break
-        default :
-            logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
-            break
-    }
+    logWarn "<b>NOT PROCESSED</b> Tuya cmd: dp=${dp} value=${fncmd} descMap.data = ${descMap?.data}"
 }
 
 private int getTuyaAttributeValue(final List<String> _data, final int index) {

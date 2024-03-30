@@ -21,9 +21,10 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/28 9:12 PM"}
+static String timeStamp() {"2024/04/31 12:3352 AM"}
 
 @Field static final Boolean _DEBUG = false
+@Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -46,17 +47,18 @@ metadata {
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
 
+        capability 'MotionSensor'
+        capability 'IlluminanceMeasurement'
         capability 'Configuration'
         capability 'Refresh'
         capability 'Health Check'
-        attribute 'all', 'string'
+        
         attribute 'batteryVoltage', 'number'
         attribute 'healthStatus', 'enum', ['offline', 'online']
         attribute 'distance', 'number'              // Tuya Radar
         attribute 'unacknowledgedTime', 'number'    // AIR models
         attribute 'existance_time', 'number'        // BlackSquareRadar & LINPTECH
         attribute 'leave_time', 'number'            // BlackSquareRadar only
-        attribute' pushed', 'number'                // TS0202 _TZ3210_cwamkvua [Motion Sensor and Scene Switch]
         attribute 'keepTime', 'enum', ['10 seconds', '30 seconds', '60 seconds', '120 seconds']
         attribute 'sensitivity', 'enum', ['low', 'medium', 'high']
 
@@ -70,6 +72,7 @@ metadata {
         attribute 'humanMotionState', 'enum', ['none', 'moving', 'small_move', 'stationary', 'presence', 'peaceful', 'large_move']
         attribute 'radarAlarmMode', 'enum',   ['0 - arm', '1 - off', '2 - alarm', '3 - doorbell']
         attribute 'radarAlarmVolume', 'enum', ['0 - low', '1 - medium', '2 - high', '3 - mute']
+
         command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
 
         if (_DEBUG) {
@@ -87,7 +90,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-        if (advancedOptions == true || advancedOptions == false) {
+        if (device) {
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
@@ -96,12 +99,11 @@ metadata {
         if (('DistanceMeasurement' in DEVICE?.capabilities)) {
             input(name: 'ignoreDistance', type: 'bool', title: '<b>Ignore distance reports</b>', description: 'If not used, ignore the distance reports received every 1 second!', defaultValue: true)
         }
-
     }
 }
 
 
-@Field static final Map deviceProfilesV2 = [
+@Field static final Map deviceProfilesV3 = [
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
             models        : ['TS0601'],
@@ -536,11 +538,11 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:101,              name:'fadingTime',                      type:'number',                rw: 'rw', min:1,    max:9999, defVal:10,    scale:1,   unit:'seconds', title: '<b>Fading time</b>', description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
             ],
             attributes:       [                                        // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
-                [at:'0xE002:0xE001',  name:'existance_time',                  type:'number',  dt: 'UINT16', rw: 'ro', min:0,    max:65535,  scale:1,    unit:'minutes',   title: '<b>Existance time/b>',                 description:'<i>existance (presence) time, recommended value is > 10 seconds!</i>'],                    // aka Presence Time
-                [at:'0xE002:0xE004',  name:'motionDetectionSensitivity',      type:'enum',    dt: 'UINT8',  rw: 'rw', min:1,    max:5,      defVal:'4',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Motion Detection Sensitivity</b>',  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
-                [at:'0xE002:0xE005',  name:'staticDetectionSensitivity',      type:'enum',    dt: 'UINT8',  rw: 'rw', min:1,    max:5,      defVal:'3',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Static Detection Sensitivity</b>',  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity
-                [at:'0xE002:0xE00A',  name:'distance',                        type:'decimal', dt: 'UINT16', rw: 'ro', min:0.0,  max:6.0,    defVal:0.0,    scale:100,  unit:'meters',            title: '<b>Distance</b>',                      description:'<i>Measured distance</i>'],                            // aka Current Distance
-                [at:'0xE002:0xE00B', name:'motionDetectionDistance', type:'enum', dt: 'UINT16', rw: 'rw', min:0.75, max:6.0, defVal:'4.50', step:75, scale:100, map:['0.75': '0.75 meters', '1.50': '1.50 meters', '2.25': '2.25 meters', '3.00': '3.00 meters', '3.75': '3.75 meters', '4.50': '4.50 meters', '5.25': '5.25 meters', '6.00' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+                [at:'0xE002:0xE001',  name:'existance_time',                  type:'number',  dt: '0x21', rw: 'ro', min:0,    max:65535,  scale:1,    unit:'minutes',   title: '<b>Existance time/b>',                 description:'<i>existance (presence) time, recommended value is > 10 seconds!</i>'],                    // aka Presence Time
+                [at:'0xE002:0xE004',  name:'motionDetectionSensitivity',      type:'enum',    dt: '0x20',  rw: 'rw', min:1,    max:5,      defVal:'4',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Motion Detection Sensitivity</b>',  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
+                [at:'0xE002:0xE005',  name:'staticDetectionSensitivity',      type:'enum',    dt: '0x20',  rw: 'rw', min:1,    max:5,      defVal:'3',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Static Detection Sensitivity</b>',  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity
+                [at:'0xE002:0xE00A',  name:'distance',  preProc:'skipIfDisabled', type:'decimal', dt: '0x21', rw: 'ro', min:0.0,  max:6.0,    defVal:0.0,    scale:100,  unit:'meters',            title: '<b>Distance</b>',                      description:'<i>Measured distance</i>'],                            // aka Current Distance
+                [at:'0xE002:0xE00B',  name:'motionDetectionDistance', type:'enum', dt: '0x21', rw: 'rw', min:0.75, max:6.0, defVal:'4.50', step:75, scale:100, map:['0.75': '0.75 meters', '1.50': '1.50 meters', '2.25': '2.25 meters', '3.00': '3.00 meters', '3.75': '3.75 meters', '4.50': '4.50 meters', '5.25': '5.25 meters', '6.00' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
             spammyDPsToIgnore : [19],       // TODO
             spammyDPsToNotTrace : [19],     // TODO
@@ -644,7 +646,134 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     ]
 ]
 
+// called from processFoundItem() for Linptech radar
+Integer skipIfDisabled(int val) {
+    if (settings.ignoreDistance == true) {
+        logTrace "skipIfDisabled: ignoring distance attribute"
+        return null
+    }
+    return val
+}
 
+
+void parseIasMessage(final String description) {
+    // https://developer.tuya.com/en/docs/iot-device-dev/tuya-zigbee-water-sensor-access-standard?id=K9ik6zvon7orn
+    Map zs = zigbee.parseZoneStatusChange(description)
+    if (zs.alarm1Set == true) {
+        handleMotion(true)
+    }
+    else {
+        handleMotion(false)
+    }
+}
+
+void handleMotion(final boolean motionActive, final boolean isDigital=false) {
+    boolean motionActiveCopy = motionActive
+    if (settings.invertMotion == true) {
+        motionActiveCopy = !motionActiveCopy
+    }
+    if (motionActiveCopy) {
+        int timeout = motionResetTimer ?: 0
+        // If the sensor only sends a motion detected message, the reset to motion inactive must be  performed in code
+        if (settings.motionReset == true && timeout != 0) {
+            runIn(timeout, resetToMotionInactive, [overwrite: true])
+        }
+        if (device.currentState('motion')?.value != 'active') {
+            state.motionStarted = unix2formattedDate(now()/*.toString()*/)
+        }
+    }
+    else {
+        if (device.currentState('motion')?.value == 'inactive') {
+            logDebug "ignored motion inactive event after ${getSecondsInactive()}s"
+            return      // do not process a second motion inactive event!
+        }
+    }
+    sendMotionEvent(motionActiveCopy, isDigital)
+}
+
+void sendMotionEvent(final boolean motionActive, boolean isDigital=false) {
+    String descriptionText = 'Detected motion'
+    if (motionActive) {
+        descriptionText = device.currentValue('motion') == 'active' ? "Motion is active ${getSecondsInactive()}s" : 'Detected motion'
+    }
+    else {
+        descriptionText = "Motion reset to inactive after ${getSecondsInactive()}s"
+    }
+    /*
+    if (isBlackSquareRadar() && device.currentValue("motion", true) == "active" && (motionActive as boolean) == true) {    // TODO - obsolete
+        return    // the black square radar sends 'motion active' every 4 seconds!
+    }
+    */
+    if (txtEnable) log.info "${device.displayName} ${descriptionText}"
+    sendEvent(
+            name            : 'motion',
+            value            : motionActive ? 'active' : 'inactive',
+            type            : isDigital == true ? 'digital' : 'physical',
+            descriptionText : descriptionText
+    )
+    //runIn(1, formatAttrib, [overwrite: true])
+}
+
+void resetToMotionInactive() {
+    if (device.currentState('motion')?.value == 'active') {
+        String descText = "Motion reset to inactive after ${getSecondsInactive()}s (software timeout)"
+        sendEvent(
+            name : 'motion',
+            value : 'inactive',
+            isStateChange : true,
+            type:  'digital',
+            descriptionText : descText
+        )
+        if (txtEnable) log.info "${device.displayName} ${descText}"
+    }
+    else {
+        if (txtEnable) log.debug "${device.displayName} ignored resetToMotionInactive (software timeout) after ${getSecondsInactive()}s"
+    }
+}
+
+int getSecondsInactive() {
+    Long unixTime = formattedDate2unix(state.motionStarted)
+    if (unixTime) { return Math.round((now() - unixTime) / 1000) }
+    return settings?.motionResetTimer ?: 0
+}
+
+boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
+    return false
+}
+
+void customParseE002Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseE002Cluster: zigbee received 0xE002 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    if (result == false) {
+        logWarn "customParseE002Cluster: received unknown 0xE002 attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+
+void customUpdated() {
+    logDebug "customUpdated()"
+    if ('DistanceMeasurement' in DEVICE?.capabilities) {
+        if (settings?.ignoreDistance == true) {
+            device.deleteCurrentState('distance')
+            logDebug "customUpdated: deleted distance state"
+        }
+        else {
+            logDebug "customUpdated: ignoreDistance is ${settings?.ignoreDistance}"
+        }
+    }    
+}
+
+void customInitializeVars(final boolean fullInit=false) {
+    logDebug "customInitializeVars(${fullInit})"
+    if (state.deviceProfile == null) {
+        setDeviceNameAndProfile()               // in deviceProfileiLib.groovy
+    }
+    if (fullInit == true) {
+        resetPreferencesToDefaults()
+    }
+    if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
+
+}
 
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
