@@ -22,7 +22,7 @@
  * ver. 2.1.3  2023-08-28 kkossev  - Added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;
  * ver. 2.1.4  2023-08-28 kkossev  - Added capability PushableButton for Fingerbot; sendTuyCommand independent from the particular Fingerboot fingerprint;
  *             2023-09-13 kkossev  - Added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot
- * ver. 3.0.4  2024-03-29 kkossev  - (dev. branch) Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
+ * ver. 3.0.4  2024-03-29 kkossev  - Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
  *                                   push() toggles on/off;
  *
  *                                   TODO:
