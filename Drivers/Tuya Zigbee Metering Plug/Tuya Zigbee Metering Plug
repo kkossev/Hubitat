@@ -59,7 +59,7 @@
  *  ver. 1.8.0 2023-09-03 kkossev - added TS011F _TZ3000_qystbcjg Somgoms ZigBee MCB Circuit Breaker DIN Rail; added TS0601 _TZE200_bcusnqt8 (matches partially the RTXCircuitBreaker)
  *  ver. 1.9.0 2024-01-18 kkossev - Groovy Linting; added TS0601 _TZE204_81yrt3lo Bidirectional energy meter with 80A current clamp (PJ-1203A); added TS0601 _TZE200_rks0sgb7 (one channel only!)
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
- *  ver. 1.9.2 2024-03-24 kkossev - (dev. branch) more Groovy Linting;
+ *  ver. 1.9.2 2024-03-30 kkossev - (dev. branch) more Groovy Linting; TODO: added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -84,7 +84,7 @@ import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
 static String version() { '1.9.2' }
-static String timeStamp() { '2024/03/24 1:14 PM' }
+static String timeStamp() { '2024/03/30 10:53 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -179,6 +179,12 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,0702,0B04,0402,E000,E001', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_qystbcjg', deviceJoinName: 'Somgoms ZigBee MCB Circuit Breaker DIN Rail' //https://www.aliexpress.com/item/1005005647599064.html
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_kqvb5akv', deviceJoinName: 'Tuya Switch Module w/ Measurements'    //
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_xkap8wtb', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_qnejhcsu', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_x3ewpzyr', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_mkhkxx1p', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/499?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_tgddllx4', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
+        
 
         // NOT WORKING WITH HE !
         /*
