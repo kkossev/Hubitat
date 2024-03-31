@@ -10,19 +10,19 @@
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
       "id": 141,
       "codeType": "library",
-      "version": 23
+      "version": 27
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 317
+      "version": 320
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
       "id": 143,
       "codeType": "library",
-      "version": 93
+      "version": 98
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/commonLib.groovy",
@@ -34,7 +34,19 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 228
+      "version": 229
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/airQualityLib.groovy",
+      "id": 141,
+      "codeType": "library",
+      "version": 25
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/aqaraCubeT1ProLib.groovy",
+      "codeType": "library",
+      "id": 164,
+      "version": 3
     }
   ]
 }

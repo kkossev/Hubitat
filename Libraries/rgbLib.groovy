@@ -1,14 +1,14 @@
-/* groovylint-disable PublicMethodsBeforeNonPublicMethods */
-library (
-    base: "driver",
-    author: "Krassimir Kossev",
-    category: "zigbee",
-    description: "RGB Library",
-    name: "rgbLib",
-    namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/rgbLib.groovy",
-    version: "1.0.0",
-    documentationLink: ""
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ElseBlockBraces, IfStatementBraces, Instanceof, LineLength, MethodCount, MethodParameterTypeRequired, MethodReturnTypeRequired, NoDef, ParameterReassignment, PublicMethodsBeforeNonPublicMethods, SpaceAroundOperator, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessarySetter, UnusedPrivateMethod, UnusedVariable, VariableName, VariableTypeRequired */
+library(
+    base: 'driver',
+    author: 'Krassimir Kossev',
+    category: 'zigbee',
+    description: 'RGB Library',
+    name: 'rgbLib',
+    namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/rgbLib.groovy',
+    version: '1.0.1',
+    documentationLink: ''
 )
 /*
  *  Zigbee Button Dimmer -Library
@@ -25,42 +25,40 @@ library (
  *  Credits: Ivar Holand for 'IKEA Tradfri RGBW Light HE v2' driver code
  *
  * ver. 1.0.0  2023-11-06 kkossev  - added rgbLib; musicMode;
+ * ver. 1.0.1  2024-04-01 kkossev  - Groovy linting (all disabled)
  *
- *                                   TODO: 
+ *                                   TODO:
 */
 
-def thermostatLibVersion()   {"1.0.0"}
-def thermostatLibStamp() {"2023/11/07 5:23 PM"}
+def rgbLibVersion()   { '1.0.1' }
+def rgbLibStamp() { '2024/04/01 12:22 AM' }
 
 import hubitat.helper.ColorUtils
 
 metadata {
-    capability "Actuator"
-    capability "Color Control"
-    capability "ColorMode"
-    capability "Color Temperature"
-    capability "Refresh"
-    capability "Switch"
-    capability "Switch Level"
-    capability "Light"
-    capability "ChangeLevel"
+    capability 'Actuator'
+    capability 'Color Control'
+    capability 'ColorMode'
+    capability 'Color Temperature'
+    capability 'Refresh'
+    capability 'Switch'
+    capability 'Switch Level'
+    capability 'Light'
+    capability 'ChangeLevel'
 
-    attribute "deviceTemperature", "number"
-    attribute "musicMode", "enum", MusicModeOpts.options.values() as List<String>
+    attribute 'deviceTemperature', 'number'
+    attribute 'musicMode', 'enum', MusicModeOpts.options.values() as List<String>
 
-    command "musicMode", [[name:"Select Music Mode", type: "ENUM",   constraints: ["--- select ---"]+MusicModeOpts.options.values() as List<String>]]
+    command 'musicMode', [[name:'Select Music Mode', type: 'ENUM',   constraints: ['--- select ---'] + MusicModeOpts.options.values() as List<String>]]
 
+    if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
-    if (_DEBUG) { command "testT", [[name: "testT", type: "STRING", description: "testT", defaultValue : ""]]  }
-    
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0005,0004,0003,0000,0300,0008,0006,FCC0", outClusters:"0019,000A", model:"lumi.light.acn132", manufacturer:"Aqara"
+    fingerprint profileId:'0104', endpointId:'01', inClusters:'0005,0004,0003,0000,0300,0008,0006,FCC0', outClusters:'0019,000A', model:'lumi.light.acn132', manufacturer:'Aqara'
     // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/7200
     //https://github.com/dresden-elektronik/deconz-rest-plugin/blob/50555f9350dc1872f266ebe9a5b3620b76e99af6/devices/xiaomi/lumi_light_acn132.json#L4
     preferences {
     }
 }
-
-
 
 private getMAX_WHITE_SATURATION() { 70 }
 private getWHITE_HUE() { 8 }
@@ -79,7 +77,7 @@ private getMAX_COLOR_TEMP() { 6500 }
 */
 void parseLevelControlClusterBulb(final Map descMap) {
     logDebug "parseLevelControlClusterBulb: 0x${descMap.value}"
-    if (descMap.attrId == "0000") {
+    if (descMap.attrId == '0000') {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
         final long rawValue = hexStrToUnsignedInt(descMap.value)
         // Aqara LED Strip T1 sends the level in the range 0..255
@@ -106,7 +104,6 @@ void parseColorControlClusterBulb(final Map descMap, description) {
     }
 }
 
-
 void processColorControlCluster(final Map descMap, description) {
     logDebug "processColorControlCluster : ${descMap}"
     def map = [:]
@@ -117,18 +114,18 @@ void processColorControlCluster(final Map descMap, description) {
     }
 
     logDebug "Map - $map"
-    def raw = map["read attr - raw"]
+    def raw = map['read attr - raw']
 
-    if(raw) {
+    if (raw) {
         def clusterId = map.cluster
         def attrList = raw.substring(12)
 
         parsed = parseAttributeList(clusterId, attrList)
 
-        if(state.colorChanged || (state.colorXReported && state.colorYReported)) {
-            state.colorChanged = false;
-            state.colorXReported = false;
-            state.colorYReported = false;
+        if (state.colorChanged || (state.colorXReported && state.colorYReported)) {
+            state.colorChanged = false
+            state.colorXReported = false
+            state.colorYReported = false
             logTrace "Color Change: xy ($state.colorX, $state.colorY)"
             def rgb = colorXy2Rgb(state.colorX, state.colorY)
             logTrace "Color Change: RGB ($rgb.red, $rgb.green, $rgb.blue)"
@@ -136,7 +133,7 @@ void processColorControlCluster(final Map descMap, description) {
         }
     }
     else {
-        logDebug "Sending color event based on pending values"
+        logDebug 'Sending color event based on pending values'
         if (state.pendingColorUpdate) {
             parsed = true
             def rgb = colorXy2Rgb(state.colorX, state.colorY)
@@ -153,23 +150,23 @@ def parseHex4le(hex) {
 def parseColorAttribute(id, value) {
     def parsed = false
 
-    if(id == 0x03) {
+    if (id == 0x03) {
         // currentColorX
         value = parseHex4le(value)
         logTrace "Parsed ColorX: $value"
         value /= 65536
         parsed = true
-        state.colorXReported = true;
+        state.colorXReported = true
         state.colorChanged |= value != colorX
         state.colorX = value
     }
-    else if(id == 0x04) {
+    else if (id == 0x04) {
         // currentColorY
         value = parseHex4le(value)
         logTrace "Parsed ColorY: $value"
         value /= 65536
         parsed = true
-        state.colorYReported = true;
+        state.colorYReported = true
         state.colorChanged |= value != colorY
         state.colorY = value
     }
@@ -180,57 +177,52 @@ def parseColorAttribute(id, value) {
     parsed
 }
 
-
-
-
 def parseAttributeList(cluster, list) {
     logTrace "Cluster: $cluster, AttrList: $list"
     def parsed = true
 
-    while(list.length()) {
+    while (list.length()) {
         def attrId = parseHex4le(list.substring(0, 4))
         def attrType = Integer.parseInt(list.substring(4, 6), 16)
         def attrShift = 0
 
-        if(!attrType) {
+        if (!attrType) {
             attrType = Integer.parseInt(list.substring(6, 8), 16)
             attrShift = 1
         }
 
         def attrLen = DataType.getLength(attrType)
-        def attrValue = list.substring(6 + 2*attrShift, 6 + 2*(attrShift+attrLen))
+        def attrValue = list.substring(6 + 2 * attrShift, 6 + 2 * (attrShift+attrLen))
 
         logTrace "Attr - Id: $attrId($attrLen), Type: $attrType, Value: $attrValue"
 
-        if(cluster == 300) {
+        if (cluster == 300) {
             parsed &= parseColorAttribute(attrId, attrValue)
         }
         else {
             log.info "Not parsing cluster $cluster attribute: $list"
-            parsed = false;
+            parsed = false
         }
 
-        list = list.substring(6 + 2*(attrShift+attrLen))
+        list = list.substring(6 + 2 * (attrShift+attrLen))
     }
 
     parsed
 }
 
-
-
 /*
 def sendColorControlEvent( rawValue ) {
     logWarn "TODO: sendColorControlEvent ($rawValue)"
     return
-    
+
     def value = rawValue as int
     if (value <0) value = 0
     if (value >100) value = 100
-    def map = [:] 
-    
+    def map = [:]
+
     def isDigital = state.states["isDigital"]
     map.type = isDigital == true ? "digital" : "physical"
-        
+
     map.name = "level"
     map.value = value
     boolean isRefresh = state.states["isRefresh"] ?: false
@@ -262,32 +254,32 @@ void parseXiaomiClusterRgbLib(final Map descMap) {
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterRgbTags(tags)
             break
-        case 0x0515:    // config/bri/min                   // r/w "dt": "0x20" 
+        case 0x0515:    // config/bri/min                   // r/w "dt": "0x20"
             raw = hexStrToUnsignedInt(descMap.value)        // .val = Math.round(Attr.val * 2.54)
             logInfo "Aqara min brightness is ${raw}"
             break
-        case 0x0516:    // config/bri/max                   // r/w "dt": "0x20" 
+        case 0x0516:    // config/bri/max                   // r/w "dt": "0x20"
             raw = hexStrToUnsignedInt(descMap.value)
             logInfo "Aqara max brightness is ${raw}"
             break
-        case 0x0517:    // config/on/startup               // r/w "dt": "0x20" 
-            raw = hexStrToUnsignedInt(descMap.value)       // val = [1, 255, 0][Attr.val]       // val === 1 ? 0 : Item.val === 0 ? 2 : 1" 
+        case 0x0517:    // config/on/startup               // r/w "dt": "0x20"
+            raw = hexStrToUnsignedInt(descMap.value)       // val = [1, 255, 0][Attr.val]       // val === 1 ? 0 : Item.val === 0 ? 2 : 1"
             logInfo "Aqara on startup is ${raw}"
             break
         case 0x051B:    // config/color/gradient/pixel_count                  // r/w "dt": "0x20" , Math.max(5, Math.min(Item.val, 50))
             raw = hexStrToUnsignedInt(descMap.value)
             logInfo "Aqara pixel count is ${raw}"
             break
-        case 0x051C:    // state/music_sync                 // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
+        case 0x051C:    // state/music_sync                 // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0
             raw = hexStrToUnsignedInt(descMap.value)
             value = MusicModeOpts.options[raw as int]
-            aqaraEvent("musicMode", value, raw)
+            aqaraEvent('musicMode', value, raw)
             break
-        case 0x0509:    // state/gradient                   // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
+        case 0x0509:    // state/gradient                   // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0
             raw = hexStrToUnsignedInt(descMap.value)
             logInfo "Aqara gradient is ${raw}"
             break
-        case 0x051F:    // state/gradient/flow              // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0 
+        case 0x051F:    // state/gradient/flow              // r/w "dt": "0x20" , val = Attr.val === 1      // Item.val ? 1 : 0
             raw = hexStrToUnsignedInt(descMap.value)
             logInfo "Aqara gradient flow is ${raw}"
             break
@@ -302,22 +294,22 @@ void parseXiaomiClusterRgbLib(final Map descMap) {
 }
 
 void aqaraEvent(eventName, value, raw) {
-    sendEvent(name: eventName, value: value, type: "physical")
+    sendEvent(name: eventName, value: value, type: 'physical')
     logInfo "${eventName} is ${value} (raw ${raw})"
 }
 
 //
-// called from parseXiaomiClusterRgbLib 
+// called from parseXiaomiClusterRgbLib
 //
-void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420 
+void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO: check https://github.com/sprut/Hub/issues/2420
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
             case 0x01:    // battery voltage
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})"
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
                 break
             case 0x03:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device internal chip temperature is ${value}&deg;"
-                sendEvent(name: "deviceTemperature", value: value, unit: "C")
+                sendEvent(name: 'deviceTemperature', value: value, unit: 'C')
                 break
             case 0x05:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} RSSI is ${value}"
@@ -328,10 +320,10 @@ void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO:
             case 0x08:            // SWBUILD_TAG_ID:
                 final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue("aqaraVersion", swBuild)
+                device.updateDataValue('aqaraVersion', swBuild)
                 break
             case 0x0a:
-                String nwk = intToHexStr(value as Integer,2)
+                String nwk = intToHexStr(value as Integer, 2)
                 if (state.health == null) { state.health = [:] }
                 String oldNWK = state.health['parentNWK'] ?: 'n/a'
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
@@ -347,10 +339,8 @@ void parseXiaomiClusterRgbTags(final Map<Integer, Object> tags) {       // TODO:
     }
 }
 
-
 // all the code below is borrowed from Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver
 // -----------------------------------------------------------------------------------------
-
 
 def updateColor(rgb) {
     logTrace "updateColor: RGB ($rgb.red, $rgb.green, $rgb.blue)"
@@ -368,19 +358,19 @@ def updateColor(rgb) {
     def color = ColorUtils.rgbToHEX([rgb.red, rgb.green, rgb.blue])
     logTrace "updateColor: $color"
 
-    sendColorEvent([name: "color", value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false])
-    sendHueEvent([name: "hue", value: hsv.hue, displayed: false])
-    sendSaturationEvent([name: "saturation", value: hsv.saturation, displayed: false])
+    sendColorEvent([name: 'color', value: color, data: [ hue: hsv.hue, saturation: hsv.saturation, red: rgb.red, green: rgb.green, blue: rgb.blue, hex: color], displayed: false])
+    sendHueEvent([name: 'hue', value: hsv.hue, displayed: false])
+    sendSaturationEvent([name: 'saturation', value: hsv.saturation, displayed: false])
     if (hsv.hue == WHITE_HUE) {
         def percent = (1 - ((hsv.saturation / 100) * (100 / MAX_WHITE_SATURATION)))
         def amount = (MAX_COLOR_TEMP - MIN_COLOR_TEMP) * percent
         def val = Math.round(MIN_COLOR_TEMP + amount)
-        sendColorTemperatureEvent([name: "colorTemperature", value: val])
-        sendColorModeEvent([name: "colorMode", value: "CT"])
+        sendColorTemperatureEvent([name: 'colorTemperature', value: val])
+        sendColorModeEvent([name: 'colorMode', value: 'CT'])
         sendColorNameEvent([setGenericTempName(val)])
-    } 
+    }
     else {
-        sendColorModeEvent([name: "colorMode", value: "RGB"])
+        sendColorModeEvent([name: 'colorMode', value: 'RGB'])
         sendColorNameEvent(setGenericName(hsv.hue))
     }
 }
@@ -394,8 +384,8 @@ void sendColorEvent(map) {
  //   def lastColorEvent = device.currentState("color",true).date.time
  //   if ((now() - lastColorEvent) < 1000) {
        // logDebug "sendColorEvent: delaying ${map.name} event because the last color event was less than 1 second ago ${(now() - lastColorEvent)}"
-        runInMillis(500, "sendDelayedColorEvent",  [overwrite: true, data: map])
-        return
+    runInMillis(500, 'sendDelayedColorEvent',  [overwrite: true, data: map])
+    return
 //    }
     //unschedule("sendDelayedColorEvent") // cancel any pending delayed events
     //logDebug "sendColorEvent: lastColorEvent = ${lastColorEvent}, now = ${now()}, diff = ${(now() - lastColorEvent)}"
@@ -408,7 +398,7 @@ private void sendDelayedColorEvent(Map map) {
 
 void sendHueEvent(map) {
     if (map.value == device.currentValue(map.name)) { return }
-    runInMillis(500, "sendDelayedHueEvent",  [overwrite: true, data: map])
+    runInMillis(500, 'sendDelayedHueEvent',  [overwrite: true, data: map])
 }
 private void sendDelayedHueEvent(Map map) {
     sendEvent(map)
@@ -417,7 +407,7 @@ private void sendDelayedHueEvent(Map map) {
 
 void sendSaturationEvent(map) {
     if (map.value == device.currentValue(map.name)) { return }
-    runInMillis(500, "sendDelayedSaturationEvent",  [overwrite: true, data: map])
+    runInMillis(500, 'sendDelayedSaturationEvent',  [overwrite: true, data: map])
 }
 private void sendDelayedSaturationEvent(Map map) {
     sendEvent(map)
@@ -426,7 +416,7 @@ private void sendDelayedSaturationEvent(Map map) {
 
 void sendColorModeEvent(map) {
     if (map.value == device.currentValue(map.name)) { return }
-    runInMillis(500, "sendDelayedColorModeEvent",  [overwrite: true, data: map])
+    runInMillis(500, 'sendDelayedColorModeEvent',  [overwrite: true, data: map])
 }
 private void sendDelayedColorModeEvent(Map map) {
     sendEvent(map)
@@ -435,7 +425,7 @@ private void sendDelayedColorModeEvent(Map map) {
 
 void sendColorNameEvent(map) {
     if (map.value == device.currentValue(map.name)) { return }
-    runInMillis(500, "sendDelayedColorNameEvent",  [overwrite: true, data: map])
+    runInMillis(500, 'sendDelayedColorNameEvent',  [overwrite: true, data: map])
 }
 private void sendDelayedColorNameEvent(Map map) {
     sendEvent(map)
@@ -444,13 +434,12 @@ private void sendDelayedColorNameEvent(Map map) {
 
 void sendColorTemperatureEvent(map) {
     if (map.value == device.currentValue(map.name)) { return }
-    runInMillis(500, "sendDelayedColorTemperatureEvent",  [overwrite: true, data: map])
+    runInMillis(500, 'sendDelayedColorTemperatureEvent',  [overwrite: true, data: map])
 }
 private void sendDelayedColorTemperatureEvent(Map map) {
     sendEvent(map)
     logInfo "${map.name} is now ${map.value}"
 }
-
 
 def sendZigbeeCommandsDelayed() {
     List cmds = state.cmds
@@ -475,7 +464,6 @@ def setLevelBulb(value, rate=null) {
     runInMillis(100, sendZigbeeCommandsDelayed)
 }
 
-
 def setColorTemperature(value, level=null, rate=null) {
     logDebug "Set color temperature $value"
 
@@ -493,19 +481,19 @@ def setColor(value) {
     def rgb = colorHsv2Rgb(value.hue / 100, value.saturation / 100)
 
     logTrace "setColor: RGB ($rgb.red, $rgb.green, $rgb.blue)"
-    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue);
+    def xy = colorRgb2Xy(rgb.red, rgb.green, rgb.blue)
     logTrace "setColor: xy ($xy.x, $xy.y)"
 
-    def intX = Math.round(xy.x*65536).intValue() // 0..65279
-    def intY = Math.round(xy.y*65536).intValue() // 0..65279
+    def intX = Math.round(xy.x * 65536).intValue() // 0..65279
+    def intY = Math.round(xy.y * 65536).intValue() // 0..65279
 
     logTrace "setColor: xy ($intX, $intY)"
 
     state.colorX = xy.x
     state.colorY = xy.y
 
-    def strX = DataType.pack(intX, DataType.UINT16, true);
-    def strY = DataType.pack(intY, DataType.UINT16, true);
+    def strX = DataType.pack(intX, DataType.UINT16, true)
+    def strY = DataType.pack(intY, DataType.UINT16, true)
 
     List cmds = []
 
@@ -522,8 +510,8 @@ def setColor(value) {
 
     state.pendingColorUpdate = true
 
-    cmds += zigbee.command(0x0300, 0x07, strX, strY, "0a00")
-    if (state.cmds == null) { state.cmds = [] }   
+    cmds += zigbee.command(0x0300, 0x07, strX, strY, '0a00')
+    if (state.cmds == null) { state.cmds = [] }
     state.cmds += cmds
 
     logTrace "zigbee command: $cmds"
@@ -532,76 +520,74 @@ def setColor(value) {
     runInMillis(100, sendZigbeeCommandsDelayed)
 }
 
-
 def setHue(hue) {
     logDebug "setHue: $hue"
-    setColor([ hue: hue, saturation: device.currentValue("saturation") ])
+    setColor([ hue: hue, saturation: device.currentValue('saturation') ])
 }
 
 def setSaturation(saturation) {
     logDebug "setSaturation: $saturation"
-    setColor([ hue: device.currentValue("hue"), saturation: saturation ])
+    setColor([ hue: device.currentValue('hue'), saturation: saturation ])
 }
 
-def setGenericTempName(temp){
+def setGenericTempName(temp) {
     if (!temp) return
     String genericName
     int value = temp.toInteger()
-    if (value <= 2000) genericName = "Sodium"
-    else if (value <= 2100) genericName = "Starlight"
-    else if (value < 2400) genericName = "Sunrise"
-    else if (value < 2800) genericName = "Incandescent"
-    else if (value < 3300) genericName = "Soft White"
-    else if (value < 3500) genericName = "Warm White"
-    else if (value < 4150) genericName = "Moonlight"
-    else if (value <= 5000) genericName = "Horizon"
-    else if (value < 5500) genericName = "Daylight"
-    else if (value < 6000) genericName = "Electronic"
-    else if (value <= 6500) genericName = "Skylight"
-    else if (value < 20000) genericName = "Polar"
+    if (value <= 2000) genericName = 'Sodium'
+    else if (value <= 2100) genericName = 'Starlight'
+    else if (value < 2400) genericName = 'Sunrise'
+    else if (value < 2800) genericName = 'Incandescent'
+    else if (value < 3300) genericName = 'Soft White'
+    else if (value < 3500) genericName = 'Warm White'
+    else if (value < 4150) genericName = 'Moonlight'
+    else if (value <= 5000) genericName = 'Horizon'
+    else if (value < 5500) genericName = 'Daylight'
+    else if (value < 6000) genericName = 'Electronic'
+    else if (value <= 6500) genericName = 'Skylight'
+    else if (value < 20000) genericName = 'Polar'
     String descriptionText = "${device.getDisplayName()} color is ${genericName}"
-    return createEvent(name: "colorName", value: genericName ,descriptionText: descriptionText)
+    return createEvent(name: 'colorName', value: genericName ,descriptionText: descriptionText)
 }
 
-def setGenericName(hue){
+def setGenericName(hue) {
     String colorName
     hue = hue.toInteger()
     hue = (hue * 3.6)
-    switch (hue.toInteger()){
-        case 0..15: colorName = "Red"
+    switch (hue.toInteger()) {
+        case 0..15: colorName = 'Red'
             break
-        case 16..45: colorName = "Orange"
+        case 16..45: colorName = 'Orange'
             break
-        case 46..75: colorName = "Yellow"
+        case 46..75: colorName = 'Yellow'
             break
-        case 76..105: colorName = "Chartreuse"
+        case 76..105: colorName = 'Chartreuse'
             break
-        case 106..135: colorName = "Green"
+        case 106..135: colorName = 'Green'
             break
-        case 136..165: colorName = "Spring"
+        case 136..165: colorName = 'Spring'
             break
-        case 166..195: colorName = "Cyan"
+        case 166..195: colorName = 'Cyan'
             break
-        case 196..225: colorName = "Azure"
+        case 196..225: colorName = 'Azure'
             break
-        case 226..255: colorName = "Blue"
+        case 226..255: colorName = 'Blue'
             break
-        case 256..285: colorName = "Violet"
+        case 256..285: colorName = 'Violet'
             break
-        case 286..315: colorName = "Magenta"
+        case 286..315: colorName = 'Magenta'
             break
-        case 316..345: colorName = "Rose"
+        case 316..345: colorName = 'Rose'
             break
-        case 346..360: colorName = "Red"
+        case 346..360: colorName = 'Red'
             break
     }
     String descriptionText = "${device.getDisplayName()} color is ${colorName}"
-    return createEvent(name: "colorName", value: colorName ,descriptionText: descriptionText)
+    return createEvent(name: 'colorName', value: colorName ,descriptionText: descriptionText)
 }
 
-
 def startLevelChange(direction) {
-    def dir = direction == "up"? 0 : 1
+    def dir = direction == 'up'? 0 : 1
     def rate = 100
 
     if (levelChangeRate != null) {
@@ -612,25 +598,24 @@ def startLevelChange(direction) {
 }
 
 def stopLevelChange() {
-    return zigbee.command(0x0008, 0x03, "") + zigbee.levelRefresh()
+    return zigbee.command(0x0008, 0x03, '') + zigbee.levelRefresh()
 }
-
 
 // Color Management functions
 
 def min(first, ... rest) {
-    def min = first;
-    for(next in rest) {
-        if(next < min) min = next
+    def min = first
+    for (next in rest) {
+        if (next < min) min = next
     }
 
     min
 }
 
 def max(first, ... rest) {
-    def max = first;
-    for(next in rest) {
-        if(next > max) max = next
+    def max = first
+    for (next in rest) {
+        if (next > max) max = next
     }
 
     max
@@ -641,16 +626,15 @@ def colorGammaAdjust(component) {
 }
 
 def colorGammaRevert(component) {
-    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055;
+    return (component <= 0.0031308) ? 12.92 * component : (1.0 + 0.055) * Math.pow(component, (1.0 / 2.4)) - 0.055
 }
 
 def colorXy2Rgb(x = 255, y = 255) {
-
     logTrace "< Color xy: ($x, $y)"
 
-    def Y = 1;
-    def X = (Y / y) * x;
-    def Z = (Y / y) * (1.0 - x - y);
+    def Y = 1
+    def X = (Y / y) * x
+    def Z = (Y / y) * (1.0 - x - y)
 
     logTrace "< Color XYZ: ($X, $Y, $Z)"
 
@@ -676,7 +660,6 @@ def colorXy2Rgb(x = 255, y = 255) {
 }
 
 def colorRgb2Xy(r, g, b) {
-
     logTrace "> Color RGB: ($r, $g, $b)"
 
     r = colorGammaAdjust(r)
@@ -728,27 +711,27 @@ def colorHsv2Rgb(h, s) {
         def q = 1 - s * remainder
         def t = 1 - s * (1 - remainder)
 
-        if(region == 0) {
+        if (region == 0) {
             r = 1
             g = t
             b = p
         }
-        else if(region == 1) {
+        else if (region == 1) {
             r = q
             g = 1
             b = p
         }
-        else if(region == 2) {
+        else if (region == 2) {
             r = p
             g = 1
             b = t
         }
-        else if(region == 3) {
+        else if (region == 3) {
             r = p
             g = q
             b = 1
         }
-        else if(region == 4) {
+        else if (region == 4) {
             r = t
             g = p
             b = 1
@@ -765,9 +748,7 @@ def colorHsv2Rgb(h, s) {
     [red: r, green: g, blue: b]
 }
 
-
-def colorRgb2Hsv(r, g, b)
-{
+def colorRgb2Hsv(r, g, b) {
     logTrace "> Color RGB: ($r, $g, $b)"
 
     def min = min(r, g, b)
@@ -785,11 +766,11 @@ def colorRgb2Hsv(r, g, b)
     else {
         s = delta / max
         if (r == max) h = ( g - b ) / delta            // between yellow & magenta
-        else if(g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow
+        else if (g == max) h = 2 + ( b - r ) / delta    // between cyan & yellow
         else h = 4 + ( r - g ) / delta                // between magenta & cyan
         h /= 6
 
-        if(h < 0) h += 1
+        if (h < 0) h += 1
     }
 
     logTrace "> Color HSV: ($h, $s, $v)"
@@ -801,40 +782,37 @@ def iTo8bitHex(value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
-
 // ----------- end of Ivar Holand's "IKEA Tradfri RGBW Light HE v2" driver code ------------
 
 def musicMode(mode) {
     List<String> cmds = []
     if (mode in MusicModeOpts.options.values()) {
         logDebug "sending musicMode: ${mode}"
-        if (mode == "on") {
-            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x01, [mfgCode: 0x115F], delay=200)
+        if (mode == 'on') {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x01, [mfgCode: 0x115F], delay = 200)
         }
-        else if (mode == "off") {
-            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x00, [mfgCode: 0x115F], delay=200)
+        else if (mode == 'off') {
+            cmds = zigbee.writeAttribute(0xFCC0, 0x051C, 0x20, 0x00, [mfgCode: 0x115F], delay = 200)
         }
     }
     else {
         logWarn "musicMode: invalid mode ${mode}"
         return
     }
-    if (cmds == []) { cmds = ["delay 299"] }
+    if (cmds == []) { cmds = ['delay 299'] }
     sendZigbeeCommands(cmds)
-
 }
-
 
 //
 // called from updated() in the main code ...
 void updatedBulb() {
-    logDebug "updatedBulb()..."
+    logDebug 'updatedBulb()...'
 }
 
 def colorControlRefresh() {
     def commands = []
-    commands += zigbee.readAttribute(0x0300, 0x03,[:],200) // currentColorX
-    commands += zigbee.readAttribute(0x0300, 0x04,[:],201) // currentColorY
+    commands += zigbee.readAttribute(0x0300, 0x03, [:], 200) // currentColorX
+    commands += zigbee.readAttribute(0x0300, 0x04, [:], 201) // currentColorY
     commands
 }
 
@@ -849,14 +827,14 @@ def refreshBulb() {
     List<String> cmds = []
     state.colorChanged = false
     state.colorXReported = false
-    state.colorYReported = false    
+    state.colorYReported = false
     state.cmds = []
     cmds =  zigbee.onOffRefresh(200) + zigbee.levelRefresh(201) + colorControlRefresh()
-    cmds += zigbee.readAttribute(0x0300,[0x4001,0x400a,0x400b,0x400c,0x000f],[:],204)    // colormode and color/capabilities
-    cmds += zigbee.readAttribute(0x0008,[0x000f,0x0010,0x0011],[:],204)                  // config/bri/execute_if_off
-    cmds += zigbee.readAttribute(0xFCC0,[0x0515,0x0516,0x517],[mfgCode:0x115F],204)      // config/bri/min & max * startup
-    cmds += zigbee.readAttribute(0xFCC0,[0x051B,0x051c],[mfgCode:0x115F],204)            // pixel count & musicMode
-    if (cmds == []) { cmds = ["delay 299"] }
+    cmds += zigbee.readAttribute(0x0300, [0x4001, 0x400a, 0x400b, 0x400c, 0x000f], [:], 204)    // colormode and color/capabilities
+    cmds += zigbee.readAttribute(0x0008, [0x000f, 0x0010, 0x0011], [:], 204)                  // config/bri/execute_if_off
+    cmds += zigbee.readAttribute(0xFCC0, [0x0515, 0x0516, 0x0517], [mfgCode:0x115F], 204)      // config/bri/min & max * startup
+    cmds += zigbee.readAttribute(0xFCC0, [0x051B, 0x051c], [mfgCode:0x115F], 204)            // pixel count & musicMode
+    if (cmds == []) { cmds = ['delay 299'] }
     logDebug "refreshBulb: ${cmds} "
     return cmds
 }
@@ -865,18 +843,16 @@ def configureBulb() {
     List<String> cmds = []
     logDebug "configureBulb() : ${cmds}"
     cmds = refreshBulb() + zigbee.onOffConfig(0, 300) + zigbee.levelConfig() + colorControlConfig(0, 300, 1)
-    if (cmds == []) { cmds = ["delay 299"] }    // no , 
-    return cmds    
+    if (cmds == []) { cmds = ['delay 299'] }    // no ,
+    return cmds
 }
 
-def initializeBulb()
-{
+def initializeBulb() {
     List<String> cmds = []
     logDebug "initializeBulb() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299",] }
-    return cmds        
+    if (cmds == []) { cmds = ['delay 299',] }
+    return cmds
 }
-
 
 void initVarsBulb(boolean fullInit=false) {
     state.colorChanged = false
@@ -885,23 +861,20 @@ void initVarsBulb(boolean fullInit=false) {
     state.colorX = 0.9999
     state.colorY = 0.9999
     state.cmds = []
-    //if (fullInit || settings?.temperaturePollingInterval == null) device.updateSetting('temperaturePollingInterval', [value: TemperaturePollingIntervalOpts.defaultValue.toString(), type: 'enum'])
-
     logDebug "initVarsBulb(${fullInit})"
 }
 
-
 void initEventsBulb(boolean fullInit=false) {
     logDebug "initEventsBulb(${fullInit})"
-    if((device.currentState("saturation")?.value == null)) {
-        sendEvent(name: "saturation", value: 0);
+    if ((device.currentState('saturation')?.value == null)) {
+        sendEvent(name: 'saturation', value: 0)
     }
-    if((device.currentState("hue")?.value == null)) {
-        sendEvent(name: "hue", value: 0);
+    if ((device.currentState('hue')?.value == null)) {
+        sendEvent(name: 'hue', value: 0)
     }
-    if ((device.currentState("level")?.value == null) || (device.currentState("level")?.value == 0)) {
-        sendEvent(name: "level", value: 100)
-    }    
+    if ((device.currentState('level')?.value == null) || (device.currentState('level')?.value == 0)) {
+        sendEvent(name: 'level', value: 100)
+    }
 }
 /*
 ================================================================================================
@@ -998,8 +971,8 @@ Endpoint 0x01 | In Cluster: 0x0005 (Scenes Cluster)
 Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster)
 ================================================================================================
 ▸ 0x0000 | On Off           | req | r-p | bool   | 01 = On  | 0..300
-▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --    
-▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --    
+▸ 0x00F5 | --               | --  | r-- | uint32 | 00D8A053 | --
+▸ 0xFFFD | Cluster Revision | req | r-- | uint16 | 0002     | --
 ------------------------------------------------------------------------------------------------
 ▸ 0x00 | Off    | req
 ▸ 0x01 | On     | req
@@ -1008,16 +981,16 @@ Endpoint 0x01 | In Cluster: 0x0006 (On/Off Cluster)
 Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster)
 ================================================================================================
 ▸ 0x0000 | Current Level          | req | r-p | uint8  | 0C = 4%          | 1..3600
-▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --     
-▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --     
-▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --     
-▸ 0x000F | --                     | --  | rw- | map8   | 00               | --     
-▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --     
-▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --     
-▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --     
-▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --     
-▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --     
-▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --     
+▸ 0x0001 | Remaining Time         | opt | r-- | uint16 | 0000 = 0 seconds | --
+▸ 0x0002 | --                     | --  | r-- | uint8  | 01               | --
+▸ 0x0003 | --                     | --  | r-- | uint8  | FE               | --
+▸ 0x000F | --                     | --  | rw- | map8   | 00               | --
+▸ 0x0010 | On Off Transition Time | opt | rw- | uint16 | 000F = 1 seconds | --
+▸ 0x0011 | On Level               | opt | rw- | uint8  | 0C = 4%          | --
+▸ 0x0012 | On Transition Time     | opt | rw- | uint16 | 000F = 1 seconds | --
+▸ 0x0013 | Off Transition Time    | opt | rw- | uint16 | 000F = 1 seconds | --
+▸ 0x00F5 | --                     | --  | r-- | uint32 | 00D8A074         | --
+▸ 0xFFFD | Cluster Revision       | req | r-- | uint16 | 0002             | --
 ------------------------------------------------------------------------------------------------
 ▸ 0x00 | Move To Level             | req
 ▸ 0x01 | Move                      | req
@@ -1030,21 +1003,21 @@ Endpoint 0x01 | In Cluster: 0x0008 (Level Control Cluster)
 ================================================================================================
 Endpoint 0x01 | In Cluster: 0x0300 (Color Control Cluster)
 ================================================================================================
-▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --    
+▸ 0x0002 | Remaining Time                   | opt | r-- | uint16 | 0000     | --
 ▸ 0x0003 | CurrentX                         | req | r-p | uint16 | 4A3C     | 0..300
 ▸ 0x0004 | CurrentY                         | req | r-p | uint16 | 8FEB     | 0..300
-▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --    
-▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --    
-▸ 0x000F | --                               | --  | rw- | map8   | 00       | --    
-▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --    
-▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --    
-▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --    
-▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --    
-▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --    
-▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --    
-▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --    
-▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --    
-▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --    
+▸ 0x0007 | Color Temperature Mireds         | req | r-p | uint16 | 0099     | --
+▸ 0x0008 | Color Mode                       | req | r-- | enum8  | 01       | --
+▸ 0x000F | --                               | --  | rw- | map8   | 00       | --
+▸ 0x0010 | Number Of Primaries              | req | r-- | uint8  | 00       | --
+▸ 0x00F5 | --                               | --  | r-- | uint32 | 00D8A06A | --
+▸ 0x4001 | Enhanced Color Mode              | req | r-- | enum8  | 01       | --
+▸ 0x400A | Color Capabilities               | req | r-- | map16  | 0018     | --
+▸ 0x400B | Color Temp Physical Min Mireds   | req | r-- | uint16 | 0099     | --
+▸ 0x400C | Color Temp Physical Max Mireds   | req | r-- | uint16 | 0172     | --
+▸ 0x400D | --                               | --  | r-- | uint16 | 0099     | --
+▸ 0x4010 | StartUp Color Temperature Mireds | opt | rw- | uint16 | 00FA     | --
+▸ 0xFFFD | Cluster Revision                 | req | r-- | uint16 | 0002     | --
 ------------------------------------------------------------------------------------------------
 ▸ 0x07 | Move to Color             | req
 ▸ 0x08 | Move Color                | req
@@ -1066,4 +1039,3 @@ Endpoint 0x01 | In Cluster: 0xFCC0 (Unknown Cluster)
 def testT(par) {
     logWarn "testT(${par})"
 }
-

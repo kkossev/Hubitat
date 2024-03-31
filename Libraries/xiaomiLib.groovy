@@ -1,4 +1,4 @@
-/* groovylint-disable PublicMethodsBeforeNonPublicMethods */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -24,7 +24,7 @@ library(
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
- * ver. 1.0.2  2024-03-04 kkossev  - (dev. branch) Groovy linting
+ * ver. 1.0.2  2024-04-01 kkossev  - (dev. branch) Groovy linting
  *
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
@@ -32,7 +32,7 @@ library(
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String xiaomiLibVersion()   { '1.0.2' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/03/04 10:02 PM' }
+static String xiaomiLibStamp() { '2024/04/01 1:16 AM' }
 
 // no metadata for this library!
 

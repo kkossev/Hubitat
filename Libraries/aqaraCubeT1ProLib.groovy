@@ -1,3 +1,4 @@
+/* groovylint-disable LineLength, NoDef */
 library (
     base: "driver",
     author: "Krassimir Kossev",

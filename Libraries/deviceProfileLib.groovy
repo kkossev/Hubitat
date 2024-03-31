@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryGetter, UnnecessaryPublicModifier, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -27,13 +27,13 @@ library(
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
- * ver. 3.1.0  2024-03-31 kkossev  - (dev. branch) deviceProfilesV3, enum pars bug fix;
+ * ver. 3.1.0  2024-03-31 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
 static String deviceProfileLibVersion()   { '3.1.0' }
-static String deviceProfileLibStamp() { '2024/03/31 10:44 PM' }
+static String deviceProfileLibStamp() { '2024/03/31 10:55 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -124,8 +124,7 @@ Map getPreferencesMapByName(final String param, boolean debug=false) {
             foundMap = DEVICE?.tuyaDPs.find { it.dp == dp }
         }
         else { // cluster:attribute
-            if (debug) { log.trace "${DEVICE?.attributes}" }
-            //def dpMaps   =  DEVICE?.tuyaDPs
+            //if (debug) { log.trace "${DEVICE?.attributes}" }
             foundMap = DEVICE?.attributes.find { it.at == preference }
         }
     // TODO - could be also 'true' or 'false' ...
@@ -139,6 +138,7 @@ Map getPreferencesMapByName(final String param, boolean debug=false) {
 
 Map getAttributesMap(String attribName, boolean debug=false) {
     Map foundMap = [:]
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def searchMap = []
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
     if (DEVICE?.tuyaDPs != null) {
@@ -217,14 +217,11 @@ List<String> getValidParsPerModel() {
     return validPars
 }
 
-/**
- * Returns the scaled value of a preference based on its type and scale.
- * @param preference The name of the preference to retrieve.
- * @param dpMap A map containing the type and scale of the preference.
- * @return The scaled value of the preference, or null if the preference is not found or has an unsupported type.
- */
+/* groovylint-disable-next-line MethodReturnTypeRequired, NoDef */
 def getScaledPreferenceValue(String preference, Map dpMap) {
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def value = settings."${preference}"
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue
     if (value == null) {
         logDebug "getScaledPreferenceValue: preference ${preference} not found!"
@@ -271,31 +268,27 @@ void updateAllPreferences() {
         return
     }
     //Integer dpInt = 0
-    def scaledValue    // int or String for enums
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
+    def preferenceValue    // int or String for enums
     // itterate over the preferences map and update the device settings
     (DEVICE?.preferences).each { name, dp ->
-        /*
-        dpInt = safeToInt(dp, -1)
-        if (dpInt <= 0) {
-            // this is the IAS and other non-Tuya DPs preferences ....
-            logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
-            return
-        }
-        def dpMaps   =  DEVICE?.tuyaDPs
-        */
         Map foundMap
         foundMap = getPreferencesMapByName(name, false)
         logDebug "updateAllPreferences: foundMap = ${foundMap}"
 
         if (foundMap != null && foundMap != [:]) {
-            // scaledValue = getScaledPreferenceValue(name, foundMap)
-            scaledValue = settings."${name}"
-            logTrace"scaledValue = ${scaledValue}"                                          // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            if (scaledValue != null) {
-                setPar(name, scaledValue)
+            // preferenceValue = getScaledPreferenceValue(name, foundMap)
+            preferenceValue = settings."${name}"
+            logTrace"preferenceValue = ${preferenceValue}"
+            if (foundMap.type == 'enum' && foundMap.scale != null && foundMap.scale != 1 && foundMap.scale != 0) {
+                // scale the value
+                preferenceValue = (safeToDouble(preferenceValue) / safeToInt(foundMap.scale)) as double
+            }
+            if (preferenceValue != null) {
+                setPar(name, preferenceValue.toString())
             }
             else {
-                logDebug "updateAllPreferences: preference ${name} is not set (scaledValue was null)"
+                logDebug "updateAllPreferences: preference ${name} is not set (preferenceValue was null)"
                 return
             }
         }
@@ -307,15 +300,16 @@ void updateAllPreferences() {
     return
 }
 
-def divideBy100( val ) { return (val as int) / 100 }
-def multiplyBy100( val ) { return (val as int) * 100 }
-def divideBy10( val ) {
+/* groovylint-disable-next-line MethodReturnTypeRequired, NoDef */
+def divideBy100(int val) { return (val as int) / 100 }
+int multiplyBy100(int val) { return (val as int) * 100 }
+int divideBy10(int val) {
     if (val > 10) { return (val as int) / 10 }
     else { return (val as int) }
 }
-def multiplyBy10( val ) { return (val as int) * 10 }
-def divideBy1( val ) { return (val as int) / 1 }    //tests
-def signedInt( val ) {
+int multiplyBy10(int val) { return (val as int) * 10 }
+int divideBy1(int val) { return (val as int) / 1 }    //tests
+int signedInt(int val) {
     if (val > 127) { return (val as int) - 256 }
     else { return (val as int) }
 }
@@ -328,9 +322,12 @@ def signedInt( val ) {
  * @param val The value to be validated and scaled.
  * @return The validated and scaled value if it is within the specified range, null otherwise.
  */
+/* groovylint-disable-next-line MethodReturnTypeRequired, NoDef */
 def validateAndScaleParameterValue(Map dpMap, String val) {
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def value              // validated value - integer, floar
-    def scaledValue        // 
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
+    def scaledValue        //
     //logDebug "validateAndScaleParameterValue: dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case 'number' :
@@ -423,6 +420,7 @@ boolean setPar(final String parPar=null, final String val=null ) {
     Map dpMap = getPreferencesMapByName(par, false)                                   // get the map for the parameter
     if ( dpMap == null || dpMap == [:]) { logInfo "setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
     if (scaledValue == null) { logInfo "setPar: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
     /*
@@ -462,6 +460,7 @@ boolean setPar(final String parPar=null, final String val=null ) {
     }
     if (isVirtual()) {
         // set a virtual attribute
+        /* groovylint-disable-next-line NoDef, VariableTypeRequired */
         def valMiscType
         logDebug "setPar: found virtual attribute ${par} value ${val}"
         if (dpMap.type == 'enum') {
@@ -517,7 +516,7 @@ boolean setPar(final String parPar=null, final String val=null ) {
         int cluster
         int attribute
         int dt
-        def mfgCode
+        String mfgCode
         try {
             cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
             //log.trace "cluster = ${cluster}"
@@ -533,7 +532,7 @@ boolean setPar(final String parPar=null, final String val=null ) {
             return false
         }
         Map mapMfCode = ['mfgCode':mfgCode]
-        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster,2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (mfgCode != null) {
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
@@ -552,17 +551,18 @@ boolean setPar(final String parPar=null, final String val=null ) {
 
 // function to send a Tuya command to data point taken from dpMap with value tuyaValue and type taken from dpMap
 // TODO - reuse it !!!
-def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
+List<String> sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     //logDebug "sendTuyaParameter: trying to send parameter ${par} value ${tuyaValue}"
     List<String> cmds = []
     if (dpMap == null) {
         logWarn "sendTuyaParameter: tuyaDPs map not found for parameter <b>${par}</b>"
-        return null
+        return []
     }
     String dp = zigbee.convertToHexString(dpMap.dp, 2)
     if (dpMap.dp <= 0 || dpMap.dp >= 256) {
         logWarn "sendTuyaParameter: invalid dp <b>${dpMap.dp}</b> for parameter <b>${par}</b>"
-        return null
+        return []
     }
     String dpType
     if (dpMap.dt == null) {
@@ -573,15 +573,16 @@ def sendTuyaParameter( Map dpMap, String par, tuyaValue) {
     }
     if (dpType == null) {
         logWarn "sendTuyaParameter: invalid dpType <b>${dpMap.type}</b> for parameter <b>${par}</b>"
-        return null
+        return []
     }
     // sendTuyaCommand
-    def dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2)
+    String dpValHex = dpType == DP_TYPE_VALUE ? zigbee.convertToHexString(tuyaValue as int, 8) : zigbee.convertToHexString(tuyaValue as int, 2)
     logDebug "sendTuyaParameter: sending parameter ${par} dpValHex ${dpValHex} (raw=${tuyaValue}) Tuya dp=${dp} dpType=${dpType} "
     cmds = sendTuyaCommand( dp, dpType, dpValHex)
     return cmds
 }
 
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 boolean sendAttribute(String par=null, val=null ) {
     List<String> cmds = []
     //Boolean validated = false
@@ -591,7 +592,7 @@ boolean sendAttribute(String par=null, val=null ) {
     Map dpMap = getAttributesMap(par, false)                                   // get the map for the attribute
     if (dpMap == null || dpMap.isEmpty()) { logWarn "sendAttribute: map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logWarn "sendAttribute: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
-    /* groovylint-disable-next-line NoDef */
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def scaledValue = validateAndScaleParameterValue(dpMap, val as String)      // convert the val to the correct type and scale it if needed
     if (scaledValue == null) { logWarn "sendAttribute: invalid parameter value <b>${val}</b>. Must be in the range ${dpMap.min} to ${dpMap.max}"; return false }
     logDebug "sendAttribute: parameter ${par} value ${val}, type ${dpMap.type} validated and scaled to ${scaledValue} type=${dpMap.type}"
@@ -641,7 +642,8 @@ boolean sendAttribute(String par=null, val=null ) {
         logDebug "sendAttribute: not a virtual device (device.controllerType = ${device.controllerType}), continue "
     }
     boolean isTuyaDP
-    def preference = dpMap.dp
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
+    def preference = dpMap.dp   // TODO - remove it?
     try {
         isTuyaDP = dpMap.dp instanceof Number       // check if dpMap.dp is a number
     }
@@ -731,7 +733,7 @@ boolean sendCommand(final String command_orig=null, final String val_orig=null) 
     }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def func
-    /* groovylint-disable-next-line NoDef */
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def funcResult
     try {
         func = DEVICE?.commands.find { it.key == command }.value
@@ -787,7 +789,7 @@ Map inputIt(String paramPar, boolean debug = false) {
         if (debug) { log.warn "inputIt: preference ${param} not defined for this device!" }
         return [:]
     }
-    /* groovylint-disable-next-line NoDef */
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preference
     try {
         preference = DEVICE?.preferences["$param"]
@@ -858,7 +860,6 @@ Map inputIt(String paramPar, boolean debug = false) {
     }
     return input
 }
-
 
 /**
  * Returns the device name and profile based on the device model and manufacturer.
@@ -977,14 +978,13 @@ List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, Str
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
     if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
         log.warn "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
-
     }
     return [isEqual, convertedValue]
 }
 
 List<Object> compareAndConvertNumbers(final Map foundItem, int tuyaValue, int hubitatValue) {
     Integer convertedValue
-    boolean isEqual 
+    boolean isEqual
     if (foundItem?.scale == null || foundItem?.scale == 0 || foundItem?.scale == 1) {    // compare as integer
         convertedValue = tuyaValue as int
     }
@@ -1008,8 +1008,10 @@ List<Object> compareAndConvertDecimals(final Map foundItem, double tuyaValue, do
     return [isEqual, convertedValue]
 }
 
-List<Object> compareAndConvertEnumKeys(final Map foundItem,  tuyaValue, hubitatValue) {
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
+List<Object> compareAndConvertEnumKeys(final Map foundItem, int tuyaValue, hubitatValue) {
     //logTrace "compareAndConvertEnumKeys: tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def convertedValue
     if (foundItem?.scale == null || foundItem?.scale == 0 || foundItem?.scale == 1) {
         convertedValue = tuyaValue as int
@@ -1029,7 +1031,6 @@ List<Object> compareAndConvertEnumKeys(final Map foundItem,  tuyaValue, hubitatV
     return [isEqual, convertedValue]
 }
 
-
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, fncmd, preference) {
     if (foundItem == null || fncmd == null || preference == null) { return [true, 'none'] }
@@ -1037,6 +1038,7 @@ List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, 
     boolean isEqual
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def tuyaValueScaled     // could be integer or float
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue = settings[foundItem.name]
     switch (foundItem.type) {
         case 'bool' :       // [0:"OFF", 1:"ON"]
@@ -1046,8 +1048,9 @@ List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, 
         case 'enum' :       // [0:"inactive", 1:"active"]   map:['75': '0.75 meters', '150': '1.50 meters', '225': '2.25 meters']
             Integer scale = (foundItem.scale ?: 0 ) as int
             if (scale != null && scale != 0 && scale != 1) {
-                preferenceValue = preferenceValue.toString().replace("[", "").replace("]", "")
-                preference = preference.toString().replace("[", "").replace("]", "")
+                preferenceValue = preferenceValue.toString().replace('[', '').replace(']', '')
+                /* groovylint-disable-next-line ParameterReassignment */
+                preference = preference.toString().replace('[', '').replace(']', '')
                 logTrace "compareAndConvertTuyaToHubitatPreferenceValue: enum: scale=${scale} fncmd=${fncmd} preference=${preference} preferenceValue=${preferenceValue} safeToDouble(fncmd)=${safeToDouble(fncmd)} safeToDouble(preference)=${safeToDouble(preference)}"
                 (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference))
             }
@@ -1089,7 +1092,7 @@ List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, 
 //  TODO: refactor!
 //
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedMethodParameter */
-List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, fncmd, boolean doNotTrace=false) {
+List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, boolean doNotTrace=false) {
     if (foundItem == null) { return [true, 'none'] }
     if (foundItem.type == null) { return [true, 'none'] }
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
@@ -1100,7 +1103,6 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, fncmd, bool
             (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
             break
         case 'enum' :       // [0:"inactive", 1:"active"]  foundItem.map=[75:0.75 meters, 150:1.50 meters, 225:2.25 meters, 300:3.00 meters, 375:3.75 meters, 450:4.50 meters]
-            
             logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(foundItem.name)=${(device.currentValue(foundItem.name))}"
             (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
             logTrace "compareAndConvertTuyaToHubitatEventValue: after compareAndConvertStrings: isEqual=${isEqual} hubitatEventValue=${hubitatEventValue}"
@@ -1185,7 +1187,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
 // TODO: refactor!
 public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
-    if (state.deviceProfile == null)  { logTrace "<b>state.deviceProfile is missing!<b>"; return false }
+    if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
 
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile
@@ -1225,12 +1227,13 @@ boolean processFoundItem(final Map foundItem, int value) {
     if (foundItem.preProc != null) {
         /* groovylint-disable-next-line ParameterReassignment */
         Integer preProcValue = preProc(foundItem, value)
-        if (preProcValue == null) { 
+        if (preProcValue == null) {
             logDebug "processFoundItem: preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!"
-            return true 
+            return true
         }
         if (preProcValue != value) {
             logDebug "processFoundItem: <b>preProc</b> changed ${foundItem.name} value to ${preProcValue}"
+            /* groovylint-disable-next-line ParameterReassignment */
             value = preProcValue as int
         }
     }
@@ -1240,15 +1243,14 @@ boolean processFoundItem(final Map foundItem, int value) {
 
     String name = foundItem.name                                   // preference name as in the attributes map
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    //device.updateSetting('motionDetectionDistance', [value: '300', type: 'enum'])
     String existingPrefValue = settings[foundItem.name] ?: 'none'  // existing preference value
     //existingPrefValue = existingPrefValue?.replace("[", "").replace("]", "")               // preference name as in Hubitat settings (preferences), if already created.
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def preferenceValue = null   // preference value
-    log.trace "settings=${settings}"
+    //log.trace "settings=${settings}"
     //boolean preferenceExists = settings.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
     boolean preferenceExists = DEVICE?.preferences?.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
-    log.trace "preferenceExists=${preferenceExists}"
+    //log.trace "preferenceExists=${preferenceExists}"
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
@@ -1279,12 +1281,12 @@ boolean processFoundItem(final Map foundItem, int value) {
     if (preferenceExists) {
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
-        log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
+        //log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
         if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
             logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
         }
         else {
-            String scaledPreferenceValue = preferenceValue.toString()
+            String scaledPreferenceValue = preferenceValue      //.toString() is not neccessary
             if (foundItem.type == 'enum' && foundItem.scale != null && foundItem.scale != 0 && foundItem.scale != 1) {
                 scaledPreferenceValue = ((preferenceValue * safeToInt(foundItem.scale)) as int).toString()
             }

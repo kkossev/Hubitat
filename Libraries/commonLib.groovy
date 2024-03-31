@@ -49,7 +49,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.4' }
-String commonLibStamp() { '2024/03/29 9:46 PM' }
+String commonLibStamp() { '2024/03/31 11:38 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -152,7 +152,9 @@ metadata {
         if (device) {
             if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) && !isZigUSB()) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-                input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
+                if (deviceType != 'mmWaveSensor') {
+                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
+                }
             }
             if (device.hasCapability('IlluminanceMeasurement')) {
                 input name: 'illuminanceThreshold', type: 'number', title: '<b>Illuminance Reporting Threshold</b>', description: '<i>Illuminance reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
@@ -1266,7 +1268,7 @@ void sendSwitchEvent(int switchValuePar) {
     clearIsDigital()
     if (this.respondsTo('customSwitchEventPostProcesing')) {
         customSwitchEventPostProcesing(map)
-    }    
+    }
 }
 
 @Field static final Map powerOnBehaviourOptions = [
@@ -2018,11 +2020,10 @@ void parseEC03Cluster(final Map descMap) {
     if (this.respondsTo('customParseEC03Cluster')) {
         customParseEC03Cluster(descMap)
     }
-    else {    
+    else {
         logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
     }
 }
-
 
 /*
  * -----------------------------------------------------------------------------
@@ -2097,7 +2098,7 @@ void parseTuyaCluster(final Map descMap) {
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     log.trace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
     if (this.respondsTo(customProcessTuyaDp)) {
-        logTrace "customProcessTuyaDp exists, calling it..."
+        logTrace 'customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
             return
         }
@@ -2816,7 +2817,7 @@ void getAllProperties() {
     log.trace 'Done'
 }
 
-// delete all Preferences 
+// delete all Preferences
 void deleteAllSettings() {
     settings.each { it ->
         logDebug "deleting ${it.key}"

@@ -761,6 +761,7 @@ void customParseEC03Cluster(final Map descMap) {
 
 void customUpdated() {
     logDebug "customUpdated()"
+    List<String> cmds = []
     if ('DistanceMeasurement' in DEVICE?.capabilities) {
         if (settings?.ignoreDistance == true) {
             device.deleteCurrentState('distance')
@@ -769,7 +770,11 @@ void customUpdated() {
         else {
             logDebug "customUpdated: ignoreDistance is ${settings?.ignoreDistance}"
         }
-    }    
+    }
+    // Itterates through all settings
+    cmds += updateAllPreferences()
+    //
+    sendZigbeeCommands(cmds)
 }
 
 void customInitializeVars(final boolean fullInit=false) {
