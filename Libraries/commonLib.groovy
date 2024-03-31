@@ -359,6 +359,10 @@ void parse(final String description) {
             parseE002Cluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseE002Cluster(descMap + map) }
             break
+        case 0xEC03 :   // Linptech unknown cluster
+            parseEC03Cluster(descMap)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseEC03Cluster(descMap + map) }
+            break
         case 0xEF00 :                                       // Tuya famous cluster
             parseTuyaCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseTuyaCluster(descMap + map) }
@@ -2005,10 +2009,20 @@ void parseE002Cluster(final Map descMap) {
     if (this.respondsTo('customParseE002Cluster')) {
         customParseE002Cluster(descMap)
     }
-    else {    
+    else {
         logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
     }
 }
+
+void parseEC03Cluster(final Map descMap) {
+    if (this.respondsTo('customParseEC03Cluster')) {
+        customParseEC03Cluster(descMap)
+    }
+    else {    
+        logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
+    }
+}
+
 
 /*
  * -----------------------------------------------------------------------------

@@ -17,11 +17,11 @@
  *
  * ver. 3.0.4  2024-04-28 kkossev  - (dev. branch) first version
  *
- *                                   TODO:
+ *                                   TODO: update() to save the preferences
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/31 1:11 PM"}
+static String timeStamp() {"2024/04/31 10:44 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -752,6 +752,12 @@ void customParseE002Cluster(final Map descMap) {
         logWarn "customParseE002Cluster: received unknown 0xE002 attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
+
+void customParseEC03Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseEC03Cluster: zigbee received unknown cluster 0xEC03 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+}
+
 
 void customUpdated() {
     logDebug "customUpdated()"

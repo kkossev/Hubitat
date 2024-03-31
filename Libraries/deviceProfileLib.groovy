@@ -27,13 +27,13 @@ library(
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
- * ver. 3.1.0  2024-03-31 kkossev  - (dev. branch) deviceProfilesV3
+ * ver. 3.1.0  2024-03-31 kkossev  - (dev. branch) deviceProfilesV3, enum pars bug fix;
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
 static String deviceProfileLibVersion()   { '3.1.0' }
-static String deviceProfileLibStamp() { '2024/03/31 1:11 PM' }
+static String deviceProfileLibStamp() { '2024/03/31 10:44 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1009,7 +1009,7 @@ List<Object> compareAndConvertDecimals(final Map foundItem, double tuyaValue, do
 }
 
 List<Object> compareAndConvertEnumKeys(final Map foundItem,  tuyaValue, hubitatValue) {
-    logTrace "compareAndConvertEnumKeys: tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+    //logTrace "compareAndConvertEnumKeys: tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
     def convertedValue
     if (foundItem?.scale == null || foundItem?.scale == 0 || foundItem?.scale == 1) {
         convertedValue = tuyaValue as int
@@ -1025,7 +1025,7 @@ List<Object> compareAndConvertEnumKeys(final Map foundItem,  tuyaValue, hubitatV
             isEqual = Math.abs((convertedValue as double) - (hubitatSafeValue as double)) < 0.001
         }
     }
-    logTrace  "compareAndConvertEnumKeys:  tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} convertedValue=${convertedValue} to hubitatValue=${hubitatValue} isEqual=${isEqual}"
+    //logTrace  "compareAndConvertEnumKeys:  tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} convertedValue=${convertedValue} to hubitatValue=${hubitatValue} isEqual=${isEqual}"
     return [isEqual, convertedValue]
 }
 
@@ -1226,25 +1226,29 @@ boolean processFoundItem(final Map foundItem, int value) {
         /* groovylint-disable-next-line ParameterReassignment */
         Integer preProcValue = preProc(foundItem, value)
         if (preProcValue == null) { 
-            logDebug "preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!"
+            logDebug "processFoundItem: preProc returned null for ${foundItem.name} value ${value} -> further processing is skipped!"
             return true 
         }
         if (preProcValue != value) {
-            logDebug "<b>preProc</b> changed ${foundItem.name} value to ${preProcValue}"
+            logDebug "processFoundItem: <b>preProc</b> changed ${foundItem.name} value to ${preProcValue}"
             value = preProcValue as int
         }
     }
     else {
-        logTrace "no preProc for ${foundItem.name}"
+        logTrace "processFoundItem: no preProc for ${foundItem.name}"
     }
 
     String name = foundItem.name                                   // preference name as in the attributes map
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     //device.updateSetting('motionDetectionDistance', [value: '300', type: 'enum'])
-    String existingPrefValue = settings[foundItem.name]                  // preference name as in Hubitat settings (preferences), if already created.
+    String existingPrefValue = settings[foundItem.name] ?: 'none'  // existing preference value
+    //existingPrefValue = existingPrefValue?.replace("[", "").replace("]", "")               // preference name as in Hubitat settings (preferences), if already created.
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def perfValue = null   // preference value
-    boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this clusterAttribute
+    def preferenceValue = null   // preference value
+    log.trace "settings=${settings}"
+    //boolean preferenceExists = settings.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
+    boolean preferenceExists = DEVICE?.preferences?.containsKey(foundItem.name)         // check if there is an existing preference for this clusterAttribute
+    log.trace "preferenceExists=${preferenceExists}"
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
@@ -1262,9 +1266,10 @@ boolean processFoundItem(final Map foundItem, int value) {
     // TODO - check if clusterAttribute is in the list of the received state.attributes - then we have something to compare !
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
+            logTrace "processFoundItem: no preference or attribute for ${name} - just log the value, if not equal to the last one..."
             (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
             descText  = "${name} is ${valueScaled} ${unitText}"
-            if (settings.logEnable) { logInfo "${descText }" }
+            if (settings.logEnable) { logInfo "${descText }" }  // only when Debug is enabled!
         }
         // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
         return true
@@ -1273,20 +1278,24 @@ boolean processFoundItem(final Map foundItem, int value) {
     // first, check if there is a preference defined to be updated
     if (preferenceExists) {
         // preference exists and its's value is extracted
-        //def oldPerfValue = device.getSetting(name)
-        (isEqual, perfValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
+        (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
+        log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
         if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
-            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${perfValue} (clusterAttribute raw value ${value})"
+            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
         }
         else {
-            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${perfValue} (clusterAttribute raw value ${value})"
-            if (debug) { logInfo "updating par ${name} from ${existingPrefValue} to ${perfValue} type ${foundItem.type}" }
+            String scaledPreferenceValue = preferenceValue.toString()
+            if (foundItem.type == 'enum' && foundItem.scale != null && foundItem.scale != 0 && foundItem.scale != 1) {
+                scaledPreferenceValue = ((preferenceValue * safeToInt(foundItem.scale)) as int).toString()
+            }
+            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+            if (settings.logEnable) { logInfo "updating the preference '${name}' from ${existingPrefValue} to ${preferenceValue} (scaledPreferenceValue=${scaledPreferenceValue}, type=${foundItem.type})" }
             try {
-                device.updateSetting("${name}", [value:perfValue, type:foundItem.type])
+                device.updateSetting("${name}", [value:scaledPreferenceValue, type:foundItem.type])
                 wasChanged = true
             }
             catch (e) {
-                logWarn "exception ${e} caught while updating preference ${name} to ${value}, type ${foundItem.type}"
+                logWarn "exception ${e} caught while updating preference ${name} to ${preferenceValue}, type ${foundItem.type}"
             }
         }
     }
@@ -1298,6 +1307,7 @@ boolean processFoundItem(final Map foundItem, int value) {
 
     // second, send an event if this is declared as an attribute!
     if (isAttribute) {                                         // this clusterAttribute has an attribute that must be sent in an Event
+        logTrace "attribute '${name}' exists (type ${foundItem.type})"
         (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${value})" }
