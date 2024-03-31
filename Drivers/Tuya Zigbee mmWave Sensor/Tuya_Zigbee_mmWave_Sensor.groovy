@@ -21,9 +21,9 @@
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/31 12:3352 AM"}
+static String timeStamp() {"2024/04/31 1:11 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 
 import groovy.transform.Field
@@ -61,6 +61,9 @@ metadata {
         attribute 'leave_time', 'number'            // BlackSquareRadar only
         attribute 'keepTime', 'enum', ['10 seconds', '30 seconds', '60 seconds', '120 seconds']
         attribute 'sensitivity', 'enum', ['low', 'medium', 'high']
+        attribute 'motionDetectionSensitivity', 'enum', ['1 - low', '2 - medium low', '3 - medium', '4 - medium high', '5 - high']
+        attribute 'staticDetectionSensitivity', 'enum', ['1 - low', '2 - medium low', '3 - medium', '4 - medium high', '5 - high']
+        attribute 'motionDetectionDistance', 'enum', ['0.75 meters', '1.50 meters', '2.25 meters', '3.00 meters', '3.75 meters', '4.50 meters', '5.25 meters', '6.00 meters']
 
         attribute 'radarSensitivity', 'number'
         attribute 'staticDetectionSensitivity', 'number'    // added 10/29/2023
@@ -538,11 +541,11 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:101,              name:'fadingTime',                      type:'number',                rw: 'rw', min:1,    max:9999, defVal:10,    scale:1,   unit:'seconds', title: '<b>Fading time</b>', description:'<i>Presence inactivity timer, seconds</i>']                                  // aka 'nobody time'
             ],
             attributes:       [                                        // LINPTECH / MOES are using a custom cluster 0xE002 for the settings (except for the fadingTime), ZCL cluster 0x0400 for illuminance (malformed reports!) and the IAS cluster 0x0500 for motion detection
-                [at:'0xE002:0xE001',  name:'existance_time',                  type:'number',  dt: '0x21', rw: 'ro', min:0,    max:65535,  scale:1,    unit:'minutes',   title: '<b>Existance time/b>',                 description:'<i>existance (presence) time, recommended value is > 10 seconds!</i>'],                    // aka Presence Time
-                [at:'0xE002:0xE004',  name:'motionDetectionSensitivity',      type:'enum',    dt: '0x20',  rw: 'rw', min:1,    max:5,      defVal:'4',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Motion Detection Sensitivity</b>',  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
-                [at:'0xE002:0xE005',  name:'staticDetectionSensitivity',      type:'enum',    dt: '0x20',  rw: 'rw', min:1,    max:5,      defVal:'3',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Static Detection Sensitivity</b>',  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity
+                [at:'0xE002:0xE001',  name:'existance_time',                  type:'number', dt: '0x21', rw: 'ro', min:0,    max:65535,  scale:1,    unit:'minutes',   title: '<b>Existance time/b>',                 description:'<i>existance (presence) time, recommended value is > 10 seconds!</i>'],                    // aka Presence Time
+                [at:'0xE002:0xE004',  name:'motionDetectionSensitivity',      type:'enum',   dt: '0x20', rw: 'rw', min:1,    max:5,      defVal:'4',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Motion Detection Sensitivity</b>',  description:'<i>Large motion detection sensitivity</i>'],           // aka Motionless Detection Sensitivity
+                [at:'0xE002:0xE005',  name:'staticDetectionSensitivity',      type:'enum',   dt: '0x20', rw: 'rw', min:1,    max:5,      defVal:'3',    scale:1,   map:[1: '1 - low', 2: '2 - medium low', 3: '3 - medium', 4: '4 - medium high', 5: '5 - high'], unit:'',         title: '<b>Static Detection Sensitivity</b>',  description:'<i>Static detection sensitivity</i>'],                 // aka Motionless Detection Sensitivity
                 [at:'0xE002:0xE00A',  name:'distance',  preProc:'skipIfDisabled', type:'decimal', dt: '0x21', rw: 'ro', min:0.0,  max:6.0,    defVal:0.0,    scale:100,  unit:'meters',            title: '<b>Distance</b>',                      description:'<i>Measured distance</i>'],                            // aka Current Distance
-                [at:'0xE002:0xE00B',  name:'motionDetectionDistance', type:'enum', dt: '0x21', rw: 'rw', min:0.75, max:6.0, defVal:'4.50', step:75, scale:100, map:['0.75': '0.75 meters', '1.50': '1.50 meters', '2.25': '2.25 meters', '3.00': '3.00 meters', '3.75': '3.75 meters', '4.50': '4.50 meters', '5.25': '5.25 meters', '6.00' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
+                [at:'0xE002:0xE00B',  name:'motionDetectionDistance',         type:'enum',   dt: '0x21', rw: 'rw', min:0.75, max:6.00, defVal:'450', step:75, scale:100, map:['75': '0.75 meters', '150': '1.50 meters', '225': '2.25 meters', '300': '3.00 meters', '375': '3.75 meters', '450': '4.50 meters', '525': '5.25 meters', '600' : '6.00 meters'], unit:'meters', title: '<b>Motion Detection Distance</b>', description:'<i>Large motion detection distance, meters</i>']               // aka Far Detection
             ],
             spammyDPsToIgnore : [19],       // TODO
             spammyDPsToNotTrace : [19],     // TODO

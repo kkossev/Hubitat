@@ -33,7 +33,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.0' }
-static String deviceProfileLibStamp() { '2024/03/31 12:24 AM' }
+static String deviceProfileLibStamp() { '2024/03/31 1:11 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -329,8 +329,8 @@ def signedInt( val ) {
  * @return The validated and scaled value if it is within the specified range, null otherwise.
  */
 def validateAndScaleParameterValue(Map dpMap, String val) {
-    def value = null    // validated value - integer, floar
-    def scaledValue = null
+    def value              // validated value - integer, floar
+    def scaledValue        // 
     //logDebug "validateAndScaleParameterValue: dpMap=${dpMap} val=${val}"
     switch (dpMap.type) {
         case 'number' :
@@ -365,9 +365,11 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
             }
             break
         case 'enum' :
-            // val could be both integer or float value ... check if the scaling is different than 1 in dpMap
+            // enums are always integer values
+            // check if the scaling is different than 1 in dpMap
             logTrace "validateAndScaleParameterValue: enum parameter <b>${val}</b>. dpMap=${dpMap}"
-            if (dpMap.scale != null && safeToInt(dpMap.scale) != 1) {   // TODO - check this !!!
+            Integer scale = safeToInt(dpMap.scale)
+            if (scale != null && scale != 0 && scale != 1) {
                 // we have a float parameter input - convert it to int
                 value = safeToDouble(val, -1.0)
                 scaledValue = (value * safeToInt(dpMap.scale)) as Integer
@@ -411,12 +413,13 @@ def validateAndScaleParameterValue(Map dpMap, String val) {
  * @param val The parameter value.
  * @return true if the parameter was successfully set, false otherwise.
  */
-boolean setPar(final String par=null, final String val=null ) {
+boolean setPar(final String parPar=null, final String val=null ) {
     List<String> cmds = []
     //Boolean validated = false
-    logDebug "setPar(${par}, ${val})"
+    logDebug "setPar(${parPar}, ${val})"
     if (DEVICE?.preferences == null || DEVICE?.preferences == [:]) { return false }
-    if (par == null /*|| !(par in getValidParsPerModel())*/) { logInfo "setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return false }
+    if (parPar == null /*|| !(par in getValidParsPerModel())*/) { logInfo "setPar: 'parameter' must be one of these : ${getValidParsPerModel()}"; return false }
+    String par = parPar.trim()
     Map dpMap = getPreferencesMapByName(par, false)                                   // get the map for the parameter
     if ( dpMap == null || dpMap == [:]) { logInfo "setPar: tuyaDPs map not found for parameter <b>${par}</b>"; return false }
     if (val == null) { logInfo "setPar: 'value' must be specified for parameter <b>${par}</b> in the range ${dpMap.min} to ${dpMap.max}"; return false }
@@ -530,7 +533,7 @@ boolean setPar(final String par=null, final String val=null ) {
             return false
         }
         Map mapMfCode = ['mfgCode':mfgCode]
-        logDebug "setPar: found cluster=${cluster} attribute=${attribute} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster,2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
         if (mfgCode != null) {
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
@@ -972,18 +975,23 @@ boolean isSpammyDPsToNotTrace(Map descMap) {
 List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, String hubitatValue) {
     String convertedValue = tuyaValue
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
+    if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
+        log.warn "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+
+    }
     return [isEqual, convertedValue]
 }
 
 List<Object> compareAndConvertNumbers(final Map foundItem, int tuyaValue, int hubitatValue) {
     Integer convertedValue
+    boolean isEqual 
     if (foundItem?.scale == null || foundItem?.scale == 0 || foundItem?.scale == 1) {    // compare as integer
         convertedValue = tuyaValue as int
     }
     else {
         convertedValue  = ((tuyaValue as double) / (foundItem.scale as double)) as int
     }
-    boolean isEqual = ((convertedValue as int) == (hubitatValue as int))
+    isEqual = ((convertedValue as int) == (hubitatValue as int))
     return [isEqual, convertedValue]
 }
 
@@ -996,8 +1004,31 @@ List<Object> compareAndConvertDecimals(final Map foundItem, double tuyaValue, do
         convertedValue = (tuyaValue as double) / (foundItem.scale as double)
     }
     isEqual = Math.abs((convertedValue as double) - (hubitatValue as double)) < 0.001
+    logTrace  "compareAndConvertDecimals: tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} convertedValue=${convertedValue} to hubitatValue=${hubitatValue} isEqual=${isEqual}"
     return [isEqual, convertedValue]
 }
+
+List<Object> compareAndConvertEnumKeys(final Map foundItem,  tuyaValue, hubitatValue) {
+    logTrace "compareAndConvertEnumKeys: tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+    def convertedValue
+    if (foundItem?.scale == null || foundItem?.scale == 0 || foundItem?.scale == 1) {
+        convertedValue = tuyaValue as int
+        isEqual = ((convertedValue as int) == (safeToInt(hubitatValue)))
+    }
+    else {  // scaled value - divide by scale
+        double hubitatSafeValue = safeToDouble(hubitatValue, -1.0)
+        convertedValue = (tuyaValue as double) / (foundItem.scale as double)
+        if (hubitatSafeValue == -1.0) {
+            isEqual = false
+        }
+        else { // compare as double (float)
+            isEqual = Math.abs((convertedValue as double) - (hubitatSafeValue as double)) < 0.001
+        }
+    }
+    logTrace  "compareAndConvertEnumKeys:  tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} convertedValue=${convertedValue} to hubitatValue=${hubitatValue} isEqual=${isEqual}"
+    return [isEqual, convertedValue]
+}
+
 
 /* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, fncmd, preference) {
@@ -1006,20 +1037,33 @@ List<Object> compareAndConvertTuyaToHubitatPreferenceValue(final Map foundItem, 
     boolean isEqual
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def tuyaValueScaled     // could be integer or float
+    def preferenceValue = settings[foundItem.name]
     switch (foundItem.type) {
         case 'bool' :       // [0:"OFF", 1:"ON"]
-        case 'enum' :       // [0:"inactive", 1:"active"]
             (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
-            //logDebug "compareAndConvertTuyaToHubitatPreferenceValue: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
+            logTrace "compareAndConvertTuyaToHubitatPreferenceValue: bool: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
+            break
+        case 'enum' :       // [0:"inactive", 1:"active"]   map:['75': '0.75 meters', '150': '1.50 meters', '225': '2.25 meters']
+            Integer scale = (foundItem.scale ?: 0 ) as int
+            if (scale != null && scale != 0 && scale != 1) {
+                preferenceValue = preferenceValue.toString().replace("[", "").replace("]", "")
+                preference = preference.toString().replace("[", "").replace("]", "")
+                logTrace "compareAndConvertTuyaToHubitatPreferenceValue: enum: scale=${scale} fncmd=${fncmd} preference=${preference} preferenceValue=${preferenceValue} safeToDouble(fncmd)=${safeToDouble(fncmd)} safeToDouble(preference)=${safeToDouble(preference)}"
+                (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference))
+            }
+            else {
+                (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
+            }
+            logTrace "compareAndConvertTuyaToHubitatPreferenceValue: enum: preference = ${preference} <b>type=${foundItem.type}</b>  foundItem=${foundItem.name} <b>isEqual=${isEqual}</b> preferenceValue=${preferenceValue} tuyaValueScaled=${tuyaValueScaled} fncmd=${fncmd}"
             break
         case 'value' :      // depends on foundItem.scale
         case 'number' :
             (isEqual, tuyaValueScaled) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(preference))
-            //log.warn "tuyaValue=${tuyaValue} tuyaValueScaled=${tuyaValueScaled} preferenceValue = ${preference} isEqual=${isEqual}"
+            logTrace "tuyaValue=${tuyaValue} tuyaValueScaled=${tuyaValueScaled} preferenceValue = ${preference} isEqual=${isEqual}"
             break
        case 'decimal' :
             (isEqual, tuyaValueScaled) = compareAndConvertDecimals(foundItem, safeToDouble(fncmd), safeToDouble(preference))
-            //logDebug "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
+            logTrace "comparing as float tuyaValue=${tuyaValue} foundItem.scale=${foundItem.scale} tuyaValueScaled=${tuyaValueScaled} to preferenceValue = ${preference}"
             break
         default :
             logDebug 'compareAndConvertTuyaToHubitatPreferenceValue: unsupported type %{foundItem.type}'
@@ -1053,8 +1097,13 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, fncmd, bool
     boolean isEqual
     switch (foundItem.type) {
         case 'bool' :       // [0:"OFF", 1:"ON"]
-        case 'enum' :       // [0:"inactive", 1:"active"]
             (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
+            break
+        case 'enum' :       // [0:"inactive", 1:"active"]  foundItem.map=[75:0.75 meters, 150:1.50 meters, 225:2.25 meters, 300:3.00 meters, 375:3.75 meters, 450:4.50 meters]
+            
+            logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(foundItem.name)=${(device.currentValue(foundItem.name))}"
+            (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
+            logTrace "compareAndConvertTuyaToHubitatEventValue: after compareAndConvertStrings: isEqual=${isEqual} hubitatEventValue=${hubitatEventValue}"
             break
         case 'value' :      // depends on foundItem.scale
         case 'number' :
@@ -1165,7 +1214,6 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
         logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
         return false
     }
-
     return processFoundItem(foundItem, value)
 }
 
@@ -1187,12 +1235,13 @@ boolean processFoundItem(final Map foundItem, int value) {
         }
     }
     else {
-        logTrace "no preProc for ${foundItem.name} : ${foundItem}"
+        logTrace "no preProc for ${foundItem.name}"
     }
 
     String name = foundItem.name                                   // preference name as in the attributes map
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def existingPrefValue = settings[name]                        // preference name as in Hubitat settings (preferences), if already created.
+    //device.updateSetting('motionDetectionDistance', [value: '300', type: 'enum'])
+    String existingPrefValue = settings[foundItem.name]                  // preference name as in Hubitat settings (preferences), if already created.
     /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def perfValue = null   // preference value
     boolean preferenceExists = existingPrefValue != null          // check if there is an existing preference for this clusterAttribute
@@ -1201,7 +1250,7 @@ boolean processFoundItem(final Map foundItem, int value) {
     boolean wasChanged = false
     boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy clusterAttribute's TODO!
     if (!doNotTrace) {
-        logTrace "processFoundItem: clusterAttribute=${clusterAttribute} ${foundItem.name} (type ${foundItem.type}, rw=${foundItem.rw} isAttribute=${isAttribute}, preferenceExists=${preferenceExists}) value is ${value} - ${foundItem.description}"
+        logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})"
     }
     // check if the clusterAttribute has the same value as the last one, or the value has changed
     // the previous value may be stored in an attribute, as a preference, as both attribute and preference or not stored anywhere ...
