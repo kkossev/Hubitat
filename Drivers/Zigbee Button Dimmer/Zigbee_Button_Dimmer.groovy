@@ -17,13 +17,13 @@
  *
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
- * ver. 3.0.4  2024-04-27 kkossev  - (dev. branch) commonLib 3.0.4
+ * ver. 3.0.4  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4; added 'Schneider Electric WDE002924'
  *
  *                                   TODO:
  */
 
 static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/27 11:50 PM"}
+static String timeStamp() {"2024/04/01 11:13 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -96,6 +96,8 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0020,1000,FC7C',      outClusters:'0003,0004,0005,0006,0008,0019,1000', model:'SYMFONISK Sound Controller', manufacturer:'IKEA of Sweden', deviceJoinName: 'IKEA SYMFONISK Sound Controller E1744'
         // OSRAM Lightify - use HE inbuilt driver to pair first !
         //fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0020,1000,FD00", outClusters:"0003,0004,0005,0006,0008,0019,0300,1000", model:"Lightify Switch Mini", manufacturer:"OSRAM", deviceJoinName: "Lightify Switch Mini"
+        fingerprint profileId:'0104', endpointId:'15', inClusters:'0000,0001,0003,0020,FF17', outClusters:'0003,0004,0005,0006,0008,0019,0102', model:'FLS/SYSTEM-M/4', manufacturer:'Schneider Electric', deviceJoinName: 'Schneider Electric WDE002924'
+
     }
 
     preferences {
@@ -135,6 +137,7 @@ def isIkeaStyrbar()             { device.getDataValue('model') == 'Remote Contro
 def isIkeaRODRET()              { device.getDataValue('model') == 'RODRET Dimmer' }
 def isIkeaOpenCloseRemote()     { device.getDataValue('model') == 'TRADFRI open/close remote' }
 def isIkeaSoundController()     { device.getDataValue('model') == 'SYMFONISK Sound Controller' }
+def isSchneider()               { device.getDataValue('manufacturer') == 'Schneider Electric' }
 
 /*
  * -----------------------------------------------------------------------------
@@ -168,8 +171,11 @@ void customParseOnOffCluster(final Map descMap) {
     else if (isOsram()) {
         processOsramCommand(descMap)
     }
+    else if (isSchneider()) {
+        processSchneiderWiser(descMap)
+    }
     else {
-        logWarn "customParseOnOffCluster: unprocessed OnOff Cluster attribute ${descMap.attrId}"
+        logWarn "customParseOnOffCluster: unprocessed OnOff Cluster 0x${descMap.clusterId}, sourceEndpoint ${descMap.sourceEndpoint}, command ${descMap.command} data ${descMap.data}"
     }
 }
 
@@ -188,8 +194,11 @@ void customParseLevelControlCluster(final Map descMap) {
     else if (isOsram()) {
         processOsramCommand(descMap)
     }
+    else if (isSchneider()) {
+        processSchneiderWiser(descMap)
+    }
     else {
-        logWarn "customParseLevelControlCluster: unprocessed LevelControl cluster attribute ${descMap.attrId}"
+        logWarn "customParseOnOffCluster: unprocessed LevelControl Cluster 0x${descMap.clusterId}, sourceEndpoint ${descMap.sourceEndpoint}, command ${descMap.command} data ${descMap.data}"
     }
 }
 
@@ -454,6 +463,76 @@ void processOsramCommand(final Map descMap)
     }
 }
 
+
+void processSchneiderWiser(final Map descMap) {
+    logDebug "processSchneiderWiser: Cluster 0x${descMap.clusterId}, sourceEndpoint ${descMap.sourceEndpoint}, command ${descMap.command} data ${descMap.data}"
+    int buttonNumber = 0
+    String buttonState = 'unknown'
+
+    if (descMap.clusterId == '0006') {
+        buttonState = 'pushed'
+        if (descMap.command == '01') {
+            buttonNumber = 1
+        }
+        else if (descMap.command == '00') {
+            buttonNumber = 2
+        }
+        else {
+            logWarn "processSchneiderWiser: unprocessed event from clusterId ${descMap.clusterId} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}"
+            return
+        }
+        if (descMap.sourceEndpoint == '16') {
+            buttonNumber += 2
+        }
+    }
+    else if (descMap.clusterId == '0008') {
+        if (descMap.command == '05') {
+            buttonState = 'held'
+            buttonNumber = 1
+        }
+        else if (descMap.command == '01') {
+            buttonState = 'held'
+            buttonNumber = 2
+        }
+        else if (descMap.command == '03') {
+            buttonState = 'released'
+            buttonNumber = state.states['lastButtonNumber'] ?: 5
+        }
+        else {
+            logWarn "processSchneiderWiser: unprocessed event from clusterId ${descMap.clusterId} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}"
+            return
+        }
+        if (descMap.sourceEndpoint == '16' && buttonState != 'released') {
+            buttonNumber += 2
+        }        
+    }
+    else {
+        logWarn "processSchneiderWiser: unprocessed clusterId ${descMap.clusterId} command ${descMap.command } sourceEndpoint ${descMap.sourceEndpoint} data = ${descMap?.data}"
+        return
+    }
+    
+    if (buttonNumber != 0) {
+        state.states['lastButtonNumber'] = buttonNumber
+    }
+    else {
+        logWarn "processSchneiderWiser: UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}"
+    }
+    if (buttonState != 'unknown' && buttonNumber != 0) {
+        def descriptionText = "button $buttonNumber was $buttonState"
+        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
+        logInfo "${descriptionText}"
+        sendEvent(event)
+    }
+    else {
+        logWarn "processSchneiderWiser: UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}"
+    }
+}
+
+
+
+
+
+
 def startButtonDebounce() {
     logDebug "starting timer (${settings.debounce}) for button ${state.states['lastButtonNumber']}"
     runInMillis((settings.debounce ?: DebounceOpts.defaultValue) as int, clearButtonDebounce, [overwrite: true])    // restart the debouncing timer again
@@ -666,11 +745,18 @@ List<String> customInitializeDevice() {
     List<String> cmds = []
     int intMinTime = 300
     int intMaxTime = 14400    // 4 hours reporting period for the battery
-
+    int ep = zigbee.convertHexToInt(device.endpointId)
     cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay = 141)    // OK
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 142', ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 144', ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x01 0x01 0x0005 {${device.zigbeeId}} {}", 'delay 145', ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 142', ]
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 144', ]
+    // Schneider Electric WDE002924
+    if (isSchneider()) {
+        logDebug 'Schneider Electric WDE002924'
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 145', ]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 146', ]
+    }   
+
+    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0005 {${device.zigbeeId}} {}", 'delay 147', ]
 
     logDebug "customInitializeDevice() : ${cmds}"
     if (cmds == []) { cmds = ['delay 299',] }
@@ -703,7 +789,7 @@ void customInitEvents(boolean fullInit=false) {
         numberOfButtons = 3
         supportedValues = ['pushed', 'held', 'released']
     }
-    else if (isIkeaStyrbar()) {
+    else if (isIkeaStyrbar() || isSchneider()) {
         numberOfButtons = 4
         supportedValues = ['pushed', 'held', 'released']
     }
