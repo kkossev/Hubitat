@@ -14,13 +14,14 @@
  *     for the specific language governing permissions and limitations under the License.
  *
  * ver. 1.0.0  2024-02-25 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure();
+ * ver. 1.0.1  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 alligned
  *
  *                                   TODO: individual thresholds for each attribute
  *                                   TODO: ZigUSB on/off (inverted)!
  */
 
-static String version() { "1.0.0" }
-static String timeStamp() { "2024/02/25 9:54 AM" }
+static String version() { "1.0.1" }
+static String timeStamp() { "2024/04/01 9:15 AM" }
 
 @Field static final Boolean _DEBUG = false
 
@@ -35,6 +36,7 @@ import groovy.json.JsonOutput
 deviceType = "Plug"
 @Field static final String DEVICE_TYPE = "Plug"
 /* groovylint-disable-next-line NglParseError */
+
 #include kkossev.commonLib
 
 // @Field static final Boolean _THREE_STATE = true  // move from the commonLib here?

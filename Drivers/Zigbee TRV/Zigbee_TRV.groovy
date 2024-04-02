@@ -25,7 +25,7 @@
  * ver. 3.0.5  2023-12-09 kkossev  - (dev. branch) BRT-100 - off mode (substitutues with eco mode); emergency heat mode ; BRT-100 - digital events for temperature, heatingSetpoint and level on autoPollThermostat() and Refresh(); BRT-100: workingState open/closed replaced with thermostatOperatingState
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
- * ver. 3.0.8  2024-03-30 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB
+ * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -73,7 +73,7 @@
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '3.0.8' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/03/30 12:52 PM' }
+static String timeStamp() { '2024/04/02 7:26 AM' }
 
 @Field static final Boolean _DEBUG = false
 

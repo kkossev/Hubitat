@@ -24,7 +24,7 @@ library(
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
- * ver. 1.0.2  2024-04-01 kkossev  - (dev. branch) Groovy linting
+ * ver. 1.0.2  2024-04-01 kkossev  - (dev. branch) Groovy linting 
  *
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
@@ -32,7 +32,7 @@ library(
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String xiaomiLibVersion()   { '1.0.2' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/04/01 1:16 AM' }
+static String xiaomiLibStamp() { '2024/04/01 8:51 AM' }
 
 // no metadata for this library!
 
