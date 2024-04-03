@@ -27,13 +27,13 @@ library(
  * ver. 3.0.1  2023-12-02 kkossev  - (dev. branch) release candidate
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
- * ver. 3.1.0  2024-04-01 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
+ * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
 static String deviceProfileLibVersion()   { '3.1.0' }
-static String deviceProfileLibStamp() { '2024/43/01 12:58 PM' }
+static String deviceProfileLibStamp() { '2024/04/03 4:38 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -76,7 +76,7 @@ metadata {
 }
 
 String getDeviceProfile()    { state.deviceProfile ?: 'UNKNOWN' }
-Map getDEVICE()              { deviceProfilesV3 ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()]}
+Map getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()]}
 Set getDeviceProfiles()      { deviceProfilesV3?.keySet() ?: deviceProfilesV2?.keySet()}
 List<String> getDeviceProfilesMap()   { deviceProfilesV3.values().description as List<String> ?: deviceProfilesV2.values().description as List<String> }
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------

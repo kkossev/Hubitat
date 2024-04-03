@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.4',
+    version: '3.0.5',
     documentationLink: ''
 )
 /*
@@ -32,8 +32,9 @@ library(
   * ver. 3.0.0  2023-11-16 kkossev  - first version 3.x.x
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
-  * ver. 3.0.3  2024-03-17 kkossev  - (dev.branch) more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-03-29 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster
+  * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
+  * ver. 3.0.4  2024-04-02 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
+  * ver. 3.0.5  2024-04-03 kkossev  - (dev.branch) button methods bug fix; configure() bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -48,8 +49,8 @@ library(
  *
 */
 
-String commonLibVersion() { '3.0.4' }
-String commonLibStamp() { '2024/03/31 11:38 PM' }
+String commonLibVersion() { '3.0.5' }
+String commonLibStamp() { '2024/04/03 9:05 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -693,12 +694,6 @@ BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
  */
 void parseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
-    /*
-    if (state.lastRx == null) { state.lastRx = [:] }
-    if (state.lastTx == null) { state.lastTx = [:] }
-    if (state.states == null) { state.states = [:] }
-    if (state.stats == null) { state.stats = [:] }
-    */
     state.lastRx['checkInTime'] = now
     switch (descMap.attrInt as Integer) {
         case 0x0000:
@@ -776,7 +771,6 @@ void parseBasicCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void parsePowerCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     if (descMap.attrId in ['0020', '0021']) {
         state.lastRx['batteryTime'] = new Date().getTime()
@@ -801,7 +795,7 @@ void parsePowerCluster(final Map descMap) {
 void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
     logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
     Map result = [:]
-    BigDecimal volts = BigDecimal(rawValue) / 10G
+    BigDecimal volts = safeToBigDecimal(rawValue) / 10G
     if (rawValue != 0 && rawValue != 255) {
         BigDecimal minVolts = 2.2
         BigDecimal maxVolts = 3.2
@@ -1471,9 +1465,17 @@ void parseOnOffAttributes(final Map it) {
 }
 
 void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=false) {
-    Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: "button $buttonNumber was $buttonState", isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
-    if (txtEnable) { log.info "${device.displayName } $event.descriptionText" }
-    sendEvent(event)
+    if (buttonState != 'unknown' && buttonNumber != 0) {
+        String descriptionText = "button $buttonNumber was $buttonState"
+        if (isDigital) { descriptionText += ' [digital]' }
+        Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
+        logInfo "$descriptionText"
+        sendEvent(event)
+    }
+    else {
+        logWarn "sendButtonEvent: UNHANDLED event for button ${buttonNumber}, buttonState=${buttonState}"
+    }
+
 }
 
 void push() {                // Momentary capability
@@ -1482,22 +1484,22 @@ void push() {                // Momentary capability
     logWarn "push() not implemented for ${(DEVICE_TYPE)}"
 }
 
-void push(int buttonNumber) {    //pushableButton capability
+void push(BigDecimal buttonNumber) {    //pushableButton capability
     logDebug "push button $buttonNumber"
     if (this.respondsTo('customPush')) { customPush(buttonNumber); return }
-    sendButtonEvent(buttonNumber, 'pushed', isDigital = true)
+    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true)
 }
 
-void doubleTap(int buttonNumber) {
-    sendButtonEvent(buttonNumber, 'doubleTapped', isDigital = true)
+void doubleTap(BigDecimal buttonNumber) {
+    sendButtonEvent(buttonNumber as int, 'doubleTapped', isDigital = true)
 }
 
-void hold(int buttonNumber) {
-    sendButtonEvent(buttonNumber, 'held', isDigital = true)
+void hold(BigDecimal buttonNumber) {
+    sendButtonEvent(buttonNumber as int, 'held', isDigital = true)
 }
 
-void release(int buttonNumber) {
-    sendButtonEvent(buttonNumber, 'released', isDigital = true)
+void release(BigDecimal buttonNumber) {
+    sendButtonEvent(buttonNumber as int, 'released', isDigital = true)
 }
 
 void sendNumberOfButtonsEvent(int numberOfButtons) {
@@ -1515,7 +1517,6 @@ void sendSupportedButtonValuesEvent(supportedValues) {
  * -----------------------------------------------------------------------------
 */
 void parseLevelControlCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (this.respondsTo('customParseLevelControlCluster')) {
         customParseLevelControlCluster(descMap)
     }
@@ -1700,7 +1701,6 @@ void setLevel(final Object value, final Object transitionTime = null) {
  * -----------------------------------------------------------------------------
 */
 void parseColorControlCluster(final Map descMap, String description) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (DEVICE_TYPE in ['Bulb']) {
         parseColorControlClusterBulb(descMap, description)
     }
@@ -1720,7 +1720,6 @@ void parseColorControlCluster(final Map descMap, String description) {
  * -----------------------------------------------------------------------------
 */
 void parseIlluminanceCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int value = hexStrToUnsignedInt(descMap.value)
     int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0
@@ -1773,7 +1772,6 @@ private void sendDelayedIllumEvent(Map eventMap) {
  * -----------------------------------------------------------------------------
 */
 void parseTemperatureCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToSignedInt(descMap.value)
     handleTemperatureEvent(value / 100.0F as BigDecimal)
@@ -1834,7 +1832,6 @@ private void sendDelayedTempEvent(Map eventMap) {
  * -----------------------------------------------------------------------------
 */
 void parseHumidityCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int value = hexStrToUnsignedInt(descMap.value)
     handleHumidityEvent(value / 100.0F as BigDecimal)
@@ -1908,7 +1905,6 @@ void parseMeteringCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void parsePm25Cluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
     BigInteger bigIntegerValue = intBitsToFloat(value.intValue()).toBigInteger()
@@ -1943,7 +1939,6 @@ void parseAnalogInputCluster(final Map descMap) {
 */
 
 void parseMultistateInputCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
     //Float floatValue = Float.intBitsToFloat(value.intValue())
@@ -1987,7 +1982,6 @@ void parseWindowCoveringCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void parseThermostatCluster(final Map descMap) {
-    if (state.lastRx == null) { state.lastRx = [:] }
     if (this.respondsTo('customParseThermostatCluster')) {
         customParseThermostatCluster(descMap)
     }
@@ -2153,6 +2147,7 @@ private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 String tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
+    logInfo "tuyaBlackMagic()..."
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
 }
 
@@ -2185,7 +2180,8 @@ List<String> initializeDevice() {
 
     // start with the device-specific initialization first.
     if (this.respondsTo('customInitializeDevice')) {
-        return customInitializeDevice()
+        List<String> customCmds = customInitializeDevice()
+        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
     // not specific device type - do some generic initializations
     if (DEVICE_TYPE in  ['THSensor']) {
@@ -2193,9 +2189,6 @@ List<String> initializeDevice() {
         cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
     }
     //
-    if (cmds == []) {
-        cmds = ['delay 299']
-    }
     return cmds
 }
 
@@ -2209,13 +2202,11 @@ List<String> configureDevice() {
     logInfo 'configureDevice...'
 
     if (this.respondsTo('customConfigureDevice')) {
-        cmds += customConfigureDevice()
+        List<String> customCmds = customConfigureDevice()
+        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
     else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
-    if ( cmds == null || cmds == []) {
-        cmds = ['delay 277',]
-    }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     return cmds
 }
@@ -2437,9 +2428,6 @@ void autoPoll() {
     logDebug 'autoPoll()...'
     checkDriverVersion()
     List<String> cmds = []
-    //if (state.states == null) { state.states = [:] }
-    //state.states["isRefresh"] = true
-    // TODO !!!!!!!!
     if (DEVICE_TYPE in  ['AirQuality']) {
         cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
@@ -2532,7 +2520,7 @@ void loadAllDefaults() {
     deleteAllStates()
     deleteAllChildDevices()
     initialize()
-    configure()     // calls  also   configureDevice()
+    configureNow()     // calls  also   configureDevice()   // bug fixed 04/03/2024
     updated()
     sendInfoEvent('All Defaults Loaded! F5 to refresh')
 }
@@ -2552,13 +2540,20 @@ List<String> configure() {
     logDebug "configure(): settings: $settings"
     cmds += tuyaBlackMagic()
     if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
-        aqaraBlackMagic()
+        aqaraBlackMagic()   // zigbee commands are sent here!
     }
     cmds += initializeDevice()
     cmds += configureDevice()
     // commented out 12/15/2923 sendZigbeeCommands(cmds)
     sendInfoEvent('sent device configuration')
-    return cmds
+    logDebug "configure(): returning cmds = ${cmds}"
+    //return cmds
+    if (cmds != null && cmds != [] ) {
+        sendZigbeeCommands(cmds)
+    }
+    else {
+        logDebug "no configure() commands defined for device type ${DEVICE_TYPE}"
+    }
 }
 
 /**
@@ -2605,6 +2600,10 @@ static BigDecimal safeToBigDecimal(val, BigDecimal defaultVal=0.0) {
 }
 
 void sendZigbeeCommands(List<String> cmd) {
+    if (cmd == null || cmd == [] || cmd == 'null') {
+        logWarn 'sendZigbeeCommands: no commands to send!'
+        return
+    }
     logDebug "sendZigbeeCommands(cmd=$cmd)"
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
@@ -2634,7 +2633,10 @@ void checkDriverVersion() {
         updateTuyaVersion()
         updateAqaraVersion()
     }
-    // no driver version change
+    if (state.states == null) { state.states = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.stats  == null) { state.stats =  [:] }
 }
 
 // credits @thebearmay
@@ -2904,6 +2906,7 @@ String formatTime(int timeInSeconds) {
 }
 
 boolean isTuya() {
+    if (!device) { return true }    // fallback - added 04/03/2024 
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */

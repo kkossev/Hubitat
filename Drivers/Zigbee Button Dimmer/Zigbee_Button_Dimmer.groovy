@@ -17,13 +17,14 @@
  *
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
- * ver. 3.0.4  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4; added 'Schneider Electric WDE002924'
+ * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
+ * ver. 3.0.5  2024-04-03 kkossev  - (dev. branch) fixed digital button events exception; reverseButton option enabled for Tuya devices only;
  *
- *                                   TODO:
+ *                                   TODO: initialize the TS004F dimmers in scene mode during pairing;
  */
 
-static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/01 11:13 PM"}
+static String version() { "3.0.5" }
+static String timeStamp() {"2024/04/03 9:14 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -81,6 +82,7 @@ metadata {
         
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0006,1000', outClusters:'0019,000A,0003,0004,0005,0006,0008,1000', model:'TS004F', manufacturer:'_TZ3000_xxxxxxxx', deviceJoinName: 'Tuya Scene Switch TS004F'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0006,1000,0000', outClusters:'0003,0004,0005,0006,0008,1000,0019,000A', model:'TS004F', manufacturer:'_TZ3000_xxxxxxxx', deviceJoinName: 'Tuya Smart Knob TS004F' //KK
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0004,0006,1000,0000', outClusters:'0003,0004,0005,0006,0008,1000,0019,000A', model:'TS004F', manufacturer:'_TZ3000_abrsvsou', deviceJoinName: 'Tuya Smart Knob TS004F' //KK (white)
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0004,0006,1000,E001', outClusters:'0019,000A,0003,0004,0006,0008,1000', model: 'TS004F', manufacturer: '_TZ3000_xxxxxxxx', deviceJoinName: 'MOES Smart Button (ZT-SY-SR-MS)' // MOES ZigBee IP55 Waterproof Smart Button Scene Switch & Wireless Remote Dimmer (ZT-SY-SR-MS)
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0006', outClusters:'0019,000A', model:'TS0044', manufacturer:'_TZ3000_xxxxxxxx', deviceJoinName: 'Zemismart Wireless Scene Switch'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,000A,0001,0006', outClusters: '0019', model: 'TS0044', manufacturer: '_TZ3000_xxxxxxxx', deviceJoinName: 'Zemismart 4 Button Remote (ESW-0ZAA-EU)'                      // needs debouncing
@@ -103,9 +105,10 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
-
-        input name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true, description: '<i>Switches button order </i>'
-        input name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options.</i>'
+        if (isTuya()) {
+            input name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true, description: '<i>Switches button order </i>'
+        }
+        input name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options for Tuya devices.</i>'
         input name: 'dimmerStep', type: 'enum', title: '<b>Dimmer step</b>', options: DimmerStepOpts.options, defaultValue: DimmerStepOpts.defaultValue, required: true, description: '<i>Level change in percent</i>'
     }
 }
@@ -514,24 +517,8 @@ void processSchneiderWiser(final Map descMap) {
     if (buttonNumber != 0) {
         state.states['lastButtonNumber'] = buttonNumber
     }
-    else {
-        logWarn "processSchneiderWiser: UNHANDLED event for button ${buttonNumber},  lastButtonNumber=${state.states['lastButtonNumber']}"
-    }
-    if (buttonState != 'unknown' && buttonNumber != 0) {
-        def descriptionText = "button $buttonNumber was $buttonState"
-        def event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: 'physical']
-        logInfo "${descriptionText}"
-        sendEvent(event)
-    }
-    else {
-        logWarn "processSchneiderWiser: UNHANDLED event for button ${buttonNumber},  buttonState=${buttonState}"
-    }
+    sendButtonEvent(buttonNumber, buttonState)
 }
-
-
-
-
-
 
 def startButtonDebounce() {
     logDebug "starting timer (${settings.debounce}) for button ${state.states['lastButtonNumber']}"
@@ -728,7 +715,6 @@ def customRefresh() {
     List<String> cmds = []
     logDebug "refreshButtonDimmer() (n/a) : ${cmds} "
     // TODO !!
-    if (cmds == []) { cmds = ['delay 299'] }
     return cmds
 }
 */
@@ -737,29 +723,29 @@ def customConfigureDevice() {
     List<String> cmds = []
     // TODO !!
     logDebug "customConfigureDevice() : ${cmds}"
-    if (cmds == []) { cmds = ['delay 299'] }    // no ,
     return cmds
 }
 
 List<String> customInitializeDevice() {
     List<String> cmds = []
-    int intMinTime = 300
-    int intMaxTime = 14400    // 4 hours reporting period for the battery
-    int ep = zigbee.convertHexToInt(device.endpointId)
-    cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay = 141)    // OK
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 142', ]
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 144', ]
-    // Schneider Electric WDE002924
-    if (isSchneider()) {
-        logDebug 'Schneider Electric WDE002924'
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 145', ]
-        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 146', ]
-    }   
+    if (!isTuya()) {
+        int intMinTime = 300
+        int intMaxTime = 14400    // 4 hours reporting period for the battery
+        int ep = zigbee.convertHexToInt(device.endpointId)
+        cmds += zigbee.configureReporting(0x0001, 0x0021, DataType.UINT8 /*0x20*/ /* data type*/, intMinTime, intMaxTime, 0x01, [:], delay = 141)    // OK
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 142', ]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 144', ]
+        // Schneider Electric WDE002924
+        if (isSchneider()) {
+            logDebug 'Schneider Electric WDE002924'
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0006 {${device.zigbeeId}} {}", 'delay 145', ]
+            cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep + 1, 1)} 0x01 0x0008 {${device.zigbeeId}} {}", 'delay 146', ]
+        }   
 
-    cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0005 {${device.zigbeeId}} {}", 'delay 147', ]
+        cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0005 {${device.zigbeeId}} {}", 'delay 147', ]
+    }
 
     logDebug "customInitializeDevice() : ${cmds}"
-    if (cmds == []) { cmds = ['delay 299',] }
     return cmds
 }
 
