@@ -34,7 +34,7 @@ library(
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
-  * ver. 3.0.5  2024-04-03 kkossev  - (dev.branch) button methods bug fix; configure() bug fix;
+  * ver. 3.0.5  2024-04-05 kkossev  - (dev.branch) button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -50,7 +50,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.5' }
-String commonLibStamp() { '2024/04/03 9:05 PM' }
+String commonLibStamp() { '2024/04/05 9:46 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -1907,10 +1907,15 @@ void parseMeteringCluster(final Map descMap) {
 void parsePm25Cluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
-    BigInteger bigIntegerValue = intBitsToFloat(value.intValue()).toBigInteger()
-    handlePm25Event(bigIntegerValue as Integer)
+    float floatValue  = Float.intBitsToFloat(value.intValue())
+    if (this.respondsTo('handlePm25Event')) {
+        handlePm25Event(floatValue as Integer)
+    }
+    else {
+        logWarn "handlePm25Event: don't know how to handle descMap=${descMap}"
+    }
 }
-// TODO - check if handlePm25Event handler exists !!
+
 
 /*
  * -----------------------------------------------------------------------------
