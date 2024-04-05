@@ -18,13 +18,13 @@
  * ver. 1.0.0  2023-04-14 kkossev  - Initial test version : Hubitat 'F2 bug' workaround; commented out Philips Hue specific commands; trap for Hubitat F2 bug
  * ver. 1.0.1  2023-04-24 kkossev  - (dev.branch) added Lidl TS0505A _TZ3000_9cpuaca6 ;
  * ver. 1.1.0  2024-03-20 kkossev  - (dev.branch) added _TZ3210_rcggc0ys _TZ3210_4zinq6io _TZ3210_3lbtuxgp; removed Philips Hue specific commands; added doNotDisturb mode preference
- * ver. 1.1.1  2024-03-29 kkossev  - (dev.branch)
+ * ver. 1.1.1  2024-04-05 kkossev  - (dev.branch) added TS0503B _TZ3000_i8l0nqdu ;
  *
  *                                   TODO: ping() rtt measurements
  */
 
 static String version()   { '1.1.1' }
-static String timeStamp() { '2023/03/29 7:15 AM' }
+static String timeStamp() { '2023/04/05 7:52 PM' }
 
 @Field static final boolean _DEBUG = false
 
@@ -97,7 +97,13 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000", outClusters:"0019,000A", model:"TS0505A", manufacturer:"_TZ3000_9cpuaca6", deviceJoinName: 'Livarno Lux mood light RGB+CCT'    // https://github.com/JohanBendz/com.tuya.zigbee/issues/47
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,0300,1000,EF00,FC11,FC57", outClusters:"0019", model:"Z102LG03-1", manufacturer:"eWeLink", deviceJoinName: "eWeLink Zigbee Bulb"
-        
+
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300", outClusters:"0019,000A", model:"TS0503B", manufacturer:"_TZ3000_i8l0nqdu", deviceJoinName: "Zigbee smart mini led strip controller"       // https://community.hubitat.com/t/hubitat-cannot-track-the-state-of-its-devices/136140/28?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300", outClusters:"0019,000A", model:"TS0503B", manufacturer:"_TZ3210_a5fxguxr", deviceJoinName: "Zigbee smart mini led strip controller"       //not tested // Requires red fix: https://github.com/Koenkk/zigbee2mqtt/issues/5962#issue-796462106
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300", outClusters:"0019,000A", model:"TS0503B", manufacturer:"_TZ3210_778drfdt", deviceJoinName: "Zigbee smart mini led strip controller"       //not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300", outClusters:"0019,000A", model:"TS0503B", manufacturer:"_TZ3000_g5xawfcq", deviceJoinName: "Zigbee smart mini led strip controller"       //not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0008,0300", outClusters:"0019,000A", model:"TS0503B", manufacturer:"_TZ3210_trm3l2aw", deviceJoinName: "Zigbee smart mini led strip controller"       //not tested
+
         // trap for Hubitat F2 bug
         fingerprint profileId:"0104", endpointId:"F2", inClusters:"", outClusters:"", model:"unknown", manufacturer:"unknown", deviceJoinName: "Zigbee device affected by Hubitat F2 bug" 
         
