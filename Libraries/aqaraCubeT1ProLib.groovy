@@ -1,3 +1,4 @@
+/* groovylint-disable LineLength, NoDef */
 library (
     base: "driver",
     author: "Krassimir Kossev",
@@ -13,7 +14,7 @@ library (
  * zigbeaqaraCubeT1ProLib - Aqara Cube T1 Pro Library
  *
  * ver. 1.0.0  2023-07-15 kkossev  - Libraries introduction for the AqaraCubeT1Pro driver; operationMode 'scene': action:wakeup, hold, shake, flipToSide,  rotateLeft, rotateRight; sideUp: 1..6;
- * ver. 1.0.1  2023-07-16 kkossev  - sideUp # event is now sent before the flipToSide action; added second fingerprint; skipped duplicated 'sideUp' events; added 'throw' action; added button events
+ * ver. 1.0.1  2023-07-16 kkossev  - (dev. branch) - sideUp # event is now sent before the flipToSide action; added second fingerprint; skipped duplicated 'sideUp' events; added 'throw' action; added button events
  *
  *                                   TODO: send action flipToSide when side is changed when the cube is lifted and put down quickly @AlanB
  *                                   TODO: add 'angle' event on rotation
@@ -33,7 +34,7 @@ metadata {
     command "doubleTap", [[name: "sent when the cube side is shaken", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
     command "release", [[name: "sent when the cube is rotated right", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
     command "hold", [[name: "sent when the cube is rotated left", type: "NUMBER", description: "simulates a button press", defaultValue : ""]]
-	 
+     
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0001,0012,0006", outClusters:"0000,0003,0019", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0006", outClusters:"0000,0003", model:"lumi.remote.cagl02", manufacturer:"LUMI", deviceJoinName: "Aqara Cube T1 Pro"                        // https://community.hubitat.com/t/alpha-aqara-cube-t1-pro-c-7/121604/11?u=kkossev
     preferences {
@@ -307,7 +308,7 @@ void parseAqaraCubeAnalogInputCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { logWarn "invalid or unknown value"; return } // invalid or unknown value
     if (descMap.attrId == "0055") {
         def value = hexStrToUnsignedInt(descMap.value)
-	    Float floatValue = Float.intBitsToFloat(value.intValue())   
+        Float floatValue = Float.intBitsToFloat(value.intValue())   
         logDebug "value=${value} floatValue=${floatValue}" 
         sendAqaraCubeRotateEvent(floatValue as Integer)
     }
@@ -392,38 +393,38 @@ const definition = {
 
 
 /*
-Manufacturer:	LUMI
-Endpoint 01 application:	19
-Endpoint 01 endpointId:	01
-Endpoint 01 idAsInt:	1
-Endpoint 01 inClusters:	0000,0003,0001,0012,0006
-Endpoint 01 initialized:	true
-Endpoint 01 manufacturer:	LUMI
-Endpoint 01 model:	lumi.remote.cagl02
-Endpoint 01 outClusters:	0000,0003,0019
-Endpoint 01 profileId:	0104
-Endpoint 01 stage:	4
+Manufacturer:    LUMI
+Endpoint 01 application:    19
+Endpoint 01 endpointId:    01
+Endpoint 01 idAsInt:    1
+Endpoint 01 inClusters:    0000,0003,0001,0012,0006
+Endpoint 01 initialized:    true
+Endpoint 01 manufacturer:    LUMI
+Endpoint 01 model:    lumi.remote.cagl02
+Endpoint 01 outClusters:    0000,0003,0019
+Endpoint 01 profileId:    0104
+Endpoint 01 stage:    4
 
-Endpoint 02 application:	unknown
-Endpoint 02 endpointId:	02
-Endpoint 02 idAsInt:	2
-Endpoint 02 inClusters:	0012
-Endpoint 02 initialized:	true
-Endpoint 02 manufacturer:	unknown
-Endpoint 02 model:	unknown
-Endpoint 02 outClusters:	0012
-Endpoint 02 profileId:	0104
-Endpoint 02 stage:	4
+Endpoint 02 application:    unknown
+Endpoint 02 endpointId:    02
+Endpoint 02 idAsInt:    2
+Endpoint 02 inClusters:    0012
+Endpoint 02 initialized:    true
+Endpoint 02 manufacturer:    unknown
+Endpoint 02 model:    unknown
+Endpoint 02 outClusters:    0012
+Endpoint 02 profileId:    0104
+Endpoint 02 stage:    4
 
-Endpoint 03 application:	unknown
-Endpoint 03 endpointId:	03
-Endpoint 03 idAsInt:	3
-Endpoint 03 inClusters:	000C
-Endpoint 03 initialized:	true
-Endpoint 03 manufacturer:	unknown
-Endpoint 03 model:	unknown
-Endpoint 03 outClusters:	000C
-Endpoint 03 profileId:	0104
-Endpoint 03 stage:	4
+Endpoint 03 application:    unknown
+Endpoint 03 endpointId:    03
+Endpoint 03 idAsInt:    3
+Endpoint 03 inClusters:    000C
+Endpoint 03 initialized:    true
+Endpoint 03 manufacturer:    unknown
+Endpoint 03 model:    unknown
+Endpoint 03 outClusters:    000C
+Endpoint 03 profileId:    0104
+Endpoint 03 stage:    4
 
 */

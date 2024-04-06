@@ -1,13 +1,14 @@
-library (
-    base: "driver",
-    author: "Krassimir Kossev",
-    category: "zigbee",
-    description: "Xiaomi Library",
-    name: "xiaomiLib",
-    namespace: "kkossev",
-    importUrl: "https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy",
-    version: "1.0.1",
-    documentationLink: ""
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
+library(
+    base: 'driver',
+    author: 'Krassimir Kossev',
+    category: 'zigbee',
+    description: 'Xiaomi Library',
+    name: 'xiaomiLib',
+    namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/xiaomiLib.groovy',
+    version: '1.0.2',
+    documentationLink: ''
 )
 /*
  *  Xiaomi Library
@@ -23,13 +24,15 @@ library (
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
+ * ver. 1.0.2  2024-04-01 kkossev  - (dev. branch) Groovy linting 
  *
- *                                   TODO: 
+ *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
 
-
-def xiaomiLibVersion()   {"1.0.1"}
-def xiaomiLibStamp() {"2023/11/07 5:23 PM"}
+/* groovylint-disable-next-line ImplicitReturnStatement */
+static String xiaomiLibVersion()   { '1.0.2' }
+/* groovylint-disable-next-line ImplicitReturnStatement */
+static String xiaomiLibStamp() { '2024/04/01 8:51 AM' }
 
 // no metadata for this library!
 
@@ -64,13 +67,13 @@ def xiaomiLibStamp() {"2023/11/07 5:23 PM"}
 //
 void parseXiaomiClusterLib(final Map descMap) {
     if (settings.logEnable) {
-        //log.trace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logTrace "zigbee received xiaomi cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-    if (DEVICE_TYPE in  ["Thermostat"]) {
+    if (DEVICE_TYPE in  ['Thermostat']) {
         parseXiaomiClusterThermostatLib(descMap)
         return
     }
-    if (DEVICE_TYPE in  ["Bulb"]) {
+    if (DEVICE_TYPE in  ['Bulb']) {
         parseXiaomiClusterRgbLib(descMap)
         return
     }
@@ -78,11 +81,11 @@ void parseXiaomiClusterLib(final Map descMap) {
     // TODO - refactor FP1 specific code
     switch (descMap.attrInt as Integer) {
         case 0x0009:                      // Aqara Cube T1 Pro
-            if (DEVICE_TYPE in  ["AqaraCube"]) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
+            if (DEVICE_TYPE in  ['AqaraCube']) { logDebug "AqaraCube 0xFCC0 attribute 0x009 value is ${hexStrToUnsignedInt(descMap.value)}" }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x00FC:                      // FP1
-            log.info "unknown attribute - resetting?"
+            log.info 'unknown attribute - resetting?'
             break
         case PRESENCE_ATTR_ID:            // 0x0142 FP1
             final Integer value = hexStrToUnsignedInt(descMap.value)
@@ -120,11 +123,11 @@ void parseXiaomiClusterLib(final Map descMap) {
             device.updateSetting('directionMode', [value: value.toString(), type: 'enum'])
             break
         case 0x0148 :                    // Aqara Cube T1 Pro - Mode
-            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) }
+            if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case 0x0149:                     // (329) Aqara Cube T1 Pro - i side facing up (0..5)
-            if (DEVICE_TYPE in  ["AqaraCube"]) { parseXiaomiClusterAqaraCube(descMap) }
+            if (DEVICE_TYPE in  ['AqaraCube']) { parseXiaomiClusterAqaraCube(descMap) }
             else { logDebug "XiaomiCluster unknown attribute ${descMap.attrInt} value raw = ${hexStrToUnsignedInt(descMap.value)}" }
             break
         case XIAOMI_SPECIAL_REPORT_ID:   // 0x00F7 sent every 55 minutes
@@ -134,7 +137,7 @@ void parseXiaomiClusterLib(final Map descMap) {
                 sendZigbeeCommands(refreshAqaraCube())
             }
             break
-        case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1 
+        case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1
             final byte[] rawData = HexUtils.hexStringToByteArray(descMap.value)
             if (rawData.size() == 24 && settings.enableDistanceDirection) {
                 final int degrees = rawData[19]
@@ -155,7 +158,7 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
     tags.each { final Integer tag, final Object value ->
         switch (tag) {
             case 0x01:    // battery voltage
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value/1000}V (raw=${value})"
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} battery voltage is ${value / 1000}V (raw=${value})"
                 break
             case 0x03:
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} device temperature is ${value}&deg;"
@@ -169,10 +172,10 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
             case 0x08:            // SWBUILD_TAG_ID:
                 final String swBuild = '0.0.0_' + (value & 0xFF).toString().padLeft(4, '0')
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} swBuild is ${swBuild} (raw ${value})"
-                device.updateDataValue("aqaraVersion", swBuild)
+                device.updateDataValue('aqaraVersion', swBuild)
                 break
             case 0x0a:
-                String nwk = intToHexStr(value as Integer,2)
+                String nwk = intToHexStr(value as Integer, 2)
                 if (state.health == null) { state.health = [:] }
                 String oldNWK = state.health['parentNWK'] ?: 'n/a'
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} <b>Parent NWK is ${nwk}</b>"
@@ -186,21 +189,21 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} light level is ${value}"
                 break
             case 0x64:
-                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value/100} (raw ${value})"    // Aqara TVOC
+                logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} temperature is ${value / 100} (raw ${value})"    // Aqara TVOC
                 // TODO - also smoke gas/density if UINT !
                 break
             case 0x65:
                 if (isAqaraFP1()) { logDebug "xiaomi decode PRESENCE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
-                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value/100} (raw ${value})" }    // Aqara TVOC
+                else              { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} humidity is ${value / 100} (raw ${value})" }    // Aqara TVOC
                 break
             case 0x66:
                 if (isAqaraFP1()) { logDebug "xiaomi decode SENSITIVITY_LEVEL_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
                 else if (isAqaraTVOC()) { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} airQualityIndex is ${value}" }        // Aqara TVOC level (in ppb)
-                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" } 
+                else                    { logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} presure is ${value}" }
                 break
             case 0x67:
-                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }    
-                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC: 
+                if (isAqaraFP1()) { logDebug "xiaomi decode DIRECTION_MODE_TAG_ID tag: 0x${intToHexStr(tag, 1)}=${value}" }
+                else              { logDebug "xiaomi decode unknown tag: 0x${intToHexStr(tag, 1)}=${value}" }                        // Aqara TVOC:
                 // air quality (as 6 - #stars) ['excellent', 'good', 'moderate', 'poor', 'unhealthy'][val - 1]
                 break
             case 0x69:
@@ -228,8 +231,8 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
                 logDebug "xiaomi decode tag: 0x${intToHexStr(tag, 1)} power is ${value}"
                 break
             case 0x9b:
-                if (isAqaraCube()) { 
-                    logDebug "Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})" 
+                if (isAqaraCube()) {
+                    logDebug "Aqara cubeMode tag: 0x${intToHexStr(tag, 1)} is '${AqaraCubeModeOpts.options[value as int]}' (${value})"
                     sendAqaraCubeOperationModeEvent(value as int)
                 }
                 else { logDebug "xiaomi decode CONSUMER CONNECTED tag: 0x${intToHexStr(tag, 1)}=${value}" }
@@ -239,7 +242,6 @@ void parseXiaomiClusterTags(final Map<Integer, Object> tags) {
         }
     }
 }
-
 
 /**
  *  Reads a specified number of little-endian bytes from a given
@@ -283,26 +285,24 @@ private static Map<Integer, Object> decodeXiaomiTags(final String hexString) {
     return results
 }
 
-
-def refreshXiaomi() {
+List<String> refreshXiaomi() {
     List<String> cmds = []
-    if (cmds == []) { cmds = ["delay 299"] }
+    if (cmds == []) { cmds = ['delay 299'] }
     return cmds
 }
 
-def configureXiaomi() {
+List<String> configureXiaomi() {
     List<String> cmds = []
     logDebug "configureThermostat() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299"] }    // no , 
-    return cmds    
+    if (cmds == []) { cmds = ['delay 299'] }    // no ,
+    return cmds
 }
 
-def initializeXiaomi()
-{
+List<String> initializeXiaomi() {
     List<String> cmds = []
     logDebug "initializeXiaomi() : ${cmds}"
-    if (cmds == []) { cmds = ["delay 299",] }
-    return cmds        
+    if (cmds == []) { cmds = ['delay 299',] }
+    return cmds
 }
 
 void initVarsXiaomi(boolean fullInit=false) {
@@ -312,4 +312,3 @@ void initVarsXiaomi(boolean fullInit=false) {
 void initEventsXiaomi(boolean fullInit=false) {
     logDebug "initEventsXiaomi(${fullInit})"
 }
-
