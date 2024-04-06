@@ -28,7 +28,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 253
+      "version": 265
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/airQualityLib.groovy",
@@ -47,6 +47,12 @@
       "codeType": "library",
       "id": 165,
       "version": 1
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
+      "id": 166,
+      "codeType": "library",
+      "version": 7
     }
   ]
 }

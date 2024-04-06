@@ -1,4 +1,4 @@
-/* groovylint-disable LineLength */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, ParameterCount, UnnecessaryGetter */
 /**
  *  ZigUSB - Device Driver for Hubitat Elevation
  *
@@ -13,83 +13,79 @@
  *     on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *     for the specific language governing permissions and limitations under the License.
  *
- * ver. 1.0.0  2024-02-25 kkossev  - (dev. branch) first test version - decoding success! refresh() and configure();
- * ver. 1.0.1  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 alligned
+ * ver. 1.0.0  2024-02-25 kkossev  - first test version - decoding success! refresh() and configure();
+ * ver. 1.0.1  2024-04-01 kkossev  - commonLib 3.0.4 alligned
+ * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) more GroovyLint fixes; created energyLib.groovy library;
  *
  *                                   TODO: individual thresholds for each attribute
- *                                   TODO: ZigUSB on/off (inverted)!
  */
 
-static String version() { "1.0.1" }
-static String timeStamp() { "2024/04/01 9:15 AM" }
+static String version() { '1.0.2' }
+static String timeStamp() { '2024/04/06 10:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 
 import groovy.transform.Field
-import hubitat.device.HubMultiAction
-import hubitat.device.Protocol
-import hubitat.helper.HexUtils
 import hubitat.zigbee.zcl.DataType
-import java.util.concurrent.ConcurrentHashMap
-import groovy.json.JsonOutput
 
-deviceType = "Plug"
-@Field static final String DEVICE_TYPE = "Plug"
+deviceType = 'Plug'
+@Field static final String DEVICE_TYPE = 'Plug'
+
 /* groovylint-disable-next-line NglParseError */
-
+#include kkossev.energyLib
 #include kkossev.commonLib
 
-// @Field static final Boolean _THREE_STATE = true  // move from the commonLib here?
-
 metadata {
-    definition (
+    definition(
         name: 'ZigUSB',
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/ZigUSB/ZigUSB.groovy',
-        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
+        namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
         if (_DEBUG) {
-            command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]]
-            command 'parseTest', [[name: "parseTest", type: "STRING", description: "parseTest", defaultValue : ""]]
-            command "tuyaTest", [
-                [name:"dpCommand", type: "STRING", description: "Tuya DP Command", constraints: ["STRING"]],
-                [name:"dpValue",   type: "STRING", description: "Tuya DP value", constraints: ["STRING"]],
-                [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
+            command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
+            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
+            command 'tuyaTest', [
+                [name:'dpCommand', type: 'STRING', description: 'Tuya DP Command', constraints: ['STRING']],
+                [name:'dpValue',   type: 'STRING', description: 'Tuya DP value', constraints: ['STRING']],
+                [name:'dpType',    type: 'ENUM',   constraints: ['DP_TYPE_VALUE', 'DP_TYPE_BOOL', 'DP_TYPE_ENUM'], description: 'DP data type']
             ]
         }
-        capability "Actuator"
-        capability "Outlet"
+        capability 'Actuator'
+        capability 'Outlet'
         capability 'Switch'
-        capability 'TemperatureMeasurement'
+        //capability 'TemperatureMeasurement'   // do not expose the capability, this is the device internal temperature!
         capability 'PowerMeter'
         capability 'EnergyMeter'
         capability 'VoltageMeasurement'
         capability 'CurrentMeter'
 
+        attribute 'temperature', 'number'   // make it a custom attribute
+
         if (_THREE_STATE == true) {
-            attribute "switch", "enum", SwitchThreeStateOpts.options.values() as List<String>
+            attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
         }
 
         // deviceType specific capabilities, commands and attributes
-        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
-            command "zigbeeGroups", [
-                [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
+        if (_DEBUG || (deviceType in ['Dimmer', 'ButtonDimmer', 'Switch', 'Valve'])) {
+            command 'zigbeeGroups', [
+                [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
+                [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
         // https://github.com/xyzroe/ZigUSB
         // https://github.com/Koenkk/zigbee-herdsman-converters/blob/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b/src/devices/xyzroe.ts
-        // https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b        
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0007,0006", outClusters:"0000,0006", model:"ZigUSB", manufacturer:"xyzroe.cc", deviceJoinName: "Zigbee USB power monitor and switch"
+        // https://github.com/Koenkk/zigbee-herdsman-converters/pull/7077 https://github.com/Koenkk/zigbee-herdsman-converters/commit/9f761492fcfeffc4ef2f88f4e96ea3b6afa8ac0b
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0007,0006', outClusters:'0000,0006', model:'ZigUSB', manufacturer:'xyzroe.cc', deviceJoinName: 'Zigbee USB power monitor and switch'
     }
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: false, description: '<i>Turns on debug logging for 24 hours.</i>'
-        input name: "alwaysOn", type: "bool", title: "<b>Always On</b>", description: "<i>Disable switching OFF for plugs that must be always On</i>", defaultValue: false
+        input name: 'alwaysOn', type: 'bool', title: '<b>Always On</b>', description: '<i>Disable switching OFF for plugs that must be always On</i>', defaultValue: false
         input name: 'autoReportingTime', type: 'number', title: '<b>Automatic reporting time period</b>', description: '<i>V/A/W reporting interval, seconds (0..3600)<br>0 (zero) disables the automatic reporting!</i>', range: '0..3600', defaultValue: DEFAULT_REPORTING_TIME
         if (advancedOptions == true || advancedOptions == true) {
-            input name: "ignoreDuplicated", type: "bool", title: "<b>Ignore Duplicated Switch Events</b>", description: "<i>Some switches and plugs send periodically the switch status as a heart-beat </i>", defaultValue: true
-            input name: "inverceSwitch", type: "bool", title: "<b>Invert the switch on/off</b>", description: "<i>ZigUSB has the on and off states inverted!</i>", defaultValue: true
+            input name: 'ignoreDuplicated', type: 'bool', title: '<b>Ignore Duplicated Switch Events</b>', description: '<i>Some switches and plugs send periodically the switch status as a heart-beat </i>', defaultValue: true
+            input name: 'inverceSwitch', type: 'bool', title: '<b>Invert the switch on/off</b>', description: '<i>ZigUSB has the on and off states inverted!</i>', defaultValue: true
         }
     }
 }
@@ -98,14 +94,14 @@ metadata {
 @Field static final int    DEFAULT_PRECISION = 3           // 3 decimal places
 @Field static final BigDecimal DEFAULT_DELTA = 0.001
 @Field static final int    MAX_POWER_LIMIT = 999
-@Field static final String ONOFF = "Switch"
-@Field static final String POWER = "Power"
-@Field static final String INST_POWER = "InstPower"
-@Field static final String ENERGY = "Energy"
-@Field static final String VOLTAGE = "Voltage"
-@Field static final String AMPERAGE = "Amperage"
-@Field static final String FREQUENCY = "Frequency"
-@Field static final String POWER_FACTOR = "PowerFactor"
+@Field static final String ONOFF = 'Switch'
+@Field static final String POWER = 'Power'
+@Field static final String INST_POWER = 'InstPower'
+@Field static final String ENERGY = 'Energy'
+@Field static final String VOLTAGE = 'Voltage'
+@Field static final String AMPERAGE = 'Amperage'
+@Field static final String FREQUENCY = 'Frequency'
+@Field static final String POWER_FACTOR = 'PowerFactor'
 
 /**
  * ZigUSB has a really wierd way of reporting the on/off state back to the hub...
@@ -117,7 +113,7 @@ void customParseDefaultCommandResponse(final Map descMap) {
 
 List<String> customRefresh() {
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint :01], delay=200)     // switch state
+    cmds += zigbee.readAttribute(0x0006, 0x0000, [destEndpoint :01], delay = 200)     // switch state
     // ANALOG_INPUT_CLUSTER attribute 0x0055 error: Unsupported COMMAND
     //cmds += zigbee.readAttribute(0x000C, 0x0055, [destEndpoint :02], delay=200)     // current, voltage, power, reporting interval
     //  TEMPERATURE_MEASUREMENT_CLUSTER attribute 0x0000 error: 0x[00, 00, 8F]
@@ -128,33 +124,28 @@ List<String> customRefresh() {
     return cmds
 }
 
-boolean customInitVars(boolean fullInit=false) {
+void customInitVars(boolean fullInit=false) {
     logDebug "customInitVars(${fullInit})"
-    if (fullInit || settings?.threeStateEnable == null) device.updateSetting("threeStateEnable", false)
-    if (fullInit || settings?.ignoreDuplicated == null) device.updateSetting("ignoreDuplicated", true)
-    if (fullInit || settings?.inverceSwitch == null) device.updateSetting("inverceSwitch", true)
-    if (fullInit || settings?.autoReportingTime == null) device.updateSetting("autoReportingTime", DEFAULT_REPORTING_TIME)
-    return true
-}
-
-boolean  customInitEvents(boolean fullInit=false) {
-    return true
+    if (fullInit || settings?.threeStateEnable == null) { device.updateSetting('threeStateEnable', false) }
+    if (fullInit || settings?.ignoreDuplicated == null) { device.updateSetting('ignoreDuplicated', true) }
+    if (fullInit || settings?.inverceSwitch == null) { device.updateSetting('inverceSwitch', true) }
+    if (fullInit || settings?.autoReportingTime == null) { device.updateSetting('autoReportingTime', DEFAULT_REPORTING_TIME) }
 }
 
 List<String> customConfigureDevice() {
-    logInfo "Configuring the device..."
+    logInfo 'Configuring the device...'
     List<String> cmds = []
     int intMinTime = 1
     int intMaxTime = (settings?.autoReportingTime as int) ?: 60
     //cmds += configureReporting("Write", ONOFF,  "1", "30", "0", sendNow=false)    // switch state should be always reported
-    cmds += configureReporting("Write", ONOFF,  intMinTime.toString(), intMaxTime.toString(), "0", sendNow=false)    // switch state should be always reported
+    cmds += configureReporting('Write', ONOFF,  intMinTime.toString(), intMaxTime.toString(), '0', sendNow = false)    // switch state should be always reported
     if (settings?.autoReportingTime != 0) {
         cmds += zigbee.configureReporting(0x000C, 0x0055, DataType.UINT16, intMinTime, intMaxTime, 0, [destEndpoint: 02])   // current, voltage, power, reporting interval
         logInfo "configuring the automatic reporting  : ${intMaxTime} seconds"
     }
     else {
         cmds += zigbee.configureReporting(0x000C, 0x0055, DataType.UINT16, 0xFFFF, 0xFFFF, 0, [destEndpoint: 02])   // disable reporting
-        logInfo "configuring the automatic reporting  : DISABLED"
+        logInfo 'configuring the automatic reporting  : DISABLED'
     }
     cmds += zigbee.reportingConfiguration(0x000C, 0x0055, [destEndpoint: 02], 200)
     logDebug "customConfigureDevice() : ${cmds}"
@@ -162,21 +153,20 @@ List<String> customConfigureDevice() {
 }
 
 void customUpdated() {
-    logDebug "customUpdated()"
+    logDebug 'customUpdated()'
     List<String> cmds = customConfigureDevice()
     sendZigbeeCommands(cmds)
     if (settings?.autoReportingTime == 0) {
-        device.deleteCurrentState("amperage")
-        device.deleteCurrentState("voltage")
-        device.deleteCurrentState("power")
+        device.deleteCurrentState('amperage')
+        device.deleteCurrentState('voltage')
+        device.deleteCurrentState('power')
     }
 }
 
-void parseZigUSBAnlogInputCluster(String description) {
-
+void customParseAnalogInputClusterDescription(String description) {
     Map descMap = myParseDescriptionAsMap(description)
     if (descMap == null) {
-        logWarn "parseZigUSBAnlogInputCluster: descMap is null"
+        logWarn 'customParseAnalogInputClusterDescription: descMap is null'
         return
     }
     // descMap=[raw:1C9F02000C1E55003915AEA7401C004204562C3430, dni:1C9F, endpoint:02, cluster:000C, size:1E, attrId:0055, encoding:39, command:0A, value:40A7AE15, clusterInt:12, attrInt:85, additionalAttrs:[[value:V,40, encoding:42, attrId:001C, consumedBytes:7, attrInt:28]]]
@@ -185,7 +175,7 @@ void parseZigUSBAnlogInputCluster(String description) {
         additionalAttrs = descMap.additionalAttrs[0] ?: [:]
     }
     // additionalAttrs=[value:W,40, encoding:42, attrId:001C, consumedBytes:7, attrInt:28]
-    //logDebug "parseZigUSBAnlogInputCluster: additionalAttrs=${additionalAttrs}"
+    //logDebug "customParseAnalogInputClusterDescription: additionalAttrs=${additionalAttrs}"
     String measurementType = UNKNOWN
     if (additionalAttrs.value != null) {
         String value = additionalAttrs['value']
@@ -197,7 +187,7 @@ void parseZigUSBAnlogInputCluster(String description) {
             case 'W' : measurementType = POWER; break
             default : break
         }
-        logTrace "parseZigUSBAnlogInputCluster: measurementType=${measurementType}"
+        logTrace "customParseAnalogInputClusterDescription: measurementType=${measurementType}"
     }
 
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
@@ -228,13 +218,13 @@ void parseZigUSBAnlogInputCluster(String description) {
         case '01' : // switch
         case '02' : // current, voltage, power, reporting interval
             if (descMap.attrId == '001C') {
-                logDebug "parseZigUSBAnlogInputCluster: (0x001C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} "
+                logDebug "customParseAnalogInputClusterDescription: (0x001C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} "
             }
             else {
                 try {
                     value = hexStrToUnsignedInt(descMap.value)
                     floatValue = Float.intBitsToFloat(value.intValue())
-                    logDebug "parseZigUSBAnlogInputCluster: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+                    logDebug "customParseAnalogInputClusterDescription: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
                     switch (measurementType) {
                         case VOLTAGE : sendVoltageEvent(floatValue, false); break
                         case AMPERAGE : sendAmperageEvent(floatValue, false); break
@@ -242,8 +232,8 @@ void parseZigUSBAnlogInputCluster(String description) {
                         default : logInfo "${measurementType} is ${floatValue.setScale(3, BigDecimal.ROUND_HALF_UP)} (raw:${value})"; break
                     }
                 }
-                catch (Exception e) {
-                    logWarn "parseZigUSBAnlogInputCluster: EXCEPTION (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+                catch (e) {
+                    logWarn "customParseAnalogInputClusterDescription: EXCEPTION (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
                 }
             }
             break
@@ -254,226 +244,22 @@ void parseZigUSBAnlogInputCluster(String description) {
         case '04' : // temperature
         default :
             value = hexStrToUnsignedInt(descMap.value)
-            logWarn "parseZigUSBAnlogInputCluster: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
+            logWarn "customParseAnalogInputClusterDescription: (0x000C) <b>endpoint:${descMap.endpoint}</b> attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value} floatValue=${floatValue}"
             break
-
     }
 }
 
 void customParseElectricalMeasureCluster(Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)
+    int value = hexStrToUnsignedInt(descMap.value)
     logDebug "customParseElectricalMeasureCluster: (0x0B04)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
 void customParseMeteringCluster(Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    def value = hexStrToUnsignedInt(descMap.value)
+    int value = hexStrToUnsignedInt(descMap.value)
     logDebug "customParseMeteringCluster: (0x0702)  attribute 0x${descMap.attrId} descMap.value=${descMap.value} value=${value}"
 }
 
-void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
-    Map map = [:]
-    map.name = 'voltage'
-    map.value = voltage.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
-    map.unit = 'V'
-    map.type = isDigital == true ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
-    final BigDecimal lastVoltage = device.currentValue('voltage') ?: 0.0
-    final BigDecimal  voltageThreshold = DEFAULT_DELTA
-    if (Math.abs(voltage - lastVoltage) >= voltageThreshold || state.states.isRefresh == true) {
-        logInfo "${map.descriptionText}"
-        sendEvent(map)
-        //runIn(1, formatAttrib, [overwrite: true])
-    }
-    else {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastVoltage} is less than ${voltageThreshold} V)"
-    }
-}
-
-void sendAmperageEvent(BigDecimal amperage, boolean isDigital=false) {
-    Map map = [:]
-    map.name = 'amperage'
-    map.value = amperage.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
-    map.unit = 'A'
-    map.type = isDigital == true ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.states.isRefresh  == true) { map.descriptionText += ' (refresh)' }
-    final BigDecimal lastAmperage = device.currentValue('amperage') ?: 0.0
-    final BigDecimal amperageThreshold = DEFAULT_DELTA
-    if (Math.abs(amperage - lastAmperage ) >= amperageThreshold || state.states.isRefresh  == true) {
-        logInfo "${map.descriptionText}"
-        sendEvent(map)
-        //runIn(1, formatAttrib, [overwrite: true])
-    }
-    else {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastAmperage} is less than ${amperageThreshold} mA)"
-    }
-}
-
-void sendPowerEvent(BigDecimal power, boolean isDigital=false) {
-    Map map = [:]
-    map.name = 'power'
-    map.value = power.setScale(DEFAULT_PRECISION, BigDecimal.ROUND_HALF_UP)
-    map.unit = 'W'
-    map.type = isDigital == true ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
-    final BigDecimal lastPower = device.currentValue('power') ?: 0.0
-    final BigDecimal powerThreshold = DEFAULT_DELTA
-    if (power  > MAX_POWER_LIMIT) {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (exceeds maximum power cap ${MAX_POWER_LIMIT} W)"
-        return
-    }
-    if (Math.abs(power - lastPower ) >= powerThreshold || state.states.isRefresh == true) {
-        logInfo "${map.descriptionText}"
-        sendEvent(map)
-        //runIn(1, formatAttrib, [overwrite: true])
-    }
-    else {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastPower} is less than ${powerThreshold} W)"
-    }
-}
-
-void sendFrequencyEvent(BigDecimal frequency, boolean isDigital=false) {
-    Map map = [:]
-    map.name = 'frequency'
-    map.value = frequency.setScale(1, BigDecimal.ROUND_HALF_UP)
-    map.unit = 'Hz'
-    map.type = isDigital == true ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
-    final BigDecimal lastFrequency = device.currentValue('frequency') ?: 0.0
-    final BigDecimal frequencyThreshold = 0.1
-    if (Math.abs(frequency - lastFrequency) >= frequencyThreshold || state.states.isRefresh == true) {
-        logInfo "${map.descriptionText}"
-        sendEvent(map)
-        //runIn(1, formatAttrib, [overwrite: true])
-    }
-    else {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${frequencyThreshold} Hz)"
-    }
-}
-
-void sendPowerFactorEvent(BigDecimal pf, boolean isDigital=false) {
-    Map map = [:]
-    map.name = 'powerFactor'
-    map.value = pf.setScale(2, BigDecimal.ROUND_HALF_UP)
-    map.unit = '%'
-    map.type = isDigital == true ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    if (state.states.isRefresh == true) { map.descriptionText += ' (refresh)' }
-    final BigDecimal lastPF = device.currentValue('powerFactor') ?: 0.0
-    final BigDecimal powerFactorThreshold = 0.01
-    if (Math.abs(pf - lastPF) >= powerFactorThreshold || state.states.isRefresh == true) {
-        logInfo "${map.descriptionText}"
-        sendEvent(map)
-        //runIn(1, formatAttrib, [overwrite: true])
-    }
-    else {
-        logDebug "ignored ${map.name} ${map.value} ${map.unit} (change from ${lastFrequency} is less than ${powerFactorThreshold} %)"
-    }
-}
-
-
-List<String> configureReporting(String operation, String measurement,  String minTime="0", String maxTime="0", String delta="0", boolean sendNow=true ) {
-    int intMinTime = safeToInt(minTime)
-    int intMaxTime = safeToInt(maxTime)
-    int intDelta = safeToInt(delta)
-    String epString = state.destinationEP
-    int ep = safeToInt(epString)
-    if (ep==null || ep==0) {
-        ep = 1
-        epString = "01"
-    }
-
-    logDebug "configureReporting operation=${operation}, measurement=${measurement}, minTime=${intMinTime}, maxTime=${intMaxTime}, delta=${intDelta} )"
-
-    List<String> cmds = []
-
-    switch (measurement) {
-        case ONOFF :
-            if (operation == "Write") {
-                cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${epString} 0x01 0x0006 {${device.zigbeeId}} {}", "delay 251", ]
-                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 ${intMinTime} ${intMaxTime} {}", "delay 251", ]
-            }
-            else if (operation == "Disable") {
-                cmds += ["he cr 0x${device.deviceNetworkId} 0x${epString} 6 0 16 65535 65535 {}", "delay 251", ]    // disable Plug automatic reporting
-            }
-            cmds +=  zigbee.reportingConfiguration(0x0006, 0x0000, [destEndpoint :ep], 251)    // read it back
-            break
-        case ENERGY :    // default delta = 1 Wh (0.001 kWh)
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, intMinTime, intMaxTime, (intDelta*getEnergyDiv() as int))
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0702, 0x0000,  DataType.UINT48, 0xFFFF, 0xFFFF, 0x0000)    // disable energy automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0702, 0x0000, [destEndpoint :ep], 252)
-            break
-        case INST_POWER :        // 0x702:0x400
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, intMinTime, intMaxTime, (intDelta*getPowerDiv() as int))
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0702, 0x0400,  DataType.INT16, 0xFFFF, 0xFFFF, 0x0000)    // disable power automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0702, 0x0400, [destEndpoint :ep], 253)
-            break
-        case POWER :        // Active power default delta = 1
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, intMinTime, intMaxTime, (intDelta*getPowerDiv() as int) )   // bug fixes in ver  1.6.0 - thanks @guyee
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0B04, 0x050B,  DataType.INT16, 0xFFFF, 0xFFFF, 0x8000)    // disable power automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x050B, [destEndpoint :ep], 254)
-            break
-        case VOLTAGE :    // RMS Voltage default delta = 1
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getVoltageDiv() as int))
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0505,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable voltage automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0505, [destEndpoint :ep], 255)
-            break
-        case AMPERAGE :    // RMS Current default delta = 100 mA = 0.1 A
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getCurrentDiv() as int))
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0508,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable amperage automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0508, [destEndpoint :ep], 256)
-            break
-        case FREQUENCY :    // added 03/27/2023
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getFrequencyDiv() as int))
-            }
-            else if (operation == "Disable") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0300,  DataType.UINT16, 0xFFFF, 0xFFFF, 0xFFFF)    // disable frequency automatic reporting - tested with Frient
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0300, [destEndpoint :ep], 257)
-            break
-        case POWER_FACTOR : // added 03/27/2023
-            if (operation == "Write") {
-                cmds += zigbee.configureReporting(0x0B04, 0x0510,  DataType.UINT16, intMinTime, intMaxTime, (intDelta*getPowerFactorDiv() as int))
-            }
-            cmds += zigbee.reportingConfiguration(0x0B04, 0x0510, [destEndpoint :ep], 258)
-            break
-        default :
-            break
-    }
-    if (cmds != null) {
-        if (sendNow == true) {
-            sendZigbeeCommands(cmds)
-        }
-        else {
-            return cmds
-        }
-    }
-}
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

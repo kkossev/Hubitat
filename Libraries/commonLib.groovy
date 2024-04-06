@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.5',
+    version: '3.0.6',
     documentationLink: ''
 )
 /*
@@ -33,8 +33,9 @@ library(
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-04-02 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
-  * ver. 3.0.5  2024-04-05 kkossev  - (dev.branch) button methods bug fix; configure() bug fix; handlePm25Event bug fix;
+  * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
+  * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
+  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -49,8 +50,8 @@ library(
  *
 */
 
-String commonLibVersion() { '3.0.5' }
-String commonLibStamp() { '2024/04/05 9:46 PM' }
+String commonLibVersion() { '3.0.6' }
+String commonLibStamp() { '2024/04/06 9:51 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -151,7 +152,7 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) && !isZigUSB()) {
+            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) ) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
                 if (deviceType != 'mmWaveSensor') {
                     input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
@@ -234,7 +235,7 @@ boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.
 boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
 boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
-boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
+//boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
 /**
  * Parse Zigbee message
@@ -315,13 +316,8 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseLevelControlCluster(descMap + map) }
             break
         case 0x000C :                                       // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
-            if (isZigUSB()) {
-                parseZigUSBAnlogInputCluster(description)
-            }
-            else {
-                parseAnalogInputCluster(descMap)
-                descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map) }
-            }
+            parseAnalogInputCluster(descMap, description)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map, description) }
             break
         case 0x0012 :                                       // Aqara Cube - Multistate Input
             parseMultistateInputCluster(descMap)
@@ -570,8 +566,8 @@ void parseDefaultCommandResponse(final Map descMap) {
     } else {
         logDebug "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} response: ${status}"
         // ZigUSB has its own interpretation of the Zigbee standards ... :(
-        if (isZigUSB()) {
-            executeCustomHandler('customParseDefaultCommandResponse', descMap)
+        if (this.respondsTo('customParseDefaultCommandResponse')) {
+            customParseDefaultCommandResponse(descMap)
         }
     }
 }
@@ -1127,7 +1123,8 @@ void parseOnOffCluster(final Map descMap) {
         parseOnOffAttributes(descMap)
     }
     else {
-        logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}"
+        if (descMap.attrId != null) { logWarn "parseOnOffCluster: unprocessed attrId ${descMap.attrId}"  }
+        else { logDebug "parseOnOffCluster: skipped processing OnOIff cluster (attrId is ${descMap.attrId})" } // ZigUSB has its own interpretation of the Zigbee standards ... :(
     }
 }
 
@@ -1475,7 +1472,6 @@ void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=fal
     else {
         logWarn "sendButtonEvent: UNHANDLED event for button ${buttonNumber}, buttonState=${buttonState}"
     }
-
 }
 
 void push() {                // Momentary capability
@@ -1892,7 +1888,6 @@ void parseElectricalMeasureCluster(final Map descMap) {
  * Metering Cluster 0x0B04
  * -----------------------------------------------------------------------------
 */
-
 void parseMeteringCluster(final Map descMap) {
     if (!executeCustomHandler('customParseMeteringCluster', descMap)) {
         logWarn 'parseMeteringCluster is NOT implemented1'
@@ -1907,6 +1902,7 @@ void parseMeteringCluster(final Map descMap) {
 void parsePm25Cluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
+    /* groovylint-disable-next-line NoFloat */
     float floatValue  = Float.intBitsToFloat(value.intValue())
     if (this.respondsTo('handlePm25Event')) {
         handlePm25Event(floatValue as Integer)
@@ -1916,21 +1912,23 @@ void parsePm25Cluster(final Map descMap) {
     }
 }
 
-
 /*
  * -----------------------------------------------------------------------------
  * Analog Input Cluster 0x000C
  * -----------------------------------------------------------------------------
 */
-void parseAnalogInputCluster(final Map descMap) {
-    if (DEVICE_TYPE in ['AirQuality']) {
+void parseAnalogInputCluster(final Map descMap, String description=null) {
+    if (this.respondsTo('customParseAnalogInputCluster')) {
+        customParseAnalogInputCluster(descMap)
+    }
+    else if (this.respondsTo('customParseAnalogInputClusterDescription')) {
+        customParseAnalogInputClusterDescription(description)                   // ZigUSB
+    }   
+    else if (DEVICE_TYPE in ['AirQuality']) {
         parseAirQualityIndexCluster(descMap)
     }
     else if (DEVICE_TYPE in ['AqaraCube']) {
         parseAqaraCubeAnalogInputCluster(descMap)
-    }
-    else if (isZigUSB()) {
-        parseZigUSBAnlogInputCluster(descMap)
     }
     else {
         logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}"
@@ -2152,7 +2150,7 @@ private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 String tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
-    logInfo "tuyaBlackMagic()..."
+    logInfo 'tuyaBlackMagic()...'
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
 }
 
@@ -2911,7 +2909,7 @@ String formatTime(int timeInSeconds) {
 }
 
 boolean isTuya() {
-    if (!device) { return true }    // fallback - added 04/03/2024 
+    if (!device) { return true }    // fallback - added 04/03/2024
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
