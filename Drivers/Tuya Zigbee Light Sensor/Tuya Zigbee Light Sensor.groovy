@@ -22,7 +22,7 @@
  *                                   TODO:  */
 
 static String version() { '3.0.6' }
-static String timeStamp() { '2024/04/06 1:31 PM' }
+static String timeStamp() { '2024/04/06 2:55 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -38,7 +38,7 @@ deviceType = 'LightSensor'
 metadata {
     definition(
         name: 'Tuya Zigbee Light Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya%20Zigbee%20Light%20Sensor.groovy',
+        importUrl: 'https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Zigbee%20Light%20Sensor/Tuya_Zigbee_Light_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
             capability 'Sensor'
