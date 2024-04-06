@@ -28,7 +28,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/xiaomiLib.groovy",
       "codeType": "library",
       "id": 165,
-      "version": 3
+      "version": 8
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
@@ -41,6 +41,12 @@
       "id": 167,
       "codeType": "library",
       "version": 4
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
+      "id": 144,
+      "codeType": "library",
+      "version": 276
     }
   ]
 }

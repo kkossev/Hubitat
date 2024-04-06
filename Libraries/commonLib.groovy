@@ -35,7 +35,7 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code;
+  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -51,7 +51,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/06 9:51 AM' }
+String commonLibStamp() { '2024/04/06 2:33 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -87,7 +87,6 @@ metadata {
         attribute 'Status', 'string'
 
         // common commands for all device types
-        // removed from version 2.0.6    //command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
         // deviceType specific capabilities, commands and attributes
@@ -102,7 +101,7 @@ metadata {
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor']) {
+        if (deviceType in  ['Device', 'THSensor', 'MotionSensor']) {
             capability 'Sensor'
         }
         if (deviceType in  ['Device', 'MotionSensor']) {
@@ -111,7 +110,7 @@ metadata {
         if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
-        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat']) {
+        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'Thermostat']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
         }
@@ -133,9 +132,6 @@ metadata {
         if (deviceType in  ['Device', 'THSensor']) {
             capability 'RelativeHumidityMeasurement'
         }
-        if (deviceType in  ['Device', 'LightSensor']) {
-            capability 'IlluminanceMeasurement'
-        }
 
         // trap for Hubitat F2 bug
         fingerprint profileId:'0104', endpointId:'F2', inClusters:'', outClusters:'', model:'unknown', manufacturer:'unknown', deviceJoinName: 'Zigbee device affected by Hubitat F2 bug'
@@ -146,17 +142,12 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement'))) {
+            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') /*|| device.hasCapability('IlluminanceMeasurement')*/)) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
                 if (deviceType != 'mmWaveSensor') {
                     input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
                 }
             }
-            if (device.hasCapability('IlluminanceMeasurement')) {
-                input name: 'illuminanceThreshold', type: 'number', title: '<b>Illuminance Reporting Threshold</b>', description: '<i>Illuminance reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
-                input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
-            }
-
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
@@ -183,7 +174,6 @@ metadata {
 @Field static final Integer DEFAULT_MAX_REPORTING_TIME = 3600
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
@@ -1664,51 +1654,13 @@ void parseColorControlCluster(final Map descMap, String description) {
  * -----------------------------------------------------------------------------
 */
 void parseIlluminanceCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0
-    handleIlluminanceEvent(lux)
-}
-
-void handleIlluminanceEvent(int illuminance, Boolean isDigital=false) {
-    Map eventMap = [:]
-    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    eventMap.name = 'illuminance'
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
-    eventMap.value  = illumCorrected
-    eventMap.type = isDigital ? 'digital' : 'physical'
-    eventMap.unit = 'lx'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    Integer lastIllum = device.currentValue('illuminance') ?: 0
-    Integer delta = Math.abs(lastIllum - illumCorrected)
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
-        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
-        return
+    if (this.respondsTo('customParseIlluminanceCluster')) {
+        customParseIlluminanceCluster(descMap)
     }
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
-        state.lastRx['illumTime'] = now()
-        sendEvent(eventMap)
-    }
-    else {         // queue the event
-        eventMap.type = 'delayed'
-        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
+    else {
+        logWarn "unprocessed Illuminance attribute ${descMap.attrId}"
     }
 }
-
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedIllumEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-}
-
-@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
 
 /*
  * -----------------------------------------------------------------------------
@@ -2664,7 +2616,7 @@ void initializeVars( boolean fullInit = false ) {
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
-
+    /*
     if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
         if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
@@ -2673,6 +2625,7 @@ void initializeVars( boolean fullInit = false ) {
         if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
         if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
     }
+    */
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
