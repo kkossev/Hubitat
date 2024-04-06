@@ -18,13 +18,14 @@
  * ver. 2.0.5  2023-07-02 kkossev  - Tuya Zigbee Button Dimmer: added Debounce option; added VoltageToPercent option for battery; added reverseButton option; healthStatus bug fix; added  Zigbee Groups' command; added switch moode (dimmer/scene) for TS004F
  * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
  * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
- * ver. 3.0.5  2024-04-05 kkossev  - (dev. branch) fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
+ * ver. 3.0.5  2024-04-05 kkossev  - fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
+ * ver. 3.0.6  2024-04-05 kkossev  - (dev. branch) zigbee gruops library; setLevel exception bug fix;
  *
  *                                   TODO: initialize the TS004F dimmers in scene mode during pairing;
  */
 
-static String version() { "3.0.5" }
-static String timeStamp() {"2024/04/05 7:24 AM"}
+static String version() { "3.0.6" }
+static String timeStamp() {"2024/04/05 9:32 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -37,6 +38,9 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
+#include kkossev.buttonLib
+#include kkossev.groupsLib
+#include kkossev.levelLib
 
 deviceType = "ButtonDimmer"
 @Field static final String DEVICE_TYPE = "ButtonDimmer"
@@ -553,9 +557,11 @@ def soundReleaseEvent() {
     state.states['debouncingActive'] = false
 }
 
-void customSetLevel(level, transitionTime) {
+void customSetLevel(int level, int transitionTime) {
+    logDebug "customSetLevel: level = $level, transitionTime = $transitionTime"
     sendDigitalLevelEvent(level)
 }
+
 
 void levelUp() {
     Integer level = (device.currentValue('level') ?: 0 ) as int
@@ -571,7 +577,7 @@ void levelDn() {
     sendDigitalLevelEvent(level)
 }
 
-void sendDigitalLevelEvent(level) {
+void sendDigitalLevelEvent(int level) {
     Boolean oldIsDigital = state.states['isDigital'] ?: true
     state.states['isDigital'] = true
     sendLevelControlEvent(level)

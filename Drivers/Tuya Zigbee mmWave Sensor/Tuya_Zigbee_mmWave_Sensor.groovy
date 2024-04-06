@@ -15,13 +15,13 @@
  * This driver is inspired by @w35l3y work on Tuya device driver (Edge project).
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
- * ver. 3.0.4  2024-04-28 kkossev  - (dev. branch) first version
+ * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  *
  *                                   TODO: update() to save the preferences
  */
 
-static String version() { "3.0.4" }
-static String timeStamp() {"2024/04/31 10:44 PM"}
+static String version() { "3.0.6" }
+static String timeStamp() {"2024/04/06 2:58 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -36,6 +36,7 @@ import groovy.json.JsonOutput
 
 #include kkossev.commonLib
 #include kkossev.deviceProfileLib
+#include kkossev.illuminanceLib
 
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"

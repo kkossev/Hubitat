@@ -46,7 +46,19 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 276
+      "version": 285
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
+      "id": 169,
+      "codeType": "library",
+      "version": 5
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/levelLib.groovy",
+      "id": 170,
+      "codeType": "library",
+      "version": 4
     }
   ]
 }

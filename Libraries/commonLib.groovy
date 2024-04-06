@@ -35,7 +35,7 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code;
+  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups code to dedicated lib; moved level methids to dedicated lib + setLevel bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -44,14 +44,13 @@ library(
   *                                   TODO: battery voltage low/high limits configuration
   *                                   TODO: add GetInof (endpoints list) command
   *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
-  *                                   TODO: move zigbeeGroups : {} to dedicated lib
   *                                   TODO: disableDefaultResponse for Tuya commands
   *                                   TODO: ping() for a virtual device (runIn 1 milissecond a callback nethod)
  *
 */
 
 String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/06 2:33 PM' }
+String commonLibStamp() { '2024/04/06 9:20 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -95,12 +94,14 @@ metadata {
                 command 'getAllProperties',       [[name: 'Get All Properties']]
             }
         }
+        /*
         if (_DEBUG || (deviceType in ['Dimmer', 'Switch', 'Valve'])) {
             command 'zigbeeGroups', [
                 [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
+        */
         if (deviceType in  ['Device', 'THSensor', 'MotionSensor']) {
             capability 'Sensor'
         }
@@ -187,15 +188,6 @@ metadata {
 @Field static final Map SwitchThreeStateOpts = [
     defaultValue: 0,
     options     : [0: 'off', 1: 'on', 2: 'switching_off', 3: 'switching_on', 4: 'switch_failure']
-]
-
-@Field static final Map ZigbeeGroupsOptsDebug = [
-    defaultValue: 0,
-    options     : [99: '--- select ---', 0: 'Add group', 1: 'View group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups', 5: 'Add group if identifying']
-]
-@Field static final Map ZigbeeGroupsOpts = [
-    defaultValue: 0,
-    options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
 
 @Field static final Map ConfigureOpts = [
@@ -879,213 +871,12 @@ void parseScenesCluster(final Map descMap) {
  * -----------------------------------------------------------------------------
 */
 void parseGroupsCluster(final Map descMap) {
-    // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]]
-    logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}"
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
-    switch (descMap.command as Integer) {
-        case 0x00: // Add group    0x0001 – 0xfff7
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) <b>error: ${statusName}</b>"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) statusCode: ${statusName}"
-                // add the group to state.zigbeeGroups['groups'] if not exist
-                int groupCount = state.zigbeeGroups['groups'].size()
-                for (int i = 0; i < groupCount; i++) {
-                    if (safeToInt(state.zigbeeGroups['groups'][i]) == groupIdInt) {
-                        logDebug "Zigbee group ${groupIdInt} (0x${groupId}) already exist"
-                        return
-                    }
-                }
-                state.zigbeeGroups['groups'].add(groupIdInt)
-                logInfo "Zigbee group added new group ${groupIdInt} (0x${zigbee.convertToHexString(groupIdInt, 4)})"
-                state.zigbeeGroups['groups'].sort()
-            }
-            break
-        case 0x01: // View group
-            // The view group command allows the sending device to request that the receiving entity or entities respond with a view group response command containing the application name string for a particular group.
-            logDebug "received View group GROUPS cluster command: ${descMap.command} (${descMap})"
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
-            }
-            break
-        case 0x02: // Get group membership
-            final List<String> data = descMap.data as List<String>
-            final int capacity = hexStrToUnsignedInt(data[0])
-            final int groupCount = hexStrToUnsignedInt(data[1])
-            final Set<String> groups = []
-            for (int i = 0; i < groupCount; i++) {
-                int pos = (i * 2) + 2
-                String group = data[pos + 1] + data[pos]
-                groups.add(hexStrToUnsignedInt(group))
-            }
-            state.zigbeeGroups['groups'] = groups
-            state.zigbeeGroups['capacity'] = capacity
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
-            break
-        case 0x03: // Remove group
-            logInfo "received  Remove group GROUPS cluster command: ${descMap.command} (${descMap})"
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "zigbee response remove group ${groupIdInt} (0x${groupId}) error: ${statusName}"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
-            }
-            // remove it from the states, even if status code was 'Not Found'
-            int index = state.zigbeeGroups['groups'].indexOf(groupIdInt)
-            if (index >= 0) {
-                state.zigbeeGroups['groups'].remove(index)
-                logDebug "Zigbee group ${groupIdInt} (0x${groupId}) removed"
-            }
-            break
-        case 0x04: //Remove all groups
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
-            logWarn 'not implemented!'
-            break
-        case 0x05: // Add group if identifying
-            //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5).
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
-            logWarn 'not implemented!'
-            break
-        default:
-            logWarn "received unknown GROUPS cluster command: ${descMap.command} (${descMap})"
-            break
+    if (this.respondsTo('customParseGroupsCluster')) {
+        customParseGroupsCluster(descMap)
     }
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> addGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    if (group < 1 || group > 0xFFF7) {
-        logWarn "addGroupMembership: invalid group ${groupNr}"
-        return []
+    else {
+        logWarn "unprocessed GroupsCluster attribute ${descMap.attrId}"
     }
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x00, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "addGroupMembership: adding group ${group} to ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> viewGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x01, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "viewGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-List<String> getGroupMembership(dummy) {
-    List<String> cmds = []
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')
-    logDebug "getGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> removeGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    if (group < 1 || group > 0xFFF7) {
-        logWarn "removeGroupMembership: invalid group ${groupNr}"
-        return []
-    }
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x03, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "removeGroupMembership: deleting group ${group} from ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> removeAllGroups(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x04, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "removeAllGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-List<String> notImplementedGroups(groupNr) {
-    List<String> cmds = []
-    //final Integer group = safeToInt(groupNr)
-    //final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    logWarn "notImplementedGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-@Field static final Map GroupCommandsMap = [
-    '--- select ---'           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'groupCommandsHelp'],
-    'Add group'                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'],
-    'View group'               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'],
-    'Get group membership'     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'],
-    'Remove group'             : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'],
-    'Remove all groups'        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'],
-    'Add group if identifying' : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
-]
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-void zigbeeGroups(final String command=null, par=null) {
-    logInfo "executing command \'${command}\', parameter ${par}"
-    List<String> cmds = []
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
-    if (state.zigbeeGroups['groups'] == null) { state.zigbeeGroups['groups'] = [] }
-    /* groovylint-disable-next-line VariableTypeRequired */
-    def value
-    Boolean validated = false
-    if (command == null || !(command in (GroupCommandsMap.keySet() as List))) {
-        logWarn "zigbeeGroups: command <b>${command}</b> must be one of these : ${GroupCommandsMap.keySet() as List}"
-        return
-    }
-    value = GroupCommandsMap[command]?.type == 'number' ? safeToInt(par, -1) : 0
-    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) { validated = true }
-    if (validated == false && GroupCommandsMap[command]?.min != null && GroupCommandsMap[command]?.max != null) {
-        log.warn "zigbeeGroups: command <b>command</b> parameter <b>${par}</b> must be within ${GroupCommandsMap[command]?.min} and  ${GroupCommandsMap[command]?.max} "
-        return
-    }
-    //
-    /* groovylint-disable-next-line VariableTypeRequired */
-    def func
-    try {
-        func = GroupCommandsMap[command]?.function
-        //def type = GroupCommandsMap[command]?.type
-        // device.updateSetting("$par", [value:value, type:type])  // TODO !!!
-        cmds = "$func"(value)
-    }
-    catch (e) {
-        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)"
-        return
-    }
-
-    logDebug "executed <b>$func</b>(<b>$value</b>)"
-    sendZigbeeCommands(cmds)
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-void groupCommandsHelp(val) {
-    logWarn 'GroupCommands: select one of the commands in this list!'
 }
 
 /*
@@ -1454,180 +1245,24 @@ void parseLevelControlCluster(final Map descMap) {
     if (this.respondsTo('customParseLevelControlCluster')) {
         customParseLevelControlCluster(descMap)
     }
-    else if (DEVICE_TYPE in ['Bulb']) {
-        parseLevelControlClusterBulb(descMap)
-    }
-    else if (descMap.attrId == '0000') {
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-        final int rawValue = hexStrToUnsignedInt(descMap.value)
-        sendLevelControlEvent(rawValue)
+    else if (this.respondsTo('levelLibParseLevelControlCluster')) {
+        levelLibParseLevelControlCluster(descMap)
     }
     else {
         logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
     }
 }
 
-void sendLevelControlEvent(final int rawValue) {
-    int value = rawValue as int
-    if (value < 0) { value = 0 }
-    if (value > 100) { value = 100 }
-    Map map = [:]
-
-    boolean isDigital = state.states['isDigital']
-    map.type = isDigital == true ? 'digital' : 'physical'
-
-    map.name = 'level'
-    map.value = value
-    boolean isRefresh = state.states['isRefresh'] ?: false
-    if (isRefresh == true) {
-        map.descriptionText = "${device.displayName} is ${value} [Refresh]"
-        map.isStateChange = true
-    }
-    else {
-        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]"
-    }
-    logInfo "${map.descriptionText}"
-    sendEvent(map)
-    clearIsDigital()
-}
-
-/**
- * Get the level transition rate
- * @param level desired target level (0-100)
- * @param transitionTime transition time in seconds (optional)
- * @return transition rate in 1/10ths of a second
- */
-private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer transitionTime = null) {
-    int rate = 0
-    final Boolean isOn = device.currentValue('switch') == 'on'
-    Integer currentLevel = (device.currentValue('level') as Integer) ?: 0
-    if (!isOn) {
-        currentLevel = 0
-    }
-    // Check if 'transitionTime' has a value
-    if (transitionTime > 0) {
-        // Calculate the rate by converting 'transitionTime' to BigDecimal, multiplying by 10, and converting to Integer
-        rate = transitionTime * 10
-    } else {
-        // Check if the 'levelUpTransition' setting has a value and the current level is less than the desired level
-        if (((settings.levelUpTransition ?: 0) as Integer) > 0 && currentLevel < desiredLevel) {
-            // Set the rate to the value of the 'levelUpTransition' setting converted to Integer
-            rate = settings.levelUpTransition.toInteger()
-        }
-        // Check if the 'levelDownTransition' setting has a value and the current level is greater than the desired level
-        else if (((settings.levelDownTransition ?: 0) as Integer) > 0 && currentLevel > desiredLevel) {
-            // Set the rate to the value of the 'levelDownTransition' setting converted to Integer
-            rate = settings.levelDownTransition.toInteger()
-        }
-    }
-    logDebug "using level transition rate ${rate}"
-    return rate
-}
-
-// Command option that enable changes when off
-@Field static final String PRE_STAGING_OPTION = '01 01'
-
-/**
- * Constrain a value to a range
- * @param value value to constrain
- * @param min minimum value (default 0)
- * @param max maximum value (default 100)
- * @param nullValue value to return if value is null (default 0)
- */
-private static BigDecimal constrain(final BigDecimal value, final BigDecimal min = 0, final BigDecimal max = 100, final BigDecimal nullValue = 0) {
-    if (min == null || max == null) {
-        return value
-    }
-    return value != null ? max.min(value.max(min)) : nullValue
-}
-
-/**
- * Constrain a value to a range
- * @param value value to constrain
- * @param min minimum value (default 0)
- * @param max maximum value (default 100)
- * @param nullValue value to return if value is null (default 0)
- */
-private static Integer constrain(final Object value, final Integer min = 0, final Integer max = 100, final Integer nullValue = 0) {
-    if (min == null || max == null) {
-        return value as Integer
-    }
-    return value != null ? Math.min(Math.max(value as Integer, min) as Integer, max) : nullValue
-}
-
-// Delay before reading attribute (when using polling)
-@Field static final int POLL_DELAY_MS = 1000
-
-/**
- * If the device is polling, delay the execution of the provided commands
- * @param delayMs delay in milliseconds
- * @param commands commands to execute
- * @return list of commands to be sent to the device
- */
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private List<String> ifPolling(final int delayMs = 0, final Closure commands) {
-    if (state.reportingEnabled == false) {
-        final int value = Math.max(delayMs, POLL_DELAY_MS)
-        return ["delay ${value}"] + (commands() as List<String>) as List<String>
-    }
-    return []
-}
-
-def intTo16bitUnsignedHex(int value) {
+String intTo16bitUnsignedHex(int value) {
     String hexStr = zigbee.convertToHexString(value.toInteger(), 4)
     return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
 }
 
-def intTo8bitUnsignedHex(int value) {
+String intTo8bitUnsignedHex(int value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
-/**
- * Send 'switchLevel' attribute event
- * @param isOn true if light is on, false otherwise
- * @param level brightness level (0-254)
- */
-/* groovylint-disable-next-line UnusedPrivateMethodParameter */
-private List<String> setLevelPrivate(final Object value, final Integer rate = 0, final Integer delay = 0, final Boolean levelPreset = false) {
-    List<String> cmds = []
-    final Integer level = constrain(value)
-    //final String hexLevel = DataType.pack(Math.round(level * 2.54).intValue(), DataType.UINT8)
-    //final String hexRate = DataType.pack(rate, DataType.UINT16, true)
-    //final int levelCommand = levelPreset ? 0x00 : 0x04
-    if (device.currentValue('switch') == 'off' && level > 0 && levelPreset == false) {
-        // If light is off, first go to level 0 then to desired level
-        cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x00, [destEndpoint:safeToInt(getDestinationEP())], delay, "00 0000 ${PRE_STAGING_OPTION}")
-    }
-    // Payload: Level | Transition Time | Options Mask | Options Override
-    // Options: Bit 0x01 enables pre-staging level
-    /*
-    cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, levelCommand, [destEndpoint:safeToInt(getDestinationEP())], delay, "${hexLevel} ${hexRate} ${PRE_STAGING_OPTION}") +
-        ifPolling(DELAY_MS + (rate * 100)) { zigbee.levelRefresh(0) }
-    */
-    int duration = 10            // TODO !!!
-    String endpointId = '01'     // TODO !!!
-    cmds +=  ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0x0008 4 { 0x${intTo8bitUnsignedHex(level)} 0x${intTo16bitUnsignedHex(duration)} }",]
 
-    return cmds
-}
-
-/**
- * Set Level Command
- * @param value level percent (0-100)
- * @param transitionTime transition time in seconds
- * @return List of zigbee commands
- */
-void setLevel(final Object value, final Object transitionTime = null) {
-    logInfo "setLevel (${value}, ${transitionTime})"
-    if (this.respondsTo('customSetLevel')) {
-        customSetLevel(value, transitionTime)
-        return
-    }
-    if (DEVICE_TYPE in  ['Bulb']) { setLevelBulb(value, transitionTime); return }
-    final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
-    scheduleCommandTimeoutCheck()
-    sendZigbeeCommands(setLevelPrivate(value, rate))
-}
 
 /*
  * -----------------------------------------------------------------------------
@@ -2108,7 +1743,8 @@ void refresh() {
 
     // device type specific refresh handlers
     if (this.respondsTo('customRefresh')) {
-        cmds += customRefresh()
+        List<String> customCmds = customRefresh()
+        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
@@ -2119,9 +1755,6 @@ void refresh() {
         }
         if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
-            cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
-        }
-        if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
         }
         if (DEVICE_TYPE in  ['THSensor']) {
@@ -2572,7 +2205,9 @@ void resetStats() {
     state.lastRx = [:]
     state.lastTx = [:]
     state.health = [:]
-    state.zigbeeGroups = [:]
+    if (this.respondsTo('groupsLibVersion')) {
+        state.zigbeeGroups = [:]
+    }
     state.stats['rxCtr'] = 0
     state.stats['txCtr'] = 0
     state.states['isDigital'] = false
@@ -2604,7 +2239,6 @@ void initializeVars( boolean fullInit = false ) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.health == null) { state.health = [:] }
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', false) }
@@ -2616,16 +2250,7 @@ void initializeVars( boolean fullInit = false ) {
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
-    /*
-    if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
-        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
-    }
-    if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
-        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
-    }
-    */
+
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
