@@ -55,6 +55,7 @@ metadata {
         capability 'Configuration'
         capability 'Refresh'
         capability 'Health Check'
+        capability 'Actuator'
         capability 'Switch'    // IKEA remote control E1810 - central button
         capability 'Battery'
         capability 'SwitchLevel'

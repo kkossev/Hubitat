@@ -50,7 +50,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/06 9:20 PM' }
+String commonLibStamp() { '2024/04/06 10:44 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -88,34 +88,20 @@ metadata {
         // common commands for all device types
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
-        // deviceType specific capabilities, commands and attributes
-        if (deviceType in ['Device']) {
-            if (_DEBUG) {
-                command 'getAllProperties',       [[name: 'Get All Properties']]
-            }
-        }
-        /*
-        if (_DEBUG || (deviceType in ['Dimmer', 'Switch', 'Valve'])) {
-            command 'zigbeeGroups', [
-                [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
-            ]
-        }
-        */
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor']) {
+        if (deviceType in  ['THSensor', 'MotionSensor']) {
             capability 'Sensor'
         }
-        if (deviceType in  ['Device', 'MotionSensor']) {
+        if (deviceType in  ['MotionSensor']) {
             capability 'MotionSensor'
         }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'Thermostat']) {
+        if (deviceType in  ['THSensor', 'MotionSensor', 'Thermostat']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
         }
-        if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Switch', 'Dimmer', 'Bulb']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
@@ -124,13 +110,10 @@ metadata {
         if (deviceType in ['Dimmer', 'Bulb']) {
             capability 'SwitchLevel'
         }
-        if (deviceType in  ['Device']) {
-            capability 'Momentary'
-        }
-        if (deviceType in  ['Device', 'THSensor']) {
+        if (deviceType in  ['THSensor']) {
             capability 'TemperatureMeasurement'
         }
-        if (deviceType in  ['Device', 'THSensor']) {
+        if (deviceType in  ['THSensor']) {
             capability 'RelativeHumidityMeasurement'
         }
 
@@ -630,18 +613,8 @@ void parseDefaultCommandResponse(final Map descMap) {
     0x16: 'Discover Attributes Extended Response'
 ]
 
-/*
- * -----------------------------------------------------------------------------
- * Xiaomi cluster 0xFCC0 parser.
- * -----------------------------------------------------------------------------
- */
 void parseXiaomiCluster(final Map descMap) {
-    if (xiaomiLibVersion() != null) {
-        parseXiaomiClusterLib(descMap)
-    }
-    else {
-        logWarn 'Xiaomi cluster 0xFCC0'
-    }
+    if (xiaomiLibVersion() != null) { parseXiaomiClusterLib(descMap) } else { logWarn 'Xiaomi cluster 0xFCC0' }
 }
 
 @Field static final int ROLLING_AVERAGE_N = 10
@@ -841,42 +814,15 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     sendEvent(map)
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Identity Cluster 0x0003
- * -----------------------------------------------------------------------------
-*/
 /* groovylint-disable-next-line UnusedMethodParameter */
-void parseIdentityCluster(final Map descMap) {
-    logDebug 'unprocessed parseIdentityCluster'
-}
+void parseIdentityCluster(final Map descMap) { logDebug 'unprocessed parseIdentityCluster' }
 
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Scenes Cluster 0x005
- * -----------------------------------------------------------------------------
-*/
 void parseScenesCluster(final Map descMap) {
-    if (this.respondsTo('customParseScenesCluster')) {
-        customParseScenesCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}"
-    }
+    if (this.respondsTo('customParseScenesCluster')) { customParseScenesCluster(descMap) } else { logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts
- * -----------------------------------------------------------------------------
-*/
 void parseGroupsCluster(final Map descMap) {
-    if (this.respondsTo('customParseGroupsCluster')) {
-        customParseGroupsCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed GroupsCluster attribute ${descMap.attrId}"
-    }
+    if (this.respondsTo('customParseGroupsCluster')) { customParseGroupsCluster(descMap) } else { logWarn "unprocessed GroupsCluster attribute ${descMap.attrId}" }
 }
 
 /*
@@ -1236,11 +1182,6 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Level Control Cluster            0x0008
- * -----------------------------------------------------------------------------
-*/
 void parseLevelControlCluster(final Map descMap) {
     if (this.respondsTo('customParseLevelControlCluster')) {
         customParseLevelControlCluster(descMap)
@@ -1262,13 +1203,6 @@ String intTo8bitUnsignedHex(int value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
-
-
-/*
- * -----------------------------------------------------------------------------
- * Color Control Cluster            0x0300
- * -----------------------------------------------------------------------------
-*/
 void parseColorControlCluster(final Map descMap, String description) {
     if (DEVICE_TYPE in ['Bulb']) {
         parseColorControlClusterBulb(descMap, description)
@@ -1283,18 +1217,8 @@ void parseColorControlCluster(final Map descMap, String description) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Illuminance    cluster 0x0400
- * -----------------------------------------------------------------------------
-*/
 void parseIlluminanceCluster(final Map descMap) {
-    if (this.respondsTo('customParseIlluminanceCluster')) {
-        customParseIlluminanceCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed Illuminance attribute ${descMap.attrId}"
-    }
+    if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) } else { logWarn "unprocessed Illuminance attribute ${descMap.attrId}" }
 }
 
 /*
@@ -1406,34 +1330,17 @@ private void sendDelayedHumidityEvent(Map eventMap) {
     sendEvent(eventMap)
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Electrical Measurement Cluster 0x0702
- * -----------------------------------------------------------------------------
-*/
-
+// Electrical Measurement Cluster 0x0702
 void parseElectricalMeasureCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) {
-        logWarn 'parseElectricalMeasureCluster is NOT implemented1'
-    }
+    if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) { logWarn 'parseElectricalMeasureCluster is NOT implemented1' }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Metering Cluster 0x0B04
- * -----------------------------------------------------------------------------
-*/
+// Metering Cluster 0x0B04
 void parseMeteringCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseMeteringCluster', descMap)) {
-        logWarn 'parseMeteringCluster is NOT implemented1'
-    }
+    if (!executeCustomHandler('customParseMeteringCluster', descMap)) { logWarn 'parseMeteringCluster is NOT implemented1' }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * pm2.5
- * -----------------------------------------------------------------------------
-*/
+// pm2.5
 void parsePm25Cluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
@@ -1447,11 +1354,7 @@ void parsePm25Cluster(final Map descMap) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Analog Input Cluster 0x000C
- * -----------------------------------------------------------------------------
-*/
+// Analog Input Cluster 0x000C
 void parseAnalogInputCluster(final Map descMap, String description=null) {
     if (this.respondsTo('customParseAnalogInputCluster')) {
         customParseAnalogInputCluster(descMap)
@@ -1467,75 +1370,31 @@ void parseAnalogInputCluster(final Map descMap, String description=null) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Multistate Input Cluster 0x0012
- * -----------------------------------------------------------------------------
-*/
+// Multistate Input Cluster 0x0012
 void parseMultistateInputCluster(final Map descMap) {
-    if (this.respondsTo('customParseMultistateInputCluster')) {
-        customParseMultistateInputCluster(descMap)
-    }
-    else {
-        logWarn "parseMultistateInputCluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseMultistateInputCluster')) { customParseMultistateInputCluster(descMap) } else { logWarn "parseMultistateInputCluster: don't know how to handle descMap=${descMap}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Window Covering Cluster 0x0102
- * -----------------------------------------------------------------------------
-*/
+// Window Covering Cluster 0x0102
 void parseWindowCoveringCluster(final Map descMap) {
-    if (this.respondsTo('customParseWindowCoveringCluster')) {
-        customParseWindowCoveringCluster(descMap)
-    }
-    else {
-        logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseWindowCoveringCluster')) { customParseWindowCoveringCluster(descMap) } else { logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * thermostat cluster 0x0201
- * -----------------------------------------------------------------------------
-*/
+// thermostat cluster 0x0201
 void parseThermostatCluster(final Map descMap) {
-    if (this.respondsTo('customParseThermostatCluster')) {
-        customParseThermostatCluster(descMap)
-    }
-    else {
-        logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseThermostatCluster')) { customParseThermostatCluster(descMap) } else { logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}" }
 }
-
-// -------------------------------------------------------------------------------------------------------------------------
 
 void parseFC11Cluster(final Map descMap) {
-    if (this.respondsTo('customParseFC11Cluster')) {
-        customParseFC11Cluster(descMap)
-    }
-    else {
-        logWarn "parseFC11Cluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseFC11Cluster')) { customParseFC11Cluster(descMap) } else { logWarn "parseFC11Cluster: don't know how to handle descMap=${descMap}" }
 }
 
 void parseE002Cluster(final Map descMap) {
-    if (this.respondsTo('customParseE002Cluster')) {
-        customParseE002Cluster(descMap)
-    }
-    else {
-        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
-    }
+    if (this.respondsTo('customParseE002Cluster')) { customParseE002Cluster(descMap) } else { logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }    // radars
 }
 
 void parseEC03Cluster(final Map descMap) {
-    if (this.respondsTo('customParseEC03Cluster')) {
-        customParseEC03Cluster(descMap)
-    }
-    else {
-        logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
-    }
+    if (this.respondsTo('customParseEC03Cluster')) { customParseEC03Cluster(descMap) } else { logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }   // radars
 }
 
 /*
@@ -1771,10 +1630,8 @@ void refresh() {
     }
 }
 
-/* groovylint-disable-next-line SpaceAfterClosingBrace */
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] }; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
-/* groovylint-disable-next-line SpaceAfterClosingBrace */
-void clearRefreshRequest() { if (state.states == null) { state.states = [:] }; state.states['isRefresh'] = false }
+void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
+void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 
 void clearInfoEvent() {
     sendInfoEvent('clear')
@@ -1793,25 +1650,18 @@ void sendInfoEvent(String info=null) {
 }
 
 void ping() {
-    if (isAqaraTVOC_OLD()) {
-        // Aqara TVOC is sleepy or does not respond to the ping.
-        logInfo 'ping() command is not available for this sleepy device.'
-        sendRttEvent('n/a')
+    if (state.lastTx == null ) { state.lastTx = [:] }
+    state.lastTx['pingTime'] = new Date().getTime()
+    //if (state.states == null ) { state.states = [:] }
+    state.states['isPing'] = true
+    scheduleCommandTimeoutCheck()
+    if (isVirtual()) {
+        runInMillis(10, virtualPong)
     }
     else {
-        if (state.lastTx == null ) { state.lastTx = [:] }
-        state.lastTx['pingTime'] = new Date().getTime()
-        //if (state.states == null ) { state.states = [:] }
-        state.states['isPing'] = true
-        scheduleCommandTimeoutCheck()
-        if (isVirtual()) {
-            runInMillis(10, virtualPong)
-        }
-        else {
-            sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
-        }
-        logDebug 'ping...'
+        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
     }
+    logDebug 'ping...'
 }
 
 def virtualPong() {
@@ -2289,7 +2139,7 @@ void setDestinationEP() {
     }
 }
 
-void  logDebug(final String msg) {
+void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
     }

@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitReturnStatement, LineLength, PublicMethodsBeforeNonPublicMethods, UnnecessaryGetter */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',

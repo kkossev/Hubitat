@@ -30,14 +30,7 @@ library(
 static String buttonLibVersion()   { '3.0.0' }
 static String buttonLibStamp() { '2024/04/06 1:02 PM' }
 
-//import groovy.json.*
-//import groovy.transform.Field
-//import hubitat.zigbee.clusters.iaszone.ZoneStatus
-//import hubitat.zigbee.zcl.DataType
-//import java.util.concurrent.ConcurrentHashMap
-
-//import groovy.transform.CompileStatic
-
+/*
 metadata {
     // no capabilities
     // no attributes
@@ -46,6 +39,7 @@ metadata {
         // no prefrences
     }
 }
+*/
 
 void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=false) {
     if (buttonState != 'unknown' && buttonNumber != 0) {
@@ -88,6 +82,7 @@ void sendNumberOfButtonsEvent(int numberOfButtons) {
     sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true, type: 'digital')
 }
 
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void sendSupportedButtonValuesEvent(supportedValues) {
     sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true, type: 'digital')
 }

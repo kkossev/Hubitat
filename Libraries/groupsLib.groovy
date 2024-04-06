@@ -52,8 +52,6 @@ metadata {
     options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
 
-
-
 /*
  * -----------------------------------------------------------------------------
  * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts
@@ -152,7 +150,7 @@ void customParseGroupsCluster(final Map descMap) {
     }
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<String> addGroupMembership(groupNr) {
     List<String> cmds = []
     final Integer group = safeToInt(groupNr)
@@ -166,7 +164,7 @@ List<String> addGroupMembership(groupNr) {
     return cmds
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<String> viewGroupMembership(groupNr) {
     List<String> cmds = []
     final Integer group = safeToInt(groupNr)
@@ -176,7 +174,7 @@ List<String> viewGroupMembership(groupNr) {
     return cmds
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedMethodParameter */
 List<String> getGroupMembership(dummy) {
     List<String> cmds = []
     cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')
@@ -184,7 +182,7 @@ List<String> getGroupMembership(dummy) {
     return cmds
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<String> removeGroupMembership(groupNr) {
     List<String> cmds = []
     final Integer group = safeToInt(groupNr)
@@ -198,7 +196,7 @@ List<String> removeGroupMembership(groupNr) {
     return cmds
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 List<String> removeAllGroups(groupNr) {
     List<String> cmds = []
     final Integer group = safeToInt(groupNr)
@@ -208,7 +206,7 @@ List<String> removeAllGroups(groupNr) {
     return cmds
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedMethodParameter */
 List<String> notImplementedGroups(groupNr) {
     List<String> cmds = []
     //final Integer group = safeToInt(groupNr)
@@ -227,13 +225,13 @@ List<String> notImplementedGroups(groupNr) {
     'Add group if identifying' : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
 ]
 
-/* groovylint-disable-next-line MethodParameterTypeRequired */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef */
 void zigbeeGroups(final String command=null, par=null) {
     logInfo "executing command \'${command}\', parameter ${par}"
     List<String> cmds = []
     if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
     if (state.zigbeeGroups['groups'] == null) { state.zigbeeGroups['groups'] = [] }
-    /* groovylint-disable-next-line VariableTypeRequired */
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def value
     Boolean validated = false
     if (command == null || !(command in (GroupCommandsMap.keySet() as List))) {
@@ -247,7 +245,7 @@ void zigbeeGroups(final String command=null, par=null) {
         return
     }
     //
-    /* groovylint-disable-next-line VariableTypeRequired */
+    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
     def func
     try {
         func = GroupCommandsMap[command]?.function
@@ -264,7 +262,7 @@ void zigbeeGroups(final String command=null, par=null) {
     sendZigbeeCommands(cmds)
 }
 
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
+/* groovylint-disable-next-line MethodParameterTypeRequired, NoDef, UnusedMethodParameter */
 void groupCommandsHelp(val) {
     logWarn 'GroupCommands: select one of the commands in this list!'
 }
