@@ -24,7 +24,7 @@ library(
  *
  * ver. 1.0.0  2023-09-09 kkossev  - added xiaomiLib
  * ver. 1.0.1  2023-11-07 kkossev  - (dev. branch)
- * ver. 1.0.2  2024-04-01 kkossev  - (dev. branch) Groovy linting 
+ * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) Groovy linting; aqaraCube specific code;
  *
  *                                   TODO: remove the isAqaraXXX  dependencies !!
 */
@@ -32,7 +32,10 @@ library(
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String xiaomiLibVersion()   { '1.0.2' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String xiaomiLibStamp() { '2024/04/01 8:51 AM' }
+static String xiaomiLibStamp() { '2024/04/06 12:14 PM' }
+
+boolean isAqaraTVOC()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
+boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
 
 // no metadata for this library!
 
@@ -134,7 +137,7 @@ void parseXiaomiClusterLib(final Map descMap) {
             final Map<Integer, Integer> tags = decodeXiaomiTags(descMap.value)
             parseXiaomiClusterTags(tags)
             if (isAqaraCube()) {
-                sendZigbeeCommands(refreshAqaraCube())
+                sendZigbeeCommands(customRefresh())
             }
             break
         case XIAOMI_RAW_ATTR_ID:        // 0xFFF2 FP1

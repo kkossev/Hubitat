@@ -35,7 +35,7 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency;
+  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: add custom* handlers for the new drivers!
@@ -102,7 +102,7 @@ metadata {
                 [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
             ]
         }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'AqaraCube']) {
+        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor']) {
             capability 'Sensor'
         }
         if (deviceType in  ['Device', 'MotionSensor']) {
@@ -111,7 +111,7 @@ metadata {
         if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
             capability 'Actuator'
         }
-        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'AqaraCube']) {
+        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat']) {
             capability 'Battery'
             attribute 'batteryVoltage', 'number'
         }
@@ -123,12 +123,6 @@ metadata {
         }
         if (deviceType in ['Dimmer', 'Bulb']) {
             capability 'SwitchLevel'
-        }
-        if (deviceType in  ['AqaraCube']) {
-            capability 'PushableButton'
-            capability 'DoubleTapableButton'
-            capability 'HoldableButton'
-            capability 'ReleasableButton'
         }
         if (deviceType in  ['Device']) {
             capability 'Momentary'
@@ -152,7 +146,7 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) ) {
+            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement'))) {
                 input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
                 if (deviceType != 'mmWaveSensor') {
                     input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
@@ -234,7 +228,7 @@ boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.
 boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
-boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
+//boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
 //boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
 /**
@@ -1461,52 +1455,6 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=false) {
-    if (buttonState != 'unknown' && buttonNumber != 0) {
-        String descriptionText = "button $buttonNumber was $buttonState"
-        if (isDigital) { descriptionText += ' [digital]' }
-        Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
-        logInfo "$descriptionText"
-        sendEvent(event)
-    }
-    else {
-        logWarn "sendButtonEvent: UNHANDLED event for button ${buttonNumber}, buttonState=${buttonState}"
-    }
-}
-
-void push() {                // Momentary capability
-    logDebug 'push momentary'
-    if (this.respondsTo('customPush')) { customPush(); return }
-    logWarn "push() not implemented for ${(DEVICE_TYPE)}"
-}
-
-void push(BigDecimal buttonNumber) {    //pushableButton capability
-    logDebug "push button $buttonNumber"
-    if (this.respondsTo('customPush')) { customPush(buttonNumber); return }
-    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true)
-}
-
-void doubleTap(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'doubleTapped', isDigital = true)
-}
-
-void hold(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'held', isDigital = true)
-}
-
-void release(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'released', isDigital = true)
-}
-
-void sendNumberOfButtonsEvent(int numberOfButtons) {
-    sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true, type: 'digital')
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-void sendSupportedButtonValuesEvent(supportedValues) {
-    sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true, type: 'digital')
-}
-
 /*
  * -----------------------------------------------------------------------------
  * Level Control Cluster            0x0008
@@ -1923,12 +1871,9 @@ void parseAnalogInputCluster(final Map descMap, String description=null) {
     }
     else if (this.respondsTo('customParseAnalogInputClusterDescription')) {
         customParseAnalogInputClusterDescription(description)                   // ZigUSB
-    }   
+    }
     else if (DEVICE_TYPE in ['AirQuality']) {
         parseAirQualityIndexCluster(descMap)
-    }
-    else if (DEVICE_TYPE in ['AqaraCube']) {
-        parseAqaraCubeAnalogInputCluster(descMap)
     }
     else {
         logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}"
@@ -1940,28 +1885,13 @@ void parseAnalogInputCluster(final Map descMap, String description=null) {
  * Multistate Input Cluster 0x0012
  * -----------------------------------------------------------------------------
 */
-
 void parseMultistateInputCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToUnsignedInt(descMap.value)
-    //Float floatValue = Float.intBitsToFloat(value.intValue())
-    if (DEVICE_TYPE in  ['AqaraCube']) {
-        parseMultistateInputClusterAqaraCube(descMap)
+    if (this.respondsTo('customParseMultistateInputCluster')) {
+        customParseMultistateInputCluster(descMap)
     }
     else {
-        handleMultistateInputEvent(value as int)
+        logWarn "parseMultistateInputCluster: don't know how to handle descMap=${descMap}"
     }
-}
-
-void handleMultistateInputEvent(int value, boolean isDigital=false) {
-    Map eventMap = [:]
-    eventMap.value = value
-    eventMap.name = 'multistateInput'
-    eventMap.unit = ''
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    sendEvent(eventMap)
-    logInfo "${eventMap.descriptionText}"
 }
 
 /*
@@ -1969,7 +1899,6 @@ void handleMultistateInputEvent(int value, boolean isDigital=false) {
  * Window Covering Cluster 0x0102
  * -----------------------------------------------------------------------------
 */
-
 void parseWindowCoveringCluster(final Map descMap) {
     if (this.respondsTo('customParseWindowCoveringCluster')) {
         customParseWindowCoveringCluster(descMap)
@@ -2208,7 +2137,6 @@ List<String> configureDevice() {
         List<String> customCmds = customConfigureDevice()
         if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
-    else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     return cmds
@@ -2230,7 +2158,6 @@ void refresh() {
     if (this.respondsTo('customRefresh')) {
         cmds += customRefresh()
     }
-    else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += refreshAqaraCube() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
         // generic refresh handling, based on teh device capabilities
@@ -2572,7 +2499,7 @@ void installed() {
 }
 
 /**
- * Invoked when initialize button is clicked
+ * Invoked when the initialize button is clicked
  */
 void initialize() {
     logInfo 'initialize...'
@@ -2749,7 +2676,6 @@ void initializeVars( boolean fullInit = false ) {
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
-    if (DEVICE_TYPE in ['AqaraCube'])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
     if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
     final String mm = device.getDataValue('model')
