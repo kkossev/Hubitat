@@ -70,7 +70,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
       "id": 171,
       "codeType": "library",
-      "version": 4
+      "version": 5
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/temperatureLib.groovy",

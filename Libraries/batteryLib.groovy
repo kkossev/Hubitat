@@ -7,7 +7,7 @@ library(
     name: 'batteryLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy',
-    version: '3.0.0',
+    version: '3.0.1',
     documentationLink: ''
 )
 /*
@@ -23,12 +23,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy
+ * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
  *
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.0.0' }
-static String batteryLibStamp() { '2024/04/06 11:49 PM' }
+static String batteryLibVersion()   { '3.0.1' }
+static String batteryLibStamp() { '2024/04/06 9:33 AM' }
 
 metadata {
     capability 'Battery'
@@ -47,13 +48,6 @@ void customParsePowerCluster(final Map descMap) {
         state.lastRx['batteryTime'] = new Date().getTime()
         state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
     }
-    if (this.respondsTo('customParsePowerCluster')) {
-        customParsePowerCluster(descMap)
-    }
-    else {
-        logDebug "zigbee received Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
-    }
-
     final int rawValue = hexStrToUnsignedInt(descMap.value)
     if (descMap.attrId == '0020') {
         sendBatteryVoltageEvent(rawValue)
