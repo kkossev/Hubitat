@@ -60,6 +60,7 @@
  *  ver. 1.9.0 2024-01-18 kkossev - Groovy Linting; added TS0601 _TZE204_81yrt3lo Bidirectional energy meter with 80A current clamp (PJ-1203A); added TS0601 _TZE200_rks0sgb7 (one channel only!)
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
  *  ver. 1.9.2 2024-03-30 kkossev - more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
+ *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -83,8 +84,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.2' }
-static String timeStamp() { '2024/03/30 10:53 AM' }
+static String version() { '1.9.3' }
+static String timeStamp() { '2024/04/07 8:37 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -184,7 +185,6 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_x3ewpzyr', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_mkhkxx1p', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/499?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0003,0004,0005,0006,0702,0B04,E000,E001,0000', outClusters:'0019,000A', model:'TS0001', manufacturer:'_TZ3000_tgddllx4', deviceJoinName: 'Tuya Switch Module w/ Measurements'    // not tested
-        
 
         // NOT WORKING WITH HE !
         /*
@@ -2574,7 +2574,8 @@ List<String> configureReporting(String operation, String measurement,  String mi
     }
 }
 
-void setEnergyPrice(String price) {
+/* groovylint-disable-next-line NoDef */
+void setEnergyPrice(/*String*/ price) {
     if (price != null) {
         double priceDouble = safeToDouble(price).round(6)
         if (priceDouble >= 0.001) {
