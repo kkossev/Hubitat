@@ -16,6 +16,7 @@
  * ver. 2.0.1  2023-05-27 kkossev  - Aqara TVOC Air Monitor driver first version
  * ver. 3.0.0  2023-12-03 kkossev  - transfer kkossev.airQualityLib into the refactored driver
  * ver. 3.0.5  2024-03-05 kkossev  - (dev. branch) commonLib 3.0.5 check; Groovy lint;
+ * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
  *
  *                                   TODO: move autoPoll() from the commonLib here ?
  *                                   TODO: code cleanup
@@ -23,14 +24,15 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.0.5' }
+static String version() { '3.0.6' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/03/05 9:53 PM' }
+static String timeStamp() { '2024/04/05 11:55 PM' }
 
 @Field static final boolean _DEBUG = false
 
 #include kkossev.commonLib
 #include kkossev.xiaomiLib
+#include kkossev.batteryLib
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction

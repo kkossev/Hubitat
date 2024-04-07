@@ -18,13 +18,13 @@
  *
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
- * ver. 3.0.6  2023-07-16 kkossev  - (dev. branch) library 3.0.6 all
+ * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
  *
  *                                   TODO: 
  */
 
 static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/06 1:13 PM"}
+static String timeStamp() {"2024/04/06 11:55 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -42,6 +42,7 @@ deviceType = "AqaraCube"
 #include kkossev.commonLib
 #include kkossev.xiaomiLib
 #include kkossev.buttonLib
+#include kkossev.batteryLib
 
 metadata {
     definition (

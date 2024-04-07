@@ -22,14 +22,15 @@
  * ver. 2.1.3  2023-08-28 kkossev  - Added Momentary capability for Fingerbot in the main code; direction preference initialization bug fix; voltageToPercent (battery %) is enabled by default; fingerbot button enable/disable;
  * ver. 2.1.4  2023-08-28 kkossev  - Added capability PushableButton for Fingerbot; sendTuyCommand independent from the particular Fingerboot fingerprint;
  *             2023-09-13 kkossev  - Added _TZ3210_j4pdtz9v Moes Zigbee Fingerbot
- * ver. 3.0.4  2024-03-29 kkossev  - (dev. branch) Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
+ * ver. 3.0.4  2024-03-29 kkossev  - Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
  *                                   push() toggles on/off;
+ * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
  *
  *                                   TODO:
  */
 
-static String version() { '3.0.4' }
-static String timeStamp() { '2024/03/29 11:50 PM' }
+static String version() { '3.0.6' }
+static String timeStamp() { '2024/04/06 11:55 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -42,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
+#include kkossev.batteryLib
 
 deviceType = 'Fingerbot'
 @Field static final String DEVICE_TYPE = 'Fingerbot'
@@ -106,7 +108,7 @@ void customPush() {
     logDebug "customPush() currentState=${currentState} fingerbotMode = ${FingerbotModeOpts.options[settings?.fingerbotMode as int]} (${settings?.fingerbotMode as int})"
     if ((settings?.fingerbotMode as int) == 0) { // push
         customOn()
-    } 
+    }
     else { // switch
         if (currentState == 'on') {
             customOff()
@@ -140,7 +142,6 @@ void autoOff() {
     sendEvent(name: 'switch', value: 'off', descriptionText: descriptionText, type: 'digital', isStateChange: true)
     logInfo "${descriptionText}"
 }
-
 
 void customOff() {
     List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
@@ -179,7 +180,6 @@ void customOn() {
     runInMillis(DIGITAL_TIMER, clearIsDigital, [overwrite: true])
     sendZigbeeCommands(cmds)
 }
-
 
 List<String> customConfigureDevice() {
     List<String> cmds = []

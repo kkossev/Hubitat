@@ -25,7 +25,7 @@
  */
 
 static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/05 9:32 PM"}
+static String timeStamp() {"2024/04/05 11:56 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -41,6 +41,7 @@ import groovy.json.JsonOutput
 #include kkossev.buttonLib
 #include kkossev.groupsLib
 #include kkossev.levelLib
+#include kkossev.batteryLib
 
 deviceType = "ButtonDimmer"
 @Field static final String DEVICE_TYPE = "ButtonDimmer"

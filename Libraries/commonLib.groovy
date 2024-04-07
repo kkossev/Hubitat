@@ -35,22 +35,17 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups code to dedicated lib; moved level methids to dedicated lib + setLevel bug fix;
+  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
-  *                                   TODO: add custom* handlers for the new drivers!
-  *                                   TODO: remove the automatic capabilities selectionm for the new drivers!
-  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
-  *                                   TODO: battery voltage low/high limits configuration
-  *                                   TODO: add GetInof (endpoints list) command
-  *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
+  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
+  *                                   TODO: add GetInfo (endpoints list) command
   *                                   TODO: disableDefaultResponse for Tuya commands
-  *                                   TODO: ping() for a virtual device (runIn 1 milissecond a callback nethod)
- *
+  *
 */
 
 String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/06 10:44 PM' }
+String commonLibStamp() { '2024/04/06 11:55 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -88,33 +83,11 @@ metadata {
         // common commands for all device types
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
-        if (deviceType in  ['THSensor', 'MotionSensor']) {
-            capability 'Sensor'
-        }
-        if (deviceType in  ['MotionSensor']) {
-            capability 'MotionSensor'
-        }
-        if (deviceType in  ['Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
-            capability 'Actuator'
-        }
-        if (deviceType in  ['THSensor', 'MotionSensor', 'Thermostat']) {
-            capability 'Battery'
-            attribute 'batteryVoltage', 'number'
-        }
         if (deviceType in  ['Switch', 'Dimmer', 'Bulb']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
             }
-        }
-        if (deviceType in ['Dimmer', 'Bulb']) {
-            capability 'SwitchLevel'
-        }
-        if (deviceType in  ['THSensor']) {
-            capability 'TemperatureMeasurement'
-        }
-        if (deviceType in  ['THSensor']) {
-            capability 'RelativeHumidityMeasurement'
         }
 
         // trap for Hubitat F2 bug
@@ -126,19 +99,10 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') /*|| device.hasCapability('IlluminanceMeasurement')*/)) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-                }
-            }
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-                if (device.hasCapability('Battery')) {
-                    input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
-                }
                 if ((deviceType in  ['Switch', 'Plug', 'Dimmer', 'Fingerbot']) && _THREE_STATE == true) {
                     input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
                 }
@@ -710,108 +674,19 @@ void parseBasicCluster(final Map descMap) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * power cluster            0x0001
- * -----------------------------------------------------------------------------
-*/
+// power cluster            0x0001
 void parsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     if (descMap.attrId in ['0020', '0021']) {
         state.lastRx['batteryTime'] = new Date().getTime()
         state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
     }
-
-    final int rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == '0020') {
-        sendBatteryVoltageEvent(rawValue)
-        if ((settings.voltageToPercent ?: false) == true) {
-            sendBatteryVoltageEvent(rawValue, convertToPercent = true)
-        }
-    }
-    else if (descMap.attrId == '0021') {
-        sendBatteryPercentageEvent(rawValue * 2)
+    if (this.respondsTo('customParsePowerCluster')) {
+        customParsePowerCluster(descMap)
     }
     else {
-        logWarn "zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logDebug "zigbee received Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
-}
-
-void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
-    Map result = [:]
-    BigDecimal volts = safeToBigDecimal(rawValue) / 10G
-    if (rawValue != 0 && rawValue != 255) {
-        BigDecimal minVolts = 2.2
-        BigDecimal maxVolts = 3.2
-        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts)
-        int roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0) { roundedPct = 1 }
-        if (roundedPct > 100) { roundedPct = 100 }
-        if (convertToPercent == true) {
-            result.value = Math.min(100, roundedPct)
-            result.name = 'battery'
-            result.unit  = '%'
-            result.descriptionText = "battery is ${roundedPct} %"
-        }
-        else {
-            result.value = volts
-            result.name = 'batteryVoltage'
-            result.unit  = 'V'
-            result.descriptionText = "battery is ${volts} Volts"
-        }
-        result.type = 'physical'
-        result.isStateChange = true
-        logInfo "${result.descriptionText}"
-        sendEvent(result)
-    }
-    else {
-        logWarn "ignoring BatteryResult(${rawValue})"
-    }
-}
-
-void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) {
-    if ((batteryPercent as int) == 255) {
-        logWarn "ignoring battery report raw=${batteryPercent}"
-        return
-    }
-    Map map = [:]
-    map.name = 'battery'
-    map.timeStamp = now()
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int)
-    map.unit  = '%'
-    map.type = isDigital ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    map.isStateChange = true
-    //
-    Object latestBatteryEvent = device.currentState('battery')
-    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now()
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}"
-    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
-        // send it now!
-        sendDelayedBatteryPercentageEvent(map)
-    }
-    else {
-        int delayedTime = (settings?.batteryDelay as int) - timeDiff
-        map.delayed = delayedTime
-        map.descriptionText += " [delayed ${map.delayed} seconds]"
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
-        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
-    }
-}
-
-private void sendDelayedBatteryPercentageEvent(Map map) {
-    logInfo "${map.descriptionText}"
-    //map.each {log.trace "$it"}
-    sendEvent(map)
-}
-
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedBatteryVoltageEvent(Map map) {
-    logInfo "${map.descriptionText}"
-    //map.each {log.trace "$it"}
-    sendEvent(map)
 }
 
 /* groovylint-disable-next-line UnusedMethodParameter */
@@ -1221,113 +1096,24 @@ void parseIlluminanceCluster(final Map descMap) {
     if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) } else { logWarn "unprocessed Illuminance attribute ${descMap.attrId}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * temperature
- * -----------------------------------------------------------------------------
-*/
+// Temperature Measurement Cluster 0x0402
 void parseTemperatureCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToSignedInt(descMap.value)
-    handleTemperatureEvent(value / 100.0F as BigDecimal)
-}
-
-void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
-    Map eventMap = [:]
-    BigDecimal temperature = safeToBigDecimal(temperaturePar)
-    if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    eventMap.name = 'temperature'
-    if (location.temperatureScale == 'F') {
-        temperature = (temperature * 1.8) + 32
-        eventMap.unit = '\u00B0F'
+    if (this.respondsTo('customParseTemperatureCluster')) {
+        customParseTemperatureCluster(descMap)
     }
     else {
-        eventMap.unit = '\u00B0C'
-    }
-    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0))
-    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
-    BigDecimal lastTemp = device.currentValue('temperature') ?: 0
-    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}"
-    if (Math.abs(lastTemp - tempCorrected) < 0.1) {
-        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})"
-        return
-    }
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    if (state.states['isRefresh'] == true) {
-        eventMap.descriptionText += ' [refresh]'
-        eventMap.isStateChange = true
-    }
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedTempEvent')        //get rid of stale queued reports
-        state.lastRx['tempTime'] = now()
-        sendEvent(eventMap)
-    }
-    else {         // queue the event
-        eventMap.type = 'delayed'
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap])
+        logWarn "unprocessed Temperature attribute ${descMap.attrId}"
     }
 }
 
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedTempEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-}
-
-/*
- * -----------------------------------------------------------------------------
- * humidity
- * -----------------------------------------------------------------------------
-*/
+// Humidity Measurement Cluster 0x0405
 void parseHumidityCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    handleHumidityEvent(value / 100.0F as BigDecimal)
-}
-
-void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
-    Map eventMap = [:]
-    BigDecimal humidity = safeToBigDecimal(humidityPar)
-    if (state.stats != null) { state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    humidity +=  safeToBigDecimal(settings?.humidityOffset ?: 0)
-    if (humidity <= 0.0 || humidity > 100.0) {
-        logWarn "ignored invalid humidity ${humidity} (${humidityPar})"
-        return
-    }
-    eventMap.value = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
-    eventMap.name = 'humidity'
-    eventMap.unit = '% RH'
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    //eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedHumidityEvent')
-        state.lastRx['humiTime'] = now()
-        sendEvent(eventMap)
+    if (this.respondsTo('customParseHumidityCluster')) {
+        customParseHumidityCluster(descMap)
     }
     else {
-        eventMap.type = 'delayed'
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap])
+        logWarn "unprocessed Humidity attribute ${descMap.attrId}"
     }
-}
-
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedHumidityEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
 }
 
 // Electrical Measurement Cluster 0x0702
@@ -1555,18 +1341,10 @@ void aqaraBlackMagic() {
 List<String> initializeDevice() {
     List<String> cmds = []
     logInfo 'initializeDevice...'
-
-    // start with the device-specific initialization first.
     if (this.respondsTo('customInitializeDevice')) {
         List<String> customCmds = customInitializeDevice()
         if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
-    // not specific device type - do some generic initializations
-    if (DEVICE_TYPE in  ['THSensor']) {
-        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
-        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
-    }
-    //
     return cmds
 }
 
@@ -1907,8 +1685,10 @@ List<String> configure() {
     if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()   // zigbee commands are sent here!
     }
-    cmds += initializeDevice()
-    cmds += configureDevice()
+    List<String> initCmds = initializeDevice()
+    if (initCmds != null && initCmds != [] ) { cmds += initCmds }
+    List<String> cfgCmds = configureDevice()
+    if (cfgCmds != null && cfgCmds != [] ) { cmds += cfgCmds }
     // commented out 12/15/2923 sendZigbeeCommands(cmds)
     sendInfoEvent('sent device configuration')
     logDebug "configure(): returning cmds = ${cmds}"
@@ -1917,7 +1697,7 @@ List<String> configure() {
         sendZigbeeCommands(cmds)
     }
     else {
-        logDebug "no configure() commands defined for device type ${DEVICE_TYPE}"
+        logDebug "configure(): no commands defined for device type ${DEVICE_TYPE}"
     }
 }
 

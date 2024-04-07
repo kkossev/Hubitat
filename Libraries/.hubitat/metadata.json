@@ -16,7 +16,7 @@
       "filepath": "/C:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 288
+      "version": 291
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/airQualityLib.groovy",
@@ -46,7 +46,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 287
+      "version": 289
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -65,6 +65,24 @@
       "id": 167,
       "codeType": "library",
       "version": 7
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
+      "id": 171,
+      "codeType": "library",
+      "version": 4
+    },
+    {
+      "filepath": "/C:/Work/Hubitat/Libraries/temperatureLib.groovy",
+      "id": 172,
+      "codeType": "library",
+      "version": 6
+    },
+    {
+      "filepath": "/C:/Work/Hubitat/Libraries/humidityLib.groovy",
+      "id": 173,
+      "codeType": "library",
+      "version": 6
     }
   ]
 }

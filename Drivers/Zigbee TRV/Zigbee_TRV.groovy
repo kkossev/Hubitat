@@ -26,6 +26,7 @@
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
+ * ver. 3.0.9  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.6 check;
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -71,9 +72,9 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.0.8' }
+static String version() { '3.0.9' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/04/02 7:26 AM' }
+static String timeStamp() { '2024/04/06 11:55 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -85,6 +86,8 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
+#include kkossev.batteryLib
+#include kkossev.temperatureLib
 #include kkossev.xiaomiLib
 #include kkossev.deviceProfileLib
 
