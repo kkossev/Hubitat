@@ -16,7 +16,7 @@
       "filepath": "/C:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 291
+      "version": 295
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/airQualityLib.groovy",
@@ -34,7 +34,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/energyLib.groovy",
       "id": 166,
       "codeType": "library",
-      "version": 7
+      "version": 8
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/buttonLib.groovy",
@@ -46,7 +46,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 289
+      "version": 297
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",

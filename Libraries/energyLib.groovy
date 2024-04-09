@@ -47,6 +47,20 @@ metadata {
     }
 }
 
+@Field static final int AC_CURRENT_DIVISOR_ID = 0x0603
+@Field static final int AC_CURRENT_MULTIPLIER_ID = 0x0602
+@Field static final int AC_FREQUENCY_ID = 0x0300
+@Field static final int AC_POWER_DIVISOR_ID = 0x0605
+@Field static final int AC_POWER_MULTIPLIER_ID = 0x0604
+@Field static final int AC_VOLTAGE_DIVISOR_ID = 0x0601
+@Field static final int AC_VOLTAGE_MULTIPLIER_ID = 0x0600
+@Field static final int ACTIVE_POWER_ID = 0x050B
+@Field static final int POWER_ON_OFF_ID = 0x0000
+@Field static final int POWER_RESTORE_ID = 0x4003
+@Field static final int RMS_CURRENT_ID = 0x0508
+@Field static final int RMS_VOLTAGE_ID = 0x0505
+
+
 void sendVoltageEvent(BigDecimal voltage, boolean isDigital=false) {
     Map map = [:]
     map.name = 'voltage'

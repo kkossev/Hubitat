@@ -28,6 +28,7 @@ library(
  *                                   TODO: battery voltage low/high limits configuration
 */
 
+
 static String batteryLibVersion()   { '3.0.1' }
 static String batteryLibStamp() { '2024/04/06 9:33 AM' }
 

@@ -35,7 +35,7 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
+  * ver. 3.0.6  2024-04-08 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
@@ -45,7 +45,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/06 11:55 PM' }
+String commonLibStamp() { '2024/04/08 10:51 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -496,21 +496,9 @@ void parseDefaultCommandResponse(final Map descMap) {
 }
 
 // Zigbee Attribute IDs
-@Field static final int AC_CURRENT_DIVISOR_ID = 0x0603
-@Field static final int AC_CURRENT_MULTIPLIER_ID = 0x0602
-@Field static final int AC_FREQUENCY_ID = 0x0300
-@Field static final int AC_POWER_DIVISOR_ID = 0x0605
-@Field static final int AC_POWER_MULTIPLIER_ID = 0x0604
-@Field static final int AC_VOLTAGE_DIVISOR_ID = 0x0601
-@Field static final int AC_VOLTAGE_MULTIPLIER_ID = 0x0600
-@Field static final int ACTIVE_POWER_ID = 0x050B
 @Field static final int ATTRIBUTE_READING_INFO_SET = 0x0000
 @Field static final int FIRMWARE_VERSION_ID = 0x4000
 @Field static final int PING_ATTR_ID = 0x01
-@Field static final int POWER_ON_OFF_ID = 0x0000
-@Field static final int POWER_RESTORE_ID = 0x4003
-@Field static final int RMS_CURRENT_ID = 0x0508
-@Field static final int RMS_VOLTAGE_ID = 0x0505
 
 @Field static final Map<Integer, String> ZigbeeStatusEnum = [
     0x00: 'Success',
@@ -1254,7 +1242,7 @@ void parseTuyaCluster(final Map descMap) {
 }
 
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    log.trace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+    logTrace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
     if (this.respondsTo(customProcessTuyaDp)) {
         logTrace 'customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -1883,6 +1871,7 @@ void initializeVars( boolean fullInit = false ) {
 
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
+    executeCustomHandler('customCreateChildDevices', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
     if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
@@ -1989,7 +1978,11 @@ void deleteAllScheduledJobs() {
 }
 
 void deleteAllChildDevices() {
-    logDebug 'deleteAllChildDevices : not implemented!'
+    getChildDevices().each { child ->
+        log.info "${device.displayName} Deleting ${child.deviceNetworkId}"
+        deleteChildDevice(child.deviceNetworkId)
+    }
+    sendInfoEvent 'All child devices DELETED'
 }
 
 void parseTest(String par) {
@@ -2114,7 +2107,7 @@ long formattedDate2unix(String formattedDate) {
         return now()
     }
 }
-
+/*
 void test(String par) {
     List<String> cmds = []
     log.warn "test... ${par}"
@@ -2124,3 +2117,4 @@ void test(String par) {
 
     sendZigbeeCommands(cmds)
 }
+*/
