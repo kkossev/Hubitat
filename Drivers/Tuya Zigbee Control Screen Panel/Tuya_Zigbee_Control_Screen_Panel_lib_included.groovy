@@ -15,16 +15,17 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 0.1.0  2024-04-07 kkossev  - (dev. branch) first version
+ * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112;Projector buttons 113,114
  *
- *                                   TODO:
+ *                                   TODO:  add info links
  */
 
-static String version() { "0.1.0" }
-static String timeStamp() {"2024/04/09 11:26 PM"}
+static String version() { "0.1.1" }
+static String timeStamp() {"2024/04/10 9:06 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
-@Field static final Boolean _SIMULATION = false
+@Field static final Boolean _SIMULATION = false      // _TZE200_vm1gyrso
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -48,13 +49,14 @@ metadata {
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
         capability 'Actuator'
-        capability 'Switch'
+        //capability 'Switch' 
         capability 'PushableButton'
 
         //attribute 'hubitatMode', 'enum', HubitatModeOpts.options.values() as List<String>
         attribute 'scene', 'string'
      
     }
+    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mua6ucdj"   // this device
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vm1gyrso"   //3 gangs dimmer - for tests only
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
@@ -155,6 +157,26 @@ boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, fi
             logDebug "Smart Curtain button 3: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Curtain button3')
             break
+        case 0x6E : // (110) Smart Blind button 1
+            logDebug "Smart Blind button 1: ${fncmd}"
+            sendSceneButtonEvent(dp, fncmd, 'Blind button1')
+            break
+        case 0x6F : // (111) Smart Blind button 2   
+            logDebug "Smart Blind button 2: ${fncmd}"
+            sendSceneButtonEvent(dp, fncmd, 'Blind button2')
+            break
+        case 0x70 : // (112) Smart Blind button 3
+            logDebug "Smart Blind button 3: ${fncmd}"
+            sendSceneButtonEvent(dp, fncmd, 'Blind button3')
+            break
+        case 0x71 : // (113) Projector button 1
+            logDebug "Projector button 1: ${fncmd}"
+            sendSceneButtonEvent(dp, fncmd, 'Projector button1')
+            break
+        case 0x72 : // (114) Projector button 2
+            logDebug "Projector button 2: ${fncmd}"
+            sendSceneButtonEvent(dp, fncmd, 'Projector button2')
+            break
         case 0x7C: // (124) Air Conditioner button 4 (ON)
             logDebug "Air Conditioner button 4 (ON): ${fncmd}"  
             sendSceneButtonEvent(dp, fncmd, 'AC button4')
@@ -188,8 +210,8 @@ void sendChildSwitchEvent(final int dp, final int fncmd) {
     String descriptionText = "${device.displayName} switch #${dp} was turned ${fncmd == 1 ? 'on' : 'off'}"
     Map eventMap = [name: 'switch', value: fncmd == 1 ? 'on' : 'off', descriptionText: descriptionText, isStateChange: true]
     logInfo "${descriptionText} (child device #${dp})"
-    String dni = ''
-    dni = "${device.id}-${numberString}"
+    String dni = getChildIdString(dp)
+    logTrace "dni=${dni}"
     ChildDeviceWrapper dw = getChildDevice(dni) // null if dni is null for the parent device
     logDebug "dw=${dw} eventMap=${eventMap}"
     if (dw != null) {
@@ -224,31 +246,34 @@ void customInitEvents(final boolean fullInit=false) {
 
 void componentOn(DeviceWrapper childDevice) {
     int childIdNumber = getChildIdNumber(childDevice)
-    if (_SIMULATION) { if (childIdNumber == 25) childIdNumber = 7 }   // test
-    logDebug "sending componentOff ${childDevice.id} (${childIdNumber})"
+    if (_SIMULATION) { if (childIdNumber == 25) { childIdNumber = 7 } }   // test
+    logDebug "sending componentOff ${childDevice.deviceNetworkId} (${childIdNumber})"
     List<String> cmds = sendTuyaCommand(HexUtils.integerToHexString(childIdNumber,1), DP_TYPE_BOOL, '01')
     sendZigbeeCommands(cmds)
 }
 
 void componentOff(DeviceWrapper childDevice) {
     int childIdNumber = getChildIdNumber(childDevice)
-    if (_SIMULATION) { if (childIdNumber == 25) childIdNumber = 7 }   // test
-    logDebug "sending componentOff ${childDevice.id} (${childIdNumber})"
+    if (_SIMULATION) { log.trace "childIdNumber=${childIdNumber}"; if (childIdNumber == 25) { childIdNumber = 7 } }   // test
+    logDebug "sending componentOff ${childDevice.deviceNetworkId} (${childIdNumber})"
     List<String> cmds = sendTuyaCommand(HexUtils.integerToHexString(childIdNumber,1), DP_TYPE_BOOL, '00')
     sendZigbeeCommands(cmds)
 }
 
 void componentRefresh(DeviceWrapper childDevice) {
-    logDebug "componentRefresh ${childDevice.id} ${childDevice} (${getChildIdNumber(childDevice)}) - n/a"
+    logDebug "componentRefresh ${childDevice.deviceNetworkId} ${childDevice} (${getChildIdNumber(childDevice)}) - n/a"
 }
 
 int getChildIdNumber(DeviceWrapper childDevice) {
-    return childDevice.id.toInteger()
+    String childId = childDevice.deviceNetworkId.split('-').last()
+    logTrace "getChildIdNumber ${childDevice.deviceNetworkId} -> ${childId}"
+    return childId.toInteger()
 }
 
 String getChildIdString(int childId) {
-    String numberString = childId.toString().padLeft(2, '0')    
-    return "${device.id}-${childId}"
+    String numberString = childId.toString().padLeft(2, '0')
+    logTrace "getChildIdString ${childId} -> ${device.id}-${numberString}"
+    return "${device.id}-${numberString}"
 }
 
 
