@@ -15,13 +15,14 @@
  * 	for the specific language governing permissions and limitations under the License.
  *
  * ver. 0.1.0  2024-04-07 kkossev  - (dev. branch) first version
- * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112;Projector buttons 113,114
+ * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
+ * ver. 0.1.2  2024-04-11 kkossev  - (dev. branch) added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
  *
- *                                   TODO:  add info links
+ *                                   TODO:  
  */
 
-static String version() { "0.1.1" }
-static String timeStamp() {"2024/04/10 9:06 PM"}
+static String version() { "0.1.2" }
+static String timeStamp() {"2024/04/11 7:56 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -53,7 +54,9 @@ metadata {
         capability 'PushableButton'
 
         //attribute 'hubitatMode', 'enum', HubitatModeOpts.options.values() as List<String>
-        attribute 'scene', 'string'
+        //attribute 'scene', 'string'   // not used, TOBEDEL
+
+        command 'syncTuyaDateTime'
      
     }
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mua6ucdj"   // this device
@@ -61,6 +64,7 @@ metadata {
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+	    input name: "helpInfo", type: "hidden", title: fmtHelpInfo("Community Link")
         if (device) {
             //input name: 'hubitatMode', type: 'enum', title: '<b>Hubitat Integration Mode</b>', options: HubitatModeOpts.options, defaultValue: HubitatModeOpts.defaultValue, required: true, description: '<i>Method to integrate with HE.</i>'
         }
@@ -295,7 +299,7 @@ void createSwitchChildDevice(int index, String switchLabel) {
             [
                 isComponent: false, 
                 name: "${device.displayName} Switch EP${index.toString().padLeft(2, '0')}", 
-                label: "Switch ${switchLabel}"
+                label: " ${switchLabel}"
             ]
         )
         sendInfoEvent "Created ${childDeviceName}"
@@ -319,6 +323,45 @@ void customCreateChildDevices(boolean fullInit=false) {
         createAllSwitchChildDevices()
     }
 }
+
+void syncTuyaDateTime() {
+    // The data format for time synchronization, including standard timestamps and local timestamps. Standard timestamp (4 bytes)    local timestamp (4 bytes) Time synchronization data format: The standard timestamp is the total number of seconds from 00:00:00 on January 01, 1970 GMT to the present.
+    // For example, local timestamp = standard timestamp + number of seconds between standard time and local time (including time zone and daylight saving time).                 // Y2K = 946684800
+    long offset = 0
+    int offsetHours = 0
+    Calendar cal = Calendar.getInstance();    //it return same time as new Date()
+    def hour = cal.get(Calendar.HOUR_OF_DAY)
+    try {
+        offset = location.getTimeZone().getOffset(new Date().getTime())
+        offsetHours = (offset / 3600000) as int
+        logDebug "timezone offset of current location is ${offset} (${offsetHours} hours), current hour is ${hour} h"
+    } catch(e) {
+        log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+    }
+    //
+    List<String> cmds
+    cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
+    logDebug "sending time data : ${cmds}"
+    cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
+}
+
+@Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'
+@Field static final String WIKI   = 'Wiki page:'
+@Field static final String COMM_LINK =   'https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208/1'
+@Field static final String GITHUB_LINK = 'https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel'
+
+
+// credits @jtp10181
+String fmtHelpInfo(String str) {
+	String info = "${DRIVER_NAME} v${version()}"
+	String prefLink = "<a href='${GITHUB_LINK}' target='_blank'>${WIKI}<br><div style='font-size: 70%;'>${info}</div></a>"
+    String topStyle = "style='font-size: 18px; padding: 1px 12px; border: 2px solid green; border-radius: 6px; color: green;'"
+    String topLink = "<a ${topStyle} href='${COMM_LINK}' target='_blank'>${str}<br><div style='font-size: 14px;'>${info}</div></a>"
+
+	return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
+		"<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</ul></li></div>"
+}
+
 
 void test(String par) {
     /*
