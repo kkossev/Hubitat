@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.5',
+    version: '3.0.6',
     documentationLink: ''
 )
 /*
@@ -33,24 +33,19 @@ library(
   * ver. 3.0.1  2023-12-06 kkossev  - nfo event renamed to Status; txtEnable and logEnable moved to the custom driver settings; 0xFC11 cluster; logEnable is false by default; checkDriverVersion is called on updated() and on healthCheck();
   * ver. 3.0.2  2023-12-17 kkossev  - configure() changes; Groovy Lint, Format and Fix v3.0.0
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
-  * ver. 3.0.4  2024-04-02 kkossev  - (dev.branch) removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
-  * ver. 3.0.5  2024-04-05 kkossev  - (dev.branch) button methods bug fix; configure() bug fix; handlePm25Event bug fix;
+  * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
+  * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
+  * ver. 3.0.6  2024-04-08 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
-  *                                   TODO: add custom* handlers for the new drivers!
-  *                                   TODO: remove the automatic capabilities selectionm for the new drivers!
-  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib !
-  *                                   TODO: battery voltage low/high limits configuration
-  *                                   TODO: add GetInof (endpoints list) command
-  *                                   TODO: handle Virtual Switch sendZigbeeCommands(cmd=[he cmd 0xbb14c77a-5810-4e65-b16d-22bc665767ed 0xnull 6 1 {}, delay 2000])
-  *                                   TODO: move zigbeeGroups : {} to dedicated lib
+  *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
+  *                                   TODO: add GetInfo (endpoints list) command
   *                                   TODO: disableDefaultResponse for Tuya commands
-  *                                   TODO: ping() for a virtual device (runIn 1 milissecond a callback nethod)
- *
+  *
 */
 
-String commonLibVersion() { '3.0.5' }
-String commonLibStamp() { '2024/04/05 9:46 PM' }
+String commonLibVersion() { '3.0.6' }
+String commonLibStamp() { '2024/04/08 10:51 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -86,60 +81,13 @@ metadata {
         attribute 'Status', 'string'
 
         // common commands for all device types
-        // removed from version 2.0.6    //command "initialize", [[name: "Manually initialize the device after switching drivers.  \n\r     ***** Will load device default values! *****"]]    // do NOT declare Initialize capability!
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
-        // deviceType specific capabilities, commands and attributes
-        if (deviceType in ['Device']) {
-            if (_DEBUG) {
-                command 'getAllProperties',       [[name: 'Get All Properties']]
-            }
-        }
-        if (_DEBUG || (deviceType in ['Dimmer', 'Switch', 'Valve'])) {
-            command 'zigbeeGroups', [
-                [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
-            ]
-        }
-        if (deviceType in  ['Device', 'THSensor', 'MotionSensor', 'LightSensor', 'AqaraCube']) {
-            capability 'Sensor'
-        }
-        if (deviceType in  ['Device', 'MotionSensor']) {
-            capability 'MotionSensor'
-        }
-        if (deviceType in  ['Device', 'Switch', 'Relay', 'Outlet', 'Dimmer', 'Bulb']) {
-            capability 'Actuator'
-        }
-        if (deviceType in  ['Device', 'THSensor', 'LightSensor', 'MotionSensor', 'Thermostat', 'AqaraCube']) {
-            capability 'Battery'
-            attribute 'batteryVoltage', 'number'
-        }
-        if (deviceType in  ['Device', 'Switch', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Switch', 'Dimmer', 'Bulb']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
             }
-        }
-        if (deviceType in ['Dimmer', 'Bulb']) {
-            capability 'SwitchLevel'
-        }
-        if (deviceType in  ['AqaraCube']) {
-            capability 'PushableButton'
-            capability 'DoubleTapableButton'
-            capability 'HoldableButton'
-            capability 'ReleasableButton'
-        }
-        if (deviceType in  ['Device']) {
-            capability 'Momentary'
-        }
-        if (deviceType in  ['Device', 'THSensor']) {
-            capability 'TemperatureMeasurement'
-        }
-        if (deviceType in  ['Device', 'THSensor']) {
-            capability 'RelativeHumidityMeasurement'
-        }
-        if (deviceType in  ['Device', 'LightSensor']) {
-            capability 'IlluminanceMeasurement'
         }
 
         // trap for Hubitat F2 bug
@@ -151,24 +99,10 @@ metadata {
         //input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
 
         if (device) {
-            if ((device.hasCapability('TemperatureMeasurement') || device.hasCapability('RelativeHumidityMeasurement') || device.hasCapability('IlluminanceMeasurement')) && !isZigUSB()) {
-                input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between reports</b>', description: '<i>Minimum reporting interval, seconds (1..300)</i>', range: '1..300', defaultValue: DEFAULT_MIN_REPORTING_TIME
-                if (deviceType != 'mmWaveSensor') {
-                    input name: 'maxReportingTime', type: 'number', title: '<b>Maximum time between reports</b>', description: '<i>Maximum reporting interval, seconds (120..10000)</i>', range: '120..10000', defaultValue: DEFAULT_MAX_REPORTING_TIME
-                }
-            }
-            if (device.hasCapability('IlluminanceMeasurement')) {
-                input name: 'illuminanceThreshold', type: 'number', title: '<b>Illuminance Reporting Threshold</b>', description: '<i>Illuminance reporting threshold, range (1..255)<br>Bigger values will result in less frequent reporting</i>', range: '1..255', defaultValue: DEFAULT_ILLUMINANCE_THRESHOLD
-                input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
-            }
-
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
                 input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
                 input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
-                if (device.hasCapability('Battery')) {
-                    input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
-                }
                 if ((deviceType in  ['Switch', 'Plug', 'Dimmer', 'Fingerbot']) && _THREE_STATE == true) {
                     input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
                 }
@@ -188,7 +122,6 @@ metadata {
 @Field static final Integer DEFAULT_MAX_REPORTING_TIME = 3600
 @Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
 @Field static final int DELAY_MS = 200                       // Delay in between zigbee commands
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
@@ -202,15 +135,6 @@ metadata {
 @Field static final Map SwitchThreeStateOpts = [
     defaultValue: 0,
     options     : [0: 'off', 1: 'on', 2: 'switching_off', 3: 'switching_on', 4: 'switch_failure']
-]
-
-@Field static final Map ZigbeeGroupsOptsDebug = [
-    defaultValue: 0,
-    options     : [99: '--- select ---', 0: 'Add group', 1: 'View group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups', 5: 'Add group if identifying']
-]
-@Field static final Map ZigbeeGroupsOpts = [
-    defaultValue: 0,
-    options     : [99: '--- select ---', 0: 'Add group', 2: 'Get group membership', 3: 'Remove group', 4: 'Remove all groups']
 ]
 
 @Field static final Map ConfigureOpts = [
@@ -233,8 +157,8 @@ boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.
 boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
-boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
-boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
+//boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
+//boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
 /**
  * Parse Zigbee message
@@ -315,13 +239,8 @@ void parse(final String description) {
             descMap.remove('additionalAttrs')?.each { final Map map -> parseLevelControlCluster(descMap + map) }
             break
         case 0x000C :                                       // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
-            if (isZigUSB()) {
-                parseZigUSBAnlogInputCluster(description)
-            }
-            else {
-                parseAnalogInputCluster(descMap)
-                descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map) }
-            }
+            parseAnalogInputCluster(descMap, description)
+            descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map, description) }
             break
         case 0x0012 :                                       // Aqara Cube - Multistate Input
             parseMultistateInputCluster(descMap)
@@ -570,28 +489,16 @@ void parseDefaultCommandResponse(final Map descMap) {
     } else {
         logDebug "zigbee ${clusterLookup(descMap.clusterInt)} command 0x${commandId} response: ${status}"
         // ZigUSB has its own interpretation of the Zigbee standards ... :(
-        if (isZigUSB()) {
-            executeCustomHandler('customParseDefaultCommandResponse', descMap)
+        if (this.respondsTo('customParseDefaultCommandResponse')) {
+            customParseDefaultCommandResponse(descMap)
         }
     }
 }
 
 // Zigbee Attribute IDs
-@Field static final int AC_CURRENT_DIVISOR_ID = 0x0603
-@Field static final int AC_CURRENT_MULTIPLIER_ID = 0x0602
-@Field static final int AC_FREQUENCY_ID = 0x0300
-@Field static final int AC_POWER_DIVISOR_ID = 0x0605
-@Field static final int AC_POWER_MULTIPLIER_ID = 0x0604
-@Field static final int AC_VOLTAGE_DIVISOR_ID = 0x0601
-@Field static final int AC_VOLTAGE_MULTIPLIER_ID = 0x0600
-@Field static final int ACTIVE_POWER_ID = 0x050B
 @Field static final int ATTRIBUTE_READING_INFO_SET = 0x0000
 @Field static final int FIRMWARE_VERSION_ID = 0x4000
 @Field static final int PING_ATTR_ID = 0x01
-@Field static final int POWER_ON_OFF_ID = 0x0000
-@Field static final int POWER_RESTORE_ID = 0x4003
-@Field static final int RMS_CURRENT_ID = 0x0508
-@Field static final int RMS_VOLTAGE_ID = 0x0505
 
 @Field static final Map<Integer, String> ZigbeeStatusEnum = [
     0x00: 'Success',
@@ -658,18 +565,8 @@ void parseDefaultCommandResponse(final Map descMap) {
     0x16: 'Discover Attributes Extended Response'
 ]
 
-/*
- * -----------------------------------------------------------------------------
- * Xiaomi cluster 0xFCC0 parser.
- * -----------------------------------------------------------------------------
- */
 void parseXiaomiCluster(final Map descMap) {
-    if (xiaomiLibVersion() != null) {
-        parseXiaomiClusterLib(descMap)
-    }
-    else {
-        logWarn 'Xiaomi cluster 0xFCC0'
-    }
+    if (xiaomiLibVersion() != null) { parseXiaomiClusterLib(descMap) } else { logWarn 'Xiaomi cluster 0xFCC0' }
 }
 
 @Field static final int ROLLING_AVERAGE_N = 10
@@ -765,347 +662,30 @@ void parseBasicCluster(final Map descMap) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * power cluster            0x0001
- * -----------------------------------------------------------------------------
-*/
+// power cluster            0x0001
 void parsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     if (descMap.attrId in ['0020', '0021']) {
         state.lastRx['batteryTime'] = new Date().getTime()
         state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
     }
-
-    final int rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == '0020') {
-        sendBatteryVoltageEvent(rawValue)
-        if ((settings.voltageToPercent ?: false) == true) {
-            sendBatteryVoltageEvent(rawValue, convertToPercent = true)
-        }
-    }
-    else if (descMap.attrId == '0021') {
-        sendBatteryPercentageEvent(rawValue * 2)
+    if (this.respondsTo('customParsePowerCluster')) {
+        customParsePowerCluster(descMap)
     }
     else {
-        logWarn "zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
+        logDebug "zigbee received Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
     }
 }
 
-void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
-    logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
-    Map result = [:]
-    BigDecimal volts = safeToBigDecimal(rawValue) / 10G
-    if (rawValue != 0 && rawValue != 255) {
-        BigDecimal minVolts = 2.2
-        BigDecimal maxVolts = 3.2
-        BigDecimal pct = (volts - minVolts) / (maxVolts - minVolts)
-        int roundedPct = Math.round(pct * 100)
-        if (roundedPct <= 0) { roundedPct = 1 }
-        if (roundedPct > 100) { roundedPct = 100 }
-        if (convertToPercent == true) {
-            result.value = Math.min(100, roundedPct)
-            result.name = 'battery'
-            result.unit  = '%'
-            result.descriptionText = "battery is ${roundedPct} %"
-        }
-        else {
-            result.value = volts
-            result.name = 'batteryVoltage'
-            result.unit  = 'V'
-            result.descriptionText = "battery is ${volts} Volts"
-        }
-        result.type = 'physical'
-        result.isStateChange = true
-        logInfo "${result.descriptionText}"
-        sendEvent(result)
-    }
-    else {
-        logWarn "ignoring BatteryResult(${rawValue})"
-    }
-}
-
-void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=false) {
-    if ((batteryPercent as int) == 255) {
-        logWarn "ignoring battery report raw=${batteryPercent}"
-        return
-    }
-    Map map = [:]
-    map.name = 'battery'
-    map.timeStamp = now()
-    map.value = batteryPercent < 0 ? 0 : batteryPercent > 100 ? 100 : (batteryPercent as int)
-    map.unit  = '%'
-    map.type = isDigital ? 'digital' : 'physical'
-    map.descriptionText = "${map.name} is ${map.value} ${map.unit}"
-    map.isStateChange = true
-    //
-    Object latestBatteryEvent = device.currentState('battery')
-    Long latestBatteryEventTime = latestBatteryEvent != null ? latestBatteryEvent.getDate().getTime() : now()
-    //log.debug "battery latest state timeStamp is ${latestBatteryTime} now is ${now()}"
-    int timeDiff = ((now() - latestBatteryEventTime) / 1000) as int
-    if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
-        // send it now!
-        sendDelayedBatteryPercentageEvent(map)
-    }
-    else {
-        int delayedTime = (settings?.batteryDelay as int) - timeDiff
-        map.delayed = delayedTime
-        map.descriptionText += " [delayed ${map.delayed} seconds]"
-        logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
-        runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
-    }
-}
-
-private void sendDelayedBatteryPercentageEvent(Map map) {
-    logInfo "${map.descriptionText}"
-    //map.each {log.trace "$it"}
-    sendEvent(map)
-}
-
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedBatteryVoltageEvent(Map map) {
-    logInfo "${map.descriptionText}"
-    //map.each {log.trace "$it"}
-    sendEvent(map)
-}
-
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Identity Cluster 0x0003
- * -----------------------------------------------------------------------------
-*/
 /* groovylint-disable-next-line UnusedMethodParameter */
-void parseIdentityCluster(final Map descMap) {
-    logDebug 'unprocessed parseIdentityCluster'
-}
+void parseIdentityCluster(final Map descMap) { logDebug 'unprocessed parseIdentityCluster' }
 
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Scenes Cluster 0x005
- * -----------------------------------------------------------------------------
-*/
 void parseScenesCluster(final Map descMap) {
-    if (this.respondsTo('customParseScenesCluster')) {
-        customParseScenesCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}"
-    }
+    if (this.respondsTo('customParseScenesCluster')) { customParseScenesCluster(descMap) } else { logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Zigbee Groups Cluster Parsing 0x004    ZigbeeGroupsOpts
- * -----------------------------------------------------------------------------
-*/
 void parseGroupsCluster(final Map descMap) {
-    // :catchall: 0104 0004 01 01 0040 00 F396 01 00 0000 00 01 00C005, profileId:0104, clusterId:0004, clusterInt:4, sourceEndpoint:01, destinationEndpoint:01, options:0040, messageType:00, dni:F396, isClusterSpecific:true, isManufacturerSpecific:false, manufacturerId:0000, command:00, direction:01, data:[00, C0, 05]]
-    logDebug "parseGroupsCluster: command=${descMap.command} data=${descMap.data}"
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
-    switch (descMap.command as Integer) {
-        case 0x00: // Add group    0x0001 – 0xfff7
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) <b>error: ${statusName}</b>"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} (${groupIdInt}) statusCode: ${statusName}"
-                // add the group to state.zigbeeGroups['groups'] if not exist
-                int groupCount = state.zigbeeGroups['groups'].size()
-                for (int i = 0; i < groupCount; i++) {
-                    if (safeToInt(state.zigbeeGroups['groups'][i]) == groupIdInt) {
-                        logDebug "Zigbee group ${groupIdInt} (0x${groupId}) already exist"
-                        return
-                    }
-                }
-                state.zigbeeGroups['groups'].add(groupIdInt)
-                logInfo "Zigbee group added new group ${groupIdInt} (0x${zigbee.convertToHexString(groupIdInt, 4)})"
-                state.zigbeeGroups['groups'].sort()
-            }
-            break
-        case 0x01: // View group
-            // The view group command allows the sending device to request that the receiving entity or entities respond with a view group response command containing the application name string for a particular group.
-            logDebug "received View group GROUPS cluster command: ${descMap.command} (${descMap})"
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "zigbee response View group ${groupIdInt} (0x${groupId}) error: ${statusName}"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
-            }
-            break
-        case 0x02: // Get group membership
-            final List<String> data = descMap.data as List<String>
-            final int capacity = hexStrToUnsignedInt(data[0])
-            final int groupCount = hexStrToUnsignedInt(data[1])
-            final Set<String> groups = []
-            for (int i = 0; i < groupCount; i++) {
-                int pos = (i * 2) + 2
-                String group = data[pos + 1] + data[pos]
-                groups.add(hexStrToUnsignedInt(group))
-            }
-            state.zigbeeGroups['groups'] = groups
-            state.zigbeeGroups['capacity'] = capacity
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groups ${groups} groupCount: ${groupCount} capacity: ${capacity}"
-            break
-        case 0x03: // Remove group
-            logInfo "received  Remove group GROUPS cluster command: ${descMap.command} (${descMap})"
-            final List<String> data = descMap.data as List<String>
-            final int statusCode = hexStrToUnsignedInt(data[0])
-            final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${data[0]}"
-            final String groupId = data[2] + data[1]
-            final int groupIdInt = hexStrToUnsignedInt(groupId)
-            if (statusCode > 0x00) {
-                logWarn "zigbee response remove group ${groupIdInt} (0x${groupId}) error: ${statusName}"
-            }
-            else {
-                logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId ${groupIdInt} (0x${groupId})  statusCode: ${statusName}"
-            }
-            // remove it from the states, even if status code was 'Not Found'
-            int index = state.zigbeeGroups['groups'].indexOf(groupIdInt)
-            if (index >= 0) {
-                state.zigbeeGroups['groups'].remove(index)
-                logDebug "Zigbee group ${groupIdInt} (0x${groupId}) removed"
-            }
-            break
-        case 0x04: //Remove all groups
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
-            logWarn 'not implemented!'
-            break
-        case 0x05: // Add group if identifying
-            //  add group membership in a particular group for one or more endpoints on the receiving device, on condition that it is identifying itself. Identifying functionality is controlled using the identify cluster, (see 3.5).
-            logDebug "received zigbee GROUPS cluster response for command: ${descMap.command} \'${ZigbeeGroupsOpts.options[descMap.command as int]}\' : groupId 0x${groupId} statusCode: ${statusName}"
-            logWarn 'not implemented!'
-            break
-        default:
-            logWarn "received unknown GROUPS cluster command: ${descMap.command} (${descMap})"
-            break
-    }
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> addGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    if (group < 1 || group > 0xFFF7) {
-        logWarn "addGroupMembership: invalid group ${groupNr}"
-        return []
-    }
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x00, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "addGroupMembership: adding group ${group} to ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> viewGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x01, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "viewGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-List<String> getGroupMembership(dummy) {
-    List<String> cmds = []
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')
-    logDebug "getGroupMembership: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> removeGroupMembership(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    if (group < 1 || group > 0xFFF7) {
-        logWarn "removeGroupMembership: invalid group ${groupNr}"
-        return []
-    }
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x03, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "removeGroupMembership: deleting group ${group} from ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-List<String> removeAllGroups(groupNr) {
-    List<String> cmds = []
-    final Integer group = safeToInt(groupNr)
-    final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x04, [:], DELAY_MS, "${groupHex} 00")
-    logDebug "removeAllGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-List<String> notImplementedGroups(groupNr) {
-    List<String> cmds = []
-    //final Integer group = safeToInt(groupNr)
-    //final String groupHex = DataType.pack(group, DataType.UINT16, true)
-    logWarn "notImplementedGroups: zigbeeGroups is ${state.zigbeeGroups['groups']} cmds=${cmds}"
-    return cmds
-}
-
-@Field static final Map GroupCommandsMap = [
-    '--- select ---'           : [ min: null, max: null,   type: 'none',   defaultValue: 99, function: 'groupCommandsHelp'],
-    'Add group'                : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 0,  function: 'addGroupMembership'],
-    'View group'               : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 1,  function: 'viewGroupMembership'],
-    'Get group membership'     : [ min: null, max: null,   type: 'none',   defaultValue: 2,  function: 'getGroupMembership'],
-    'Remove group'             : [ min: 0,    max: 0xFFF7, type: 'number', defaultValue: 3,  function: 'removeGroupMembership'],
-    'Remove all groups'        : [ min: null, max: null,   type: 'none',   defaultValue: 4,  function: 'removeAllGroups'],
-    'Add group if identifying' : [ min: 1,    max: 0xFFF7, type: 'number', defaultValue: 5,  function: 'notImplementedGroups']
-]
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-void zigbeeGroups(final String command=null, par=null) {
-    logInfo "executing command \'${command}\', parameter ${par}"
-    List<String> cmds = []
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
-    if (state.zigbeeGroups['groups'] == null) { state.zigbeeGroups['groups'] = [] }
-    /* groovylint-disable-next-line VariableTypeRequired */
-    def value
-    Boolean validated = false
-    if (command == null || !(command in (GroupCommandsMap.keySet() as List))) {
-        logWarn "zigbeeGroups: command <b>${command}</b> must be one of these : ${GroupCommandsMap.keySet() as List}"
-        return
-    }
-    value = GroupCommandsMap[command]?.type == 'number' ? safeToInt(par, -1) : 0
-    if (GroupCommandsMap[command]?.type == 'none' || (value >= GroupCommandsMap[command]?.min && value <= GroupCommandsMap[command]?.max)) { validated = true }
-    if (validated == false && GroupCommandsMap[command]?.min != null && GroupCommandsMap[command]?.max != null) {
-        log.warn "zigbeeGroups: command <b>command</b> parameter <b>${par}</b> must be within ${GroupCommandsMap[command]?.min} and  ${GroupCommandsMap[command]?.max} "
-        return
-    }
-    //
-    /* groovylint-disable-next-line VariableTypeRequired */
-    def func
-    try {
-        func = GroupCommandsMap[command]?.function
-        //def type = GroupCommandsMap[command]?.type
-        // device.updateSetting("$par", [value:value, type:type])  // TODO !!!
-        cmds = "$func"(value)
-    }
-    catch (e) {
-        logWarn "Exception ${e} caught while processing <b>$func</b>(<b>$value</b>)"
-        return
-    }
-
-    logDebug "executed <b>$func</b>(<b>$value</b>)"
-    sendZigbeeCommands(cmds)
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
-void groupCommandsHelp(val) {
-    logWarn 'GroupCommands: select one of the commands in this list!'
+    if (this.respondsTo('customParseGroupsCluster')) { customParseGroupsCluster(descMap) } else { logWarn "unprocessed GroupsCluster attribute ${descMap.attrId}" }
 }
 
 /*
@@ -1127,7 +707,8 @@ void parseOnOffCluster(final Map descMap) {
         parseOnOffAttributes(descMap)
     }
     else {
-        logWarn "unprocessed OnOffCluster attribute ${descMap.attrId}"
+        if (descMap.attrId != null) { logWarn "parseOnOffCluster: unprocessed attrId ${descMap.attrId}"  }
+        else { logDebug "parseOnOffCluster: skipped processing OnOIff cluster (attrId is ${descMap.attrId})" } // ZigUSB has its own interpretation of the Zigbee standards ... :(
     }
 }
 
@@ -1464,242 +1045,27 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-void sendButtonEvent(int buttonNumber, String buttonState, boolean isDigital=false) {
-    if (buttonState != 'unknown' && buttonNumber != 0) {
-        String descriptionText = "button $buttonNumber was $buttonState"
-        if (isDigital) { descriptionText += ' [digital]' }
-        Map event = [name: buttonState, value: buttonNumber.toString(), data: [buttonNumber: buttonNumber], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
-        logInfo "$descriptionText"
-        sendEvent(event)
-    }
-    else {
-        logWarn "sendButtonEvent: UNHANDLED event for button ${buttonNumber}, buttonState=${buttonState}"
-    }
-
-}
-
-void push() {                // Momentary capability
-    logDebug 'push momentary'
-    if (this.respondsTo('customPush')) { customPush(); return }
-    logWarn "push() not implemented for ${(DEVICE_TYPE)}"
-}
-
-void push(BigDecimal buttonNumber) {    //pushableButton capability
-    logDebug "push button $buttonNumber"
-    if (this.respondsTo('customPush')) { customPush(buttonNumber); return }
-    sendButtonEvent(buttonNumber as int, 'pushed', isDigital = true)
-}
-
-void doubleTap(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'doubleTapped', isDigital = true)
-}
-
-void hold(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'held', isDigital = true)
-}
-
-void release(BigDecimal buttonNumber) {
-    sendButtonEvent(buttonNumber as int, 'released', isDigital = true)
-}
-
-void sendNumberOfButtonsEvent(int numberOfButtons) {
-    sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true, type: 'digital')
-}
-
-/* groovylint-disable-next-line MethodParameterTypeRequired */
-void sendSupportedButtonValuesEvent(supportedValues) {
-    sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true, type: 'digital')
-}
-
-/*
- * -----------------------------------------------------------------------------
- * Level Control Cluster            0x0008
- * -----------------------------------------------------------------------------
-*/
 void parseLevelControlCluster(final Map descMap) {
     if (this.respondsTo('customParseLevelControlCluster')) {
         customParseLevelControlCluster(descMap)
     }
-    else if (DEVICE_TYPE in ['Bulb']) {
-        parseLevelControlClusterBulb(descMap)
-    }
-    else if (descMap.attrId == '0000') {
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-        final int rawValue = hexStrToUnsignedInt(descMap.value)
-        sendLevelControlEvent(rawValue)
+    else if (this.respondsTo('levelLibParseLevelControlCluster')) {
+        levelLibParseLevelControlCluster(descMap)
     }
     else {
         logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
     }
 }
 
-void sendLevelControlEvent(final int rawValue) {
-    int value = rawValue as int
-    if (value < 0) { value = 0 }
-    if (value > 100) { value = 100 }
-    Map map = [:]
-
-    boolean isDigital = state.states['isDigital']
-    map.type = isDigital == true ? 'digital' : 'physical'
-
-    map.name = 'level'
-    map.value = value
-    boolean isRefresh = state.states['isRefresh'] ?: false
-    if (isRefresh == true) {
-        map.descriptionText = "${device.displayName} is ${value} [Refresh]"
-        map.isStateChange = true
-    }
-    else {
-        map.descriptionText = "${device.displayName} was set ${value} [${map.type}]"
-    }
-    logInfo "${map.descriptionText}"
-    sendEvent(map)
-    clearIsDigital()
-}
-
-/**
- * Get the level transition rate
- * @param level desired target level (0-100)
- * @param transitionTime transition time in seconds (optional)
- * @return transition rate in 1/10ths of a second
- */
-private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer transitionTime = null) {
-    int rate = 0
-    final Boolean isOn = device.currentValue('switch') == 'on'
-    Integer currentLevel = (device.currentValue('level') as Integer) ?: 0
-    if (!isOn) {
-        currentLevel = 0
-    }
-    // Check if 'transitionTime' has a value
-    if (transitionTime > 0) {
-        // Calculate the rate by converting 'transitionTime' to BigDecimal, multiplying by 10, and converting to Integer
-        rate = transitionTime * 10
-    } else {
-        // Check if the 'levelUpTransition' setting has a value and the current level is less than the desired level
-        if (((settings.levelUpTransition ?: 0) as Integer) > 0 && currentLevel < desiredLevel) {
-            // Set the rate to the value of the 'levelUpTransition' setting converted to Integer
-            rate = settings.levelUpTransition.toInteger()
-        }
-        // Check if the 'levelDownTransition' setting has a value and the current level is greater than the desired level
-        else if (((settings.levelDownTransition ?: 0) as Integer) > 0 && currentLevel > desiredLevel) {
-            // Set the rate to the value of the 'levelDownTransition' setting converted to Integer
-            rate = settings.levelDownTransition.toInteger()
-        }
-    }
-    logDebug "using level transition rate ${rate}"
-    return rate
-}
-
-// Command option that enable changes when off
-@Field static final String PRE_STAGING_OPTION = '01 01'
-
-/**
- * Constrain a value to a range
- * @param value value to constrain
- * @param min minimum value (default 0)
- * @param max maximum value (default 100)
- * @param nullValue value to return if value is null (default 0)
- */
-private static BigDecimal constrain(final BigDecimal value, final BigDecimal min = 0, final BigDecimal max = 100, final BigDecimal nullValue = 0) {
-    if (min == null || max == null) {
-        return value
-    }
-    return value != null ? max.min(value.max(min)) : nullValue
-}
-
-/**
- * Constrain a value to a range
- * @param value value to constrain
- * @param min minimum value (default 0)
- * @param max maximum value (default 100)
- * @param nullValue value to return if value is null (default 0)
- */
-private static Integer constrain(final Object value, final Integer min = 0, final Integer max = 100, final Integer nullValue = 0) {
-    if (min == null || max == null) {
-        return value as Integer
-    }
-    return value != null ? Math.min(Math.max(value as Integer, min) as Integer, max) : nullValue
-}
-
-// Delay before reading attribute (when using polling)
-@Field static final int POLL_DELAY_MS = 1000
-
-/**
- * If the device is polling, delay the execution of the provided commands
- * @param delayMs delay in milliseconds
- * @param commands commands to execute
- * @return list of commands to be sent to the device
- */
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private List<String> ifPolling(final int delayMs = 0, final Closure commands) {
-    if (state.reportingEnabled == false) {
-        final int value = Math.max(delayMs, POLL_DELAY_MS)
-        return ["delay ${value}"] + (commands() as List<String>) as List<String>
-    }
-    return []
-}
-
-def intTo16bitUnsignedHex(int value) {
+String intTo16bitUnsignedHex(int value) {
     String hexStr = zigbee.convertToHexString(value.toInteger(), 4)
     return new String(hexStr.substring(2, 4) + hexStr.substring(0, 2))
 }
 
-def intTo8bitUnsignedHex(int value) {
+String intTo8bitUnsignedHex(int value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
-/**
- * Send 'switchLevel' attribute event
- * @param isOn true if light is on, false otherwise
- * @param level brightness level (0-254)
- */
-/* groovylint-disable-next-line UnusedPrivateMethodParameter */
-private List<String> setLevelPrivate(final Object value, final Integer rate = 0, final Integer delay = 0, final Boolean levelPreset = false) {
-    List<String> cmds = []
-    final Integer level = constrain(value)
-    //final String hexLevel = DataType.pack(Math.round(level * 2.54).intValue(), DataType.UINT8)
-    //final String hexRate = DataType.pack(rate, DataType.UINT16, true)
-    //final int levelCommand = levelPreset ? 0x00 : 0x04
-    if (device.currentValue('switch') == 'off' && level > 0 && levelPreset == false) {
-        // If light is off, first go to level 0 then to desired level
-        cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x00, [destEndpoint:safeToInt(getDestinationEP())], delay, "00 0000 ${PRE_STAGING_OPTION}")
-    }
-    // Payload: Level | Transition Time | Options Mask | Options Override
-    // Options: Bit 0x01 enables pre-staging level
-    /*
-    cmds += zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, levelCommand, [destEndpoint:safeToInt(getDestinationEP())], delay, "${hexLevel} ${hexRate} ${PRE_STAGING_OPTION}") +
-        ifPolling(DELAY_MS + (rate * 100)) { zigbee.levelRefresh(0) }
-    */
-    int duration = 10            // TODO !!!
-    String endpointId = '01'     // TODO !!!
-    cmds +=  ["he cmd 0x${device.deviceNetworkId} 0x${endpointId} 0x0008 4 { 0x${intTo8bitUnsignedHex(level)} 0x${intTo16bitUnsignedHex(duration)} }",]
-
-    return cmds
-}
-
-/**
- * Set Level Command
- * @param value level percent (0-100)
- * @param transitionTime transition time in seconds
- * @return List of zigbee commands
- */
-void setLevel(final Object value, final Object transitionTime = null) {
-    logInfo "setLevel (${value}, ${transitionTime})"
-    if (this.respondsTo('customSetLevel')) {
-        customSetLevel(value, transitionTime)
-        return
-    }
-    if (DEVICE_TYPE in  ['Bulb']) { setLevelBulb(value, transitionTime); return }
-    final Integer rate = getLevelTransitionRate(value as Integer, transitionTime as Integer)
-    scheduleCommandTimeoutCheck()
-    sendZigbeeCommands(setLevelPrivate(value, rate))
-}
-
-/*
- * -----------------------------------------------------------------------------
- * Color Control Cluster            0x0300
- * -----------------------------------------------------------------------------
-*/
 void parseColorControlCluster(final Map descMap, String description) {
     if (DEVICE_TYPE in ['Bulb']) {
         parseColorControlClusterBulb(descMap, description)
@@ -1714,199 +1080,45 @@ void parseColorControlCluster(final Map descMap, String description) {
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Illuminance    cluster 0x0400
- * -----------------------------------------------------------------------------
-*/
 void parseIlluminanceCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0
-    handleIlluminanceEvent(lux)
+    if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) } else { logWarn "unprocessed Illuminance attribute ${descMap.attrId}" }
 }
 
-void handleIlluminanceEvent(int illuminance, Boolean isDigital=false) {
-    Map eventMap = [:]
-    if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    eventMap.name = 'illuminance'
-    Integer illumCorrected = Math.round((illuminance * ((settings?.illuminanceCoeff ?: 1.00) as float)))
-    eventMap.value  = illumCorrected
-    eventMap.type = isDigital ? 'digital' : 'physical'
-    eventMap.unit = 'lx'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['illumTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    Integer lastIllum = device.currentValue('illuminance') ?: 0
-    Integer delta = Math.abs(lastIllum - illumCorrected)
-    if (delta < ((settings?.illuminanceThreshold ?: DEFAULT_ILLUMINANCE_THRESHOLD) as int)) {
-        logDebug "<b>skipped</b> illuminance ${illumCorrected}, less than delta ${settings?.illuminanceThreshold} (lastIllum=${lastIllum})"
-        return
-    }
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedIllumEvent')        //get rid of stale queued reports
-        state.lastRx['illumTime'] = now()
-        sendEvent(eventMap)
-    }
-    else {         // queue the event
-        eventMap.type = 'delayed'
-        logDebug "${device.displayName} <b>delaying ${timeRamaining} seconds</b> event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedIllumEvent',  [overwrite: true, data: eventMap])
-    }
-}
-
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedIllumEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['illumTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-}
-
-@Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
-
-/*
- * -----------------------------------------------------------------------------
- * temperature
- * -----------------------------------------------------------------------------
-*/
+// Temperature Measurement Cluster 0x0402
 void parseTemperatureCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToSignedInt(descMap.value)
-    handleTemperatureEvent(value / 100.0F as BigDecimal)
-}
-
-void handleTemperatureEvent(BigDecimal temperaturePar, boolean isDigital=false) {
-    Map eventMap = [:]
-    BigDecimal temperature = safeToBigDecimal(temperaturePar)
-    if (state.stats != null) { state.stats['tempCtr'] = (state.stats['tempCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    eventMap.name = 'temperature'
-    if (location.temperatureScale == 'F') {
-        temperature = (temperature * 1.8) + 32
-        eventMap.unit = '\u00B0F'
+    if (this.respondsTo('customParseTemperatureCluster')) {
+        customParseTemperatureCluster(descMap)
     }
     else {
-        eventMap.unit = '\u00B0C'
-    }
-    BigDecimal tempCorrected = (temperature + safeToBigDecimal(settings?.temperatureOffset ?: 0))
-    eventMap.value = tempCorrected.setScale(1, BigDecimal.ROUND_HALF_UP)
-    BigDecimal lastTemp = device.currentValue('temperature') ?: 0
-    logTrace "lastTemp=${lastTemp} tempCorrected=${tempCorrected} delta=${Math.abs(lastTemp - tempCorrected)}"
-    if (Math.abs(lastTemp - tempCorrected) < 0.1) {
-        logDebug "skipped temperature ${tempCorrected}, less than delta 0.1 (lastTemp=${lastTemp})"
-        return
-    }
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    if (state.states['isRefresh'] == true) {
-        eventMap.descriptionText += ' [refresh]'
-        eventMap.isStateChange = true
-    }
-    Integer timeElapsed = Math.round((now() - (state.lastRx['tempTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedTempEvent')        //get rid of stale queued reports
-        state.lastRx['tempTime'] = now()
-        sendEvent(eventMap)
-    }
-    else {         // queue the event
-        eventMap.type = 'delayed'
-        logDebug "${device.displayName} DELAYING ${timeRamaining} seconds event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedTempEvent',  [overwrite: true, data: eventMap])
+        logWarn "unprocessed Temperature attribute ${descMap.attrId}"
     }
 }
 
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedTempEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['tempTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-}
-
-/*
- * -----------------------------------------------------------------------------
- * humidity
- * -----------------------------------------------------------------------------
-*/
+// Humidity Measurement Cluster 0x0405
 void parseHumidityCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    final int value = hexStrToUnsignedInt(descMap.value)
-    handleHumidityEvent(value / 100.0F as BigDecimal)
-}
-
-void handleHumidityEvent(BigDecimal humidityPar, Boolean isDigital=false) {
-    Map eventMap = [:]
-    BigDecimal humidity = safeToBigDecimal(humidityPar)
-    if (state.stats != null) { state.stats['humiCtr'] = (state.stats['humiCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    humidity +=  safeToBigDecimal(settings?.humidityOffset ?: 0)
-    if (humidity <= 0.0 || humidity > 100.0) {
-        logWarn "ignored invalid humidity ${humidity} (${humidityPar})"
-        return
-    }
-    eventMap.value = humidity.setScale(0, BigDecimal.ROUND_HALF_UP)
-    eventMap.name = 'humidity'
-    eventMap.unit = '% RH'
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    //eventMap.isStateChange = true
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    Integer timeElapsed = Math.round((now() - (state.lastRx['humiTime'] ?: now())) / 1000)
-    Integer minTime = settings?.minReportingTime ?: DEFAULT_MIN_REPORTING_TIME
-    Integer timeRamaining = (minTime - timeElapsed) as Integer
-    if (timeElapsed >= minTime) {
-        logInfo "${eventMap.descriptionText}"
-        unschedule('sendDelayedHumidityEvent')
-        state.lastRx['humiTime'] = now()
-        sendEvent(eventMap)
+    if (this.respondsTo('customParseHumidityCluster')) {
+        customParseHumidityCluster(descMap)
     }
     else {
-        eventMap.type = 'delayed'
-        logDebug "DELAYING ${timeRamaining} seconds event : ${eventMap}"
-        runIn(timeRamaining, 'sendDelayedHumidityEvent',  [overwrite: true, data: eventMap])
+        logWarn "unprocessed Humidity attribute ${descMap.attrId}"
     }
 }
 
-/* groovylint-disable-next-line UnusedPrivateMethod */
-private void sendDelayedHumidityEvent(Map eventMap) {
-    logInfo "${eventMap.descriptionText} (${eventMap.type})"
-    state.lastRx['humiTime'] = now()     // TODO - -(minReportingTimeHumidity * 2000)
-    sendEvent(eventMap)
-}
-
-/*
- * -----------------------------------------------------------------------------
- * Electrical Measurement Cluster 0x0702
- * -----------------------------------------------------------------------------
-*/
-
+// Electrical Measurement Cluster 0x0702
 void parseElectricalMeasureCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) {
-        logWarn 'parseElectricalMeasureCluster is NOT implemented1'
-    }
+    if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) { logWarn 'parseElectricalMeasureCluster is NOT implemented1' }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Metering Cluster 0x0B04
- * -----------------------------------------------------------------------------
-*/
-
+// Metering Cluster 0x0B04
 void parseMeteringCluster(final Map descMap) {
-    if (!executeCustomHandler('customParseMeteringCluster', descMap)) {
-        logWarn 'parseMeteringCluster is NOT implemented1'
-    }
+    if (!executeCustomHandler('customParseMeteringCluster', descMap)) { logWarn 'parseMeteringCluster is NOT implemented1' }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * pm2.5
- * -----------------------------------------------------------------------------
-*/
+// pm2.5
 void parsePm25Cluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)
+    /* groovylint-disable-next-line NoFloat */
     float floatValue  = Float.intBitsToFloat(value.intValue())
     if (this.respondsTo('handlePm25Event')) {
         handlePm25Event(floatValue as Integer)
@@ -1916,112 +1128,47 @@ void parsePm25Cluster(final Map descMap) {
     }
 }
 
-
-/*
- * -----------------------------------------------------------------------------
- * Analog Input Cluster 0x000C
- * -----------------------------------------------------------------------------
-*/
-void parseAnalogInputCluster(final Map descMap) {
-    if (DEVICE_TYPE in ['AirQuality']) {
+// Analog Input Cluster 0x000C
+void parseAnalogInputCluster(final Map descMap, String description=null) {
+    if (this.respondsTo('customParseAnalogInputCluster')) {
+        customParseAnalogInputCluster(descMap)
+    }
+    else if (this.respondsTo('customParseAnalogInputClusterDescription')) {
+        customParseAnalogInputClusterDescription(description)                   // ZigUSB
+    }
+    else if (DEVICE_TYPE in ['AirQuality']) {
         parseAirQualityIndexCluster(descMap)
-    }
-    else if (DEVICE_TYPE in ['AqaraCube']) {
-        parseAqaraCubeAnalogInputCluster(descMap)
-    }
-    else if (isZigUSB()) {
-        parseZigUSBAnlogInputCluster(descMap)
     }
     else {
         logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}"
     }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * Multistate Input Cluster 0x0012
- * -----------------------------------------------------------------------------
-*/
-
+// Multistate Input Cluster 0x0012
 void parseMultistateInputCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToUnsignedInt(descMap.value)
-    //Float floatValue = Float.intBitsToFloat(value.intValue())
-    if (DEVICE_TYPE in  ['AqaraCube']) {
-        parseMultistateInputClusterAqaraCube(descMap)
-    }
-    else {
-        handleMultistateInputEvent(value as int)
-    }
+    if (this.respondsTo('customParseMultistateInputCluster')) { customParseMultistateInputCluster(descMap) } else { logWarn "parseMultistateInputCluster: don't know how to handle descMap=${descMap}" }
 }
 
-void handleMultistateInputEvent(int value, boolean isDigital=false) {
-    Map eventMap = [:]
-    eventMap.value = value
-    eventMap.name = 'multistateInput'
-    eventMap.unit = ''
-    eventMap.type = isDigital == true ? 'digital' : 'physical'
-    eventMap.descriptionText = "${eventMap.name} is ${eventMap.value} ${eventMap.unit}"
-    sendEvent(eventMap)
-    logInfo "${eventMap.descriptionText}"
-}
-
-/*
- * -----------------------------------------------------------------------------
- * Window Covering Cluster 0x0102
- * -----------------------------------------------------------------------------
-*/
-
+// Window Covering Cluster 0x0102
 void parseWindowCoveringCluster(final Map descMap) {
-    if (this.respondsTo('customParseWindowCoveringCluster')) {
-        customParseWindowCoveringCluster(descMap)
-    }
-    else {
-        logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseWindowCoveringCluster')) { customParseWindowCoveringCluster(descMap) } else { logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" }
 }
 
-/*
- * -----------------------------------------------------------------------------
- * thermostat cluster 0x0201
- * -----------------------------------------------------------------------------
-*/
+// thermostat cluster 0x0201
 void parseThermostatCluster(final Map descMap) {
-    if (this.respondsTo('customParseThermostatCluster')) {
-        customParseThermostatCluster(descMap)
-    }
-    else {
-        logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseThermostatCluster')) { customParseThermostatCluster(descMap) } else { logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}" }
 }
-
-// -------------------------------------------------------------------------------------------------------------------------
 
 void parseFC11Cluster(final Map descMap) {
-    if (this.respondsTo('customParseFC11Cluster')) {
-        customParseFC11Cluster(descMap)
-    }
-    else {
-        logWarn "parseFC11Cluster: don't know how to handle descMap=${descMap}"
-    }
+    if (this.respondsTo('customParseFC11Cluster')) { customParseFC11Cluster(descMap) } else { logWarn "parseFC11Cluster: don't know how to handle descMap=${descMap}" }
 }
 
 void parseE002Cluster(final Map descMap) {
-    if (this.respondsTo('customParseE002Cluster')) {
-        customParseE002Cluster(descMap)
-    }
-    else {
-        logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
-    }
+    if (this.respondsTo('customParseE002Cluster')) { customParseE002Cluster(descMap) } else { logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }    // radars
 }
 
 void parseEC03Cluster(final Map descMap) {
-    if (this.respondsTo('customParseEC03Cluster')) {
-        customParseEC03Cluster(descMap)
-    }
-    else {
-        logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})"    // radars
-    }
+    if (this.respondsTo('customParseEC03Cluster')) { customParseEC03Cluster(descMap) } else { logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }   // radars
 }
 
 /*
@@ -2095,7 +1242,7 @@ void parseTuyaCluster(final Map descMap) {
 }
 
 void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
-    log.trace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
+    logTrace "processTuyaDP: <b> checking customProcessTuyaDp</b> dp=${dp} dp_id=${dp_id} fncmd=${fncmd} dp_len=${dp_len}"
     if (this.respondsTo(customProcessTuyaDp)) {
         logTrace 'customProcessTuyaDp exists, calling it...'
         if (customProcessTuyaDp(descMap, dp, dp_id, fncmd, dp_len) == true) {
@@ -2152,7 +1299,7 @@ private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 String tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
-    logInfo "tuyaBlackMagic()..."
+    logInfo 'tuyaBlackMagic()...'
     return zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [destEndpoint :ep], delay = 200)
 }
 
@@ -2182,18 +1329,10 @@ void aqaraBlackMagic() {
 List<String> initializeDevice() {
     List<String> cmds = []
     logInfo 'initializeDevice...'
-
-    // start with the device-specific initialization first.
     if (this.respondsTo('customInitializeDevice')) {
         List<String> customCmds = customInitializeDevice()
         if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
-    // not specific device type - do some generic initializations
-    if (DEVICE_TYPE in  ['THSensor']) {
-        cmds += zigbee.configureReporting(zigbee.TEMPERATURE_MEASUREMENT_CLUSTER, 0 /*TEMPERATURE_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.INT16, 15, 300, 100 /* 100=0.1도*/)                // 402 - temperature
-        cmds += zigbee.configureReporting(zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER, 0 /*RALATIVE_HUMIDITY_MEASUREMENT_MEASURED_VALUE_ATTRIBUTE*/, DataType.UINT16, 15, 300, 400/*10/100=0.4%*/)   // 405 - humidity
-    }
-    //
     return cmds
 }
 
@@ -2210,7 +1349,6 @@ List<String> configureDevice() {
         List<String> customCmds = customConfigureDevice()
         if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
-    else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += configureDeviceAqaraCube() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     return cmds
@@ -2230,9 +1368,9 @@ void refresh() {
 
     // device type specific refresh handlers
     if (this.respondsTo('customRefresh')) {
-        cmds += customRefresh()
+        List<String> customCmds = customRefresh()
+        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
     }
-    else if (DEVICE_TYPE in  ['AqaraCube'])  { cmds += refreshAqaraCube() }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
         // generic refresh handling, based on teh device capabilities
@@ -2242,9 +1380,6 @@ void refresh() {
         }
         if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
-            cmds += zigbee.command(zigbee.GROUPS_CLUSTER, 0x02, [:], DELAY_MS, '00')            // Get group membership
-        }
-        if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
         }
         if (DEVICE_TYPE in  ['THSensor']) {
@@ -2261,10 +1396,8 @@ void refresh() {
     }
 }
 
-/* groovylint-disable-next-line SpaceAfterClosingBrace */
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] }; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
-/* groovylint-disable-next-line SpaceAfterClosingBrace */
-void clearRefreshRequest() { if (state.states == null) { state.states = [:] }; state.states['isRefresh'] = false }
+void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
+void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 
 void clearInfoEvent() {
     sendInfoEvent('clear')
@@ -2283,25 +1416,18 @@ void sendInfoEvent(String info=null) {
 }
 
 void ping() {
-    if (isAqaraTVOC_OLD()) {
-        // Aqara TVOC is sleepy or does not respond to the ping.
-        logInfo 'ping() command is not available for this sleepy device.'
-        sendRttEvent('n/a')
+    if (state.lastTx == null ) { state.lastTx = [:] }
+    state.lastTx['pingTime'] = new Date().getTime()
+    //if (state.states == null ) { state.states = [:] }
+    state.states['isPing'] = true
+    scheduleCommandTimeoutCheck()
+    if (isVirtual()) {
+        runInMillis(10, virtualPong)
     }
     else {
-        if (state.lastTx == null ) { state.lastTx = [:] }
-        state.lastTx['pingTime'] = new Date().getTime()
-        //if (state.states == null ) { state.states = [:] }
-        state.states['isPing'] = true
-        scheduleCommandTimeoutCheck()
-        if (isVirtual()) {
-            runInMillis(10, virtualPong)
-        }
-        else {
-            sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
-        }
-        logDebug 'ping...'
+        sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
     }
+    logDebug 'ping...'
 }
 
 def virtualPong() {
@@ -2547,8 +1673,10 @@ List<String> configure() {
     if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()   // zigbee commands are sent here!
     }
-    cmds += initializeDevice()
-    cmds += configureDevice()
+    List<String> initCmds = initializeDevice()
+    if (initCmds != null && initCmds != [] ) { cmds += initCmds }
+    List<String> cfgCmds = configureDevice()
+    if (cfgCmds != null && cfgCmds != [] ) { cmds += cfgCmds }
     // commented out 12/15/2923 sendZigbeeCommands(cmds)
     sendInfoEvent('sent device configuration')
     logDebug "configure(): returning cmds = ${cmds}"
@@ -2557,7 +1685,7 @@ List<String> configure() {
         sendZigbeeCommands(cmds)
     }
     else {
-        logDebug "no configure() commands defined for device type ${DEVICE_TYPE}"
+        logDebug "configure(): no commands defined for device type ${DEVICE_TYPE}"
     }
 }
 
@@ -2574,7 +1702,7 @@ void installed() {
 }
 
 /**
- * Invoked when initialize button is clicked
+ * Invoked when the initialize button is clicked
  */
 void initialize() {
     logInfo 'initialize...'
@@ -2695,7 +1823,9 @@ void resetStats() {
     state.lastRx = [:]
     state.lastTx = [:]
     state.health = [:]
-    state.zigbeeGroups = [:]
+    if (this.respondsTo('groupsLibVersion')) {
+        state.zigbeeGroups = [:]
+    }
     state.stats['rxCtr'] = 0
     state.stats['txCtr'] = 0
     state.states['isDigital'] = false
@@ -2727,7 +1857,6 @@ void initializeVars( boolean fullInit = false ) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.health == null) { state.health = [:] }
-    if (state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
     if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', false) }
@@ -2740,18 +1869,10 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
 
-    if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }
-        if (fullInit || settings?.maxReportingTime == null) { device.updateSetting('maxReportingTime', [value:DEFAULT_MAX_REPORTING_TIME, type:'number']) }
-    }
-    if (device.hasCapability('IlluminanceMeasurement')) {
-        if (fullInit || settings?.illuminanceThreshold == null) { device.updateSetting('illuminanceThreshold', [value:DEFAULT_ILLUMINANCE_THRESHOLD, type:'number']) }
-        if (fullInit || settings?.illuminanceCoeff == null) { device.updateSetting('illuminanceCoeff', [value:1.00, type:'decimal']) }
-    }
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
+    executeCustomHandler('customCreateChildDevices', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
-    if (DEVICE_TYPE in ['AqaraCube'])  { initVarsAqaraCube(fullInit); initEventsAqaraCube(fullInit) }
     if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
     final String mm = device.getDataValue('model')
@@ -2787,7 +1908,7 @@ void setDestinationEP() {
     }
 }
 
-void  logDebug(final String msg) {
+void logDebug(final String msg) {
     if (settings?.logEnable) {
         log.debug "${device.displayName} " + msg
     }
@@ -2857,7 +1978,11 @@ void deleteAllScheduledJobs() {
 }
 
 void deleteAllChildDevices() {
-    logDebug 'deleteAllChildDevices : not implemented!'
+    getChildDevices().each { child ->
+        log.info "${device.displayName} Deleting ${child.deviceNetworkId}"
+        deleteChildDevice(child.deviceNetworkId)
+    }
+    sendInfoEvent 'All child devices DELETED'
 }
 
 void parseTest(String par) {
@@ -2911,7 +2036,7 @@ String formatTime(int timeInSeconds) {
 }
 
 boolean isTuya() {
-    if (!device) { return true }    // fallback - added 04/03/2024 
+    if (!device) { return true }    // fallback - added 04/03/2024
     String model = device.getDataValue('model')
     String manufacturer = device.getDataValue('manufacturer')
     /* groovylint-disable-next-line UnnecessaryTernaryExpression */
@@ -2982,7 +2107,7 @@ long formattedDate2unix(String formattedDate) {
         return now()
     }
 }
-
+/*
 void test(String par) {
     List<String> cmds = []
     log.warn "test... ${par}"
@@ -2992,3 +2117,4 @@ void test(String par) {
 
     sendZigbeeCommands(cmds)
 }
+*/

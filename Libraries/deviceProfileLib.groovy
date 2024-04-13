@@ -76,8 +76,8 @@ metadata {
 }
 
 String getDeviceProfile()    { state.deviceProfile ?: 'UNKNOWN' }
-Map getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()]}
-Set getDeviceProfiles()      { deviceProfilesV3?.keySet() ?: deviceProfilesV2?.keySet()}
+Map getDEVICE()              { deviceProfilesV3 != null ? deviceProfilesV3[getDeviceProfile()] : deviceProfilesV2[getDeviceProfile()] }
+Set getDeviceProfiles()      { deviceProfilesV3?.keySet() ?: deviceProfilesV2?.keySet() }
 List<String> getDeviceProfilesMap()   { deviceProfilesV3.values().description as List<String> ?: deviceProfilesV2.values().description as List<String> }
 // ---------------------------------- deviceProfilesV3 helper functions --------------------------------------------
 
