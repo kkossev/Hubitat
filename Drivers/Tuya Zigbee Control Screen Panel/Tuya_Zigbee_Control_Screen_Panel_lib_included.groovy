@@ -17,12 +17,13 @@
  * ver. 0.1.0  2024-04-07 kkossev  - (dev. branch) first version
  * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
  * ver. 0.1.2  2024-04-11 kkossev  - (dev. branch) added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
+ * ver. 1.0.0  2024-04-13 kkossev  - first release version
  *
  *                                   TODO:  
  */
 
-static String version() { "0.1.2" }
-static String timeStamp() {"2024/04/11 7:56 PM"}
+static String version() { "1.0.0" }
+static String timeStamp() {"2024/04/13 4:32 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
