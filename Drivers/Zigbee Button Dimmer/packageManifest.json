@@ -6,5 +6,13 @@
  "dateReleased":"2024-04-13",
  "releaseNotes":"3.0.6  2024-04-07 - first HPM version",
  "documentationLink":"https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/3",
- "communityLink":"https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/3"
+ "communityLink":"https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/3",
+ "drivers": [
+  {
+     "id":"cad2820a-82ad-4329-923d-0a4ccb885355",
+     "name":"Zigbee Button Dimmer",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Button%20Dimmer/Zigbee_Button_Dimmer_lib_included.groovy",
+     "required":true
+  }
+  ]
 }
