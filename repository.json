@@ -245,6 +245,17 @@
       "tags":[
         "Zigbee"
        ]
+    },
+	{
+      "id":"7d3627fd-27c6-4784-a76a-4f2eded51168",
+      "name":"Zigbee Button Dimmer",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Button%20Dimmer/packageManifest.json",
+      "description":"Zigbee Buttons Dimmers",
+      "tags":[
+        "Buttons",
+        "Zigbee"
+       ]
     }	
   ]
 }
