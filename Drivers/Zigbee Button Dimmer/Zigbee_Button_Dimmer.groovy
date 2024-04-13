@@ -19,7 +19,7 @@
  * ver. 2.1.4  2023-09-06 kkossev  - buttonDimmerLib library; added IKEA Styrbar E2001/E2002, IKEA on/off switch E1743, IKEA remote control E1810; added Identify cluster; Ranamed 'Zigbee Button Dimmer'; bugfix - Styrbar ignore button 1; IKEA RODRET E2201  key #4 changed to key #2; added IKEA TRADFRI open/close remote E1766
  * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
  * ver. 3.0.5  2024-04-05 kkossev  - fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
- * ver. 3.0.6  2024-04-07 kkossev  - (dev. branch) zigbee gruops library; setLevel exception bug fix;
+ * ver. 3.0.6  2024-04-07 kkossev  - zigbee groups library; setLevel exception bug fix;
  *
  *                                   TODO: initialize the TS004F dimmers in scene mode during pairing; stack overflow bug fix !!!!
  */
