@@ -235,6 +235,16 @@
       "tags":[
         "Tools & Utilities", "Matter"
        ]
-    }
+    },
+	{
+      "id":"3d3e4d40-3184-4604-b26c-0165f04f8b4a",
+      "name":"Tuya Zigbee Control Screen Panel",
+      "category":"Integrations",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Control%20Screen%20Panel/packageManifest.json",
+      "description":"T3E - Tuya Zigbee Control Screen Panel",
+      "tags":[
+        "Zigbee"
+       ]
+    }	
   ]
 }
