@@ -1,0 +1,10 @@
+{
+ "packageName":"Zigbee Button Dimmer",
+ "author":"Krassimir Kossev",
+ "version":"3.0.6",
+ "minimumHEVersion":"2.3.8.139",
+ "dateReleased":"2024-04-13",
+ "releaseNotes":"3.0.6  2024-04-07 - first HPM version",
+ "documentationLink":"https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/3",
+ "communityLink":"https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/3"
+}
