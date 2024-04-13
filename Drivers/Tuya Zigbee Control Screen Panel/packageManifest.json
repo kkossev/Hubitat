@@ -1,0 +1,18 @@
+{
+    "packageName":"Tuya Zigbee Control Screen Panel",
+    "author":"Krassimir kkossev",
+    "version":"1.0.0",
+    "minimumHEVersion":"2.3.8.119",
+    "dateReleased":"2024-04-13",
+    "releaseNotes":"1.0.0  2024-04-13 - first version available in HPM",
+    "documentationLink":"https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel",
+    "communityLink":"https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208",
+    "drivers": [
+     {
+        "id":"7862fa83-0a21-46a9-b256-819e1f98a28b",
+        "name":"Tuya Zigbee Control Screen Panel",
+        "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Control%20Screen%20Panel/Tuya_Zigbee_Control_Screen_Panel_lib_included.groovy",
+        "required":true
+     }
+     ]
+   }
