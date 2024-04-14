@@ -61,6 +61,7 @@
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
  *  ver. 1.9.2 2024-03-30 kkossev - more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
+ *  ver. 1.9.4 2024-04-14 kkossev - (dev. branch) added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -84,8 +85,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.3' }
-static String timeStamp() { '2024/04/07 8:37 AM' }
+static String version() { '1.9.4' }
+static String timeStamp() { '2024/04/14 10:11 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -161,7 +162,10 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,0006', outClusters:'0019,000A', model:'TS011F', manufacturer:'_TZ3000_lnggrqqi', deviceJoinName: 'Tuya RC-MCB Circuit Breaker 2P'            // vendor: 'Mumubiz', model: 'ZJSB9-80Z' https://www.aliexpress.com/item/1005002605097816.html not tested  (no power monitoring)
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_cjbofhxw', deviceJoinName: 'MatSee Smart Meter with CT'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_abatw3kj', deviceJoinName: 'RTX Circuit Breaker 4x25A ZCB25-4P'        // https://community.hubitat.com/t/3phase-switch-recomendations/118293/12?u=kkossev
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bcusnqt8', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bcusnqt8', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM01
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ves1ycwx', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // SPM02
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_v9hkz2yn', deviceJoinName: 'Zemismart Real-time Smart Energy Monitor'  // https://community.hubitat.com/t/release-tuya-zigbee-metering-plug-w-healthstatus/86465/520?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_81yrt3lo', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'       // https://github.com/Koenkk/zigbee-herdsman-converters/blob/8162314dbfd6e3803aeaf1d35fffd83c7e6ff5c6/src/devices/tuya.ts#L5185
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00,FF66"', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_rks0sgb7', deviceJoinName: 'Bidirectional energy meter with 80A current clamp'  //https://community.hubitat.com/t/driver-for-zigbee-tuya-power-monitoring/123257/14?u=kkossev
 
@@ -364,7 +368,7 @@ static int getATTRIBUTE_HISTORICAL_CONSUMPTION() { 0x0400 }
 
 private boolean isTuyaSpecificCluster() { device.getDataValue('model') in ['TS0601'] }
 private boolean isCircuitBreaker()      { device.getDataValue('manufacturer') in ['_TZ3000_ky0fq4ho'] }
-private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE200_bcusnqt8'] }    // TODO - _TZE200_bcusnqt8 matches only partially !
+private boolean isRTXCircuitBreaker()   { device.getDataValue('manufacturer') in ['_TZE200_abatw3kj', '_TZE200_bcusnqt8', '_TZE204_ves1ycwx', '_TZE200_ves1ycwx', '_TZE200_v9hkz2yn'] }    // TODO - _TZE200_bcusnqt8 matches only partially !
 private boolean isDinRail()             { device.getDataValue('manufacturer') in ['_TZE200_eaac7dkw', '_TZE200_bkkmqmyo', '_TZE200_lsanae15'] }
 private boolean isHEProblematic()       { device.getDataValue('manufacturer') in ['_TZ3000_okaz9tjs', '_TZ3000_r6buo8ba', '_TZ3000_cfnprab5', 'SONOFF', 'Woolley', 'unknown'] }
 private boolean isHoch()                { device.getDataValue('manufacturer') in ['_TZE200_hkdl5fmv'] }
