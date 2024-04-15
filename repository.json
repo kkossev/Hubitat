@@ -246,7 +246,7 @@
         "Buttons", "Misc. Devices", "Zigbee"
        ]
     },
-	{
+    {
       "id":"7d3627fd-27c6-4784-a76a-4f2eded51168",
       "name":"Zigbee Button Dimmer",
       "category":"Control",
@@ -256,7 +256,7 @@
         "Buttons", "Zigbee"
        ]
     },
-	{
+    {
       "id":"fc13f97d-e5a8-4d5e-bf84-1c9b712f9568",
       "name":"Aqara Cube T1 Pro",
       "category":"Control",
