@@ -68,7 +68,8 @@
  * ver. 1.6.8  2023-11-20 kkossev  - SONOFF SNZB-06P RADAR bug fixes; added radarSensitivity and fadingTime preferences; update parameters for Tuya radars bug fix;
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
- *
+ * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes;
+  *
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: ignore invalid humidity reprots (>100 %)
@@ -99,8 +100,8 @@
 */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '1.8.0' }
-static String timeStamp() { '2024/03/23 10:19 AM' }
+static String version() { '1.8.1' }
+static String timeStamp() { '2024/04/16 10:06 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -1135,7 +1136,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     ],
 
     // isSONOFF()
-    'SONOFF_SNZB-06P_RADAR' : [ // https://github.com/Koenkk/zigbee-herdsman-converters/blob/14dffaa06511876d096aa72e669df4b032f4cf33/src/devices/sonoff.ts#L675 
+    'SONOFF_SNZB-06P_RADAR' : [ // https://github.com/Koenkk/zigbee-herdsman-converters/blob/14dffaa06511876d096aa72e669df4b032f4cf33/src/devices/sonoff.ts#L675
             description   : 'SONOFF SNZB-06P RADAR',
             models        : ['SONOFF'],
             device        : [type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
@@ -1293,7 +1294,7 @@ Map getPreferencesMap(final String param, boolean debug=false) {
         if (preference.isNumber()) {
             // find the preference in the tuyaDPs map
             int dp = safeToInt(preference)
-            Map dpMaps   =  DEVICE?.tuyaDPs
+            List<Map> dpMaps   =  DEVICE?.tuyaDPs
             foundMap = dpMaps.find { it.dp == dp }
         }
         else { // cluster:attribute
@@ -2024,7 +2025,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
     //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV2[state.deviceProfile]?.tuyaDPs as Map
+    List<Map> tuyaDPsMap = deviceProfilesV2[state.deviceProfile]?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null
@@ -3332,6 +3333,7 @@ List<String> updateAllPreferences() {
     Integer dpInt = 0
     /* groovylint-disable-next-line NoDef */
     def scaledValue    // int or String for enums
+    log.trace "(DEVICE?.preferences)=${(DEVICE?.preferences)}"
     (DEVICE?.preferences).each { name, dp ->
         dpInt = safeToInt(dp, -1)
         if (dpInt <= 0) {
@@ -3340,7 +3342,7 @@ List<String> updateAllPreferences() {
             return []
         }
         Map foundMap
-        foundMap = getPreferencesMap(name)
+        foundMap = getPreferencesMap(name, true)
         /* groovylint-disable-next-line InvertedIfElse */
         if (!foundMap?.isEmpty()) {
             scaledValue = getScaledPreferenceValue(name, foundMap)
