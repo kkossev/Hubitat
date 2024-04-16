@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.6',
+    version: '3.0.7',
     documentationLink: ''
 )
 /*
@@ -35,7 +35,8 @@ library(
   * ver. 3.0.3  2024-03-17 kkossev  - more groovy lint; support for deviceType Plug; ignore repeated temperature readings; cleaned thermostat specifics; cleaned AirQuality specifics; removed IRBlaster type; removed 'radar' type; threeStateEnable initlilization
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
-  * ver. 3.0.6  2024-04-08 kkossev  - (dev. branch) removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
+  * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
+  * ver. 3.0.7  2024-04-14 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr; trace ZDO commands;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
@@ -44,8 +45,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.0.6' }
-String commonLibStamp() { '2024/04/08 10:51 PM' }
+String commonLibVersion() { '3.0.7' }
+String commonLibStamp() { '2024/04/14 8:54 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -194,6 +195,9 @@ void parse(final String description) {
     }
     final Map descMap = myParseDescriptionAsMap(description)
 
+    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }
+    if (isSpammyDeviceReport(descMap)) { return }
+
     if (descMap.profileId == '0000') {
         parseZdoClusters(descMap)
         return
@@ -202,8 +206,6 @@ void parse(final String description) {
         parseGeneralCommandResponse(descMap)
         return
     }
-    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }
-    if (isSpammyDeviceReport(descMap)) { return }
     //
     //final String clusterName = clusterLookup(descMap.clusterInt)
     //final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
@@ -324,6 +326,24 @@ boolean isSpammyDeviceReport(final Map descMap) {
     return false
 }
 
+@Field static final Map<Integer, String> ZdoClusterEnum = [
+    0x0002: 'Node Descriptor Request',
+    0x0005: 'Active Endpoints Request',
+    0x0006: 'Match Descriptor Request',
+    0x0022: 'Unbind Request',
+    0x0013: 'Device announce',
+    0x0034: 'Management Leave Request',
+    0x8002: 'Node Descriptor Response',
+    0x8004: 'Simple Descriptor Response',
+    0x8005: 'Active Endpoints Response',
+    0x801D: 'Extended Simple Descriptor Response',
+    0x801E: 'Extended Active Endpoint Response',
+    0x8021: 'Bind Response',
+    0x8022: 'Unbind Response',
+    0x8023: 'Bind Register Response',
+    0x8034: 'Management Leave Response'
+]
+
 /**
  * ZDO (Zigbee Data Object) Clusters Parsing
  * @param descMap Zigbee message in parsed map format
@@ -334,11 +354,38 @@ void parseZdoClusters(final Map descMap) {
     final String statusHex = ((List)descMap.data)[1]
     final Integer statusCode = hexStrToUnsignedInt(statusHex)
     final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${statusHex}"
-    if (statusCode > 0x00) {
-        logWarn "parseZdoClusters: ZDO ${clusterName} error: ${statusName} (statusCode: 0x${statusHex})"
-    }
-    else {
-        logDebug "parseZdoClusters: ZDO ${clusterName} success: ${descMap.data}"
+    final String clusterInfo = "${device.displayName} Received ZDO ${clusterName} (0x${descMap.clusterId}) status ${statusName}"
+    switch (clusterId) {
+        case 0x0005 :
+            if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
+            break
+        case 0x0006 :
+            if (state.stats == null) { state.stats = [:] } ; state.stats['matchDescCtr'] = (state.stats['matchDescCtr'] ?: 0) + 1
+            if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
+            break
+        case 0x0013 : // device announcement
+            if (state.stats == null) { state.stats = [:] } ; state.stats['rejoinCtr'] = (state.stats['rejoinCtr'] ?: 0) + 1
+            if (settings?.logEnable) { log.info "${clusterInfo}, rejoinCtr= ${state.stats['rejoinCtr']}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Device network ID: ${descMap.data[2] + descMap.data[1]}, Capability Information: ${descMap.data[11]})" }
+            break
+        case 0x8004 : // simple descriptor response
+            if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, status:${descMap.data[1]}, lenght:${hubitat.helper.HexUtils.hexStringToInt(descMap.data[4])}" }
+            //parseSimpleDescriptorResponse( descMap )
+            break
+        case 0x8005 : // endpoint response
+            String endpointCount = descMap.data[4]
+            String endpointList = descMap.data[5]
+            if (settings?.logEnable) { log.info "${clusterInfo}, (endpoint response) endpointCount = ${endpointCount}  endpointList = ${endpointList}" }
+            break
+        case 0x8021 : // bind response
+            if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Status: ${descMap.data[1] == '00' ? 'Success' : '<b>Failure</b>'})" }
+            break
+        case 0x8022 : //unbind request
+        case 0x8034 : //leave response
+            if (settings?.logEnable) { log.info "${clusterInfo}" }
+            break
+        default :
+            if (settings?.logEnable) { log.warn "${device.displayName} Unprocessed ZDO command: cluster=${descMap.clusterId} command=${descMap.command} attrId=${descMap.attrId} value=${descMap.value} data=${descMap.data}" }
+            break
     }
 }
 
@@ -521,24 +568,6 @@ void parseDefaultCommandResponse(final Map descMap) {
     0xC3: 'Unsupported Cluster'
 ]
 
-@Field static final Map<Integer, String> ZdoClusterEnum = [
-    0x0002: 'Node Descriptor Request',
-    0x0005: 'Active Endpoints Request',
-    0x0006: 'Match Descriptor Request',
-    0x0022: 'Unbind Request',
-    0x0013: 'Device announce',
-    0x0034: 'Management Leave Request',
-    0x8002: 'Node Descriptor Response',
-    0x8004: 'Simple Descriptor Response',
-    0x8005: 'Active Endpoints Response',
-    0x801D: 'Extended Simple Descriptor Response',
-    0x801E: 'Extended Active Endpoint Response',
-    0x8021: 'Bind Response',
-    0x8022: 'Unbind Response',
-    0x8023: 'Bind Register Response',
-    0x8034: 'Management Leave Response'
-]
-
 @Field static final Map<Integer, String> ZigbeeGeneralCommandEnum = [
     0x00: 'Read Attributes',
     0x01: 'Read Attributes Response',
@@ -646,7 +675,7 @@ void parseBasicCluster(final Map descMap) {
             logDebug "Tuya check-in (AppVersion=${descMap?.value})"
             break
         case [0xFFE0, 0xFFE1, 0xFFE3, 0xFFE4] :
-            logDebug "Tuya unknown attribute ${descMap?.attrId} value=${descMap?.value}"
+            logDebug "Tuya attribute ${descMap?.attrId} value=${descMap?.value}"
             break
         case 0xFFFE:
             logDebug "Tuya attributeReportingStatus (attribute FFFE) value=${descMap?.value}"
@@ -1360,24 +1389,30 @@ List<String> configureDevice() {
  * -----------------------------------------------------------------------------
 */
 
+List<String> customHandlers(final List customHandlersList) {
+    List<String> cmds = []
+    if (customHandlersList != null && customHandlersList != []) {
+        customHandlersList.each { handler ->
+            if (this.respondsTo(handler)) {
+                List<String> customCmds = this."${handler}"()
+                if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+            }
+        }
+    }
+    return cmds
+}
+
 void refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
     checkDriverVersion()
     List<String> cmds = []
     setRefreshRequest()    // 3 seconds
 
-    // device type specific refresh handlers
-    if (this.respondsTo('customRefresh')) {
-        List<String> customCmds = customRefresh()
-        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
-    }
-    else if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
+    List<String> customCmds = customHandlers(['batteryRefresh', 'groupsRefresh', 'customRefresh'])
+    if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+
+    if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
-        // generic refresh handling, based on teh device capabilities
-        if (device.hasCapability('Battery')) {
-            cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 200)         // battery voltage
-            cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 200)         // battery percentage
-        }
         if (DEVICE_TYPE in  ['Dimmer']) {
             cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
             cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
@@ -1667,9 +1702,12 @@ void configureNow() {
  */
 List<String> configure() {
     List<String> cmds = []
-    logInfo 'configure...'
+    if (state.stats == null) { state.stats = [:] } ; state.stats.cfgCtr = (state.stats.cfgCtr ?: 0) + 1
+    logInfo "configure()... cfgCtr=${state.stats.cfgCtr}"
     logDebug "configure(): settings: $settings"
-    cmds += tuyaBlackMagic()
+    if (isTuya()) {
+        cmds += tuyaBlackMagic()
+    }
     if (isAqaraTVOC_OLD() || isAqaraTRV_OLD()) {
         aqaraBlackMagic()   // zigbee commands are sent here!
     }
@@ -1693,7 +1731,8 @@ List<String> configure() {
  * Invoked by Hubitat when driver is installed
  */
 void installed() {
-    logInfo 'installed...'
+    if (state.stats == null) { state.stats = [:] } ; state.stats.instCtr = (state.stats.instCtr ?: 0) + 1
+    logInfo "installed()... instCtr=${state.stats.instCtr}"
     // populate some default values for attributes
     sendEvent(name: 'healthStatus', value: 'unknown')
     sendEvent(name: 'powerSource', value: 'unknown')
@@ -1705,7 +1744,8 @@ void installed() {
  * Invoked when the initialize button is clicked
  */
 void initialize() {
-    logInfo 'initialize...'
+    if (state.stats == null) { state.stats = [:] } ; state.stats.initCtr = (state.stats.initCtr ?: 0) + 1
+    logInfo "initialize()... initCtr=${state.stats.initCtr}"
     initializeVars(fullInit = true)
     updateTuyaVersion()
     updateAqaraVersion()
@@ -1859,7 +1899,7 @@ void initializeVars( boolean fullInit = false ) {
     if (state.health == null) { state.health = [:] }
 
     if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
-    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', false) }
+    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_DEBUG_LOGGING ?: false) }
     if (fullInit || settings?.traceEnable == null) { device.updateSetting('traceEnable', false) }
     if (fullInit || settings?.alwaysOn == null) { device.updateSetting('alwaysOn', false) }
     if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
@@ -1868,6 +1908,9 @@ void initializeVars( boolean fullInit = false ) {
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
     if ((fullInit || settings?.threeStateEnable == null) && _THREE_STATE == true) { device.updateSetting('threeStateEnable', false) }
+
+    // common libraries initialization
+    executeCustomHandler('groupsInitializeVars', fullInit)
 
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
@@ -1947,19 +1990,23 @@ void getAllProperties() {
 
 // delete all Preferences
 void deleteAllSettings() {
+    String preferencesDeleted = ''
     settings.each { it ->
-        logDebug "deleting ${it.key}"
+        preferencesDeleted += "${it.key} (${it.value}), "
         device.removeSetting("${it.key}")
     }
+    logDebug "Deleted settings: ${preferencesDeleted}"
     logInfo  'All settings (preferences) DELETED'
 }
 
 // delete all attributes
 void deleteAllCurrentStates() {
+    String attributesDeleted = ''
     device.properties.supportedAttributes.each { it ->
-        logDebug "deleting $it"
+        attributesDeleted += "${it}, "
         device.deleteCurrentState("$it")
     }
+    logDebug "Deleted attributes: ${attributesDeleted}"
     logInfo 'All current states (attributes) DELETED'
 }
 

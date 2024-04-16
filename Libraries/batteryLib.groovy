@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -7,7 +7,7 @@ library(
     name: 'batteryLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy',
-    version: '3.0.1',
+    version: '3.0.2',
     documentationLink: ''
 )
 /*
@@ -24,20 +24,20 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
+ * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
  *
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-
-static String batteryLibVersion()   { '3.0.1' }
-static String batteryLibStamp() { '2024/04/06 9:33 AM' }
+static String batteryLibVersion()   { '3.0.2' }
+static String batteryLibStamp() { '2024/04/15 8:07 AM' }
 
 metadata {
     capability 'Battery'
     attribute 'batteryVoltage', 'number'
     // no commands
     preferences {
-        if (device) {
+        if (device && advancedOptions == true) {
             input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
         }
     }
@@ -45,19 +45,24 @@ metadata {
 
 void customParsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (descMap.attrId in ['0020', '0021']) {
-        state.lastRx['batteryTime'] = new Date().getTime()
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
-    }
     final int rawValue = hexStrToUnsignedInt(descMap.value)
-    if (descMap.attrId == '0020') {
+    if (descMap.attrId == '0020') { // battery voltage
+        state.lastRx['batteryTime'] = new Date().getTime()
+        state.stats['bVoltCtr'] = (state.stats['bVoltCtr'] ?: 0) + 1
         sendBatteryVoltageEvent(rawValue)
         if ((settings.voltageToPercent ?: false) == true) {
             sendBatteryVoltageEvent(rawValue, convertToPercent = true)
         }
     }
-    else if (descMap.attrId == '0021') {
-        sendBatteryPercentageEvent(rawValue * 2)
+    else if (descMap.attrId == '0021') { // battery percentage
+        state.lastRx['batteryTime'] = new Date().getTime()
+        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
+        if (isTuya()) {
+            sendBatteryPercentageEvent(rawValue)
+        }
+        else {
+            sendBatteryPercentageEvent((rawValue / 2) as int)
+        }
     }
     else {
         logWarn "customParsePowerCluster: zigbee received unknown Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -139,4 +144,11 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     logInfo "${map.descriptionText}"
     //map.each {log.trace "$it"}
     sendEvent(map)
+}
+
+List<String> batteryRefresh() {
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0001, 0x0020, [:], delay = 100)         // battery voltage
+    cmds += zigbee.readAttribute(0x0001, 0x0021, [:], delay = 100)         // battery percentage
+    return cmds
 }

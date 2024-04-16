@@ -20,14 +20,16 @@
  * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
  * ver. 3.0.5  2024-04-05 kkossev  - fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
  * ver. 3.0.6  2024-04-07 kkossev  - zigbee groups library; setLevel exception bug fix;
+ * ver. 3.0.7  2024-04-15 kkossev  - (dev.branch) re-initialize TS004F dimmers in the last mode during re-pairing; defaults bug fix;
  *
- *                                   TODO: initialize the TS004F dimmers in scene mode during pairing; stack overflow bug fix !!!!
+ *                                   TODO: 
  */
 
-static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/07 8:47 AM"}
+static String version() { "3.0.7" }
+static String timeStamp() {"2024/04/15 10:25 PM"}
 
 @Field static final Boolean _DEBUG = false
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -69,11 +71,12 @@ metadata {
         attribute 'batteryVoltage', 'number'
 
         command 'switchMode', [[name: 'mode*', type: 'ENUM', constraints: ['--- select ---'] + SwitchModeOpts.options.values() as List<String>, description: 'Select dimmer or switch mode']]
+        /*  moved to groupsLib
         command 'zigbeeGroups', [
             [name:'command', type: 'ENUM',   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
             [name:'value',   type: 'STRING', description: 'Group number', constraints: ['STRING']]
         ]
-
+        */
 
         if (_DEBUG) {
             command 'test', [[name: "test", type: "STRING", description: "test", defaultValue : ""]] 
@@ -110,11 +113,13 @@ metadata {
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING ?: false, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (isTuya()) {
             input name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true, description: '<i>Switches button order </i>'
         }
-        input name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options for Tuya devices.</i>'
+        if (isTuya() || advancedOptions == true) {
+            input name: 'debounce', type: 'enum', title: '<b>Debouncing</b>', options: DebounceOpts.options, defaultValue: DebounceOpts.defaultValue, required: true, description: '<i>Debouncing options for Tuya devices.</i>'
+        }
         input name: 'dimmerStep', type: 'enum', title: '<b>Dimmer step</b>', options: DimmerStepOpts.options, defaultValue: DimmerStepOpts.defaultValue, required: true, description: '<i>Level change in percent</i>'
     }
 }
@@ -681,14 +686,27 @@ void processTS004Fmode(final Map descMap) {
     }
 }
 
+List<String> getTuyaSwitchModeCmds(String mode) {
+    List<String> cmds = []
+    if (isTuya()) {
+        if (mode == 'scene') {
+            cmds += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay = 200)
+        }
+        else {
+            cmds += zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00, [:], delay = 200)
+        }
+    }
+    return cmds
+}
+
 def switchToSceneMode() {
     logInfo 'switching TS004F into Scene mode'
-    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01))
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x01, [:], delay = 200))
 }
 
 def switchToDimmerMode() {
     logInfo 'switching TS004F into Dimmer mode'
-    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00))
+    sendZigbeeCommands(zigbee.writeAttribute(0x0006, 0x8004, 0x30, 0x00, [:], delay = 200))
 }
 
 def switchMode( mode ) {
@@ -718,19 +736,24 @@ void processTuyaDpButtonDimmer(descMap, dp, dp_id, fncmd) {
     }
 }
 
-/*
-def customRefresh() {
+
+List<String> customRefresh() {
     List<String> cmds = []
-    logDebug "refreshButtonDimmer() (n/a) : ${cmds} "
-    // TODO !!
+    if (isTuya()) {
+        cmds += zigbee.readAttribute(0x0006, 0x8004, [:], delay = 100)
+    }
+    logDebug "customRefresh() : ${cmds}"
     return cmds
 }
-*/
 
-def customConfigureDevice() {
+
+List<String> customConfigureDevice() {
     List<String> cmds = []
-    // TODO !!
-    logDebug "customConfigureDevice() : ${cmds}"
+    if (isTuya()) {
+        String currentMode = device.currentValue('switchMode') ?: 'scene'
+        cmds += getTuyaSwitchModeCmds(currentMode)
+        logDebug "customConfigureDevice() : re-configuring switchMode=${currentMode} (${cmds})"
+    }
     return cmds
 }
 
@@ -752,15 +775,15 @@ List<String> customInitializeDevice() {
 
         cmds += ["zdo bind 0x${device.deviceNetworkId} 0x${intToHexStr(ep, 1)} 0x01 0x0005 {${device.zigbeeId}} {}", 'delay 147', ]
     }
-
     logDebug "customInitializeDevice() : ${cmds}"
     return cmds
 }
 
-void customInitVars(boolean fullInit=false) {
-    logDebug "customInitVars(${fullInit})"
-    def debounceDefault = ((device.getDataValue('model') ?: 'n/a') == 'TS004F' || ((device.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d'])) ?  '1000' : '0'
-    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: debounceDefault, type: 'enum'])
+void customInitializeVars(boolean fullInit=false) {
+    logDebug "customInitializeVars(${fullInit})"
+    int debounceDefault = ((device.getDataValue('model') ?: 'n/a') == 'TS004F' || ((device.getDataValue('manufacturer') ?: 'n/a') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d'])) ?  1000 : 0
+    logDebug "debounceDefault = ${debounceDefault}"
+    if (fullInit || settings?.debounce == null) device.updateSetting('debounce', [value: debounceDefault.toString(), type: 'enum'])
     if (fullInit || settings?.reverseButton == null) device.updateSetting('reverseButton', true)
     if (fullInit || settings?.dimmerStep == null) device.updateSetting('dimmerStep', [value: DimmerStepOpts.defaultValue.toString(), type: 'enum'])
     if (state.states == null) { state.states = [:] }

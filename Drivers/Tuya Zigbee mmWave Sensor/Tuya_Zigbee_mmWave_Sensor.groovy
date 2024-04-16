@@ -16,6 +16,7 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
+ * ver. 3.0.7  2024-04-15 kkossev  - (dev. branch)
  *
  *                                   TODO: update() to save the preferences
  */

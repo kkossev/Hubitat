@@ -26,7 +26,7 @@
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
- * ver. 3.0.9  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.6 check;
+ * ver. 3.1.0  2024-04-17 kkossev  - (dev. branch) commonLib 3.0.7 check; changed to deviceProfilesV3
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -52,7 +52,6 @@
  *                                   TODO: add 'force manual mode' preference (like in the wall thermostat driver)
  *                                   TODO: move debug and info logging preferences from the common library to the driver, so that they are the first preferences in the list
  *                                   TODO: add Info dummy preference to the driver with a hyperlink
- *                                   TODO: change deviceProfilesV2 to deviceProfilesV3 in the lib
  *                                   TODO: add _DEBUG command (for temporary switching the debug logs on/off)
  *                                   TODO: make a driver template for new drivers
  *                                   TODO: Versions of the main module + included libraries
@@ -72,9 +71,9 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.0.9' }
+static String version() { '3.1.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/04/06 11:55 PM' }
+static String timeStamp() { '2024/04/17 5:00 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -148,7 +147,7 @@ metadata {
         if (_DEBUG) { command 'testT', [[name: 'testT', type: 'STRING', description: 'testT', defaultValue : '']]  }
 
         // itterate through all the figerprints and add them on the fly
-        deviceProfilesV2.each { profileName, profileMap ->
+        deviceProfilesV3.each { profileName, profileMap ->
             if (profileMap.fingerprints != null) {
                 profileMap.fingerprints.each {
                     fingerprint it
@@ -184,7 +183,7 @@ metadata {
     options     : [0: 'manual', 1: 'auto', 2: 'away']
 ]
 
-@Field static final Map deviceProfilesV2 = [
+@Field static final Map deviceProfilesV3 = [
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/6339b6034de34f8a633e4f753dc6e506ac9b001c/src/devices/xiaomi.ts#L3197
     // https://github.com/Smanar/deconz-rest-plugin/blob/6efd103c1a43eb300a19bf3bf3745742239e9fee/devices/xiaomi/xiaomi_lumi.airrtc.agl001.json
     // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6351

@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 330
+      "version": 332
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -46,13 +46,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 298
+      "version": 319
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
       "id": 169,
       "codeType": "library",
-      "version": 6
+      "version": 9
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/levelLib.groovy",
@@ -70,7 +70,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
       "id": 171,
       "codeType": "library",
-      "version": 5
+      "version": 11
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/temperatureLib.groovy",

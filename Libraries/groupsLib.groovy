@@ -7,7 +7,7 @@ library(
     name: 'groupsLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/groupsLib.groovy',
-    version: '3.0.0',
+    version: '3.0.1',
     documentationLink: ''
 )
 /*
@@ -23,12 +23,13 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added groupsLib.groovy
+ * ver. 3.0.1  2024-04-14 kkossev  - groupsInitializeVars() groupsRefresh()
  *
  *                                   TODO:
 */
 
-static String groupsLibVersion()   { '3.0.0' }
-static String groupsLibStamp() { '2024/04/06 3:56 PM' }
+static String groupsLibVersion()   { '3.0.1' }
+static String groupsLibStamp() { '2024/04/15 7:09 AM' }
 
 metadata {
     // no capabilities
@@ -267,12 +268,12 @@ void groupCommandsHelp(val) {
     logWarn 'GroupCommands: select one of the commands in this list!'
 }
 
-List<String> customRefresh() {
-    logDebug 'customRefresh()'
+List<String> groupsRefresh() {
+    logDebug 'groupsRefresh()'
     return getGroupMembership(null)
 }
 
-void customInitializeVars( boolean fullInit = false ) {
-    logDebug "customInitializeVars()... fullInit = ${fullInit}"
+void groupsInitializeVars(boolean fullInit = false) {
+    logDebug "groupsInitializeVars()... fullInit = ${fullInit}"
     if (fullInit || state.zigbeeGroups == null) { state.zigbeeGroups = [:] }
 }
