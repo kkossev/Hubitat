@@ -28,13 +28,13 @@ library(
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
- * ver. 3.1.1  2024-04-16 kkossev  - (dev. branch) deviceProfilesV3 bug fix
+ * ver. 3.1.1  2024-04-16 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix;
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
 */
 
 static String deviceProfileLibVersion()   { '3.1.1' }
-static String deviceProfileLibStamp() { '2024/04/16 5:09 PM' }
+static String deviceProfileLibStamp() { '2024/04/16 11:08 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -139,12 +139,11 @@ Map getPreferencesMapByName(final String param, boolean debug=false) {
 
 Map getAttributesMap(String attribName, boolean debug=false) {
     Map foundMap = [:]
-    /* groovylint-disable-next-line NoDef, VariableTypeRequired */
-    def searchMap = []
+    List<Map> searchMapList = []
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
     if (DEVICE?.tuyaDPs != null) {
-        searchMap =  DEVICE?.tuyaDPs
-        foundMap = searchMap.find { it.name == attribName }
+        searchMapList =  DEVICE?.tuyaDPs
+        foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
             return foundMap
@@ -152,8 +151,8 @@ Map getAttributesMap(String attribName, boolean debug=false) {
     }
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in attributes" }
     if (DEVICE?.attributes != null) {
-        searchMap  =  DEVICE?.attributes
-        foundMap = searchMap.find { it.name == attribName }
+        searchMapList  =  DEVICE?.attributes
+        foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
             if (debug) { logDebug "getAttributesMap: foundMap = ${foundMap}" }
             return foundMap
@@ -1165,7 +1164,7 @@ boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final in
     //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
-    Map tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs as Map
+    List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
     if (tuyaDPsMap == null || tuyaDPsMap == [:]) { return false }    // no any Tuya DPs defined in the Device Profile
 
     Map foundItem = null

@@ -36,7 +36,7 @@ library(
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
-  * ver. 3.0.7  2024-04-14 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr; trace ZDO commands;
+  * ver. 3.0.7  2024-04-17 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands;
   *
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
@@ -46,7 +46,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.7' }
-String commonLibStamp() { '2024/04/14 8:54 PM' }
+String commonLibStamp() { '2024/04/17 5:36 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -357,6 +357,7 @@ void parseZdoClusters(final Map descMap) {
     final String clusterInfo = "${device.displayName} Received ZDO ${clusterName} (0x${descMap.clusterId}) status ${statusName}"
     switch (clusterId) {
         case 0x0005 :
+            if (state.stats == null) { state.stats = [:] } ; state.stats['activeEpRqCtr'] = (state.stats['activeEpRqCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
             break
         case 0x0006 :

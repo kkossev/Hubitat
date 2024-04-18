@@ -22,15 +22,17 @@
  * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices;
  * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
  * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
+ * ver. 3.0.7  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
  *
+ *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
  *                                   TODO: add power-on behavior option
  *                                   TODO: add 'allStatus' attribute
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { "3.0.3" }
-static String timeStamp() {"2024/02/24 10:47 PM"}
+static String version() { "3.0.37" }
+static String timeStamp() {"2024/04/17 1:29 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -44,7 +46,9 @@ import groovy.json.JsonOutput
 
 deviceType = "Switch"
 @Field static final String DEVICE_TYPE = "Switch"
+
 #include kkossev.commonLib
+#include kkossev.groupsLib
 
 // @Field static final Boolean _THREE_STATE = true  // move from the commonLib here?
 
@@ -70,12 +74,6 @@ metadata {
         }
 
         // deviceType specific capabilities, commands and attributes
-        if (_DEBUG || (deviceType in ["Dimmer", "ButtonDimmer", "Switch", "Valve"])) {
-            command "zigbeeGroups", [
-                [name:"command", type: "ENUM",   constraints: ZigbeeGroupsOpts.options.values() as List<String>],
-                [name:"value",   type: "STRING", description: "Group number", constraints: ["STRING"]]
-            ]
-        }
 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0006,0007,0B05,FC57", outClusters:"0019", model:"ZBMINIL2", manufacturer:"SONOFF", deviceJoinName: "SONOFF ZBMINIL2"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "TRADFRI control outlet"
