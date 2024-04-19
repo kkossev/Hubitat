@@ -22,7 +22,7 @@
  * ver. 3.0.1  2023-11-25 kkossev  - (dev. branch) added LEDVANCE Plug 03; added TS0101 _TZ3000_pnzfdr9y SilverCrest Outdoor Plug Model HG06619 manufactured by Lidl; added configuration for 0x0006 cluster reproting for all devices;
  * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
  * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
- * ver. 3.0.7  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
+ * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -31,8 +31,8 @@
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { "3.0.37" }
-static String timeStamp() {"2024/04/17 1:29 PM"}
+static String version() { "3.0.7" }
+static String timeStamp() {"2024/04/18 7:44 AM"}
 
 @Field static final Boolean _DEBUG = false
 

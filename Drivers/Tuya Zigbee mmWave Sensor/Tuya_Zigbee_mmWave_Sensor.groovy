@@ -16,13 +16,24 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
- * ver. 3.0.7  2024-04-15 kkossev  - (dev. branch)
+ * ver. 3.0.7  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light (0/1);
  *
+ *                                   TODO: SONOFF brightness : dark/light - if the attribute is of a type ENUM, send the value, not the key !!
+ *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
+ *                                   TODO: SONOFF preferences are not updated as attributes when changed - implement refresh() method? or postProcess method?
  *                                   TODO: update() to save the preferences
- */
+ *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
+ *                                   TODO: Linptech spammyDPsToIgnore[] !
+ *                                   TODO: command for black radar LED
+ *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
+ *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
+ *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
+ *                                   TODO: TS0225_HL0SS9OA_RADAR - add presets
+ *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
+*/
 
-static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/06 11:59 PM"}
+static String version() { "3.0.7" }
+static String timeStamp() {"2024/04/19 8:13 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -77,6 +88,7 @@ metadata {
         attribute 'humanMotionState', 'enum', ['none', 'moving', 'small_move', 'stationary', 'presence', 'peaceful', 'large_move']
         attribute 'radarAlarmMode', 'enum',   ['0 - arm', '1 - off', '2 - alarm', '3 - doorbell']
         attribute 'radarAlarmVolume', 'enum', ['0 - low', '1 - medium', '2 - high', '3 - mute']
+        attribute 'illumState', 'enum', ['dark', 'light']
 
         command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
 
@@ -643,9 +655,12 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR']      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
             attributes:       [
-                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum',   rw: 'rw', min:1, max:3,    defVal:'2',  unit:'',           map:[1:'low', 2:'medium', 3:'high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
-                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum',   rw: 'rw', min:10, max:999, defVal:'60', unit:'seconds',    map:[10:'10 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+                [at:'0x0406:0x0000', name:'motion',           type:'enum',             rw: 'ro', min:0,  max:1,   defVal:'0',  scale:1,         map:[0:'inactive', 1:'active'] ,   unit:'',  title:'<b>Occupancy state</b>', description:'<i>Occupancy state</i>'],
+                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum', dt: '0x20', rw: 'rw', min:1,  max:3,   defVal:'2',  scale:1, unit:'',        map:[1:'1 - low', 2:'2 - medium', 3:'3 - high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
+                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'60', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+                [at:'0xFC11:0x2001', name:'illumState',       type:'enum', dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:1,   defVal:'0', scale:1,  unit:'',   map:[0:'dark', 1:'light'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']
             ],
+            refresh: ['refreshSonoff'],
             deviceJoinName: 'SONOFF SNZB-06P RADAR',
             configuration : ['0x0406':'bind', '0x0FC57':'bind'/*, "0xFC11":"bind"*/]
     ]
@@ -755,11 +770,45 @@ void customParseE002Cluster(final Map descMap) {
     }
 }
 
+void customParseFC11Cluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseFC11Cluster: zigbee received 0xFC11 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    if (result == false) {
+        logWarn "customParseFC11Cluster: received unknown 0xFC11 attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+void customParseOccupancyCluster(final Map descMap) {
+    final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
+    logTrace "customParseOccupancyCluster: zigbee received cluster 0x0406 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    boolean result = processClusterAttributeFromDeviceProfile(descMap)    // deviceProfileLib
+    if (result == false) {
+        logWarn "customParseOccupancyCluster: received unknown 0x0406 attribute 0x${descMap.attrId} (value ${descMap.value})"
+    }
+}
+
 void customParseEC03Cluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseEC03Cluster: zigbee received unknown cluster 0xEC03 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
 }
 
+List<String> refreshSonoff() {
+    logDebug "refreshSonoff()"
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x0406, 0x0022, [:], delay = 100)    // radarSensitivity
+    cmds += zigbee.readAttribute(0x0406, 0x0020, [:], delay = 100)    // fadingTime
+    cmds += zigbee.readAttribute(0xFC11, 0x2001, [mfgCode: 0x1286], delay = 100)    // dark/light   mfgCode:'0x1286',
+    return cmds
+}
+
+List<String> customRefresh() {
+    logDebug "customRefresh()"
+    List<String> cmds = []
+    if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
+        cmds += refreshSonoff()
+    }
+    return cmds
+}
 
 void customUpdated() {
     logDebug "customUpdated()"
@@ -775,8 +824,11 @@ void customUpdated() {
     }
     // Itterates through all settings
     cmds += updateAllPreferences()
-    //
     sendZigbeeCommands(cmds)
+    if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
+        setRefreshRequest() 
+        runIn(2, refreshSonoff, [overwrite: true])
+    }
 }
 
 void customInitializeVars(final boolean fullInit=false) {
