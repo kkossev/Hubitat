@@ -69,30 +69,24 @@
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
-  *
+ * ver. 1.8.2  2024-04-18 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P
+ *
+ *                                   TODO: Move SONOFF SNZB-06 to the new 'Tuya Zigbee mmWave Sensor' driver
+ *                                   TODO: Implement ping() for all devices
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
  *                                   TODO: ignore invalid humidity reprots (>100 %)
  *                                   TODO: publish examples of SetPar usage : https://community.hubitat.com/t/4-in-1-parameter-for-adjusting-reporting-time/115793/12?u=kkossev
  *                                   TODO: quickRef
- *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: delete all previous preferencies when changing the device profile ?
  *                                   TODO: do not show errors/warnings for  new settings ie breath , led etc if the preferences setsetare not set and saved - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
  *                                   TODO: check why only voltage is reported for SONOFF_MOTION_IAS;
  *                                   TODO: hide motionKeepTime and motionSensitivity for SONOFF_MOTION_IAS;
  *                                   TODO: if isSleepy - store in state.cmds and send when the device wakes up!  (on both update() and refresh()
  *                                   TODO: TS0202_MOTION_IAS missing sensitivity and retrigger time settings bug fix;
- *                                   TODO: handle preferences of a type TEXT
  *                                   TODO: add Sensitivity Levels Presets
  *                                   TODO: when device rejoins the network, read the battry percentage again!
- *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
- *                                   TODO: command for black radar LED
- *                                   TODO: TS0225_2AAELWXK_RADAR  dont see an attribute as mentioned that shows the distance at which the motion was detected. - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
- *                                   TODO: TS0225_2AAELWXK_RADAR led setting not working - https://community.hubitat.com/t/the-new-tuya-human-presence-sensors-ts0225-tze200-hl0ss9oa-tze200-2aaelwxk-have-actually-5-8ghz-modules-inside/122283/294?u=kkossev
- *                                   TODO: radars - ignore the change of the presence/motion being turned off when changing parameters for a period of 10 seconds ?
- *                                   TODO: TS0225_HL0SS9OA_RADAR - add presets
  *                                   TOOD: Tuya 2in1 illuminance_interval (dp=102) !
- *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
  *                                   TODO: use getKeepTimeOpts() for processing dp=0x0A (10) keep time ! ( 2-in-1 time is wrong)
  *                                   TODO: add to state 'last battery' the time when the battery was last reported.
  *                                   TODO: check the bindings commands in configure()
@@ -100,8 +94,8 @@
 */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '1.8.1' }
-static String timeStamp() { '2024/04/16 10:34 PM' }
+static String version() { '1.8.2' }
+static String timeStamp() { '2024/04/18 5:11 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -174,16 +168,20 @@ metadata {
 
         deviceProfilesV2.each { profileName, profileMap ->
             if (profileMap.fingerprints != null) {
-                profileMap.fingerprints.each {
-                    fingerprint it
+                if (profileMap.device?.isDepricated != true) {
+                    profileMap.fingerprints.each {
+                        fingerprint it
+                    }
                 }
             }
         }
     }
 
     preferences {
-        if (advancedOptions == true || advancedOptions == false) { // Groovy ... :)
-            //input (name: "quickref",  type: "hidden", title: "$ttStyleStr<a href='https://htmlpreview.github.io/?https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_Multi_Sensor_4_In_1.html' target='_blank'>Quick Reference v${version()}</a>")
+        if (device) {
+            if (DEVICE?.device.isDepricated == true) {
+                input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://htmlpreview.github.io/?https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_Multi_Sensor_4_In_1.html' target='_blank'>This driver is depricated for use with ${state.deviceProfile} device!<br><br>Please change to the new driver as per the instructions in this link!</a>")
+            }
             input(name: 'txtEnable', type: 'bool',   title: '<b>Description text logging</b>', description: '<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>', defaultValue: true)
             input(name: 'logEnable', type: 'bool',   title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>', defaultValue: true)
 
@@ -216,10 +214,12 @@ metadata {
         }
 
         // itterate over DEVICE.preferences map and inputIt all!
-        (DEVICE?.preferences).each { key, value ->
-            Map map = inputIt(key)
-            if (map != null && map != [:]) {
-                input map
+        if (device && DEVICE?.device.isDepricated != true) {
+            (DEVICE?.preferences).each { key, value ->
+                Map map = inputIt(key)
+                if (map != null && map != [:]) {
+                    input map
+                }
             }
         }
 
@@ -257,7 +257,7 @@ metadata {
 @Field static final String UNKNOWN =  'UNKNOWN'
 @Field static final Map blackRadarLedOptions =      [ '0' : 'Off', '1' : 'On' ]      // HumanPresenceSensorAIR
 @Field static final Map TS0225humanMotionState = [ '0': 'none', '1': 'moving', '2': 'small_move', '3': 'stationary'  ]
-@Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:yellow;color:black;}</style>'
+@Field static String ttStyleStr = '<style>.tTip {display:inline-block;border-bottom: 1px dotted black;}.tTip .tTipText {display:none;border-radius: 6px;padding: 5px 0;position: absolute;z-index: 1;}.tTip:hover .tTipText {display:inline-block;background-color:red;color:red;}</style>'
 
 /*
                                LivingRoom    Bedroom    Washroom    Aisle    Kitchen
@@ -287,7 +287,17 @@ Map getKeepTimeOpts() { return is4in1() ? keepTime4in1Opts : is3in1() ? keepTime
 String getDeviceProfile()     { state.deviceProfile ?: 'UNKNOWN' }
 Map getDEVICE()          { deviceProfilesV2[getDeviceProfile()] }
 List<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
-List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
+//List<String> getDeviceProfilesMap()   { deviceProfilesV2.values().description as List<String> }
+List<String> getDeviceProfilesMap()   {
+    List<String> activeProfiles = []
+    deviceProfilesV2.each { profileName, profileMap ->
+        if (profileMap.device?.isDepricated != true) {
+            activeProfiles.add(profileName)
+        }
+    }
+    return activeProfiles
+}
+
 boolean is4in1() { return getDeviceProfile().contains('TS0202_4IN1') }
 boolean is3in1() { return getDeviceProfile().contains('TS0601_3IN1') }
 boolean is2in1() { return getDeviceProfile().contains('TS0601_2IN1') }
@@ -1137,23 +1147,25 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : ['0x0406':'bind']
     ],
 
-    // isSONOFF()
-    'SONOFF_SNZB-06P_RADAR' : [ // https://github.com/Koenkk/zigbee-herdsman-converters/blob/14dffaa06511876d096aa72e669df4b032f4cf33/src/devices/sonoff.ts#L675
+    'SONOFF_SNZB-06P_RADAR' : [ // Depricated
             description   : 'SONOFF SNZB-06P RADAR',
             models        : ['SONOFF'],
-            device        : [type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
+            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
             capabilities  : ['MotionSensor': true],
-            preferences   : ['fadingTime':'0x0406:0x0020', 'radarSensitivity':'0x0406:0x0022'],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            //preferences   : ['fadingTime':'0x0406:0x0020', 'radarSensitivity':'0x0406:0x0022'],
+            //commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR']      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
-            ],
+                //[profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR']      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
+                [model:'SNZB-06P', manufacturer:'SONOFF']      // Depricated!
+            ]   //  ,
+            /*
             attributes:       [
                 [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum',   rw: 'rw', min:1, max:3,    defVal:'2',  unit:'',           map:[1:'low', 2:'medium', 3:'high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
                 [at:'0x0406:0x0020', name:'fadingTime',       type:'enum',   rw: 'rw', min:10, max:999, defVal:'60', unit:'seconds',    map:[10:'10 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
             ],
-            deviceJoinName: 'SONOFF SNZB-06P RADAR',
-            configuration : ['0x0406':'bind', '0x0FC57':'bind'/*, "0xFC11":"bind"*/]
+            */
+            //deviceJoinName: 'SONOFF SNZB-06P RADAR',
+            //configuration : ['0x0406':'bind', '0x0FC57':'bind'/*, "0xFC11":"bind"*/]
     ],
 
     // isSiHAS()
@@ -2563,6 +2575,11 @@ void updated() {
     /* groovylint-disable-next-line EmptyElseBlock */
     else {
     //logDebug "forcedProfile is not set"
+    }
+
+    if (DEVICE?.device?.depricated == true) {
+        logWarn 'The use of this driver with this device is depricated. Please update to the new driver!'
+        return
     }
 
     //    LED enable - TODO !
