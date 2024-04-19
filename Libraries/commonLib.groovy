@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnusedImport, UnusedPrivateMethod, VariableName */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -36,8 +36,9 @@ library(
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
-  * ver. 3.0.7  2024-04-17 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands;
+  * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster;
   *
+  *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
   *                                   TODO: add GetInfo (endpoints list) command
@@ -46,7 +47,7 @@ library(
 */
 
 String commonLibVersion() { '3.0.7' }
-String commonLibStamp() { '2024/04/17 5:36 PM' }
+String commonLibStamp() { '2024/04/18 11:13 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -268,6 +269,9 @@ void parse(final String description) {
         case zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER : //0x0405
             parseHumidityCluster(descMap)
             break
+        case 0x0406 : //OCCUPANCY_CLUSTER                   // Sonoff SNZB-06
+            parseOccupancyCluster(descMap)
+            break
         case 0x042A :                                       // pm2.5
             parsePm25Cluster(descMap)
             break
@@ -291,7 +295,7 @@ void parse(final String description) {
             parseTuyaCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseTuyaCluster(descMap + map) }
             break
-        case 0xFC11 :                                    // Sonoff
+        case 0xFC11 :                                       // Sonoff
             parseFC11Cluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseFC11Cluster(descMap + map) }
             break
@@ -1134,6 +1138,16 @@ void parseHumidityCluster(final Map descMap) {
     }
 }
 
+// Occupancy Sensing Cluster 0x0406
+void parseOccupancyCluster(final Map descMap) {
+    if (this.respondsTo('customParseOccupancyCluster')) {
+        customParseOccupancyCluster(descMap)
+    }
+    else {
+        logWarn "unprocessed Occupancy attribute ${descMap.attrId}"
+    }
+}
+
 // Electrical Measurement Cluster 0x0702
 void parseElectricalMeasureCluster(final Map descMap) {
     if (!executeCustomHandler('customParseElectricalMeasureCluster', descMap)) { logWarn 'parseElectricalMeasureCluster is NOT implemented1' }
@@ -1404,7 +1418,7 @@ List<String> customHandlers(final List customHandlersList) {
 }
 
 void refresh() {
-    logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE}"
+    logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE} model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')}"
     checkDriverVersion()
     List<String> cmds = []
     setRefreshRequest()    // 3 seconds
@@ -1432,14 +1446,14 @@ void refresh() {
     }
 }
 
-void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
-void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
+public void setRefreshRequest()   { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = true; runInMillis(REFRESH_TIMER, clearRefreshRequest, [overwrite: true]) }
+public void clearRefreshRequest() { if (state.states == null) { state.states = [:] } ; state.states['isRefresh'] = false }
 
-void clearInfoEvent() {
+public void clearInfoEvent() {
     sendInfoEvent('clear')
 }
 
-void sendInfoEvent(String info=null) {
+public void sendInfoEvent(String info=null) {
     if (info == null || info == 'clear') {
         logDebug 'clearing the Status event'
         sendEvent(name: 'Status', value: 'clear', isDigital: true)
@@ -1451,7 +1465,7 @@ void sendInfoEvent(String info=null) {
     }
 }
 
-void ping() {
+public void ping() {
     if (state.lastTx == null ) { state.lastTx = [:] }
     state.lastTx['pingTime'] = new Date().getTime()
     //if (state.states == null ) { state.states = [:] }
@@ -1912,6 +1926,7 @@ void initializeVars( boolean fullInit = false ) {
 
     // common libraries initialization
     executeCustomHandler('groupsInitializeVars', fullInit)
+    executeCustomHandler('deviceProfileInitializeVars', fullInit)
 
     // device specific initialization should be at the end
     executeCustomHandler('customInitializeVars', fullInit)
