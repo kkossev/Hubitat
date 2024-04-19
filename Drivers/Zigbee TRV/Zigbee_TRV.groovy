@@ -26,7 +26,7 @@
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
- * ver. 3.1.0  2024-04-17 kkossev  - (dev. branch) commonLib 3.0.7 check; changed to deviceProfilesV3
+ * ver. 3.1.0  2024-04-19 kkossev  - (dev. branch) commonLib 3.0.7 check; changed to deviceProfilesV3
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -73,7 +73,7 @@
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '3.1.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/04/17 5:00 PM' }
+static String timeStamp() { '2024/04/19 8:46 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -105,6 +105,8 @@ metadata {
         capability 'Battery'
         capability 'Temperature Measurement'
         capability 'Thermostat'                 // needed for HomeKit
+                    // coolingSetpoint - NUMBER; heatingSetpoint - NUMBER; supportedThermostatFanModes - JSON_OBJECT; supportedThermostatModes - JSON_OBJECT; temperature - NUMBER, unit:°F || °C; thermostatFanMode - ENUM ["on", "circulate", "auto"]
+                    // thermostatMode - ENUM ["auto", "off", "heat", "emergency heat", "cool"]; thermostatOperatingState - ENUM ["heating", "pending cool", "pending heat", "vent economizer", "idle", "cooling", "fan only"]; thermostatSetpoint - NUMBER, unit:°F || °C
         capability 'ThermostatHeatingSetpoint'
         capability 'ThermostatCoolingSetpoint'
         capability 'ThermostatOperatingState'   // thermostatOperatingState - ENUM ["vent economizer", "pending cool", "cooling", "heating", "pending heat", "fan only", "idle"]
@@ -839,10 +841,10 @@ void setCoolingSetpoint(temperature) {
 void setThermostatMode(final String requestedMode) {
     String mode = requestedMode
     boolean result = false
-    List nativelySupportedModes = getAttributesMap('thermostatMode')?.map?.values() ?: []
-    List systemModes = getAttributesMap('systemMode')?.map?.values() ?: []
-    List ecoModes = getAttributesMap('ecoMode')?.map?.values() ?: []
-    List emergencyHeatingModes = getAttributesMap('emergencyHeating')?.map?.values() ?: []
+    List nativelySupportedModes = getAttributesMap('thermostatMode')?.map?.values() as List ?: []
+    List systemModes = getAttributesMap('systemMode')?.map?.values() as List ?: []
+    List ecoModes = getAttributesMap('ecoMode')?.map?.values() as List ?: []
+    List emergencyHeatingModes = getAttributesMap('emergencyHeating')?.map?.values() as List ?: []
 
     logDebug "setThermostatMode: sending setThermostatMode(${mode}). Natively supported: ${nativelySupportedModes}"
 

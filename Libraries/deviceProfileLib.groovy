@@ -143,7 +143,7 @@ Map getAttributesMap(String attribName, boolean debug=false) {
     Map foundMap = [:]
     List<Map> searchMapList = []
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in tuyaDPs" }
-    if (DEVICE?.tuyaDPs != null) {
+    if (DEVICE?.tuyaDPs != null && DEVICE?.tuyaDPs != [:]) {
         searchMapList =  DEVICE?.tuyaDPs
         foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
@@ -152,7 +152,7 @@ Map getAttributesMap(String attribName, boolean debug=false) {
         }
     }
     if (debug) { logDebug "getAttributesMap: searching for attribute ${attribName} in attributes" }
-    if (DEVICE?.attributes != null) {
+    if (DEVICE?.attributes != null && DEVICE?.attributes != [:]) {
         searchMapList  =  DEVICE?.attributes
         foundMap = searchMapList.find { it.name == attribName }
         if (foundMap != null) {
@@ -1108,8 +1108,17 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
             (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
             break
         case 'enum' :       // [0:"inactive", 1:"active"]  foundItem.map=[75:0.75 meters, 150:1.50 meters, 225:2.25 meters, 300:3.00 meters, 375:3.75 meters, 450:4.50 meters]
-            logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(foundItem.name)=${(device.currentValue(foundItem.name))}"
-            (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
+            logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))} map=${foundItem.map}"
+            Object latestEvent = device.currentState(foundItem.name)
+            String dataType = latestEvent?.dataType 
+            logTrace "latestEvent is dataType is ${dataType}"
+            // if the attribute is of a type enum, the value is a string. Compare the string values!
+            if (dataType == 'ENUM') {
+                (isEqual, hubitatEventValue) = compareAndConvertStrings(foundItem, foundItem.map[fncmd as int] ?: 'unknown', device.currentValue(foundItem.name) ?: 'unknown')
+            }
+            else {
+                (isEqual, hubitatEventValue) = compareAndConvertEnumKeys(foundItem, fncmd, device.currentValue(foundItem.name))
+            }
             logTrace "compareAndConvertTuyaToHubitatEventValue: after compareAndConvertStrings: isEqual=${isEqual} hubitatEventValue=${hubitatEventValue}"
             break
         case 'value' :      // depends on foundItem.scale
@@ -1274,8 +1283,8 @@ boolean processFoundItem(final Map foundItem, int value) {
     if (!isAttribute && !preferenceExists) {                    // if the previous value of this clusterAttribute is not stored anywhere - just seend an Info log if Debug is enabled
         if (!doNotTrace) {                                      // only if the clusterAttribute is not in the spammy list
             logTrace "processFoundItem: no preference or attribute for ${name} - just log the value, if not equal to the last one..."
-            (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
-            descText  = "${name} is ${valueScaled} ${unitText}"
+            // TODO - scaledValue ?????
+            descText  = "${name} is ${value} ${unitText}"
             if (settings.logEnable) { logInfo "${descText }" }  // only when Debug is enabled!
         }
         // no more processing is needed, as this clusterAttribute is not a preference and not an attribute
