@@ -18,12 +18,13 @@
  * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
  * ver. 0.1.2  2024-04-11 kkossev  - (dev. branch) added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
  * ver. 1.0.0  2024-04-13 kkossev  - first release version
+ * ver. 1.0.1  2024-04-20 kkossev  - 
  *
  *                                   TODO:  
  */
 
-static String version() { "1.0.0" }
-static String timeStamp() {"2024/04/13 4:32 PM"}
+static String version() { "1.0.1" }
+static String timeStamp() {"2024/04/20 12:05 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -77,7 +78,35 @@ metadata {
     options     : [0: 'Scene Mode', 1: 'Virtual Buttons']
 ]
 
-
+@Field static final Map<Integer,String> TUYA_DP = [
+    0x01: 'on/off',
+    0x05: 'Full-on mode',
+    0x06: 'Full-off mode',
+    0x07: 'Viewing mode',
+    0x08: 'Meeting mode',
+    0x09: 'Sleeping mode',
+    0x0A: 'Coffee break mode',
+    0x12: 'Unknown 1',
+    0x13: 'Unknown 2',
+    0x14: 'Unknown 3',
+    0x15: 'Unknown 4',
+    0x18: 'Switch 1',
+    0x19: 'Switch 2',
+    0x1A: 'Switch 3',
+    0x1B: 'Switch 4',
+    0x68: 'Smart Curtain button 1',
+    0x69: 'Smart Curtain button 2',
+    0x6A: 'Smart Curtain button 3',
+    0x6E: 'Smart Blind button 1',
+    0x6F: 'Smart Blind button 2',
+    0x70: 'Smart Blind button 3',
+    0x71: 'Projector button 1',
+    0x72: 'Projector button 2',
+    0x7C: 'Air Conditioner button 4 (ON)',
+    0x7D: 'Air Conditioner button 1 (OFF)',
+    0x7E: 'Air Conditioner button 2 (Cooling)',
+    0x7F: 'Air Conditioner button 3 (Heating)'
+]
 
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
     logDebug "customProcessTuyaDp(${descMap}, ${dp}, ${dp_id}, ${fncmd}, ${dp_len})"
@@ -118,20 +147,20 @@ boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, fi
             logDebug "Coffee break mode: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Mode CoffeeBreak')
             break
-        case 0x12 : // (18) Unkknown 1
-            logDebug "Unkknown 1: ${fncmd}"
+        case 0x12 : // (18) Unknown 1
+            logDebug "Unknown 1: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Mode Unknown1')
             break
-        case 0x13 : // (19) Unkknown 2
-            logDebug "Unkknown 2: ${fncmd}"
+        case 0x13 : // (19) Unknown 2
+            logDebug "Unknown 2: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Mode Unknown2')
             break
-        case 0x14 : // (20) Unkknown 3
-            logDebug "Unkknown 3: ${fncmd}"
+        case 0x14 : // (20) Unknown 3
+            logDebug "Unknown 3: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Mode Unknown3')
             break
-        case 0x15 : // (21) Unkknown 4
-            logDebug "Unkknown 4: ${fncmd}"
+        case 0x15 : // (21) Unknown 4
+            logDebug "Unknown 4: ${fncmd}"
             sendSceneButtonEvent(dp, fncmd, 'Mode Unknown4')
             break
         case 0x18 : // (24) Switch 1

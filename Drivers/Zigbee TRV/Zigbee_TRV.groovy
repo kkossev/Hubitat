@@ -26,7 +26,7 @@
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
- * ver. 3.1.0  2024-04-19 kkossev  - (dev. branch) commonLib 3.0.7 check; changed to deviceProfilesV3
+ * ver. 3.1.0  2024-04-19 kkossev  - (dev. branch) commonLib 3.0.7 check; deviceProfilesV3; enum attributes bug fix
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV

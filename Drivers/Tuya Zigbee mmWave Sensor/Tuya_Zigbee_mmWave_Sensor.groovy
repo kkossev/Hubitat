@@ -16,12 +16,10 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
- * ver. 3.0.7  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light (0/1);
+ * ver. 3.0.7  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  *
- *                                   TODO: SONOFF brightness : dark/light - if the attribute is of a type ENUM, send the value, not the key !!
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
- *                                   TODO: SONOFF preferences are not updated as attributes when changed - implement refresh() method? or postProcess method?
- *                                   TODO: update() to save the preferences
+ *                                   TODO: refactor the refresh() method? or postProcess method?
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: command for black radar LED
@@ -33,9 +31,9 @@
 */
 
 static String version() { "3.0.7" }
-static String timeStamp() {"2024/04/19 8:13 PM"}
+static String timeStamp() {"2024/04/19 11:24 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 
 import groovy.transform.Field

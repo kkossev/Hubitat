@@ -28,7 +28,7 @@ library(
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
- * ver. 3.1.1  2024-04-16 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix;
+ * ver. 3.1.1  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix;
  *
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
  *                                   TODO: handle preferences of a type TEXT
@@ -36,7 +36,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.1' }
-static String deviceProfileLibStamp() { '2024/04/18 10:18 AM' }
+static String deviceProfileLibStamp() { '2024/04/19 11:27 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -982,7 +982,7 @@ List<Object> compareAndConvertStrings(final Map foundItem, String tuyaValue, Str
     String convertedValue = tuyaValue
     boolean isEqual    = ((tuyaValue  as String) == (hubitatValue as String))      // because the events(attributes) are always strings
     if (foundItem?.scale != null || foundItem?.scale != 0 || foundItem?.scale != 1) {
-        log.warn "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
+        logTrace "compareAndConvertStrings: scaling: foundItem.scale=${foundItem.scale} tuyaValue=${tuyaValue} hubitatValue=${hubitatValue}"
     }
     return [isEqual, convertedValue]
 }
