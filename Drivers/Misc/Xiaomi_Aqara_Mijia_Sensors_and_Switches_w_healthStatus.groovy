@@ -28,7 +28,7 @@
  *
  *  Changelog:
  *
- *  v0.21 - healthStatus improvements (@kkossev) 2024-04-20
+ *  v0.21 - healthStatus fixes and improvements (@kkossev) 2024-04-20
  *
  *  v0.20 - Changed Presence to Health (@Danabw) 2023-10-23
  *
@@ -100,7 +100,7 @@ import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 
 metadata {
-	definition (name: "Xiaomi Aqara Mijia Sensors and Switches (w/ healthStatus)", namespace: "waytotheweb", author: "Jonathan Michaelson", importUrl: "https://raw.githubusercontent.com/waytotheweb/hubitat/main/drivers/Xiaomi_Aqara_Mijia_Sensors.groovy") {
+	definition (name: "Xiaomi Aqara Mijia Sensors and Switches (w/ healthStatus)", namespace: "waytotheweb", author: "Jonathan Michaelson", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/Xiaomi_Aqara_Mijia_Sensors_and_Switches_w_healthStatus.groovy") {
 		capability "Battery"
 		capability "VoltageMeasurement"
 		capability "Sensor"
@@ -541,7 +541,7 @@ def updated() {
 	unschedule(deviceHealthCheck); unschedule(presenceStart); unschedule(presenceTracker)
 	device.deleteCurrentState('presence')
 	if (device.currentValue("healthStatus") == null) { sendEvent("name": "healthStatus", "value":  "unknown") }
-	if (settings?.healthStatusEnabled != offline) { scheduleDeviceHealthCheck() }
+	if (settings?.healthStatusEnabled != false) { scheduleDeviceHealthCheck() }
 }
 
 void scheduleDeviceHealthCheck() {
@@ -568,6 +568,10 @@ void deviceHealthCheck() {
 	}
 	scheduleDeviceHealthCheck()	// keep checking
 }
+
+// traps for the old periodic presence check methods
+void presenceTracker() { updated() }
+void presenceStart() { updated() }
 
 def deviceHeld() {
 	if (state.held == false){
