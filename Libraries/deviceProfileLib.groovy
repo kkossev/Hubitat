@@ -30,13 +30,14 @@ library(
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix;
  *
+ *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
  *                                   TODO: handle preferences of a type TEXT
  *
 */
 
 static String deviceProfileLibVersion()   { '3.1.1' }
-static String deviceProfileLibStamp() { '2024/04/19 11:27 PM' }
+static String deviceProfileLibStamp() { '2024/04/21 10:21 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1378,7 +1379,7 @@ boolean processFoundItem(final Map foundItem, int value) {
                     sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
                         logDebug "event ${name} sent w/ value ${valueScaled}"
-                        logTrace "${descText}"                                 // send an Info log also (because value changed )  // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
+                        logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
                     }
                     break
             }
