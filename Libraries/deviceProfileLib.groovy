@@ -1471,10 +1471,10 @@ public boolean validateAndFixPreferences(boolean debug=false) {
     return true
 }
 
-void printFingerprints() {
+public void printFingerprints() {
     deviceProfilesV3.each { profileName, profileMap ->
         profileMap.fingerprints?.each { fingerprint ->
-            logInfo fingerprint
+            logInfo "${fingerprint}"
         }
     }
 }

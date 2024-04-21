@@ -16,7 +16,7 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
- * ver. 3.0.7  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
+ * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  *
  *                                   TODO: illumState default value is 0 - should be 'unknown' ?
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
@@ -32,7 +32,7 @@
 */
 
 static String version() { "3.0.7" }
-static String timeStamp() {"2024/04/21 10:43 AM"}
+static String timeStamp() {"2024/04/21 11:24 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -100,7 +100,14 @@ metadata {
                 [name:"dpType",    type: "ENUM",   constraints: ["DP_TYPE_VALUE", "DP_TYPE_BOOL", "DP_TYPE_ENUM"], description: "DP data type"]
             ]
         }
-        
+        // itterate through all the figerprints and add them on the fly
+        deviceProfilesV3.each { profileName, profileMap ->
+            if (profileMap.fingerprints != null) {
+                profileMap.fingerprints.each {
+                    fingerprint it
+                }
+            }
+        }        
     }
 
     preferences {
@@ -662,14 +669,14 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             device        : [type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
             capabilities  : ['MotionSensor': true],
             preferences   : ['fadingTime':'0x0406:0x0020', 'radarSensitivity':'0x0406:0x0022'],
-            commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
+            commands      : ['printFingerprints':'printFingerprints','resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR']      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
+                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR'],      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
             attributes:       [
                 [at:'0x0406:0x0000', name:'motion',           type:'enum',             rw: 'ro', min:0,  max:1,   defVal:'0',  scale:1,         map:[0:'inactive', 1:'active'] ,   unit:'',  title:'<b>Occupancy state</b>', description:'<i>Occupancy state</i>'],
-                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum', dt: '0x20', rw: 'rw', min:1,  max:3,   defVal:'2',  scale:1, unit:'',        map:[1:'1 - low', 2:'2 - medium', 3:'3 - high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
-                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'60', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum', dt: '0x20', rw: 'rw', min:1,  max:3,   defVal:'1',  scale:1, unit:'',        map:[1:'1 - low', 2:'2 - medium', 3:'3 - high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
+                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
                 [at:'0xFC11:0x2001', name:'illumState',       type:'enum', dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:2,   defVal:2, scale:1,  unit:'',   map:[0:'dark', 1:'light', 2:'unknown'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']
             ],
             refresh: ['refreshSonoff'],
