@@ -32,7 +32,7 @@
 */
 
 static String version() { "3.0.7" }
-static String timeStamp() {"2024/04/21 10:37 AM"}
+static String timeStamp() {"2024/04/21 10:43 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -55,7 +55,7 @@ deviceType = "mmWaveSensor"
 metadata {
     definition (
         name: 'Tuya Zigbee mmWave Sensor',
-        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20DSensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
+        importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true )
     {
 
