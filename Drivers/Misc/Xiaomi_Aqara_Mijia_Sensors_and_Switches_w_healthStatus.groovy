@@ -28,9 +28,9 @@
  *
  *  Changelog:
  *
- *  v0.21 - healthStatus fixes and improvements (@kkossev) 2024-04-20
+ *  v0.2.1 - healthStatus fixes and improvements (@kkossev) 2024-04-21
  *
- *  v0.20 - Changed Presence to Health (@Danabw) 2023-10-23
+ *  v0.2.0 - Changed Presence to Health (@Danabw) 2023-10-23
  *
  *  v0.18 - Added the ability to pass a button number and default none to 1 - thanks to @FourEyedPanda
  *          Added the release command to the available list
@@ -98,6 +98,8 @@
 
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
+
+static String version() { '0.2.1 04/21/2024 7:10 AM' }
 
 metadata {
 	definition (name: "Xiaomi Aqara Mijia Sensors and Switches (w/ healthStatus)", namespace: "waytotheweb", author: "Jonathan Michaelson", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/Xiaomi_Aqara_Mijia_Sensors_and_Switches_w_healthStatus.groovy") {
@@ -456,6 +458,7 @@ def parse(String description) {
 			}
 		}
 	}
+	if (state.version != version()) { state.version = version() }
 	if (settings?.healthStatusEnabled != false) {
 		unschedule(deviceHealthCheck); unschedule(presenceStart); unschedule(presenceTracker)
 		if (device.currentValue("healthStatus") != "online"){
@@ -550,10 +553,10 @@ void scheduleDeviceHealthCheck() {
 		if (infoLogging) log.info "$device.displayName health check is disabled"
 		return 
 	}
-	if (healthStatusHours == null || healthStatusHours == "") healthStatusHours = "12"
-	def scheduleHours = healthStatusHours.toInteger() * 60 * 60
+	if (settings?.healthHours == null || settings?.healthHours == "") { device.updateSetting('healthHours', [value: '12', type: 'enum']) }
+	int scheduleHours = settings?.healthHours.toInteger() * 60 * 60
 	if (scheduleHours < 1 || scheduleHours > 86400) scheduleHours = 43200
-	if (debugLogging) log.debug "$device.displayName health check in ${healthHours} hours"
+	if (debugLogging) log.debug "$device.displayName health check in ${settings?.healthHours} hours"
 	runIn(scheduleHours, "deviceHealthCheck")
 }
 
