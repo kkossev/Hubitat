@@ -28,7 +28,7 @@
  *
  *  Changelog:
  *
- *  v0.2.1 - healthStatus fixes and improvements (@kkossev) 2024-04-21
+ *  v0.2.1 - healthStatus fixes and improvements (@kkossev) 2024-04-22
  *
  *  v0.2.0 - Changed Presence to Health (@Danabw) 2023-10-23
  *
@@ -99,7 +99,7 @@
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 
-static String version() { '0.2.1 04/21/2024 7:10 AM' }
+static String version() { '0.2.1 2024/04/22 8:07 AM' }
 
 metadata {
 	definition (name: "Xiaomi Aqara Mijia Sensors and Switches (w/ healthStatus)", namespace: "waytotheweb", author: "Jonathan Michaelson", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/Xiaomi_Aqara_Mijia_Sensors_and_Switches_w_healthStatus.groovy") {
@@ -460,7 +460,7 @@ def parse(String description) {
 	}
 	if (state.version != version()) { state.version = version() }
 	if (settings?.healthStatusEnabled != false) {
-		unschedule(deviceHealthCheck); unschedule(presenceStart); unschedule(presenceTracker)
+		unschedule(presenceStart); unschedule(presenceTracker)
 		if (device.currentValue("healthStatus") != "online"){
 			sendEvent("name": "healthStatus", "value":  "online")
 			if (infoLogging) log.info "$device.displayName is online"
@@ -541,23 +541,24 @@ def dry() {
 }
 
 def updated() {
-	unschedule(deviceHealthCheck); unschedule(presenceStart); unschedule(presenceTracker)
+	unschedule(presenceStart); unschedule(presenceTracker)
 	device.deleteCurrentState('presence')
 	if (device.currentValue("healthStatus") == null) { sendEvent("name": "healthStatus", "value":  "unknown") }
 	if (settings?.healthStatusEnabled != false) { scheduleDeviceHealthCheck() }
 }
 
 void scheduleDeviceHealthCheck() {
-	unschedule(deviceHealthCheck); unschedule(presenceStart); unschedule(presenceTracker)
+	unschedule(presenceStart); unschedule(presenceTracker)
 	if (settings?.healthStatusEnabled != true) { 
+		unschedule(deviceHealthCheck); 
 		if (infoLogging) log.info "$device.displayName health check is disabled"
 		return 
 	}
 	if (settings?.healthHours == null || settings?.healthHours == "") { device.updateSetting('healthHours', [value: '12', type: 'enum']) }
 	int scheduleHours = settings?.healthHours.toInteger() * 60 * 60
-	if (scheduleHours < 1 || scheduleHours > 86400) scheduleHours = 43200
+	if (scheduleHours < 1 || scheduleHours > 86400) { scheduleHours = 43200 }
 	if (debugLogging) log.debug "$device.displayName health check in ${settings?.healthHours} hours"
-	runIn(scheduleHours, "deviceHealthCheck")
+	runIn(scheduleHours, "deviceHealthCheck", [overwrite: true])
 }
 
 void deviceHealthCheck() {
