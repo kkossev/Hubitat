@@ -265,6 +265,16 @@
       "tags":[
         "Buttons", "Misc. Devices", "Zigbee"
        ]
+    },
+	{
+      "id":"e4f2a589-2ac0-4923-b6c7-bfc08b9db948",
+      "name":"Tuya Zigbee mmWave Sensor",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/manifest.json",
+      "description":"Tuya mmWave sensors - new driver to replace the Tuya 4 In 1 driver. W.I.P.",
+      "tags":[
+        "Motion Control", "Zigbee"
+       ]
     }	
   ]
 }
