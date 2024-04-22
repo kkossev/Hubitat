@@ -28,7 +28,7 @@ library(
  * ver. 3.0.2  2023-12-17 kkossev  - (dev. branch) inputIt moved to the preferences section; setfunction replaced by customSetFunction; Groovy Linting;
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
- * ver. 3.1.1  2024-04-19 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix;
+ * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
  *
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
@@ -37,7 +37,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.1' }
-static String deviceProfileLibStamp() { '2024/04/21 10:21 AM' }
+static String deviceProfileLibStamp() { '2024/04/21 7:29 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -169,39 +169,24 @@ Map getAttributesMap(String attribName, boolean debug=false) {
  * Resets the device preferences to their default values.
  * @param debug A boolean indicating whether to output debug information.
  */
-void resetPreferencesToDefaults(boolean debug=false) {
-    logTrace "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
+void resetPreferencesToDefaults(boolean debug=true) {
+    logDebug "resetPreferencesToDefaults: DEVICE=${DEVICE?.description} preferences=${DEVICE?.preferences}"
     Map preferences = DEVICE?.preferences
-    if (preferences == null || preferences.isEmpty()) {
-        logDebug 'Preferences not found!'
-        return
-    }
+    if (preferences == null || preferences.isEmpty()) { logDebug 'Preferences not found!' ; return }
     Map parMap = [:]
     preferences.each { parName, mapValue ->
         if (debug) { log.trace "$parName $mapValue" }
-        // TODO - could be also 'true' or 'false' ...
-        if (mapValue in [true, false]) {
-            logDebug "Preference ${parName} is predefined -> (${mapValue})"
-            // TODO - set the predefined value
-            /*
-            if (debug) log.info "par ${parName} defVal = ${parMap.defVal}"
-            device.updateSetting("${parMap.name}",[value:parMap.defVal, type:parMap.type])
-            */
+        if ((mapValue in [true, false]) || (mapValue in ['true', 'false'])) {
+            logDebug "Preference ${parName} is predefined -> (${mapValue})"     // what was the idea here?
             return // continue
         }
-        // find the individual preference map
-        parMap = getPreferencesMapByName(parName, false)
-        if (parMap?.isEmpty()) {
-            logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
-            return // continue
-        }
-        // parMap = [at:0xE002:0xE005, name:staticDetectionSensitivity, type:number, dt:UINT8, rw:rw, min:0, max:5, scale:1, unit:x, title:Static Detection Sensitivity, description:Static detection sensitivity]
-        if (parMap.defVal == null) {
-            logDebug "no default value for preference ${parName} !"
-            return // continue
-        }
-        if (debug) { log.info "par ${parName} defVal = ${parMap.defVal}" }
-        device.updateSetting("${parMap.name}", [value:parMap.defVal, type:parMap.type])
+        parMap = getPreferencesMapByName(parName, false)    // the individual preference map
+        if (parMap?.isEmpty()) { logDebug "Preference ${parName} not found in tuyaDPs or attributes map!";  return }    // continue
+        // at:'0x0406:0x0020', name:'fadingTime', type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+        if (parMap.defVal == null) { logDebug "no default value for preference ${parName} !" ; return }     // continue
+        if (debug) { log.info "setting par ${parMap.name} defVal = ${parMap.defVal} (type:${parMap.type})" }
+        String str = parMap.name
+        device.updateSetting("$str", [value:parMap.defVal as String, type:parMap.type])
     }
     logInfo 'Preferences reset to default values'
 }
@@ -1378,7 +1363,7 @@ boolean processFoundItem(final Map foundItem, int value) {
                 default :
                     sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
-                        logDebug "event ${name} sent w/ value ${valueScaled}"
+                        logTrace "event ${name} sent w/ value ${valueScaled}"
                         logInfo "${descText}"   // TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
                     }
                     break

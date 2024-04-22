@@ -17,10 +17,12 @@
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
+ * ver. 3.0.8  2024-04-21 kkossev  - (dev. branch) added detectionDelay for SNZB-06; refactored the refresh() method
  *
+ *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
+ *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
  *                                   TODO: illumState default value is 0 - should be 'unknown' ?
  *                                   TODO: Motion reset to inactive after 43648s - convert to H:M:S
- *                                   TODO: refactor the refresh() method? or postProcess method?
  *                                   TODO: Black Square Radar validateAndFixPreferences: map not found for preference indicatorLight
  *                                   TODO: Linptech spammyDPsToIgnore[] !
  *                                   TODO: command for black radar LED
@@ -31,11 +33,13 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.0.7" }
-static String timeStamp() {"2024/04/21 11:24 AM"}
+static String version() { "3.0.8" }
+static String timeStamp() {"2024/04/22 8:07 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
+@Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
+
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -112,7 +116,7 @@ metadata {
 
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
-        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
+        input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_DEBUG_LOGGING, description: '<i>Turns on debug logging for 24 hours.</i>'
         if (device) {
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
@@ -648,7 +652,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : [:]
     ],
     */
-    /*
+    
     'OWON_OCP305_RADAR'   : [
             description   : 'OWON OCP305 Radar',
             models        : ['OCP305'],
@@ -661,25 +665,26 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             deviceJoinName: 'OWON OCP305 Radar',
             configuration : ['0x0406':'bind']
     ],
-    */
+    
     // isSONOFF()
     'SONOFF_SNZB-06P_RADAR' : [
             description   : 'SONOFF SNZB-06P RADAR',
             models        : ['SONOFF'],
             device        : [type: 'radar', powerSource: 'dc', isIAS:false, isSleepy:false],
             capabilities  : ['MotionSensor': true],
-            preferences   : ['fadingTime':'0x0406:0x0020', 'radarSensitivity':'0x0406:0x0022'],
+            preferences   : ['fadingTime':'0x0406:0x0020', 'radarSensitivity':'0x0406:0x0022', 'detectionDelay':'0x0406:0x0021'],
             commands      : ['printFingerprints':'printFingerprints','resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR'],      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
             ],
             attributes:       [
-                [at:'0x0406:0x0000', name:'motion',           type:'enum',             rw: 'ro', min:0,  max:1,   defVal:'0',  scale:1,         map:[0:'inactive', 1:'active'] ,   unit:'',  title:'<b>Occupancy state</b>', description:'<i>Occupancy state</i>'],
-                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum', dt: '0x20', rw: 'rw', min:1,  max:3,   defVal:'1',  scale:1, unit:'',        map:[1:'1 - low', 2:'2 - medium', 3:'3 - high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
-                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum', dt: '0x21', rw: 'rw', min:15, max:999, defVal:'30', scale:1, unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
-                [at:'0xFC11:0x2001', name:'illumState',       type:'enum', dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:2,   defVal:2, scale:1,  unit:'',   map:[0:'dark', 1:'light', 2:'unknown'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']
+                [at:'0x0406:0x0000', name:'motion',           type:'enum',                rw: 'ro', min:0,   max:1,    defVal:'0',  scale:1,         map:[0:'inactive', 1:'active'] ,   unit:'',  title:'<b>Occupancy state</b>', description:'<i>Occupancy state</i>'],
+                [at:'0x0406:0x0022', name:'radarSensitivity', type:'enum',    dt: '0x20', rw: 'rw', min:1,   max:3,    defVal:'1',  scale:1,  unit:'',        map:[1:'1 - low', 2:'2 - medium', 3:'3 - high'], title:'<b>Radar Sensitivity</b>',   description:'<i>Radar Sensitivity</i>'],
+                [at:'0x0406:0x0020', name:'fadingTime',       type:'enum',    dt: '0x21', rw: 'rw', min:15,  max:999,  defVal:'30', scale:1,  unit:'seconds', map:[15:'15 seconds', 30:'30 seconds', 60:'60 seconds', 120:'120 seconds', 300:'300 seconds'], title:'<b>Fading Time</b>',   description:'<i>Radar fading time in seconds</i>'],
+                [at:'0x0406:0x0021', name:'detectionDelay',   type:'decimal', dt: '0x21', rw: 'rw', min:0.0, max:10.0, defVal:0.0,  scale:10, unit:'seconds',  title:'<b>Detection delay</b>',            description:'<i>Presence detection delay timer</i>'],
+                [at:'0xFC11:0x2001', name:'illumState',       type:'enum',    dt: '0x20', mfgCode: '0x1286', rw: 'ro', min:0,  max:2,   defVal:2, scale:1,  unit:'',   map:[0:'dark', 1:'light', 2:'unknown'], title:'<b>Illuminance State</b>',   description:'<i>Illuminance State</i>']
             ],
-            refresh: ['refreshSonoff'],
+            refresh: ['motion', 'radarSensitivity', 'fadingTime', 'detectionDelay'],
             deviceJoinName: 'SONOFF SNZB-06P RADAR',
             configuration : ['0x0406':'bind', '0x0FC57':'bind'/*, "0xFC11":"bind"*/]
     ]
@@ -811,21 +816,28 @@ void customParseEC03Cluster(final Map descMap) {
     logTrace "customParseEC03Cluster: zigbee received unknown cluster 0xEC03 attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
 }
 
-List<String> refreshSonoff() {
-    logDebug "refreshSonoff()"
+List<String> refreshFromDeviceProfileList() {
+    logDebug "refreshFromDeviceProfileList()"
     List<String> cmds = []
-    cmds += zigbee.readAttribute(0x0406, 0x0022, [:], delay = 100)    // radarSensitivity
-    cmds += zigbee.readAttribute(0x0406, 0x0020, [:], delay = 100)    // fadingTime
-    cmds += zigbee.readAttribute(0xFC11, 0x2001, [mfgCode: 0x1286], delay = 100)    // dark/light   mfgCode:'0x1286',
+    if (DEVICE?.refresh != null) {
+        List<String> refreshList = DEVICE.refresh
+        for (String k : refreshList) {
+            if (k != null) {
+                Map map = DEVICE.attributes.find { it.name == k }
+                if (map != null) {
+                    Map mfgCode = map.mfgCode != null ? ['mfgCode':map.mfgCode] : [:]
+                    cmds += zigbee.readAttribute(hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[0]), hubitat.helper.HexUtils.hexStringToInt((map.at).split(':')[1]), mfgCode, delay = 100)
+                }
+            }
+        }
+    }
     return cmds
 }
 
 List<String> customRefresh() {
     logDebug "customRefresh()"
     List<String> cmds = []
-    if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
-        cmds += refreshSonoff()
-    }
+    cmds += refreshFromDeviceProfileList()
     return cmds
 }
 
@@ -846,7 +858,7 @@ void customUpdated() {
     sendZigbeeCommands(cmds)
     if (getDeviceProfile() == 'SONOFF_SNZB-06P_RADAR') {
         setRefreshRequest() 
-        runIn(2, refreshSonoff, [overwrite: true])
+        runIn(2, customRefresh, [overwrite: true])
     }
 }
 
