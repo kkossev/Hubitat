@@ -1,0 +1,18 @@
+{
+ "packageName":"Tuya Zigbee mmWave Sensor",
+ "author":"Krassimir Kossev",
+ "version":"3.0.7",
+ "minimumHEVersion":"2.3.7.110",
+ "dateReleased":"2024-04-22",
+ "releaseNotes":"ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;",
+ "documentationLink":"https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/90?u=kkossev",
+ "communityLink":"https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/90?u=kkossev",
+ "drivers": [
+  {
+     "id":"4780297c-060a-44c1-b071-4e7d08e88936",
+     "name":"Tuya Zigbee mmWave Sensor",
+     "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy",
+     "required":true
+  }
+  ]
+}
