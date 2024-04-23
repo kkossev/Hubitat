@@ -47,8 +47,8 @@
  * ver. 2.6.6 2023-05-30 kkossev     - reverseButton default value bug fix;
  *
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
- * ver. 2.6.10 2023-12-01 kkossev    - (dev. branch) added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
- * ver. 2.7.0 2024-03-06 kkossev     - (dev. branch) Groovy lint; added TS0021 _TZ3210_3ulg9kpo 
+ * ver. 2.6.10 2023-12-01 kkossev    - added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
+ * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo 
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
