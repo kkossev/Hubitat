@@ -547,8 +547,16 @@ def updated() {
 
 void replacePresenceWithHealthStatus() {
 	unschedule(presenceStart); unschedule(presenceTracker)
+	if (device.currentValue("healthStatus") == null) { 
+		if (device.currentValue("presence") == "present") {
+			sendEvent("name": "healthStatus", "value":  "online")
+		} else if (device.currentValue("presence") == "not present") {
+			sendEvent("name": "healthStatus", "value":  "offline")
+		} else {
+			sendEvent("name": "healthStatus", "value":  "unknown")
+		}
+	}
 	device.deleteCurrentState('presence')
-	if (device.currentValue("healthStatus") == null) { sendEvent("name": "healthStatus", "value":  "unknown") }
 }
 
 void scheduleDeviceHealthCheck() {
