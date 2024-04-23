@@ -28,7 +28,7 @@
  *
  *  Changelog:
  *
- *  v0.2.1 - healthStatus fixes and improvements (@kkossev) 2024-04-22
+ *  v0.2.1 - healthStatus fixes and improvements (@kkossev) 2024-04-23
  *
  *  v0.2.0 - Changed Presence to Health (@Danabw) 2023-10-23
  *
@@ -99,7 +99,7 @@
 import hubitat.zigbee.zcl.DataType
 import hubitat.helper.HexUtils
 
-static String version() { '0.2.1 2024/04/22 8:07 AM' }
+static String version() { '0.2.1 2024/04/23' }
 
 metadata {
 	definition (name: "Xiaomi Aqara Mijia Sensors and Switches (w/ healthStatus)", namespace: "waytotheweb", author: "Jonathan Michaelson", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Misc/Xiaomi_Aqara_Mijia_Sensors_and_Switches_w_healthStatus.groovy") {
@@ -541,10 +541,14 @@ def dry() {
 }
 
 def updated() {
+	replacePresenceWithHealthStatus()
+	if (settings?.healthStatusEnabled != false) { scheduleDeviceHealthCheck() }
+}
+
+void replacePresenceWithHealthStatus() {
 	unschedule(presenceStart); unschedule(presenceTracker)
 	device.deleteCurrentState('presence')
 	if (device.currentValue("healthStatus") == null) { sendEvent("name": "healthStatus", "value":  "unknown") }
-	if (settings?.healthStatusEnabled != false) { scheduleDeviceHealthCheck() }
 }
 
 void scheduleDeviceHealthCheck() {
@@ -675,7 +679,10 @@ def configure() {
 	unschedule()
 	state.clear()
 
-    if(healthStatusEnabled !=false) scheduleDeviceHealthCheck()
+	replacePresenceWithHealthStatus()
+    if(healthStatusEnabled !=false) {
+		scheduleDeviceHealthCheck()
+	}
 
 	cmd = [
 		"zdo bind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0000 {${device.zigbeeId}} {}",
