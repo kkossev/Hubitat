@@ -49,6 +49,7 @@
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
  * ver. 2.6.10 2023-12-01 kkossev    - added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
  * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo 
+ * ver. 2.7.1 2024-04-23 kkossev     - (dev. branch) added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz ;
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -67,15 +68,15 @@
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  */
 
-static String version() { '2.7.0' }
-static String timeStamp() { '2024/03/06 7:27 PM' }
+static String version() { '2.7.1' }
+static String timeStamp() { '2024/04/23 5:07 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
-//import hubitat.helper.HexUtils
-//import hubitat.device.HubMultiAction
+import hubitat.helper.HexUtils
+import hubitat.device.HubMultiAction
 import groovy.json.JsonOutput
 
 metadata {
@@ -190,13 +191,16 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0003,0500,0000', outClusters: '0501,0019,000A', model: 'TS0215A', manufacturer: '_TZ3000_pkfazisv', deviceJoinName: 'iAlarm (Meian) SOS button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
 
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0500,EF00,0000', outClusters: '0019,000A', model: 'TS0021', manufacturer: '_TZ3210_3ulg9kpo', deviceJoinName: 'Tuya 2 button'    // https://community.hubitat.com/t/request-adding-fingerprints-for-ialarm-devices/118166/2?u=kkossev
+
+        fingerprint inClusters: '0000,0001,0003,0004,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,0300,1000', manufacturer: '_TZ3000_b3mgfu0d', model: 'TS0044', deviceJoinName: 'Candeo remote' //https://community.hubitat.com/t/release-tuya-scene-switch-ts004f-driver-w-healthstatus/92823/187?u=kkossev
+        fingerprint inClusters: '0000,0001,0003,0004,1000', outClusters: '0019,000A,0003,0004,0005,0006,0008,0300,1000', manufacturer: '_TZ3000_czuyt8lz', model: 'TS0044', deviceJoinName: 'Candeo remote'
     }
     preferences {
         input(name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: DEFAULT_LOG_ENABLE)
         input(name: 'txtEnable', type: 'bool', title: '<b>Enable description text logging</b>', defaultValue: true)
         input(name: 'reverseButton', type: 'bool', title: '<b>Reverse button order</b>', defaultValue: true)
         input(name: 'advancedOptions', type: 'bool', title: 'Advanced options', defaultValue: false)
-        if (advancedOptions == true) {
+        if (advancedOptions == true && device != null && !isUSBpowered()) {
             input name: 'batteryReporting', type: 'enum', title: '<b>Battery Reporting Interval</b>', options: batteryReportingOptions.options, defaultValue: batteryReportingOptions.defaultValue, description: \
              '<i>Keep the battery reporting interval to <b>Default</b>, except when battery level is not reported at all for a long period.<br><b>Caution</b>:some devices are repored to deplete the battery very fast, if the battery reporting is set different than the default!</i>'
         }
@@ -221,9 +225,10 @@ boolean isKonkeButton() { device.getDataValue('model') in ['3AFE280100510001', '
 boolean isSonoff() { device.getDataValue('manufacturer') == 'eWeLink' }
 boolean isIkea() { device.getDataValue('manufacturer') == 'IKEA of Sweden' }
 boolean isOsram() { device.getDataValue('manufacturer') == 'OSRAM' }
-boolean needsDebouncing() { device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p']) }
+boolean needsDebouncing() { device.getDataValue('model') == 'TS004F' || (device.getDataValue('manufacturer') in ['_TZ3000_abci1hiu', '_TZ3000_vp6clf9d', '_TZ3000_ur5fpg7p', '_TZ3000_wkai4ga5']) }
 boolean needsMagic() { device.getDataValue('model') in ['TS004F', 'TS0044', 'TS0043', 'TS0042', 'TS0041', 'TS0046'] }
 boolean isSOSbutton() { device.getDataValue('manufacturer') in ['_TZ3000_4fsgukof', '_TZ3000_wr2ucaj9', '_TZ3000_zsh6uat3', '_TZ3000_tj4pwzzm', '_TZ3000_2izubafb', '_TZ3000_pkfazisv' ] }
+boolean isUSBpowered() { device.getDataValue('manufacturer') in ['_TZ3000_b3mgfu0d', '_TZ3000_czuyt8lz'] }
 
 // Parse incoming device messages to generate events
 void parse(String description) {
@@ -683,7 +688,14 @@ void initialize() {
     sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true)
     sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true)
     if (device.currentValue('healthStatus') == null) { setHealthStatusValue('unknown') }
-    if (device.currentValue('powerSource') == null) { sendEvent(name: 'powerSource', value: 'battery', isStateChange: true) }
+    if (device.currentValue('powerSource') == null) { 
+        if (isUSBpowered()) {
+            sendEvent(name: 'powerSource', value: 'dc', isStateChange: true)
+        }
+        else {
+            sendEvent(name: 'powerSource', value: 'battery', isStateChange: true)
+        }
+    }
 
     state.lastButtonNumber = 0
     scheduleDeviceHealthCheck()
