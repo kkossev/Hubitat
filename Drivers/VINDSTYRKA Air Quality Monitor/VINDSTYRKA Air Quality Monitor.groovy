@@ -16,14 +16,15 @@
  * For a big portions of code all credits go to Jonathan Bradshaw.
  *
  * ver. 2.0.0  2023-05-08 kkossev  - Initial test version (VINDSTYRKA driver)
- * ver. 2.1.5  2023-09-02 kkossev  - (dev. branch) VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex
- * ver. 3.0.5  2024-04-05 kkossev  - (dev. branch) commonLib 3.0.5 check; Groovy lint;
+ * ver. 2.1.5  2023-09-02 kkossev  - VINDSTYRKA: removed airQualityLevel, added thresholds; airQualityIndex replaced by sensirionVOCindex
+ * ver. 3.0.5  2024-04-05 kkossev  - commonLib 3.0.5 check; Groovy lint;
+ * ver. 3.1.0  2024-04-24 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization
  *
  *                                   TODO: 
  */
 
-static String version() { "3.0.5" }
-static String timeStamp() {"2024/04/05 9:42 PM"}
+static String version() { "3.1.0" }
+static String timeStamp() {"2024/04/25 11:53 PM"}
 
 @Field static final boolean _DEBUG = false
 
