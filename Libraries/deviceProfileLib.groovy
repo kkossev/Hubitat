@@ -1181,7 +1181,7 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
         return false
     }
 
-    return processFoundItem(foundItem, fncmd_orig)
+    return processFoundItem(foundItem, fncmd_orig, isSpammyDPsToNotTrace(descMap))
 }
 
 // TODO: refactor!
@@ -1216,12 +1216,12 @@ public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
         logTrace "processClusterAttributeFromDeviceProfile: clusterAttribute ${clusterAttribute} was not found in the attributes list for this deviceProfile ${DEVICE?.description}"
         return false
     }
-    return processFoundItem(foundItem, value)
+    return processFoundItem(foundItem, value, isSpammyDPsToNotTrace(descMap))
 }
 
 // modifies the value of the foundItem if needed !!!
 /* groovylint-disable-next-line MethodParameterTypeRequired */
-boolean processFoundItem(final Map foundItem, int value) {
+boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = false) {
     if (foundItem == null) { return false }
     // added 10/31/2023 - preProc the attribute value if needed
     if (foundItem.preProc != null) {
@@ -1254,8 +1254,7 @@ boolean processFoundItem(final Map foundItem, int value) {
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
-    boolean doNotTrace = false  // isSpammyDPsToNotTrace(descMap)          // do not log/trace the spammy clusterAttribute's TODO!
-    if (!doNotTrace) {
+        if (!doNotTrace) {
         logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})"
     }
     // check if the clusterAttribute has the same value as the last one, or the value has changed
@@ -1278,19 +1277,19 @@ boolean processFoundItem(final Map foundItem, int value) {
     }
 
     // first, check if there is a preference defined to be updated
-    if (preferenceExists) {
+    if (preferenceExists && !doNotTrace) {  // do not even try to automatically update the preference if it is in the spammy list! - added 04/23/2024
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
         //log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
-        if (isEqual == true) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
-            logDebug "no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+        if (isEqual == true && !doNotTrace) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
+            logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
         }
         else {
             String scaledPreferenceValue = preferenceValue      //.toString() is not neccessary
             if (foundItem.type == 'enum' && foundItem.scale != null && foundItem.scale != 0 && foundItem.scale != 1) {
                 scaledPreferenceValue = ((preferenceValue * safeToInt(foundItem.scale)) as int).toString()
             }
-            logDebug "preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+            logDebug "processFoundItem: preference '${name}' value ${existingPrefValue} <b>differs</b> from the new scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
             if (settings.logEnable) { logInfo "updating the preference '${name}' from ${existingPrefValue} to ${preferenceValue} (scaledPreferenceValue=${scaledPreferenceValue}, type=${foundItem.type})" }
             try {
                 device.updateSetting("${name}", [value:scaledPreferenceValue, type:foundItem.type])

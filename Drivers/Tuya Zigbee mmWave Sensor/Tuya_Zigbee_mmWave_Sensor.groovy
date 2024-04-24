@@ -17,7 +17,8 @@
  *
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
- * ver. 3.0.8  2024-04-21 kkossev  - (dev. branch) added detectionDelay for SNZB-06; refactored the refresh() method
+ * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
+ * ver. 3.1.0  2024-04-23 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization;
  *
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
  *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
@@ -33,8 +34,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.0.8" }
-static String timeStamp() {"2024/04/22 8:07 AM"}
+static String version() { "3.1.0" }
+static String timeStamp() {"2024/04/24 11:51 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -92,6 +93,7 @@ metadata {
         attribute 'radarAlarmMode', 'enum',   ['0 - arm', '1 - off', '2 - alarm', '3 - doorbell']
         attribute 'radarAlarmVolume', 'enum', ['0 - low', '1 - medium', '2 - high', '3 - mute']
         attribute 'illumState', 'enum', ['dark', 'light', 'unknown']
+        attribute 'WARNING', 'string'
 
         command 'setMotion', [[name: 'setMotion', type: 'ENUM', constraints: ['No selection', 'active', 'inactive'], description: 'Force motion active/inactive (for tests)']]
 
@@ -202,7 +204,7 @@ metadata {
             configuration : [:]
     ],
     */
-    /*
+    
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f277bef2f84d50aea70c25261db0c2ded84b7396/src/devices/tuya.ts#L4164
     'TS0601_RADAR_MIR-HE200-TY'   : [        // Human presence sensor radar 'MIR-HE200-TY' - illuminance, presence, occupancy, motion_speed, motion_direction, radar_sensitivity, radar_scene ('default', 'area', 'toilet', 'bedroom', 'parlour', 'office', 'hotel')
             description   : 'Tuya Human Presence Sensor MIR-HE200-TY',
@@ -233,14 +235,14 @@ metadata {
             deviceJoinName: 'Tuya Human Presence Sensor MIR-HE200-TY',
             configuration : [:]
     ],
-    */
-    /*
-    'TS0601_BLACK_SQUARE_RADAR'   : [        // // 24GHz Big Black Square Radar w/ annoying LED    // isBlackSquareRadar()
+    
+    
+    'TS0601_BLACK_SQUARE_RADAR'   : [        // // 24GHz Big Black Square Radar w/ annoying LED    // EXTREMLY SPAMMY !!!
             description   : 'Tuya Black Square Radar',
             models        : ['TS0601'],
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor':true],
-            preferences   : ['indicatorLight':103],
+            preferences   : ['indicatorLight':'103'],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_0u3bj3rc', deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED'],
@@ -253,11 +255,11 @@ metadata {
                 [dp:102, name:'leave_time',     type:'number', rw: 'ro', min:0, max:9999, scale:1,   unit:'minutes',    description:'Shows the duration of the absence in minutes'],
                 [dp:103, name:'indicatorLight', type:'enum',   rw: 'rw', min:0, max:1,    defVal: '0', map:[0:'OFF', 1:'ON'],  title:'<b>Indicator Light</b>', description:'<i>Turns the onboard LED on or off</i>']
             ],
-            spammyDPsToIgnore : [103],                    // we don't need to know the LED status every 4 seconds!
+            spammyDPsToIgnore : [103, 102, 101],            // we don't need to know the LED status every 4 seconds! Skip also all other spammy DPs except motion
             spammyDPsToNotTrace : [1, 101, 102, 103],     // very spammy device - 4 packates are sent every 4 seconds!
             deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED',
     ],
-    */
+    
     /*
     'TS0601_YXZBRB58_RADAR'   : [        // Seller: shenzhenshixiangchuangyeshiyey Manufacturer: Shenzhen Eysltime Intelligent LTD    Item model number: YXZBRB58  isYXZBRB58radar()
             description   : 'Tuya YXZBRB58 Radar',
@@ -775,6 +777,18 @@ void resetToMotionInactive() {
     }
 }
 
+void setMotion(String mode) {
+    if (mode == 'active') {
+        handleMotion(motionActive = true, isDigital = true)
+    } else if (mode == 'inactive') {
+        handleMotion(motionActive = false, isDigital = true)
+    } else {
+        if (settings?.txtEnable) {
+            log.warn "${device.displayName} please select motion action"
+        }
+    }
+}
+
 int getSecondsInactive() {
     Long unixTime = formattedDate2unix(state.motionStarted)
     if (unixTime) { return Math.round((now() - unixTime) / 1000) }
@@ -873,6 +887,34 @@ void customInitializeVars(final boolean fullInit=false) {
     if (fullInit == true || settings?.ignoreDistance == null) { device.updateSetting('ignoreDistance', true) }
 
 }
+
+void customInitEvents(final boolean fullInit=false) {
+    logDebug "customInitEvents()"
+    if (getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
+        sendEvent(name: 'WARNING', value: 'EXTREMLY SPAMMY DEVICE!', descriptionText: 'This device bombards the hub every 4 seconds!')
+    }
+}
+
+@CompileStatic
+void testFunc( par) {
+    parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100') 
+}
+
+// catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100 
+void test(String par) {
+    long startTime = now()
+    logDebug "test() started at ${startTime}"
+    //parse('catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100')
+    def parpar = 'catchall: 0104 EF00 01 01 0040 00 7770 01 00 0000 02 01 00556701000100'
+
+    for (int i=0; i<100; i++) { 
+        testFunc(parpar) 
+    }
+
+    long endTime = now()
+    logDebug "test() ended at ${endTime} (duration ${endTime - startTime}ms)"
+}
+
 
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////

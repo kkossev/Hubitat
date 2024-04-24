@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.0.7',
+    version: '3.1.0',
     documentationLink: ''
 )
 /*
@@ -36,7 +36,8 @@ library(
   * ver. 3.0.4  2024-04-02 kkossev  - removed Button, buttonDimmer and Fingerbot specifics; batteryVoltage bug fix; inverceSwitch bug fix; parseE002Cluster;
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
-  * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster;
+  * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
+  * ver. 3.1.0  2024-04-24 kkossev  - (dev. branch) unnecesery unschedule() speed optimization.
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -46,8 +47,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.0.7' }
-String commonLibStamp() { '2024/04/18 11:13 AM' }
+String commonLibVersion() { '3.1.0' }
+String commonLibStamp() { '2024/04/24 11:50 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -167,10 +168,10 @@ boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : fa
  * @param description Zigbee message in hex format
  */
 void parse(final String description) {
-    checkDriverVersion()
-    if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats = [:] }
-    unschedule('deviceCommandTimeout')
-    setHealthStatusOnline()
+    checkDriverVersion(state)    // +1 ms
+    updateRxStats(state)         // +1 ms
+    unscheduleCommandTimeoutCheck(state)
+    setHealthStatusOnline(state) // +2 ms
 
     if (description?.startsWith('zone status')  || description?.startsWith('zone report')) {
         logDebug "parse: zone status: $description"
@@ -191,13 +192,14 @@ void parse(final String description) {
         sendZigbeeCommands(cmds)
         return
     }
-    if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {
+
+    if (isTuyaE00xCluster(description) == true || otherTuyaOddities(description) == true) {     // +15 ms
         return
     }
-    final Map descMap = myParseDescriptionAsMap(description)
+    final Map descMap = myParseDescriptionAsMap(description)    // +5 ms
 
-    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }
-    if (isSpammyDeviceReport(descMap)) { return }
+    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }  
+    if (isSpammyDeviceReport(descMap)) { return }  // +20 mS (both)
 
     if (descMap.profileId == '0000') {
         parseZdoClusters(descMap)
@@ -314,9 +316,13 @@ void parse(final String description) {
     }
 }
 
-boolean isChattyDeviceReport(final Map descMap)  {
+static void updateRxStats(final Map state) {
+    if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats = [:] }  // +5ms
+}
+
+boolean isChattyDeviceReport(final Map descMap)  {  // when @CompileStatis is slower?
     if (_TRACE_ALL == true) { return false }
-    if (this.respondsTo('isSpammyDPsToNotTrace')) {
+    if (this.respondsTo('isSpammyDPsToNotTrace')) {  // defined in deviceProfileLib
         return isSpammyDPsToNotTrace(descMap)
     }
     return false
@@ -324,7 +330,7 @@ boolean isChattyDeviceReport(final Map descMap)  {
 
 boolean isSpammyDeviceReport(final Map descMap) {
     if (_TRACE_ALL == true) { return false }
-    if (this.respondsTo('isSpammyDPsToIgnore')) {
+    if (this.respondsTo('isSpammyDPsToIgnore')) {   // defined in deviceProfileLib
         return isSpammyDPsToIgnore(descMap)
     }
     return false
@@ -1275,7 +1281,9 @@ void parseTuyaCluster(final Map descMap) {
             int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
             int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            if (!isChattyDeviceReport(descMap)) {
+                logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            }
             processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
         }
@@ -1419,7 +1427,7 @@ List<String> customHandlers(final List customHandlersList) {
 
 void refresh() {
     logDebug "refresh()... DEVICE_TYPE is ${DEVICE_TYPE} model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')}"
-    checkDriverVersion()
+    checkDriverVersion(state)
     List<String> cmds = []
     setRefreshRequest()    // 3 seconds
 
@@ -1495,7 +1503,8 @@ def virtualPong() {
         logWarn "unexpected ping timeRunning=${timeRunning} "
     }
     state.states['isPing'] = false
-    unschedule('deviceCommandTimeout')
+    //unschedule('deviceCommandTimeout')
+    unscheduleCommandTimeoutCheck(state)
 }
 
 /**
@@ -1534,7 +1543,16 @@ private String clusterLookup(final Object cluster) {
 }
 
 private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    state.states['isTimeoutCheck'] = true
     runIn(delay, 'deviceCommandTimeout')
+}
+
+// unschedule() is a very time consuming operation : ~ 5 milliseconds per call !
+void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :( 
+    if (state.states['isTimeoutCheck'] == true) {
+        state.states['isTimeoutCheck'] = false
+        unschedule('deviceCommandTimeout')
+    }
 }
 
 void deviceCommandTimeout() {
@@ -1566,7 +1584,8 @@ private void unScheduleDeviceHealthCheck() {
 }
 
 // called when any event was received from the Zigbee device in the parse() method.
-void setHealthStatusOnline() {
+
+void setHealthStatusOnline(Map state) {
     if (state.health == null) { state.health = [:] }
     state.health['checkCtr3']  = 0
     if (!((device.currentValue('healthStatus') ?: 'unknown') in ['online'])) {
@@ -1576,7 +1595,7 @@ void setHealthStatusOnline() {
 }
 
 void deviceHealthCheck() {
-    checkDriverVersion()
+    checkDriverVersion(state)
     if (state.health == null) { state.health = [:] }
     int ctr = state.health['checkCtr3'] ?: 0
     if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
@@ -1607,7 +1626,7 @@ void sendHealthStatusEvent(final String value) {
  */
 void autoPoll() {
     logDebug 'autoPoll()...'
-    checkDriverVersion()
+    checkDriverVersion(state)
     List<String> cmds = []
     if (DEVICE_TYPE in  ['AirQuality']) {
         cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
@@ -1623,7 +1642,7 @@ void autoPoll() {
  */
 void updated() {
     logInfo 'updated()...'
-    checkDriverVersion()
+    checkDriverVersion(state)
     logInfo"driver version ${driverVersionAndTimeStamp()}"
     unschedule()
 
@@ -1812,12 +1831,14 @@ String getDestinationEP() {    // [destEndpoint:safeToInt(getDestinationEP())]
     return state.destinationEP ?: device.endpointId ?: '01'
 }
 
-void checkDriverVersion() {
+@CompileStatic
+void checkDriverVersion(final Map state) {
+    return
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
         logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
         sendInfoEvent("Updated to version ${driverVersionAndTimeStamp()}")
         state.driverVersion = driverVersionAndTimeStamp()
-        initializeVars(fullInit = false)
+        initializeVars(false)
         updateTuyaVersion()
         updateAqaraVersion()
     }
@@ -1826,6 +1847,7 @@ void checkDriverVersion() {
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.stats  == null) { state.stats =  [:] }
 }
+
 
 // credits @thebearmay
 String getModel() {
@@ -2018,26 +2040,20 @@ void deleteAllSettings() {
 // delete all attributes
 void deleteAllCurrentStates() {
     String attributesDeleted = ''
-    device.properties.supportedAttributes.each { it ->
-        attributesDeleted += "${it}, "
-        device.deleteCurrentState("$it")
-    }
-    logDebug "Deleted attributes: ${attributesDeleted}"
-    logInfo 'All current states (attributes) DELETED'
+    device.properties.supportedAttributes.each { it -> attributesDeleted += "${it}, " ; device.deleteCurrentState("$it") }
+    logDebug "Deleted attributes: ${attributesDeleted}" ; logInfo 'All current states (attributes) DELETED'
 }
 
 // delete all State Variables
 void deleteAllStates() {
-    state.each { it ->
-        logDebug "deleting state ${it.key}"
-    }
+    String stateDeleted = ''
+    state.each { it -> stateDeleted += "${it.key}, " }
     state.clear()
-    logInfo 'All States DELETED'
+    logDebug "Deleted states: ${stateDeleted}" ; logInfo 'All States DELETED'
 }
 
 void deleteAllScheduledJobs() {
-    unschedule()
-    logInfo 'All scheduled jobs DELETED'
+    unschedule() ; logInfo 'All scheduled jobs DELETED'
 }
 
 void deleteAllChildDevices() {

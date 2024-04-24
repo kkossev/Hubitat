@@ -69,7 +69,7 @@
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
- * ver. 1.8.2  2024-04-18 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P
+ * ver. 1.8.2  2024-04-24 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P, the SPAMMY_BLACK_RADAR, MIR2-HE200-TY; 
  *
  *                                   TODO: Move SONOFF SNZB-06 to the new 'Tuya Zigbee mmWave Sensor' driver
  *                                   TODO: Implement ping() for all devices
@@ -95,7 +95,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.2' }
-static String timeStamp() { '2024/04/18 5:11 PM' }
+static String timeStamp() { '2024/04/24 11:56 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -696,56 +696,42 @@ boolean isChattyRadarReport(final Map descMap) {
 
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f277bef2f84d50aea70c25261db0c2ded84b7396/src/devices/tuya.ts#L4164
     'TS0601_RADAR_MIR-HE200-TY'   : [        // Human presence sensor radar 'MIR-HE200-TY' - illuminance, presence, occupancy, motion_speed, motion_direction, radar_sensitivity, radar_scene ('default', 'area', 'toilet', 'bedroom', 'parlour', 'office', 'hotel')
-            description   : 'Tuya Human Presence Sensor MIR-HE200-TY',
+            description   : 'Tuya Human Presence Sensor MIR-HE200-TY',  // deprecated
             models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true],
-            preferences   : ['radarSensitivity':'2', 'tumbleSwitch':'105', 'tumbleAlarmTime':'106', /*"radarScene":"112",*/ 'fallSensitivity':'118'],
-            commands      : ['resetStats':'resetStats'],
+            //preferences   : ['radarSensitivity':'2', 'tumbleSwitch':'105', 'tumbleAlarmTime':'106', /*"radarScene":"112",*/ 'fallSensitivity':'118'],
+            //commands      : ['resetStats':'resetStats'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_vrfecyku', deviceJoinName: 'Tuya Human presence sensor MIR-HE200-TY'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lu01t0zl', deviceJoinName: 'Tuya Human presence sensor with fall function'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ypprdwsl', deviceJoinName: 'Tuya Human presence sensor with fall function']
+                [model:'TS0601', manufacturer:'_TZE200_vrfecyku'],
+                [model:'TS0601', manufacturer:'_TZE200_lu01t0zl'],
+                [model:'TS0601', manufacturer:'_TZE200_ypprdwsl']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:0,   max:10,    defVal:7,   scale:1,    unit:'',        title:'<b>Radar sensitivity</b>',          description:'<i>Sensitivity of the radar</i>'],
                 [dp:102, name:'motionState',        type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Motion state</b>', description:'<i>Motion state (occupancy)</i>'],
-                [dp:103, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,   scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
-                [dp:105, name:'tumbleSwitch',       type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'OFF', 1:'ON'] ,   unit:'',     title:'<b>Tumble status switch</b>', description:'<i>Tumble status switch</i>'],
-                [dp:106, name:'tumbleAlarmTime',    type:'number',  rw: 'rw', min:1,   max:5,     defVal:1,   scale:1,    unit:'minutes',        title:'<b>Tumble alarm time</b>',                   description:'<i>Tumble alarm time</i>'],
-                [dp:112, name:'radarScene',         type:'enum',    rw: 'rw', min:0,   max:6,     defVal:'0', scale:1,    map:[ 0:'default', 1:'area', 2:'toilet', 3:'bedroom', 4:'parlour', 5:'office', 6:'hotel'] ,   unit:'-',     title:'<b>Radar Presets</b>', description:'<i>Presets for sensitivity for presence and movement</i>'],
-                [dp:114, name:'motionDirection',    type:'enum',    rw: 'ro', min:0,   max:2,     defVal:'0', scale:1,    map:[ 0:'standing_still', 1:'moving_forward', 2:'moving_backward'] ,   unit:'-',     title:'<b>Movement direction</b>', description:'<i>direction of movement from the point of view of the radar</i>'],
-                [dp:115, name:'motionSpeed',        type:'number',  rw: 'ro', min:0,   max:9999,  defVal:0,   scale:1,    unit:'-',        title:'<b>Movement speed</b>',                   description:'<i>Speed of movement</i>'],
-                [dp:116, name:'fallDownStatus',     type:'enum',    rw: 'ro', min:0,   max:2,     defVal:'0', scale:1,    map:[ 0:'none', 1:'maybe_fall', 2:'fall'] ,   unit:'-',     title:'<b>Fall down status</b>', description:'<i>Fall down status</i>'],
-                //[dp:117, name:'staticDwellAalarm',  type:"text",    rw: "ro", min:0,   max:9999,  defVal:0, scale:1,    unit:"-",        title:"<b>Static dwell alarm</b>",                   description:'<i>Static dwell alarm</i>'],
-                [dp:118, name:'fallSensitivity',    type:'number',  rw: 'rw', min:1,   max:10,    defVal:7,   scale:1,    unit:'',        title:'<b>Fall sensitivity</b>',          description:'<i>Fall sensitivity of the radar</i>'],
             ],
-            deviceJoinName: 'Tuya Human Presence Sensor MIR-HE200-TY',
-            configuration : [:]
+            //deviceJoinName: 'Tuya Human Presence Sensor MIR-HE200-TY',
     ],
 
-    'TS0601_BLACK_SQUARE_RADAR'   : [        // // 24GHz Big Black Square Radar w/ annoying LED    // isBlackSquareRadar()
+    'TS0601_BLACK_SQUARE_RADAR'   : [        // // 24GHz Big Black Square Radar w/ annoying LED    // isBlackSquareRadar()  // deprecated
             description   : 'Tuya Black Square Radar',
             models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor':true],
-            preferences   : ['indicatorLight':103],
-            commands      : ['resetStats':'resetStats'],
+            //preferences   : ['indicatorLight':103],
+            //commands      : ['resetStats':'resetStats'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_0u3bj3rc', deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED'],
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_v6ossqfy', deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED'],
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_mx6u6l4y', deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED']
+                [model:'TS0601', manufacturer:'_TZE200_0u3bj3rc'],
+                [model:'TS0601', manufacturer:'_TZE200_v6ossqfy'],
+                [model:'TS0601', manufacturer:'_TZE200_mx6u6l4y']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'inactive', 1:'active'],     description:'Presence'],
-                [dp:101, name:'existance_time', type:'number', rw: 'ro', min:0, max:9999, scale:1,   unit:'minutes',    description:'Shows the presence duration in minutes'],
-                [dp:102, name:'leave_time',     type:'number', rw: 'ro', min:0, max:9999, scale:1,   unit:'minutes',    description:'Shows the duration of the absence in minutes'],
-                [dp:103, name:'indicatorLight', type:'enum',   rw: 'rw', min:0, max:1,    defVal: '0', map:[0:'OFF', 1:'ON'],  title:'<b>Indicator Light</b>', description:'<i>Turns the onboard LED on or off</i>']
             ],
             spammyDPsToIgnore : [103],                    // we don't need to know the LED status every 4 seconds!
             spammyDPsToNotTrace : [1, 101, 102, 103],     // very spammy device - 4 packates are sent every 4 seconds!
-            deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED',
+            //deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED',
     ],
 
     'TS0601_YXZBRB58_RADAR'   : [        // Seller: shenzhenshixiangchuangyeshiyey Manufacturer: Shenzhen Eysltime Intelligent LTD    Item model number: YXZBRB58  isYXZBRB58radar()
@@ -1134,17 +1120,17 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : [:]
     ],
 
-    'OWON_OCP305_RADAR'   : [
+    'OWON_OCP305_RADAR'   : [   // depricated
             description   : 'OWON OCP305 Radar',
             models        : ['OCP305'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated:true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'Battery': true],
-            preferences   : [:],
+            //preferences   : [:],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406', outClusters:'0003', model:'OCP305', manufacturer:'OWON']
+                [model:'OCP305', manufacturer:'OWON']   // depricated
             ],
-            deviceJoinName: 'OWON OCP305 Radar',
-            configuration : ['0x0406':'bind']
+            //deviceJoinName: 'OWON OCP305 Radar',
+           // configuration : ['0x0406':'bind']
     ],
 
     'SONOFF_SNZB-06P_RADAR' : [ // Depricated
