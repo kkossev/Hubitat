@@ -4,7 +4,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/deviceProfileLib.groovy",
       "id": 142,
       "codeType": "library",
-      "version": 379
+      "version": 381
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/rgbLib.groovy",
@@ -46,7 +46,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 371
+      "version": 389
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -89,6 +89,12 @@
       "id": 172,
       "codeType": "library",
       "version": 8
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/illuminanceLib.groovy",
+      "id": 168,
+      "codeType": "library",
+      "version": 6
     }
   ]
 }

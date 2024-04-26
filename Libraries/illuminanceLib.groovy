@@ -7,7 +7,7 @@ library(
     name: 'illuminanceLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy',
-    version: '3.0.0',
+    version: '3.0.1',
     documentationLink: ''
 )
 /*
@@ -24,11 +24,12 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
  *
- *                                   TODO:
+ *                                   TODO: illum threshold not working!
+ *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
-static String illuminanceLibVersion()   { '3.0.0' }
-static String illuminanceLibStamp() { '2024/04/06 2:40 PM' }
+static String illuminanceLibVersion()   { '3.0.1' }
+static String illuminanceLibStamp() { '2024/04/26 8:06 AM' }
 
 metadata {
     // no capabilities
@@ -39,7 +40,7 @@ metadata {
     }
 }
 
-@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 5
+@Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10
 
 void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
@@ -48,7 +49,7 @@ void customParseIlluminanceCluster(final Map descMap) {
     handleIlluminanceEvent(lux)
 }
 
-void handleIlluminanceEvent(int illuminance, Boolean isDigital=false) {
+void handleIlluminanceEvent(int illuminance, boolean isDigital=false) {
     Map eventMap = [:]
     if (state.stats != null) { state.stats['illumCtr'] = (state.stats['illumCtr'] ?: 0) + 1 } else { state.stats = [:] }
     eventMap.name = 'illuminance'
@@ -89,7 +90,7 @@ private void sendDelayedIllumEvent(Map eventMap) {
 @Field static final Map tuyaIlluminanceOpts = [0: 'low', 1: 'medium', 2: 'high']
 
 /* groovylint-disable-next-line UnusedMethodParameter */
-void customProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
+void illuminanceProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
     switch (dp) {
         case 0x01 : // on/off
             if (DEVICE_TYPE in  ['LightSensor']) {
@@ -116,7 +117,7 @@ void customProcessTuyaDP(final Map descMap, int dp, int dp_id, int fncmd) {
     }
 }
 
-void customInitializeVars( boolean fullInit = false ) {
+void illuminanceInitializeVars( boolean fullInit = false ) {
     logDebug "customInitializeVars()... fullInit = ${fullInit}"
     if (device.hasCapability('IlluminanceMeasurement')) {
         if (fullInit || settings?.minReportingTime == null) { device.updateSetting('minReportingTime', [value:DEFAULT_MIN_REPORTING_TIME, type:'number']) }

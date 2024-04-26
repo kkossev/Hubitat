@@ -494,8 +494,8 @@ public boolean setPar(final String parPar=null, final String val=null ) {
             return false
         }
         else {
-            logInfo "setPar: (2) successfluly executed setPar <b>$customSetFunction</b>(<b>$val</b> (scaledValue=${scaledValue}))"
-            sendZigbeeCommands( cmds )
+            logInfo "setPar: (2) sending parameter <b>$par</b> (<b>$val</b> (scaledValue=${scaledValue}))"
+            sendZigbeeCommands(cmds)
             return false
         }
     }
@@ -1353,7 +1353,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
                     break
                 case 'illuminance' :
                 case 'illuminance_lux' :
-                    handleIlluminanceEvent(valueCorrected.toInteger())
+                    handleIlluminanceEvent(valueCorrected as int)
                     break
                 case 'pushed' :
                     logDebug "button event received value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"

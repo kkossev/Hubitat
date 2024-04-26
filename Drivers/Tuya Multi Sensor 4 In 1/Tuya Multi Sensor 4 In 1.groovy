@@ -69,7 +69,7 @@
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
- * ver. 1.8.2  2024-04-24 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P, the SPAMMY_BLACK_RADAR, MIR2-HE200-TY; 
+ * ver. 1.8.2  2024-04-25 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P, the SPAMMY_BLACK_RADAR, MIR2-HE200-TY; TS0601_KAPVNNLK_RADAR
  *
  *                                   TODO: Move SONOFF SNZB-06 to the new 'Tuya Zigbee mmWave Sensor' driver
  *                                   TODO: Implement ping() for all devices
@@ -95,7 +95,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.2' }
-static String timeStamp() { '2024/04/24 11:56 PM' }
+static String timeStamp() { '2024/04/25 1:36 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -667,31 +667,20 @@ boolean isChattyRadarReport(final Map descMap) {
     // status: completed
     ],
 
-    'TS0601_KAPVNNLK_RADAR'   : [        // 24GHz spammy radar w/ battery backup - no illuminance!
-            description   : 'Tuya TS0601_KAPVNNLK 24GHz Radar',        // https://www.amazon.com/dp/B0CDRBX1CQ?psc=1&ref=ppx_yo2ov_dt_b_product_details  // https://www.aliexpress.com/item/1005005834366702.html  // https://github.com/Koenkk/zigbee2mqtt/issues/18632
-            models        : ['TS0601'],                                // https://www.aliexpress.com/item/1005005858609756.html     // https://www.aliexpress.com/item/1005005946786561.html    // https://www.aliexpress.com/item/1005005946931559.html
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
-            capabilities  : ['MotionSensor': true, 'DistanceMeasurement':true, 'HumanMotionState':true],
-            preferences   : ['radarSensitivity':'15', 'fadingTime':'12', 'maximumDistance':'13', 'smallMotionDetectionSensitivity':'16'],
-            commands      : ['resetStats':'resetStats', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences'],
+    'TS0601_KAPVNNLK_RADAR'   : [        // 24GHz spammy radar w/ battery backup - depricated
+            description   : 'Tuya TS0601_KAPVNNLK 24GHz Radar',
+            models        : ['TS0601'],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_kapvnnlk', deviceJoinName: 'Tuya 24 GHz Human Presence Detector NEW'],           // https://community.hubitat.com/t/tuya-smart-human-presence-sensor-micromotion-detect-human-motion-detector-zigbee-ts0601-tze204-sxm7l9xa/111612/71?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_kyhbrfyl', deviceJoinName: 'Tuya 24 GHz Human Presence Detector NEW'],           // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/1042?u=kkossev
+                [model:'TS0601', manufacturer:'_TZE204_kapvnnlk'],
+                [model:'TS0601', manufacturer:'_TZE204_kyhbrfyl']
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:11,  name:'humanMotionState',    type:'enum',    rw: 'ro', min:0,   max:2,     defVal:'0', map:[0:'none', 1:'small_move', 2:'large_move'],  description:'Human motion state'],        // "none", "small_move", "large_move"]
-                [dp:12,  name:'fadingTime',          type:'number',  rw: 'rw', min:3,   max:600,   defVal:60,   scale:1,   unit:'seconds',    title:'<b>Fading time</b>',                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
-                [dp:13,  name:'maximumDistance',     type:'decimal', rw: 'rw', min:1.5, max:6.0,   defVal:4.0, step:75, scale:100, unit:'meters',     title:'<b>Maximum detection distance</b>', description:'<i>Maximum (far) detection distance</i>'],  // aka 'Large motion detection distance'
-                [dp:15,  name:'radarSensitivity',    type:'number',  rw: 'rw', min:0,   max:7 ,    defVal:5,    scale:1,   unit:'',          title:'<b>Radar sensitivity</b>',          description:'<i>Large motion detection sensitivity of the radar</i>'],
-                [dp:16 , name:'smallMotionDetectionSensitivity', type:'number',  rw: 'rw', min:0,   max:7,  defVal:5,     scale:1,   unit:'', title:'<b>Small motion sensitivity</b>',   description:'<i>Small motion detection sensitivity</i>'],
-                [dp:19,  name:'distance',            type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,  scale:100, unit:'meters',     title:'<b>Distance</b>',                   description:'<i>detected distance</i>'],
-                [dp:101, name:'batteryLevel',        type:'number',  rw: 'ro', min:0,   max:100,   defVal:100,  scale:1,   unit:'%',          title:'<b>Battery level</b>',              description:'<i>Battery level</i>']
+                [dp:1,   name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>']
             ],
             spammyDPsToIgnore : [19],
-            spammyDPsToNotTrace : [19],
-            deviceJoinName: 'Tuya 24 GHz Human Presence Detector NEW',
-            configuration : [:]
+            spammyDPsToNotTrace : [19]
     ],
 
     // https://github.com/Koenkk/zigbee-herdsman-converters/blob/f277bef2f84d50aea70c25261db0c2ded84b7396/src/devices/tuya.ts#L4164
