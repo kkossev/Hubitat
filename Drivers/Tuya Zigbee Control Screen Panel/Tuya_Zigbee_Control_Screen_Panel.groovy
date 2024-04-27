@@ -14,17 +14,18 @@
  * 	on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  * 	for the specific language governing permissions and limitations under the License.
  *
- * ver. 0.1.0  2024-04-07 kkossev  - (dev. branch) first version
- * ver. 0.1.1  2024-04-10 kkossev  - (dev. branch) removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
- * ver. 0.1.2  2024-04-11 kkossev  - (dev. branch) added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
+ * ver. 0.1.0  2024-04-07 kkossev  - first version
+ * ver. 0.1.1  2024-04-10 kkossev  - removed Switch capability; added Smart Blind buttons 110,111,112; Projector buttons 113,114
+ * ver. 0.1.2  2024-04-11 kkossev  - added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
  * ver. 1.0.0  2024-04-13 kkossev  - first release version
- * ver. 1.0.1  2024-04-20 kkossev  - 
+ * ver. 1.0.1  2024-04-27 kkossev  - commonLib 3.1.0 update; sync the time automatically on device power up; 
  *
- *                                   TODO:  
+ *                                   TODO:  configure the number of switches in the preferences
+ *                                   TODO:  create the child devices automatically
  */
 
 static String version() { "1.0.1" }
-static String timeStamp() {"2024/04/20 12:05 PM"}
+static String timeStamp() {"2024/04/27 11:16 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -57,12 +58,9 @@ metadata {
 
         //attribute 'hubitatMode', 'enum', HubitatModeOpts.options.values() as List<String>
         //attribute 'scene', 'string'   // not used, TOBEDEL
-
-        command 'syncTuyaDateTime'
-     
+        //command 'syncTuyaDateTime'
     }
     fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_mua6ucdj"   // this device
-    fingerprint profileId:"0104", endpointId:"01", inClusters:"0004,0005,EF00,0000", outClusters:"0019,000A", model:"TS0601", manufacturer:"_TZE200_vm1gyrso"   //3 gangs dimmer - for tests only
     preferences {
         input name: 'txtEnable', type: 'bool', title: '<b>Enable descriptionText logging</b>', defaultValue: true, description: '<i>Enables command logging.</i>'
         input name: 'logEnable', type: 'bool', title: '<b>Enable debug logging</b>', defaultValue: true, description: '<i>Turns on debug logging for 24 hours.</i>'
@@ -258,7 +256,7 @@ void sendChildSwitchEvent(final int dp, final int fncmd) {
 
 void sendSceneButtonEvent(final int dp, final int fncmd, final String sceneName) {
     logTrace "sendSceneButtonEvent(dp=${dp}, fncmd=${fncmd}, sceneName=${sceneName})"
-    String descriptionText = "${sceneName ?: 'unknown'} button was pushed (device #${dp})"	
+    String descriptionText = "button ${dp} was pushed (${sceneName ?: 'unknown'})"	
     Map event = [name: 'pushed', value: dp.toString(), data: [buttonNumber: dp], descriptionText: descriptionText, isStateChange: true, type: isDigital == true ? 'digital' : 'physical']
     logInfo "$descriptionText"
     sendEvent(event)
@@ -354,25 +352,12 @@ void customCreateChildDevices(boolean fullInit=false) {
     }
 }
 
-void syncTuyaDateTime() {
-    // The data format for time synchronization, including standard timestamps and local timestamps. Standard timestamp (4 bytes)    local timestamp (4 bytes) Time synchronization data format: The standard timestamp is the total number of seconds from 00:00:00 on January 01, 1970 GMT to the present.
-    // For example, local timestamp = standard timestamp + number of seconds between standard time and local time (including time zone and daylight saving time).                 // Y2K = 946684800
-    long offset = 0
-    int offsetHours = 0
-    Calendar cal = Calendar.getInstance();    //it return same time as new Date()
-    def hour = cal.get(Calendar.HOUR_OF_DAY)
-    try {
-        offset = location.getTimeZone().getOffset(new Date().getTime())
-        offsetHours = (offset / 3600000) as int
-        logDebug "timezone offset of current location is ${offset} (${offsetHours} hours), current hour is ${hour} h"
-    } catch(e) {
-        log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+
+void customParseTuyaCluster(final Map descMap) {
+    logDebug "customParseTuyaCluster(${descMap})"
+    if (descMap.cluster == CLUSTER_TUYA && descMap.command == '11') {
+        syncTuyaDateTime()
     }
-    //
-    List<String> cmds
-    cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
-    logDebug "sending time data : ${cmds}"
-    cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
 }
 
 @Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'

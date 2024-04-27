@@ -37,7 +37,7 @@ library(
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
-  * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) unnecesery unschedule() speed optimization.
+  * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) unnecesery unschedule() speed optimization; added syncTuyaDateTime();
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -1248,20 +1248,33 @@ private static getDP_TYPE_STRING()     { '03' }    // [ N byte string ]
 private static getDP_TYPE_ENUM()       { '04' }    // [ 0-255 ]
 private static getDP_TYPE_BITMAP()     { '05' }    // [ 1,2,4 bytes ] as bits
 
+void syncTuyaDateTime() {
+    // The data format for time synchronization, including standard timestamps and local timestamps. Standard timestamp (4 bytes)    local timestamp (4 bytes) Time synchronization data format: The standard timestamp is the total number of seconds from 00:00:00 on January 01, 1970 GMT to the present.
+    // For example, local timestamp = standard timestamp + number of seconds between standard time and local time (including time zone and daylight saving time).  // Y2K = 946684800
+    long offset = 0
+    int offsetHours = 0
+    Calendar cal = Calendar.getInstance();    //it return same time as new Date()
+    def hour = cal.get(Calendar.HOUR_OF_DAY)
+    try {
+        offset = location.getTimeZone().getOffset(new Date().getTime())
+        offsetHours = (offset / 3600000) as int
+        logDebug "timezone offset of current location is ${offset} (${offsetHours} hours), current hour is ${hour} h"
+    } catch(e) {
+        log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
+    }
+    //
+    List<String> cmds
+    cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
+    String dateTimeNow = unix2formattedDate(now())
+    logDebug "sending time data : ${dateTimeNow} (${cmds})"
+    sendZigbeeCommands(cmds)
+    logInfo "Tuya device time synchronized to ${dateTimeNow}"
+}
+
+
 void parseTuyaCluster(final Map descMap) {
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '24') {        //getSETTIME
-        logDebug "Tuya time synchronization request from device, descMap = ${descMap}"
-        Long offset = 0
-        try {
-            offset = location.getTimeZone().getOffset(new Date().getTime())
-        }
-        catch (e) {
-            logWarn 'cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero'
-        }
-        String cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
-        logDebug "sending time data : ${cmds}"
-        cmds.each { sendHubCommand(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE)) }
-    //if (state.txCounter != null) state.txCounter = state.txCounter + 1
+        syncTuyaDateTime()
     }
     else if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '0B') {    // ZCL Command Default Response
         String clusterCmd = descMap?.data[0]

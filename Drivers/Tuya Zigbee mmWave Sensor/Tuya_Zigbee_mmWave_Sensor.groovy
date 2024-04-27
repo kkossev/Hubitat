@@ -18,7 +18,7 @@
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
- * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR
+ * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
  *
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
  *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
@@ -35,7 +35,7 @@
 */
 
 static String version() { "3.1.0" }
-static String timeStamp() {"2024/04/26 8:03 PM"}
+static String timeStamp() {"2024/04/26 10:10 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -262,7 +262,7 @@ metadata {
             deviceJoinName: '24GHz Black Square Human Presence Radar w/ LED',
     ],
     
-    /*
+    
     'TS0601_YXZBRB58_RADAR'   : [        // Seller: shenzhenshixiangchuangyeshiyey Manufacturer: Shenzhen Eysltime Intelligent LTD    Item model number: YXZBRB58  isYXZBRB58radar()
             description   : 'Tuya YXZBRB58 Radar',
             models        : ['TS0601'],
@@ -289,7 +289,7 @@ metadata {
             deviceJoinName: 'Tuya Human Presence Detector YXZBRB58',    // https://www.aliexpress.com/item/1005005764168560.html
             configuration : [:]
     ],
-    */
+    
     /*
     // isSXM7L9XAradar()                                                // https://github.com/dresden-elektronik/deconz-rest-plugin/issues/6998#issuecomment-1612113340
     'TS0601_SXM7L9XA_RADAR'   : [                                       // https://gist.github.com/Koenkk/9295fc8afcc65f36027f9ab4d319ce64
@@ -319,7 +319,7 @@ metadata {
             configuration : [:],
     ],
     */
-    /*
+    
     // isIJXVKHD0radar()  '24G MmWave radar human presence motion sensor'
     'TS0601_IJXVKHD0_RADAR'   : [
             description   : 'Tuya Human Presence Detector IJXVKHD0',    // https://github.com/Koenkk/zigbee-herdsman-converters/blob/5acadaf16b0e85c1a8401223ddcae3d31ce970eb/src/devices/tuya.ts#L5747
@@ -349,7 +349,7 @@ metadata {
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100-24G',
             configuration : [:]
     ],
-    */
+    
 /*
 SmartLife   radarSensitivity staticDetectionSensitivity
     L1          7                   9
@@ -391,7 +391,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             configuration : [:]
     ],
     */
-    /*
+    
     // the new 5.8 GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - pedestal mount form-factor
     'TS0225_HL0SS9OA_RADAR'   : [
             description   : 'Tuya TS0225_HL0SS9OA Radar',        // https://www.aliexpress.com/item/1005005761971083.html
@@ -443,7 +443,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             deviceJoinName: 'Tuya TS0225_HL0SS9OA Human Presence Detector',
             configuration : [:]
     ],
-    */
+    
     /*
     // the new 5.8GHz radar w/ humanMotionState and a lot of configuration options, 'not-so-spammy' !   - wall mount form-factor    is2AAELWXKradar()
     'TS0225_2AAELWXK_RADAR'   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
