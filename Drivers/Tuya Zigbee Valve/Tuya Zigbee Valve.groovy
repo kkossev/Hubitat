@@ -32,8 +32,9 @@
  *  ver. 1.2.4 2023-04-09 kkossev - _TZ3000_5ucujjts deviceProfile bug fix; added rtt measurement in ping(); handle known E00X clusters
  *  ver. 1.2.5 2023-05-22 kkossev - handle exception when processing application version; Saswell _TZE200_81isopgh fingerptint correction; fixed Lidl/Parkside _TZE200_htnnfasr group; lables changed : timer is in seconds (Saswell) or in minutes (GiEX)
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
- *  ver. 1.2.7 2023-12-18 kkossev - (dev.brahnch) code linting
- *  ver. 1.3.0 2024-03-17 kkossev - (dev.brahnch) more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
+ *  ver. 1.2.7 2023-12-18 kkossev - code linting
+ *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
+ *  ver. 1.3.1 2024-04-28 kkossev - (dev.branch) getPowerSource bug fix;
  *
  *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
@@ -43,8 +44,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.0' }
-String timeStamp() { '2024/03/17 10:43 AM' }
+String version() { '1.3.1' }
+String timeStamp() { '2024/04/28 9:28 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -116,7 +117,7 @@ metadata {
 String getModelGroup()          { return state.deviceProfile ?: 'UNKNOWN' }
 Set<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
 boolean isConfigurable(String model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
-String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: modelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
+String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: getModelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
 boolean isConfigurable()         { return isConfigurable(getModelGroup()) }
 boolean isGIEX()                 { return getModelGroup().contains('GIEX') }    // GiEX valve device
 boolean isSASWELL()              { return getModelGroup().contains('SASWELL') }
