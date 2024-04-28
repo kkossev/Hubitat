@@ -25,9 +25,9 @@
  */
 
 static String version() { "1.0.1" }
-static String timeStamp() {"2024/04/27 11:16 AM"}
+static String timeStamp() {"2024/04/27 8:33 PM"}
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean _SIMULATION = false      // _TZE200_vm1gyrso
 
@@ -43,6 +43,11 @@ import com.hubitat.app.DeviceWrapper
 
 deviceType = "multiEpSwitch"
 @Field static final String DEVICE_TYPE = "multiEpSwitch"
+
+@Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'
+@Field static final String WIKI   = 'Wiki page:'
+@Field static final String COMM_LINK =   'https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208/1'
+@Field static final String GITHUB_LINK = 'https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel'
 
 #include kkossev.commonLib
 
@@ -77,33 +82,79 @@ metadata {
 ]
 
 @Field static final Map<Integer,String> TUYA_DP = [
-    0x01: 'on/off',
-    0x05: 'Full-on mode',
-    0x06: 'Full-off mode',
-    0x07: 'Viewing mode',
-    0x08: 'Meeting mode',
-    0x09: 'Sleeping mode',
-    0x0A: 'Coffee break mode',
-    0x12: 'Unknown 1',
-    0x13: 'Unknown 2',
-    0x14: 'Unknown 3',
-    0x15: 'Unknown 4',
-    0x18: 'Switch 1',
-    0x19: 'Switch 2',
-    0x1A: 'Switch 3',
-    0x1B: 'Switch 4',
-    0x68: 'Smart Curtain button 1',
-    0x69: 'Smart Curtain button 2',
-    0x6A: 'Smart Curtain button 3',
-    0x6E: 'Smart Blind button 1',
-    0x6F: 'Smart Blind button 2',
-    0x70: 'Smart Blind button 3',
-    0x71: 'Projector button 1',
-    0x72: 'Projector button 2',
-    0x7C: 'Air Conditioner button 4 (ON)',
-    0x7D: 'Air Conditioner button 1 (OFF)',
-    0x7E: 'Air Conditioner button 2 (Cooling)',
-    0x7F: 'Air Conditioner button 3 (Heating)'
+    1: 'Reserve Scene1',    // can be written ENUM data type and will report back the value
+    2: 'Reserve Scene2',    // no UI on the panel ?
+    3: 'Reserve Scene3',
+    4: 'Reserve Scene4',
+
+    5: 'Full-on mode',    // same as the scenes 1..4
+    6: 'Full-off mode',
+    7: 'Viewing mode',
+    8: 'Meeting mode',
+    9: 'Sleeping mode',
+    10: 'Coffee break mode',
+    
+    17: 'Scene ID & Group ID',
+
+    18: 'Mode 1',
+    19: 'Mode 2',
+    20: 'Mode 3',
+    21: 'Mode 4',
+    24: 'Switch 1',
+    25: 'Switch 2',
+    26: 'Switch 3',
+    27: 'Switch 4',
+    30: 'Countdown 1',
+    31: 'Countdown 2',
+    32: 'Countdown 3',
+    33: 'Countdown 4',
+    38: 'Relay status all',
+    39: 'Relay status 1',
+    40: 'Relay status 2',
+    41: 'Relay status 3',
+    42: 'Relay status 4',
+    101: 'Temp value',
+    102: 'Bright value 1',
+    103: 'Temp switch 1',
+    104: 'Curtain open',
+    105: 'Curtain stop',
+    106: 'Curtain close',
+    107: 'Roller shutter open',
+    108: 'Roller shutter stop',
+    109: 'Roller shutter close',
+    110: 'Blinds open',
+    111: 'Blinds stop',
+    112: 'Blinds close',
+    113: 'Projector open',
+    114: 'Projector close',
+    115: 'Screen open',
+    116: 'Screen stop',
+    117: 'Screen close',
+    118: 'Gauze curtain open',
+    119: 'Gauze curtain stop',
+    120: 'Gauze curtain close',
+    121: 'Window open',
+    122: 'Window stop',
+    123: 'Window close',
+    124: 'Air Conditioner on',
+    125: 'Air Conditioner off',
+    126: 'Air Conditioner cooling',
+    127: 'Air Conditioner heating'
+]
+
+@Field static final Map<Integer,String> TuyaPanelSwitches = [
+    130: 'Switch 1-1',
+    131: 'Switch 1-2',
+    132: 'Switch 1-3',
+    133: 'Switch 1-4',
+    134: 'Switch 2-1',
+    135: 'Switch 2-2',
+    136: 'Switch 2-3',
+    137: 'Switch 2-4',
+    138: 'Switch 3-1',
+    139: 'Switch 3-2',
+    140: 'Switch 3-3',
+    141: 'Switch 3-4'
 ]
 
 boolean customProcessTuyaDp(final Map descMap, final int dp, final int dp_id, final int fncmd, final int dp_len=0) {
@@ -359,12 +410,6 @@ void customParseTuyaCluster(final Map descMap) {
         syncTuyaDateTime()
     }
 }
-
-@Field static final String DRIVER_NAME = 'Tuya Zigbee Control Screen Panel'
-@Field static final String WIKI   = 'Wiki page:'
-@Field static final String COMM_LINK =   'https://community.hubitat.com/t/a-new-interesting-tuya-zigbee-control-screen-panel-w-relays-and-scenes-t3e-2023-new-model/136208/1'
-@Field static final String GITHUB_LINK = 'https://github.com/kkossev/Hubitat/wiki/Tuya-Zigbee-Control-Screen-Panel'
-
 
 // credits @jtp10181
 String fmtHelpInfo(String str) {
