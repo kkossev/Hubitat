@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.1' }
-String timeStamp() { '2024/04/28 9:42 PM' }
+String timeStamp() { '2024/04/28 10:35 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -699,6 +699,9 @@ void parseZHAcommand(Map descMap) {
                             case '13' : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
+                            case '1A' : // (26) TS049
+                                logInfo "TS049 fault (${cmd}) is: ${value}"
+                                break
                             case '65' : // (101) WaterValveIrrigationStartTime for GiEX and LIDL?   // IrrigationStartTime       # (string) ex: "08:12:26"
                                 if (isTS0049()) {   // TS0049 valve on/off
                                     String switchValue = value == 0 ? 'off' : 'on'
@@ -732,7 +735,12 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '68' : // (104) WaterValveIrrigationTarget for GiEX        // IrrigationTarget   for _TZE200_sh1btabb       # duration in minutes or capacity in Liters (depending on mode)
-                                logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
+                                if (isTS0049()) {
+                                    logInfo "Automatic Execution Status (dp=${cmd}) is: (${value})"
+                                }
+                                else {
+                                    logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
+                                }
                                 break
                             case '69' : // (105) WaterValveCycleIrrigationInterval for GiEX      // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
                                 if (isTS0049()) {   // count down timer
@@ -752,14 +760,24 @@ void parseZHAcommand(Map descMap) {
                                 }
                                 break
                             case '6B' : // (107) - LIDL time schedile                    // https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-868509538
-                                logInfo "Lidl  LIDL time schedile (${cmd}) is: ${value}"
+                                if (isTS0049()) {
+                                    logInfo "TS0049 Automatic Mode Distinction (dp=${cmd}) is ${value}"
+                                }
+                                else {
+                                    logInfo "${device.displayName} LIDL time schedile (${cmd}) is: ${value}" 
+                                }
                                 break
                             case '6C' : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (isGIEX()) {
                                     logInfo "GiEX Battery (${cmd}) is: ${value} %"
                                     sendBatteryEvent(value)
-                                } else {    // Lidl
-                                    logInfo "LIDL frost state (${cmd}) is: ${value}"
+                                } 
+                                else if (isTS0049()) {
+                                    logInfo "TS0049 Effective Time Period (dp=${cmd}) is ${value}"
+                                }
+                                else {    // Lidl
+                                    logInfo "LIDL battery (${cmd}) is: ${value} %"
+                                    sendBatteryEvent(value)
                                 }
                                 break
                             case '6D' : // (109) LIDL frost reset
@@ -769,6 +787,9 @@ void parseZHAcommand(Map descMap) {
                                 else {
                                     logInfo "LIDL reset frost alarmcommand (${cmd}) is: ${value}"    // to be sent to the device! TODO: reset frost alarm : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084774734 - command 0x6D ?TYPE_ENUM value 01
                                 }
+                                break
+                            case '6E' : // (110) TS0049
+                                logInfo "TS0049 Log Report (dp=${cmd}) is ${value}"
                                 break
                             case '6F' : // (111) WaterValveWaterConsumed for GiEX       // WaterConsumed             # water consumed (Litres)
                                 if (isTS0049()) {   // TS0049 irrigation time
@@ -780,16 +801,37 @@ void parseZHAcommand(Map descMap) {
                                     sendEvent(name: 'waterConsumed', value: value, type: 'physical')
                                 }
                                 break
+                            case '70' : // (112)
+                                logInfo "TS0049 Flow Reset (dp=${cmd}) is ${value}"
+                                break
+                            case '71' : // (113)
+                                logInfo "TS0049 Temp Current (dp=${cmd}) is ${value}"
+                                break
                             case '72' : // (114) WaterValveLastIrrigationDuration for GiEX   LastIrrigationDuration    # (string) Ex: "00:01:10,0"
-                                String str = getAttributeString(descMap.data)
-                                if (txtEnable == true) { log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}" }
-                                sendEvent(name: 'lastIrrigationDuration', value: str, type: 'physical')
+                                if (isTS0049()) {   // TS0049 battery
+                                    logInfo "TS0049 Humidity Value (dp=${cmd}) is ${value}"
+                                }
+                                else {    // GiEX (or LIDL
+                                    String str = getAttributeString(descMap.data)
+                                    if (txtEnable == true) { log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}" }
+                                    sendEvent(name: 'lastIrrigationDuration', value: str, type: 'physical')
+                                }
                                 break
                             case '73' : // (115) TS0049 battery
                                 String valueString = batteryStateOptions[safeToInt(value).toString()]
                                 logInfo "TS0049 battery_state (${cmd}) is: ${valueString} (${value})"
                                 sendBatteryEvent(value == 0 ? 33 : value == 1 ? 66 : value == 2 ? 100 : 0)
                                 break
+                                // case '74' : // (116) TS0049 - MaxTemp Set 
+                                // case '75' : // (117) TS0049 - MinTemp Set
+                                // case '76' : // (118) TS0049 - MaxHum  Set
+                                // case '77' : // (119) TS0049 - MinHum  Set
+                                // case '78' : // (120) TS0049 - Charge State
+                                // case '79' : // (121) TS0049 - Water Once
+                                // case '7A' : // (122) TS0049 - Flowrate Total
+                                // case '7B' : // (123) TS0049 - Water Supply Pressure
+                                // case '7C' : // (124) TS0049 - Flow Rate Instant Value
+                                // case '7D' : // (125) TS0049 - Flow Calibration
                             case 'D1' : // cycle timer
                                 if (txtEnable == true) { log.info "${device.displayName} cycle timer (${cmd}) is: ${value}" }
                                 break
