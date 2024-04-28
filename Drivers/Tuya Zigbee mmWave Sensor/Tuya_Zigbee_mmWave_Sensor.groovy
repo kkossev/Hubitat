@@ -18,7 +18,7 @@
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) first version
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
- * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
+ * ver. 3.1.0  2024-04-28 kkossev  - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
  *
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
  *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
@@ -35,9 +35,9 @@
 */
 
 static String version() { "3.1.0" }
-static String timeStamp() {"2024/04/26 10:10 PM"}
+static String timeStamp() {"2024/04/28 7:06 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 

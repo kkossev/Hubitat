@@ -19,16 +19,15 @@
  * ver. 0.1.2  2024-04-11 kkossev  - added syncTuyaDateTime test button; added info links; removed duplicated switch switch in the child device names
  * ver. 1.0.0  2024-04-13 kkossev  - first release version
  * ver. 1.0.1  2024-04-27 kkossev  - commonLib 3.1.0 update; sync the time automatically on device power up; 
- * ver. 1.1.0  2024-04-28 kkossev  - (dev.branch) relays child devices are created automatically; if a child device exist, send a switch event, otherwise send a button event;
+ * ver. 1.1.0  2024-04-28 kkossev  - relays child devices are created automatically; if a child device exist, send a switch event, otherwise send a button event;
+ * ver. 1.1.1  2024-04-28 kkossev  - (dev.branch)
  *
- *                                   TODO:  
  *                                   TODO:  configure the number of the physical switches (relays) in the Preferences
  *                                   TODO:  enable/disable the virtual switches 1,2,3 in the Preferences (also create child devices)
- *                                   TODO:  create the child devices automatically
  */
 
 static String version() { "1.1.0" }
-static String timeStamp() {"2024/04/28 6:0 PM"}
+static String timeStamp() {"2024/04/28 7:03 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
