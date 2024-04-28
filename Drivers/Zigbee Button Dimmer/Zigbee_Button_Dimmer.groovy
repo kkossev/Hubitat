@@ -20,13 +20,13 @@
  * ver. 3.0.4  2024-04-01 kkossev  - commonLib 3.0.4; added 'Schneider Electric WDE002924'
  * ver. 3.0.5  2024-04-05 kkossev  - fixed digital button events exception; reverseButton option enabled for Tuya devices only; added 'FLSSYSTEM-M4' alternative model name, when modified by the Zigbee - Generic Switch driver
  * ver. 3.0.6  2024-04-07 kkossev  - zigbee groups library; setLevel exception bug fix;
- * ver. 3.0.7  2024-04-15 kkossev  - (dev.branch) re-initialize TS004F dimmers in the last mode during re-pairing; defaults bug fix;
+ * ver. 3.0.7  2024-04-28 kkossev  - commonLib 3.1.0; re-initialize TS004F dimmers in the last mode during re-pairing; defaults bug fix;
  *
  *                                   TODO: 
  */
 
 static String version() { "3.0.7" }
-static String timeStamp() {"2024/04/15 10:25 PM"}
+static String timeStamp() {"2024/04/28 7:11 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true
