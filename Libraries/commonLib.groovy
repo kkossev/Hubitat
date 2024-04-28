@@ -37,7 +37,7 @@ library(
   * ver. 3.0.5  2024-04-05 kkossev  - button methods bug fix; configure() bug fix; handlePm25Event bug fix;
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
-  * ver. 3.1.0  2024-04-26 kkossev  - (dev. branch) unnecesery unschedule() speed optimization; added syncTuyaDateTime();
+  * ver. 3.1.0  2024-04-28 kkossev  - (dev. branch) unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -48,7 +48,7 @@ library(
 */
 
 String commonLibVersion() { '3.1.0' }
-String commonLibStamp() { '2024/04/26 5:36 PM' }
+String commonLibStamp() { '2024/04/28 5:18 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -187,7 +187,7 @@ void parse(final String description) {
         logDebug "parse: enroll request: $description"
         /* The Zone Enroll Request command is generated when a device embodying the Zone server cluster wishes to be  enrolled as an active  alarm device. It  must do this immediately it has joined the network  (during commissioning). */
         if (settings?.logEnable) { logInfo 'Sending IAS enroll response...' }
-        String cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+        List<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
         logDebug "enroll response: ${cmds}"
         sendZigbeeCommands(cmds)
         return
@@ -656,7 +656,7 @@ void parseBasicCluster(final Map descMap) {
                 state.states['isPing'] = false
             }
             else {
-                logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
+                logTrace "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
             }
             break
         case 0x0004:
@@ -782,7 +782,7 @@ void off() {
         logWarn "AlwaysOn option for ${device.displayName} is enabled , the command to switch it OFF is ignored!"
         return
     }
-    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
+    List<String> cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.off()  : zigbee.on()
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "off() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -817,7 +817,7 @@ void on() {
         customOn()
         return
     }
-    List cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
+    List<String> cmds = (settings?.inverceSwitch == null || settings?.inverceSwitch == false) ?  zigbee.on()  : zigbee.off()
     String currentState = device.currentState('switch')?.value ?: 'n/a'
     logDebug "on() currentState=${currentState}"
     if (_THREE_STATE == true && settings?.threeStateEnable == true) {
@@ -1377,7 +1377,7 @@ void tuyaTest(String dpCommand, String dpValue, String dpTypeString ) {
 private getANALOG_INPUT_BASIC_CLUSTER() { 0x000C }
 private getANALOG_INPUT_BASIC_PRESENT_VALUE_ATTRIBUTE() { 0x0055 }
 
-String tuyaBlackMagic() {
+List<String> tuyaBlackMagic() {
     int ep = safeToInt(state.destinationEP ?: 01)
     if (ep == null || ep == 0) { ep = 1 }
     logInfo 'tuyaBlackMagic()...'
@@ -1394,7 +1394,7 @@ void aqaraBlackMagic() {
         if (isAqaraTVOC_OLD()) {
             cmds += zigbee.readAttribute(0xFCC0, [0x0102, 0x010C], [mfgCode: 0x115F], delay = 200)    // TVOC only
         }
-        sendZigbeeCommands( cmds )
+        sendZigbeeCommands(cmds)
         logDebug 'sent aqaraBlackMagic()'
     }
     else {
@@ -1412,8 +1412,9 @@ List<String> initializeDevice() {
     logInfo 'initializeDevice...'
     if (this.respondsTo('customInitializeDevice')) {
         List<String> customCmds = customInitializeDevice()
-        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+        if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
+    logDebug "initializeDevice(): cmds=${cmds}"
     return cmds
 }
 
@@ -1425,13 +1426,13 @@ List<String> initializeDevice() {
 List<String> configureDevice() {
     List<String> cmds = []
     logInfo 'configureDevice...'
-
     if (this.respondsTo('customConfigureDevice')) {
         List<String> customCmds = customConfigureDevice()
-        if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+        if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
     else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     // sendZigbeeCommands(cmds) changed 03/04/2024
+    logDebug "configureDevice(): cmds=${cmds}"
     return cmds
 }
 
@@ -1443,11 +1444,11 @@ List<String> configureDevice() {
 
 List<String> customHandlers(final List customHandlersList) {
     List<String> cmds = []
-    if (customHandlersList != null && customHandlersList != []) {
+    if (customHandlersList != null && !customHandlersList.isEmpty()) {
         customHandlersList.each { handler ->
             if (this.respondsTo(handler)) {
                 List<String> customCmds = this."${handler}"()
-                if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+                if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
             }
         }
     }
@@ -1461,7 +1462,7 @@ void refresh() {
     setRefreshRequest()    // 3 seconds
 
     List<String> customCmds = customHandlers(['batteryRefresh', 'groupsRefresh', 'customRefresh'])
-    if (customCmds != null && customCmds != []) { cmds +=  customCmds }
+    if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
 
     if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
     else {
@@ -1475,7 +1476,8 @@ void refresh() {
         }
     }
 
-    if (cmds != null && cmds != [] ) {
+    if (cmds != null && !cmds.isEmpty()) {
+        logDebug "refresh() cmds=${cmds}"
         sendZigbeeCommands(cmds)
     }
     else {
@@ -1507,7 +1509,7 @@ public void ping() {
     if (state.states == null ) { state.states = [:] } ;     state.states['isPing'] = true
     scheduleCommandTimeoutCheck()
     if (isVirtual()) { runInMillis(10, virtualPong) }
-    else { sendZigbeeCommands( zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) ) }
+    else { sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) ) }
     logDebug 'ping...'
 }
 
@@ -1657,7 +1659,7 @@ void autoPoll() {
         cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
     }
 
-    if (cmds != null && cmds != [] ) {
+    if (cmds != null && !cmds.isEmpty()) {
         sendZigbeeCommands(cmds)
     }
 }
@@ -1751,7 +1753,7 @@ void loadAllDefaults() {
 }
 
 void configureNow() {
-    sendZigbeeCommands( configure() )
+    configure()
 }
 
 /**
@@ -1759,7 +1761,7 @@ void configureNow() {
  * Invoked when device is first installed and when the user updates the configuration  TODO
  * @return sends zigbee commands
  */
-List<String> configure() {
+void configure() {
     List<String> cmds = []
     if (state.stats == null) { state.stats = [:] } ; state.stats.cfgCtr = (state.stats.cfgCtr ?: 0) + 1
     logInfo "configure()... cfgCtr=${state.stats.cfgCtr}"
@@ -1771,15 +1773,13 @@ List<String> configure() {
         aqaraBlackMagic()   // zigbee commands are sent here!
     }
     List<String> initCmds = initializeDevice()
-    if (initCmds != null && initCmds != [] ) { cmds += initCmds }
+    if (initCmds != null && !initCmds.isEmpty()) { cmds += initCmds }
     List<String> cfgCmds = configureDevice()
-    if (cfgCmds != null && cfgCmds != [] ) { cmds += cfgCmds }
-    // commented out 12/15/2923 sendZigbeeCommands(cmds)
-    sendInfoEvent('sent device configuration')
-    logDebug "configure(): returning cmds = ${cmds}"
-    //return cmds
-    if (cmds != null && cmds != [] ) {
+    if (cfgCmds != null && !cfgCmds.isEmpty()) { cmds += cfgCmds }
+    if (cmds != null && !cmds.isEmpty()) {
         sendZigbeeCommands(cmds)
+        logDebug "configure(): sent cmds = ${cmds}"
+        sendInfoEvent('sent device configuration')
     }
     else {
         logDebug "configure(): no commands defined for device type ${DEVICE_TYPE}"
@@ -1832,18 +1832,22 @@ static BigDecimal safeToBigDecimal(val, BigDecimal defaultVal=0.0) {
 }
 
 void sendZigbeeCommands(List<String> cmd) {
-    if (cmd == null || cmd == 'null' || cmd == [] || cmd == [null]) {
-        logWarn "sendZigbeeCommands: no commands to send! cmd=${cmd}"
+    if (cmd == null || cmd.isEmpty()) {
+        logWarn "sendZigbeeCommands: list is empty! cmd=${cmd}"
         return
     }
-    logDebug "sendZigbeeCommands(cmd=$cmd)"
     hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
     cmd.each {
-            allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
-            if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats = [:] }
+        if (it == null || it.isEmpty() || it == 'null') {
+            logWarn "sendZigbeeCommands it: no commands to send! it=${it} (cmd=${cmd})"
+            return
+        }
+        allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
+        if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats = [:] }
     }
     if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] }
     sendHubCommand(allActions)
+    logDebug "sendZigbeeCommands: sent cmd=${cmd}"
 }
 
 String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString})" }
