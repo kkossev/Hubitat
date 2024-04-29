@@ -34,7 +34,7 @@
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
- *  ver. 1.3.1 2024-04-28 kkossev - (dev.branch) getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix;
+ *  ver. 1.3.1 2024-04-29 kkossev - (dev.branch) getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix?
  *
  *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.1' }
-String timeStamp() { '2024/04/28 10:35 PM' }
+String timeStamp() { '2024/04/29 10:15 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -1636,10 +1636,10 @@ String getPACKET_ID() {
     return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
-List<String> sendTuyaCommand(String dp, String dp_type, fncmd) {
+List<String> sendTuyaCommand(String dp, String dp_type, String fncmd) {
     List<String> cmds = []
-    //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
+    int tuyaCmd = isTS0049() ? 0x04 : SETDATA
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
     if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
     if (state.stats == null) { state.stats = [:] }
     state.stats['TxCtr'] = state.stats['TxCtr'] != null ? state.stats['TxCtr'] + 1 : 1
