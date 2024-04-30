@@ -26,7 +26,7 @@
  * ver. 3.0.6  2023-12-18 kkossev  - (dev. branch) configure() changes (SONOFF still not initialized properly!); adding TUYA_SASWELL group; TUYA_SASWELL heatingSetpoint correction; Groovy linting;
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
- * ver. 3.1.0  2024-04-19 kkossev  - (dev. branch) commonLib 3.0.7 check; deviceProfilesV3; enum attributes bug fix
+ * ver. 3.1.0  2024-04-19 kkossev  - commonLib 3.1.0 check; deviceProfilesV3; enum attributes bug fix
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -773,7 +773,7 @@ void setHeatingSetpoint(final BigDecimal temperaturePar ) {
     /* groovylint-disable-next-line ConstantIfExpression */
     if (true) {
         //logDebug "0.5 C correction of the heating setpoint${temperature}"
-        log.trace "tempDouble = ${tempDouble}"
+        //log.trace "tempDouble = ${tempDouble}"
         tempDouble = (tempDouble * 2).setScale(0, RoundingMode.HALF_UP) / 2
     }
     else {

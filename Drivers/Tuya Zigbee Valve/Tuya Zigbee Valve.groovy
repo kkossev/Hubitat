@@ -34,7 +34,7 @@
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
- *  ver. 1.3.1 2024-04-29 kkossev - (dev.branch) getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix?
+ *  ver. 1.3.1 2024-04-30 kkossev - (dev.branch) getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
  *
  *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
@@ -45,7 +45,7 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
 String version() { '1.3.1' }
-String timeStamp() { '2024/04/29 10:15 AM' }
+String timeStamp() { '2024/04/30 7:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -72,7 +72,7 @@ metadata {
         attribute 'irrigationDuration', 'number'
         attribute 'irrigationCapacity', 'number'
 
-        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX and TS0049)', constraints: ['0..86400']]]
+        command 'setIrrigationTimer', [[name:'timer, in seconds (Saswell) or minutes (GiEX, TS0049)', type: 'NUMBER', description: 'Set the irrigation duration timer, in seconds (Saswell) or in minutes (GiEX, TS0049)', constraints: ['0..86400']]]
         command 'setIrrigationCapacity', [[name:'capacity, liters (Saswell and GiEX)', type: 'NUMBER', description: 'Set Irrigation Capacity, litres', constraints: ['0..9999']]]
         command 'setIrrigationMode', [[name:'select the mode (Saswell and GiEX)', type: 'ENUM', description: 'Set Irrigation Mode', constraints: ['--select--', 'duration', 'capacity']]]
 
@@ -573,6 +573,7 @@ void parseZHAcommand(Map descMap) {
     switch (descMap.command) {
         case '01' : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
         case '02' : // version 1.0.2
+        case '05' : // version 1.3.1 04/30/2024 TS0049
         case '06' : // version 1.3.1 04/28/2024 TS0049
             String status = descMap.data[2]
             String attrId = descMap.data[1] + descMap.data[0]
