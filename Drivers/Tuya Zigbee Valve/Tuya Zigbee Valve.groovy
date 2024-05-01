@@ -34,6 +34,7 @@
  *  ver. 1.2.6 2023-07-28 kkossev - fixed exceptions in configure(), ping() and rtt commands; scheduleDeviceHealthCheck() was not scheduled on initialize() and updated(); UNKNOWN deviceProfile fixed; set deviceProfile preference to match the automatically selected one; fake deviceCommandTimeout fix;
  *  ver. 1.2.7 2023-12-18 kkossev - code linting
  *  ver. 1.3.0 2024-03-17 kkossev - more code linting; added TS0049 _TZ3210_0jxeoadc; added three-states (opening, closing)
+ *  ver. 1.3.1 2024-04-30 kkossev - getPowerSource bug fix; TS0049 command '06' processing; TS049 battery% fix; TS049 open/close fix; TS0049 command '05' processing;
  *
  *                                  TODO: 
  *                                  TODO: set device name from fingerprint (deviceProfilesV2 as in 4-in-1 driver)
@@ -43,8 +44,8 @@ import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 
-String version() { '1.3.0' }
-String timeStamp() { '2024/03/17 10:43 AM' }
+String version() { '1.3.1' }
+String timeStamp() { '2024/04/30 7:56 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -116,7 +117,7 @@ metadata {
 String getModelGroup()          { return state.deviceProfile ?: 'UNKNOWN' }
 Set<String> getDeviceProfiles()      { deviceProfilesV2.keySet() }
 boolean isConfigurable(String model)    { return (deviceProfilesV2["$model"]?.preferences != null && deviceProfilesV2["$model"]?.preferences != []) }
-String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: modelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
+String getPowerSource(String profile = null) { String ps = deviceProfilesV2["${profile ?: getModelGroup()}"]?.attributes?.powerSource; return ps != null && !ps.isEmpty() ? ps : 'unknown' }
 boolean isConfigurable()         { return isConfigurable(getModelGroup()) }
 boolean isGIEX()                 { return getModelGroup().contains('GIEX') }    // GiEX valve device
 boolean isSASWELL()              { return getModelGroup().contains('SASWELL') }
@@ -309,7 +310,7 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
             ]
     ],
 
-    'TS0049_IRRIGATION_VALVE'    : [
+    'TS0049_IRRIGATION_VALVE'    : [    // isTS0049()
             model         : 'TS0049',     // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1435490104
             manufacturers : ['_TZ3210_0jxeoadc', '_TZ3000_hwnphliv'],   // https://github.com/Koenkk/zigbee2mqtt/issues/15124
             fingerprints  : [
@@ -321,7 +322,9 @@ boolean isBatteryPowered()       { return isGIEX() || isSASWELL() || isTS0049() 
             capabilities  : ['valve': true, 'battery': true],
             configuration : ['battery': false],
             attributes    : ['healthStatus': 'unknown', 'powerSource': 'battery', 'battery': '---', 'timerTimeLeft': '---', 'lastValveOpenDuration': '---'],
-            tuyaCommands  : ['switch': '0x65'],
+            // https://github.com/Koenkk/zigbee2mqtt/issues/15124#issuecomment-1345161859 
+            // 00 - ??; 26 - "error_status"; 101(0x65) - "on_off"(bool); 0x66-???(bool); 0x67-??(bool); 0x69-??;0x6A-??; 0x6D-??(8bit) 110(0x6E) - ??; 111(0x6F) - "irrigation_time" or countdown(32bit); 115(0x73) - battery state: Low = 0x00 Medium = 0x01 High = 0x02; 
+            tuyaCommands  : ['switch': '0x65'], 
             preferences   : [
                 'powerOnBehaviour' : [ name: 'powerOnBehaviour', type: 'enum', title: '<b>Power-On Behaviour</b>', description:'<i>Select Power-On Behaviour</i>', defaultValue: '2', options:  ['0': 'closed', '1': 'open', '2': 'last state']] //,
             ]
@@ -570,6 +573,8 @@ void parseZHAcommand(Map descMap) {
     switch (descMap.command) {
         case '01' : //read attribute response. If there was no error, the successful attribute reading would be processed in the main parse() method.
         case '02' : // version 1.0.2
+        case '05' : // version 1.3.1 04/30/2024 TS0049
+        case '06' : // version 1.3.1 04/28/2024 TS0049
             String status = descMap.data[2]
             String attrId = descMap.data[1] + descMap.data[0]
             if (status == '86') {
@@ -695,6 +700,9 @@ void parseZHAcommand(Map descMap) {
                             case '13' : // (19) inching switch ( once enabled, each time the device is turned on, it will automatically turn off after a period time as preset
                                 logInfo "inching switch(!?!) is: ${value}"
                                 break
+                            case '1A' : // (26) TS049
+                                logInfo "TS049 fault (${cmd}) is: ${value}"
+                                break
                             case '65' : // (101) WaterValveIrrigationStartTime for GiEX and LIDL?   // IrrigationStartTime       # (string) ex: "08:12:26"
                                 if (isTS0049()) {   // TS0049 valve on/off
                                     String switchValue = value == 0 ? 'off' : 'on'
@@ -708,8 +716,9 @@ void parseZHAcommand(Map descMap) {
                                 break
                             case '66' : // (102) WaterValveIrrigationEndTime  for GiEX    // IrrigationStopTime        # (string) ex: "08:13:36"
                                 if (isTS0049()) {
-                                    String switchValue = value == 0 ? 'off' : 'on'
-                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${switchValue} ${value})"
+                                    String str = waterModeOptions[safeToInt(value).toString()]
+                                    logInfo "Water Valve Mode (dp=${cmd}) is: ${str} (${value})"  // 0 - 'duration'; 1 - 'capacity'
+                                    sendEvent(name: 'waterMode', value: str, type: 'physical')
                                 }
                                 else {
                                     String str = getAttributeString(descMap.data)
@@ -720,18 +729,24 @@ void parseZHAcommand(Map descMap) {
                             case '67' : // (103) WaterValveCycleIrrigationNumTimes  for GiEX        // CycleIrrigationNumTimes   # number of cycle irrigation times, set to 0 for single cycle        // TODO - Send to device cycle_irrigation_num_times ?
                                 if (isTS0049()) {
                                     String switchValue = value == 0 ? 'off' : 'on'
-                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${switchValue} ${value})"
+                                    logInfo "TS0049 Valve (dp=${cmd}) rain sensor is ${switchValue} ${value})"
                                 }
                                 else {
                                     if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationNumTimes (${cmd}) is: ${value}" }
                                 }
                                 break
                             case '68' : // (104) WaterValveIrrigationTarget for GiEX        // IrrigationTarget   for _TZE200_sh1btabb       # duration in minutes or capacity in Liters (depending on mode)
-                                logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
+                                if (isTS0049()) {
+                                    logInfo "Automatic Execution Status (dp=${cmd}) is: (${value})"
+                                }
+                                else {
+                                    logInfo "IrrigationTarget (${cmd}) is: ${value}"            // TODO - Send to device irrigation_target?
+                                }
                                 break
                             case '69' : // (105) WaterValveCycleIrrigationInterval for GiEX      // CycleIrrigationInterval   # cycle irrigation interval (minutes, max 1440)                        // TODO - Send to device cycle_irrigation_interval ?
-                                if (isTS0049()) {
-                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                if (isTS0049()) {   // count down timer
+                                    logInfo "TS049 timer time left (${cmd}) is: ${value}"   // seconds or minutes?
+                                    sendEvent(name: 'timerTimeLeft', value: value, type: 'physical')                                
                                 }
                                 else {
                                     if (txtEnable == true) { log.info "${device.displayName} CycleIrrigationInterval (${cmd}) is: ${value}" }
@@ -739,30 +754,43 @@ void parseZHAcommand(Map descMap) {
                                 break
                             case '6A' : // (106) WaterValveCurrentTempurature            // CurrentTemperature        # (value ignored because isn't a valid tempurature reading.  Misdocumented and usage unclear)
                                 if (isTS0049()) {
-                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                    logInfo "TS0049 Valve (dp=${cmd}) loop timing is ${value}"
                                 }
                                 else {
                                     if (txtEnable == true) { log.info "${device.displayName} ?CurrentTempurature? (${cmd}) is: ${value}" }       // ignore!
                                 }
                                 break
                             case '6B' : // (107) - LIDL time schedile                    // https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-868509538
-                                logInfo "Lidl  LIDL time schedile (${cmd}) is: ${value}"
+                                if (isTS0049()) {
+                                    logInfo "TS0049 Automatic Mode Distinction (dp=${cmd}) is ${value}"
+                                }
+                                else {
+                                    logInfo "${device.displayName} LIDL time schedile (${cmd}) is: ${value}" 
+                                }
                                 break
                             case '6C' : // (108) WaterValveBattery for GiEX    // 0001/0021,mul:2           # match to BatteryPercentage
                                 if (isGIEX()) {
                                     logInfo "GiEX Battery (${cmd}) is: ${value} %"
                                     sendBatteryEvent(value)
-                                } else {    // Lidl
-                                    logInfo "LIDL frost state (${cmd}) is: ${value}"
+                                } 
+                                else if (isTS0049()) {
+                                    logInfo "TS0049 Effective Time Period (dp=${cmd}) is ${value}"
+                                }
+                                else {    // Lidl
+                                    logInfo "LIDL battery (${cmd}) is: ${value} %"
+                                    sendBatteryEvent(value)
                                 }
                                 break
                             case '6D' : // (109) LIDL frost reset
                                 if (isTS0049()) {
-                                    logInfo "TS0049 Valve (dp=${cmd}) unknown par is ${value}"
+                                    logInfo "TS0049 Valve (dp=${cmd}) model is ${value}"
                                 }
                                 else {
                                     logInfo "LIDL reset frost alarmcommand (${cmd}) is: ${value}"    // to be sent to the device! TODO: reset frost alarm : https://github.com/Koenkk/zigbee2mqtt/issues/7695#issuecomment-1084774734 - command 0x6D ?TYPE_ENUM value 01
                                 }
+                                break
+                            case '6E' : // (110) TS0049
+                                logInfo "TS0049 Log Report (dp=${cmd}) is ${value}"
                                 break
                             case '6F' : // (111) WaterValveWaterConsumed for GiEX       // WaterConsumed             # water consumed (Litres)
                                 if (isTS0049()) {   // TS0049 irrigation time
@@ -774,15 +802,37 @@ void parseZHAcommand(Map descMap) {
                                     sendEvent(name: 'waterConsumed', value: value, type: 'physical')
                                 }
                                 break
+                            case '70' : // (112)
+                                logInfo "TS0049 Flow Reset (dp=${cmd}) is ${value}"
+                                break
+                            case '71' : // (113)
+                                logInfo "TS0049 Temp Current (dp=${cmd}) is ${value}"
+                                break
                             case '72' : // (114) WaterValveLastIrrigationDuration for GiEX   LastIrrigationDuration    # (string) Ex: "00:01:10,0"
-                                String str = getAttributeString(descMap.data)
-                                if (txtEnable == true) { log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}" }
-                                sendEvent(name: 'lastIrrigationDuration', value: str, type: 'physical')
+                                if (isTS0049()) {   // TS0049 battery
+                                    logInfo "TS0049 Humidity Value (dp=${cmd}) is ${value}"
+                                }
+                                else {    // GiEX (or LIDL
+                                    String str = getAttributeString(descMap.data)
+                                    if (txtEnable == true) { log.info "${device.displayName} LastIrrigationDuration (${cmd}) is: ${value}" }
+                                    sendEvent(name: 'lastIrrigationDuration', value: str, type: 'physical')
+                                }
                                 break
                             case '73' : // (115) TS0049 battery
-                                logInfo "TS0049 battery (${cmd}) is: ${value} %"
-                                sendBatteryEvent(value)
+                                String valueString = batteryStateOptions[safeToInt(value).toString()]
+                                logInfo "TS0049 battery_state (${cmd}) is: ${valueString} (${value})"
+                                sendBatteryEvent(value == 0 ? 33 : value == 1 ? 66 : value == 2 ? 100 : 0)
                                 break
+                                // case '74' : // (116) TS0049 - MaxTemp Set 
+                                // case '75' : // (117) TS0049 - MinTemp Set
+                                // case '76' : // (118) TS0049 - MaxHum  Set
+                                // case '77' : // (119) TS0049 - MinHum  Set
+                                // case '78' : // (120) TS0049 - Charge State
+                                // case '79' : // (121) TS0049 - Water Once
+                                // case '7A' : // (122) TS0049 - Flowrate Total
+                                // case '7B' : // (123) TS0049 - Water Supply Pressure
+                                // case '7C' : // (124) TS0049 - Flow Rate Instant Value
+                                // case '7D' : // (125) TS0049 - Flow Calibration
                             case 'D1' : // cycle timer
                                 if (txtEnable == true) { log.info "${device.displayName} cycle timer (${cmd}) is: ${value}" }
                                 break
@@ -965,6 +1015,7 @@ void open() {
 
 void sendBatteryEvent(int roundedPct, boolean isDigital=false) {
     sendEvent(name: 'battery', value: roundedPct, unit: '%', type:  isDigital == true ? 'digital' : 'physical', isStateChange: true)
+    logInfo "battery is: ${roundedPct}%"
     if (isDigital == false) {
         if (state.states == null) { state.states = [:] }
         state.states['lastBattery'] = roundedPct.toString()
@@ -1549,10 +1600,10 @@ void updateTuyaVersion() {
 /* groovylint-disable-next-line MethodParameterTypeRequired, UnusedMethodParameter */
 void test( description ) {
 //    catchall: 0104 EF00 01 01 0040 00 533D 01 00 0000 01 01 00550101000100
-//    log.warn "testing <b>${description}</b>"
-//    parse(description)
-//    log.trace "getPowerSource()=${getPowerSource()}"
-    setDeviceNameAndProfile()
+    log.warn "test parsing: <b>${description}</b>"
+    parse(description)
+    //log.trace "getPowerSource()=${getPowerSource()}"
+   // setDeviceNameAndProfile()
 }
 
 void testX() {
@@ -1586,10 +1637,10 @@ String getPACKET_ID() {
     return zigbee.convertToHexString(new Random().nextInt(65536), 4)
 }
 
-List<String> sendTuyaCommand(String dp, String dp_type, fncmd) {
+List<String> sendTuyaCommand(String dp, String dp_type, String fncmd) {
     List<String> cmds = []
-    //cmds += zigbee.command(CLUSTER_TUYA, SETDATA, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length()/2), 4) + fncmd )
-    cmds += zigbee.command(CLUSTER_TUYA, SETDATA, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
+    int tuyaCmd = isTS0049() ? 0x04 : SETDATA
+    cmds += zigbee.command(CLUSTER_TUYA, tuyaCmd, [:], delay = 200, PACKET_ID + dp + dp_type + zigbee.convertToHexString((int)(fncmd.length() / 2), 4) + fncmd)
     if (settings?.logEnable) { log.trace "${device.displayName} sendTuyaCommand = ${cmds}" }
     if (state.stats == null) { state.stats = [:] }
     state.stats['TxCtr'] = state.stats['TxCtr'] != null ? state.stats['TxCtr'] + 1 : 1
