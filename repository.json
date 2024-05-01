@@ -275,6 +275,16 @@
       "tags":[
         "Motion Control", "Zigbee"
        ]
+    },
+	{
+      "id":"e720ee9e-fe3a-47b2-acdc-43db91d84782",
+      "name":"Zemismart ZigBee Wall Switch Multi-Gang",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/kkossev/hubitat-muxa-fork/master/drivers/manifest.json",
+      "description":"Muxa's popular Zemismart ZigBee Wall Switch Multi-Gang. Works with Tuya models TS0001,TS0002, TS0003, TS0004, TS0011, TS0012, TS0013, TS0115, TS011F",
+      "tags":[
+        "Lights & Switches", "Zigbee"
+       ]
     }	
   ]
 }
