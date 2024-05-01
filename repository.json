@@ -273,7 +273,7 @@
       "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/manifest.json",
       "description":"Tuya mmWave sensors - new driver to replace the Tuya 4 In 1 driver. W.I.P.",
       "tags":[
-        "Motion Control", "Zigbee"
+        "Zigbee", "Motion Control"
        ]
     },
 	{
@@ -283,7 +283,7 @@
       "location":"https://raw.githubusercontent.com/kkossev/hubitat-muxa-fork/master/drivers/manifest.json",
       "description":"Muxa's popular Zemismart ZigBee Wall Switch Multi-Gang. Works with Tuya models TS0001,TS0002, TS0003, TS0004, TS0011, TS0012, TS0013, TS0115, TS011F",
       "tags":[
-        "Lights & Switches", "Zigbee"
+        "Zigbee", "Lights & Switches"
        ]
     }	
   ]
