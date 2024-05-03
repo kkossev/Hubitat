@@ -11,6 +11,7 @@
      {
         "id":"7862fa83-0a21-46a9-b256-819e1f98a28b",
         "name":"Tuya Zigbee Control Screen Panel",
+		"namespace": "kkossev",
         "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Tuya%20Zigbee%20Control%20Screen%20Panel/Tuya_Zigbee_Control_Screen_Panel_lib_included.groovy",
         "required":true
      }

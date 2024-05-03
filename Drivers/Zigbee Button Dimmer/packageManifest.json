@@ -11,6 +11,7 @@
   {
      "id":"cad2820a-82ad-4329-923d-0a4ccb885355",
      "name":"Zigbee Button Dimmer",
+	 "namespace": "kkossev",
      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Zigbee%20Button%20Dimmer/Zigbee_Button_Dimmer_lib_included.groovy",
      "required":true
   }

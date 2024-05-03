@@ -11,6 +11,7 @@
   {
      "id":"39945711-acb5-420b-a3ce-6ec89772f4cf",
      "name":"Aqara Cube T1 Pro",
+	 "namespace": "kkossev",
      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/main/Drivers/Aqara%20Cube%20T1%20Pro/Aqara_Cube_T1_Pro_lib_included.groovy",
      "required":true
   }

@@ -11,6 +11,7 @@
   {
      "id":"4780297c-060a-44c1-b071-4e7d08e88936",
      "name":"Tuya Zigbee mmWave Sensor",
+	 "namespace": "kkossev",
      "location":"https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20mmWave%20Sensor/Tuya_Zigbee_mmWave_Sensor_lib_included.groovy",
      "required":true
   }
