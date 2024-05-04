@@ -29,8 +29,9 @@ library(
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
- * ver. 3.1.2  2024-04-21 kkossev  - (dev. branch) added isSpammyDeviceProfile()
+ * ver. 3.1.2  2024-05-04 kkossev  - (dev. branch) added isSpammyDeviceProfile() 
  *
+ *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
  *                                   TODO: handle preferences of a type TEXT
@@ -1182,7 +1183,7 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     }
     if (foundItem == null || foundItem == [:]) {
         // DP was not found into the tuyaDPs list for this particular deviceProfile
-        updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
+     //   updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
         // continue processing the DP report in the old code ...
         return false
     }

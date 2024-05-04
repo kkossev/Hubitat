@@ -19,8 +19,9 @@
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
  * ver. 3.1.0  2024-04-28 kkossev  - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
- * ver. 3.1.1  2024-05-04 kkossev  - (dev. branch) enabled all radars
+ * ver. 3.1.1  2024-05-04 kkossev  - (dev. branch) enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change;
  *
+ *                                   TODO: 
  *                                   TODO: cleanup the 4-in-1 state variables!
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
  *                                   TODO: add response to ZDO Match Descriptor Request (Sonoff SNZB-06)
@@ -37,7 +38,7 @@
 */
 
 static String version() { "3.1.1" }
-static String timeStamp() {"2024/05/04 12:31 PM"}
+static String timeStamp() {"2024/05/04 5:55 PM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -693,6 +694,31 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             refresh: ['motion', 'radarSensitivity', 'fadingTime', 'detectionDelay'],
             deviceJoinName: 'SONOFF SNZB-06P RADAR',
             configuration : ['0x0406':'bind', '0x0FC57':'bind'/*, "0xFC11":"bind"*/]
+    ],
+
+    'TS0601_MUVJRJR5_RADAR'   : [                                       // Zigbee side mounted human presence sensor 24Ghz      // ZN494622_01  // no illuminance
+            description   : 'Tuya Human Presence Detector MUVJRJR5',    // https://s.click.aliexpress.com/e/_DDkMp7Z 
+            models        : ['TS0601'],                                 
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': false, 'DistanceMeasurement':true],
+            preferences   : ['radarSensitivity':'16', 'fadingTime':'103', 'maximumDistance':'13', 'ledIndicator':'101'],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_muvkrjr5', deviceJoinName: 'Tuya Human Presence Detector MUVJRJR5'],       //
+            ],
+            tuyaDPs:        [
+                [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,    max:1,     defVal:'0', scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
+                [dp:13,  name:'maximumDistance',    type:'decimal', rw: 'rw', min:1.5, max:6.0,  defVal:5.0, scale:100, unit:'meters',  title:'<b>Maximum distance</b>', description:'<i>Breath detection maximum distance</i>'],
+                [dp:16,  name:'radarSensitivity',   type:'number',  rw: 'rw', min:68,   max:90,    defVal:80,   scale:1,   unit:'',  title:'<b>Radar sensitivity</b>',       description:'<i>Radar sensitivity</i>'],
+                [dp:19,  name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance'],
+                [dp:101,  name:'ledIndicator',      type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - OFF', 1:'1 - ON'],       title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
+                // 102 - toggle to enable presence notifications in app is ignored 
+                [dp:103, name:'fadingTime',         type:'number', rw: 'rw', min:3,  max:1799,  defVal:30, scale:1,   unit:'seconds',  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>']
+            ],
+            spammyDPsToIgnore : [19,9], //dp 9 for tests only
+            spammyDPsToNotTrace : [19,9],
+            deviceJoinName: 'Tuya Human Presence Detector MUVJRJR5',
+            configuration : [:]
     ]
 ]
 
@@ -872,6 +898,22 @@ void customUpdated() {
             logDebug "customUpdated: ignoreDistance is ${settings?.ignoreDistance}"
         }
     }
+
+    if (settings?.forcedProfile != null) {
+        logDebug "current state.deviceProfile=${state.deviceProfile}, settings.forcedProfile=${settings?.forcedProfile}, getProfileKey()=${getProfileKey(settings?.forcedProfile)}"
+        if (getProfileKey(settings?.forcedProfile) != state.deviceProfile) {
+            logInfo "changing the device profile from ${state.deviceProfile} to ${getProfileKey(settings?.forcedProfile)}"
+            state.deviceProfile = getProfileKey(settings?.forcedProfile)
+            initializeVars(fullInit = false)
+            resetPreferencesToDefaults(debug = true)
+            logInfo 'press F5 to refresh the page'
+        }
+    }
+    /* groovylint-disable-next-line EmptyElseBlock */
+    else {
+        logDebug "forcedProfile is not set"
+    }
+
     // Itterates through all settings
     cmds += updateAllPreferences()
     sendZigbeeCommands(cmds)
