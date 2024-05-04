@@ -19,7 +19,7 @@
  * ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;
  * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
  * ver. 3.1.0  2024-04-28 kkossev  - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
- * ver. 3.1.1  2024-05-04 kkossev  - (dev. branch) enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change;
+ * ver. 3.1.1  2024-05-04 kkossev  - (dev. branch) enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change; added 'switch' for the TuYa SZR07U;
  *
  *                                   TODO: 
  *                                   TODO: cleanup the 4-in-1 state variables!
@@ -38,7 +38,7 @@
 */
 
 static String version() { "3.1.1" }
-static String timeStamp() {"2024/05/04 7:15 PM"}
+static String timeStamp() {"2024/05/04 7:44 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -701,7 +701,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             models        : ['TS0601'],                                 
             device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': false, 'DistanceMeasurement':true],
-            preferences   : ['radarSensitivity':'16', 'fadingTime':'103', 'maximumDistance':'13', 'ledIndicator':'101'],
+            preferences   : ['radarSensitivity':'16', 'fadingTime':'103', 'maximumDistance':'13', 'ledIndicator':'101', 'switch':'102'],
             commands      : ['resetStats':'resetStats'],
             fingerprints  : [
                 [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_muvkrjr5', deviceJoinName: 'Tuya Human Presence Detector MUVJRJR5'],       //
@@ -711,8 +711,8 @@ SmartLife   radarSensitivity staticDetectionSensitivity
                 [dp:13,  name:'maximumDistance',    type:'decimal', rw: 'rw', min:1.5, max:6.0,  defVal:5.0, scale:100, unit:'meters',  title:'<b>Maximum distance</b>', description:'<i>Breath detection maximum distance</i>'],
                 [dp:16,  name:'radarSensitivity',   type:'number',  rw: 'rw', min:68,   max:90,    defVal:80,   scale:1,   unit:'',  title:'<b>Radar sensitivity</b>',       description:'<i>Radar sensitivity</i>'],
                 [dp:19,  name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0, scale:100, unit:'meters',  description:'Distance'],
-                [dp:101,  name:'ledIndicator',      type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - OFF', 1:'1 - ON'],       title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
-                // 102 - toggle to enable presence notifications in app is ignored 
+                [dp:101, name:'ledIndicator',       type:'enum',    rw: 'rw', min:0,    max:1,    defVal:'0',  map:[0:'0 - OFF', 1:'1 - ON'],       title:'<b>LED indicator mode</b>',                 description:'<i>LED indicator mode</i>'],
+                [dp:102, name:'switch',             type:'enum',    rw: 'rw', min:0,   max:1,     defVal:'1',   map:[0:'OFF', 1:'ON'],       title:'<b>Switch</b>',  description:'<i>Switch</i>'],
                 [dp:103, name:'fadingTime',         type:'number', rw: 'rw', min:3,  max:1799,  defVal:30, scale:1,   unit:'seconds',  title:'<b>Fading time</b>', description:'<i>Presence (fading) delay time</i>']
             ],
             spammyDPsToIgnore : [19,9], //dp 9 for tests only
