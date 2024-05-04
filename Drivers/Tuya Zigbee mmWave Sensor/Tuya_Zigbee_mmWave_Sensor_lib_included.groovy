@@ -38,9 +38,9 @@
 */
 
 static String version() { "3.1.1" }
-static String timeStamp() {"2024/05/04 5:55 PM"}
+static String timeStamp() {"2024/05/04 5:56 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 

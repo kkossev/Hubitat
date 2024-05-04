@@ -53,9 +53,9 @@ import hubitat.zigbee.zcl.DataType
 import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
-#include kkossev.commonLib
-#include kkossev.deviceProfileLib
 #include kkossev.illuminanceLib
+#include kkossev.deviceProfileLib
+#include kkossev.commonLib
 
 deviceType = "mmWaveSensor"
 @Field static final String DEVICE_TYPE = "mmWaveSensor"
