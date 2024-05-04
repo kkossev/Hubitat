@@ -38,7 +38,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.2' }
-static String deviceProfileLibStamp() { '2024/05/04 12:30 PM' }
+static String deviceProfileLibStamp() { '2024/05/04 12:45 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1287,7 +1287,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
         //log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
-        if (isEqual == true && !doNotTrace) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
+        if (isEqual == true && !doNotTrace && !isSpammyDeviceProfile()) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
             logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
         }
         else {
