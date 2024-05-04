@@ -1,10 +1,10 @@
 {
  "packageName":"Tuya Zigbee mmWave Sensor",
  "author":"Krassimir Kossev",
- "version":"3.0.7",
+ "version":"3.1.1",
  "minimumHEVersion":"2.3.7.110",
- "dateReleased":"2024-04-22",
- "releaseNotes":"ver. 3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;",
+ "dateReleased":"2024-05-04",
+ "releaseNotes":"3.1.1  2024-05-04 - enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change; added 'switch' for the TuYa SZR07U; Linptech: added ledIndicator; radar attributes types changed to number (was enum\n3.1.0  2024-04-28 - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR\n3.0.8  2024-04-23 - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; \n3.0.7  2024-04-21 kkossev  - deviceProfilesV3; SNZB-06 data type fix; OccupancyCluster processing; added illumState dark/light;",
  "documentationLink":"https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/90?u=kkossev",
  "communityLink":"https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/90?u=kkossev",
  "drivers": [
