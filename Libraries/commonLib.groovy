@@ -2093,8 +2093,9 @@ void deleteAllChildDevices() {
 
 void parseTest(String par) {
     //read attr - raw: DF8D0104020A000029280A, dni: DF8D, endpoint: 01, cluster: 0402, size: 0A, attrId: 0000, encoding: 29, command: 0A, value: 280A
-    log.warn "parseTest(${par})"
+    log.warn "parseTest - <b>START</b> (${par})"
     parse(par)
+    log.warn "parseTest -   <b>END</b> (${par})"
 }
 
 def testJob() {

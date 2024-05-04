@@ -38,9 +38,9 @@
 */
 
 static String version() { "3.1.1" }
-static String timeStamp() {"2024/05/04 5:55 PM"}
+static String timeStamp() {"2024/05/04 7:15 PM"}
 
-@Field static final Boolean _DEBUG = true
+@Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
 @Field static final Boolean DEFAULT_DEBUG_LOGGING = true 
 
@@ -963,8 +963,12 @@ void customParseZdoClusters(final Map descMap){
 }
 
 void customParseTuyaCluster(final Map descMap) {
-    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11' && getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
+    if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '11') {}
+        if (getDeviceProfile() == 'TS0601_BLACK_SQUARE_RADAR') {
         updateInidicatorLight()
+    }
+    else {
+        logDebug "customParseTuyaCluster: received Tuya cluster <b>command ${descMap.command}</b>"
     }
 }
 
