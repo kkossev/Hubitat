@@ -7,7 +7,7 @@ library(
     name: 'commonLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.1.0',
+    version: '3.1.1',
     documentationLink: ''
 )
 /*
@@ -38,6 +38,7 @@ library(
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
+  * ver. 3.1.1  2024-05-04 kkossev  - (dev. branch) getTuyaAttributeValue bug fix;
   *
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
@@ -47,8 +48,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.1.0' }
-String commonLibStamp() { '2024/04/28 5:18 PM' }
+String commonLibVersion() { '3.1.1' }
+String commonLibStamp() { '2024/05/04 11:20 AM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -155,13 +156,10 @@ metadata {
 
 boolean isVirtual() { device.controllerType == null || device.controllerType == '' }
 /* groovylint-disable-next-line UnusedMethodParameter */
-//def isVINDSTYRKA() { (device?.getDataValue('model') ?: 'n/a') in ['VINDSTYRKA'] }
 boolean isAqaraTVOC_OLD()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airmonitor.acn01'] }
 boolean isAqaraTRV_OLD()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.airrtc.agl001'] }
 boolean isAqaraFP1()   { (device?.getDataValue('model') ?: 'n/a') in ['lumi.motion.ac01'] }
 boolean isFingerbot()  { DEVICE_TYPE == 'Fingerbot' ? isFingerbotFingerot() : false }
-//boolean isAqaraCube()  { (device?.getDataValue('model') ?: 'n/a') in ['lumi.remote.cagl02'] }
-//boolean isZigUSB()     { (device?.getDataValue('model') ?: 'n/a') in ['ZigUSB'] }
 
 /**
  * Parse Zigbee message
@@ -332,6 +330,14 @@ boolean isSpammyDeviceReport(final Map descMap) {
     if (_TRACE_ALL == true) { return false }
     if (this.respondsTo('isSpammyDPsToIgnore')) {   // defined in deviceProfileLib
         return isSpammyDPsToIgnore(descMap)
+    }
+    return false
+}
+
+boolean isSpammyTuyaRadar() {
+    if (_TRACE_ALL == true) { return false }
+    if (this.respondsTo('isSpammyDeviceProfile'())) {   // defined in deviceProfileLib
+        return isSpammyDeviceProfile()
     }
     return false
 }
@@ -1297,7 +1303,7 @@ void parseTuyaCluster(final Map descMap) {
             int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
             int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            if (!isChattyDeviceReport(descMap)) {
+            if (!isChattyDeviceReport(descMap) && !isSpammyDeviceProfile()) {
                 logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             }
             processTuyaDP(descMap, dp, dp_id, fncmd)
@@ -1335,6 +1341,7 @@ private int getTuyaAttributeValue(final List<String> _data, final int index) {
     int retValue = 0
     if (_data.size() >= 6) {
         int dataLength = zigbee.convertHexToInt(_data[5 + index])
+        if (dataLength == 0) { return 0 }
         int power = 1
         for (i in dataLength..1) {
             retValue = retValue + power * zigbee.convertHexToInt(_data[index + i + 5])
@@ -1923,20 +1930,11 @@ void resetStatistics() {
 // called from initializeVars(true) and resetStatistics()
 void resetStats() {
     logDebug 'resetStats...'
-    state.stats = [:]
-    state.states = [:]
-    state.lastRx = [:]
-    state.lastTx = [:]
-    state.health = [:]
-    if (this.respondsTo('groupsLibVersion')) {
-        state.zigbeeGroups = [:]
-    }
-    state.stats['rxCtr'] = 0
-    state.stats['txCtr'] = 0
-    state.states['isDigital'] = false
-    state.states['isRefresh'] = false
-    state.health['offlineCtr'] = 0
-    state.health['checkCtr3'] = 0
+    state.stats = [:] ; state.states = [:] ; state.lastRx = [:] ; state.lastTx = [:] ; state.health = [:]
+    if (this.respondsTo('groupsLibVersion')) { state.zigbeeGroups = [:] }
+    state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0
+    state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
+    state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
 }
 
 /**
@@ -2209,14 +2207,4 @@ long formattedDate2unix(String formattedDate) {
         return now()
     }
 }
-/*
-void test(String par) {
-    List<String> cmds = []
-    log.warn "test... ${par}"
 
-    cmds = ["zdo unbind 0x${device.deviceNetworkId} 0x${device.endpointId} 0x01 0x0020 {${device.zigbeeId}} {}",]
-    //parse(par)
-
-    sendZigbeeCommands(cmds)
-}
-*/

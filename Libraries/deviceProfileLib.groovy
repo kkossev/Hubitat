@@ -7,7 +7,7 @@ library(
     name: 'deviceProfileLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
-    version: '3.1.1',
+    version: '3.1.2',
     documentationLink: ''
 )
 /*
@@ -29,6 +29,7 @@ library(
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
+ * ver. 3.1.2  2024-04-21 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  *
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
  *                                   TODO: refactor sendAttribute ! sendAttribute exception bug fix for virtual devices; check if String getObjectClassName(Object o) is in 2.3.3.137, can be used?
@@ -36,8 +37,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.1.1' }
-static String deviceProfileLibStamp() { '2024/04/21 7:29 PM' }
+static String deviceProfileLibVersion()   { '3.1.2' }
+static String deviceProfileLibStamp() { '2024/05/04 12:30 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -961,6 +962,11 @@ public boolean isSpammyDPsToNotTrace(Map descMap) {
     int dp = zigbee.convertHexToInt(descMap.data[2])
     List spammyList = deviceProfilesV3[getDeviceProfile()]?.spammyDPsToNotTrace as List
     return (spammyList != null && (dp in spammyList))
+}
+
+public boolean isSpammyDeviceProfile() {
+    Boolean isSpammy = deviceProfilesV3[getDeviceProfile()]?.device?.isSpammy ?: false
+    return isSpammy
 }
 
 /* groovylint-disable-next-line UnusedMethodParameter */
