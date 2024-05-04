@@ -506,7 +506,7 @@ public boolean setPar(final String parPar=null, final String val=null ) {
         int cluster
         int attribute
         int dt
-        String mfgCode
+        String mfgCodeString = ''
         try {
             cluster = hubitat.helper.HexUtils.hexStringToInt((dpMap.at).split(':')[0])
             //log.trace "cluster = ${cluster}"
@@ -514,16 +514,16 @@ public boolean setPar(final String parPar=null, final String val=null ) {
             //log.trace "attribute = ${attribute}"
             dt = dpMap.dt != null ? hubitat.helper.HexUtils.hexStringToInt(dpMap.dt) : null
             //log.trace "dt = ${dt}"
-            mfgCode = dpMap.mfgCode
+            mfgCodeString = dpMap.mfgCode
         //log.trace "mfgCode = ${dpMap.mfgCode}"
         }
         catch (e) {
             logWarn "setPar: Exception '${e}' caught while splitting cluser and attribute <b>$customSetFunction</b>(<b>$scaledValue</b>) (val=${val}))"
             return false
         }
-        Map mapMfCode = ['mfgCode':mfgCode]
-        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
-        if (mfgCode != null) {
+        Map mapMfCode = ['mfgCode':mfgCodeString]
+        logDebug "setPar: found cluster=0x${zigbee.convertToHexString(cluster, 2)} attribute=0x${zigbee.convertToHexString(attribute, 2)} dt=${dpMap.dt} mfgCodeString=${mfgCodeString} mapMfCode=${mapMfCode} scaledValue=${scaledValue}  (val=${val})"
+        if (mfgCodeString != null && mfgCodeString != '') {
             cmds = zigbee.writeAttribute(cluster, attribute, dt, scaledValue, mapMfCode, delay = 200)
         }
         else {
