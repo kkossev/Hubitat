@@ -69,9 +69,8 @@
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
- * ver. 1.8.2  2024-04-25 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P, the SPAMMY_BLACK_RADAR, MIR2-HE200-TY; TS0601_KAPVNNLK_RADAR
+ * ver. 1.8.2  2024-05-05 kkossev  - (dev.branch) depricated SONOFF-SNZB-06P, the SPAMMY_BLACK_RADAR, MIR2-HE200-TY; TS0601_KAPVNNLK_RADAR; added TS0202 _TZ3000_kmh5qpmb; depriceated TS0601_TUYA_RADAR; 
  *
- *                                   TODO: Move SONOFF SNZB-06 to the new 'Tuya Zigbee mmWave Sensor' driver
  *                                   TODO: Implement ping() for all devices
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
  *                                   TODO: TS0601_3IN1 - process Battery/USB powerSource change events! (0..4)
@@ -95,7 +94,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.2' }
-static String timeStamp() { '2024/04/25 1:36 PM' }
+static String timeStamp() { '2024/05/05 9:49 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -204,7 +203,7 @@ metadata {
             input(name: 'ledEnable', type: 'bool', title: '<b>Enable LED</b>', description: '<i>Enable LED blinking when motion is detected (4in1 only)</i>', defaultValue: true)
         }
         if (advancedOptions == true || advancedOptions == false) {
-            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences.luxThreshold != false)) {
+            if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences?.luxThreshold != false)) {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
             }
@@ -473,6 +472,7 @@ boolean isChattyRadarReport(final Map descMap) {
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_hktqahrq', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_jmrgyl7o', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // not tested! //https://zigbee.blakadder.com/Luminea_ZX-5311.html
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'WHD02',  manufacturer:'_TZ3000_kmh5qpmb', deviceJoinName: 'Tuya TS0202 Motion Sensor'],
+                [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3000_kmh5qpmb', deviceJoinName: 'Tuya TS0202 Motion Sensor'],             // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-w-healthstatus/92441/1059?u=kkossev
                 [profileId:'0104', endpointId:'01', inClusters:'0001,0500,0003,0000', outClusters:'1000,0006,0019,000A', model:'TS0202', manufacturer:'_TZ3040_usvkzkyn', deviceJoinName: 'Tuya TS0202 Motion Sensor'],            // not tested // https://www.amazon.ae/Rechargeable-Detector-Security-Devices-Required/dp/B0BKKJ48QH
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-53o41joc', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],                                            // 60 seconds reset period
                 [profileId:'0104', endpointId:'01', inClusters:'0000,0001,0003,0500', model:'RH3040', manufacturer:'TUYATEC-b5g40alm', deviceJoinName: 'TUYATEC RH3040 Motion Sensor'],
@@ -627,35 +627,18 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
             models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
-            preferences   : ['radarSensitivity':'2', 'detectionDelay':'101', 'fadingTime':'102', 'minimumDistance':'3', 'maximumDistance':'4'],
-            commands      : ['resetStats':'resetStats'],
+            //preferences   : ['radarSensitivity':'2', 'detectionDelay':'101', 'fadingTime':'102', 'minimumDistance':'3', 'maximumDistance':'4'],
+            //commands      : ['resetStats':'resetStats', 'test':'test'],
             fingerprints  : [
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ztc6ggyl', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor ZY-M100'],       // KK
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_ztc6ggyl', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor ZY-M100'],       // KK
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ikvncluo', deviceJoinName: 'Moes TuyaHuman Presence Detector Radar 2 in 1'],    // jw970065
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_lyetpprm', deviceJoinName: 'Tuya ZigBee Breath Presence Sensor'],
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_wukb7rhc', deviceJoinName: 'Moes Smart Human Presence Detector'],               // https://www.moeshouse.com/collections/smart-sensor-security/products/smart-zigbee-human-presence-detector-pir-mmwave-radar-detection-sensor-ceiling-mount
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_jva8ink8', deviceJoinName: 'AUBESS Human Presence Detector'],                   // https://www.aliexpress.com/item/1005004262109070.html
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_mrf6vtua', deviceJoinName: 'Tuya Human Presence Detector'],                     // not tested
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_ar0slwnd', deviceJoinName: 'Tuya Human Presence Detector'],                     // not tested
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_sfiy5tfs', deviceJoinName: 'Tuya Human Presence Detector'],                     // not tested
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_holel4dk', deviceJoinName: 'Tuya Human Presence Detector'],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars/92441/280?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_xpq2rzhq', deviceJoinName: 'Tuya Human Presence Detector'],                     // https://community.hubitat.com/t/release-tuya-zigbee-multi-sensor-4-in-1-pir-motion-sensors-and-mmwave-presence-radars-w-healthstatus/92441/432?u=kkossev
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_qasjif9e', deviceJoinName: 'Tuya Human Presence Detector'],                     //
-                [profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_xsm7l9xa', deviceJoinName: 'Tuya Human Presence Detector']                      //
-
+                [manufacturer:'_TZE200_ztc6ggyl'], [manufacturer:'_TZE204_ztc6ggyl'], [manufacturer:'_TZE200_ikvncluo'], [manufacturer:'_TZE200_lyetpprm'], [manufacturer:'_TZE200_wukb7rhc'],
+                [manufacturer:'_TZE200_jva8ink8'], [manufacturer:'_TZE200_mrf6vtua'], [manufacturer:'_TZE200_ar0slwnd'], [manufacturer:'_TZE200_sfiy5tfs'], [manufacturer:'_TZE200_holel4dk'],
+                [manufacturer:'_TZE200_xpq2rzhq'], [manufacturer:'_TZE204_qasjif9e'], [manufacturer:'_TZE204_xsm7l9xa']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
-                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:0,   max:9 ,    defVal:7,    scale:1,    unit:'',        title:'<b>Radar sensitivity</b>',          description:'<i>Sensitivity of the radar</i>'],
-                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0, max:10.0,  defVal:0.1,  scale:100,  unit:'meters',   title:'<b>Minimim detection distance</b>', description:'<i>Minimim (near) detection distance</i>'],
-                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.0, max:10.0,  defVal:6.0,  scale:100,  unit:'meters',   title:'<b>Maximum detection distance</b>', description:'<i>Maximum (far) detection distance</i>'],
-                [dp:6,   name:'radarStatus',        type:'enum',    rw: 'ro', min:0,   max:5 ,    defVal:'1',  scale:1,    map:[ 0:'checking', 1:'check_success', 2:'check_failure', 3:'others', 4:'comm_fault', 5:'radar_fault'] ,   unit:'TODO',     title:'<b>Radar self checking status</b>', description:'<i>Radar self checking status</i>'],            // radarSeradarSelfCheckingStatus[fncmd.toString()]
                 [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0 , defVal:0.0,  scale:100,  unit:'meters',   title:'<b>Distance</b>',                   description:'<i>detected distance</i>'],
-                [dp:101, name:'detectionDelay',     type:'decimal', rw: 'rw', min:0.0, max:10.0,  defVal:0.2,  scale:10,   unit:'seconds',  title:'<b>Detection delay</b>',            description:'<i>Presence detection delay timer</i>'],
-                [dp:102, name:'fadingTime',         type:'decimal', rw: 'rw', min:0.5, max:500.0, defVal:60.0, scale:10,   unit:'seconds',  title:'<b>Fading time</b>',                description:'<i>Presence inactivity delay timer</i>'],                                  // aka 'nobody time'
                 [dp:103, name:'debugCLI',           type:'number',  rw: 'ro', min:0,   max:99999, defVal:0,    scale:1,    unit:'?',        title:'<b>debugCLI</b>',                   description:'<i>debug CLI</i>'],
                 [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,    scale:1,    unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>'],
 
@@ -663,7 +646,7 @@ boolean isChattyRadarReport(final Map descMap) {
             spammyDPsToIgnore : [9],
             spammyDPsToNotTrace : [9, 103],
             deviceJoinName: 'Tuya Human Presence Detector ZY-M100',
-            configuration : [:]
+            //configuration : [:]
     // status: completed
     ],
 
@@ -673,11 +656,12 @@ boolean isChattyRadarReport(final Map descMap) {
             device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true],
             fingerprints  : [
-                [model:'TS0601', manufacturer:'_TZE204_kapvnnlk'],
-                [model:'TS0601', manufacturer:'_TZE204_kyhbrfyl']
+                [manufacturer:'_TZE204_kapvnnlk'], [manufacturer:'_TZE204_kyhbrfyl']
             ],
             tuyaDPs:        [
-                [dp:1,   name:'motion',              type:'enum',    rw: 'ro', min:0,   max:1 ,    defVal:'0',  scale:1,   map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>']
+                [dp:1, name:'motion', type:'enum', rw: 'ro', min:0, max:1, defVal:'0',  scale:1,   map:[0:'inactive', 1:'active'] , unit:'', title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
+                [dp:19,  name:'distance', type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,  scale:100, unit:'meters', title:'<b>Distance</b>', description:'<i>detected distance</i>']
+
             ],
             spammyDPsToIgnore : [19],
             spammyDPsToNotTrace : [19]
@@ -692,9 +676,7 @@ boolean isChattyRadarReport(final Map descMap) {
             //preferences   : ['radarSensitivity':'2', 'tumbleSwitch':'105', 'tumbleAlarmTime':'106', /*"radarScene":"112",*/ 'fallSensitivity':'118'],
             //commands      : ['resetStats':'resetStats'],
             fingerprints  : [
-                [model:'TS0601', manufacturer:'_TZE200_vrfecyku'],
-                [model:'TS0601', manufacturer:'_TZE200_lu01t0zl'],
-                [model:'TS0601', manufacturer:'_TZE200_ypprdwsl']
+                [manufacturer:'_TZE200_vrfecyku'], [manufacturer:'_TZE200_lu01t0zl'], [manufacturer:'_TZE200_ypprdwsl']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',             type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
@@ -711,9 +693,7 @@ boolean isChattyRadarReport(final Map descMap) {
             //preferences   : ['indicatorLight':103],
             //commands      : ['resetStats':'resetStats'],
             fingerprints  : [
-                [model:'TS0601', manufacturer:'_TZE200_0u3bj3rc'],
-                [model:'TS0601', manufacturer:'_TZE200_v6ossqfy'],
-                [model:'TS0601', manufacturer:'_TZE200_mx6u6l4y']
+                [manufacturer:'_TZE200_0u3bj3rc'], [manufacturer:'_TZE200_v6ossqfy'], [manufacturer:'_TZE200_mx6u6l4y']
             ],
             tuyaDPs:        [
                 [dp:1,   name:'motion',         type:'enum',   rw: 'ro', min:0, max:1,    defVal: '0', map:[0:'inactive', 1:'active'],     description:'Presence'],
@@ -1116,7 +1096,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             capabilities  : ['MotionSensor': true, 'Battery': true],
             //preferences   : [:],
             fingerprints  : [
-                [model:'OCP305', manufacturer:'OWON']   // depricated
+                [manufacturer:'OWON']   // depricated
             ],
             //deviceJoinName: 'OWON OCP305 Radar',
            // configuration : ['0x0406':'bind']
@@ -1131,7 +1111,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             //commands      : ['resetStats':'resetStats', 'refresh':'refresh', 'initialize':'initialize', 'updateAllPreferences': 'updateAllPreferences', 'resetPreferencesToDefaults':'resetPreferencesToDefaults', 'validateAndFixPreferences':'validateAndFixPreferences'],
             fingerprints  : [
                 //[profileId:'0104', endpointId:'01', inClusters:'0000,0003,0406,0500,FC57,FC11', outClusters:'0003,0019', model:'SNZB-06P', manufacturer:'SONOFF', deviceJoinName: 'SONOFF SNZB-06P RADAR']      // https://community.hubitat.com/t/sonoff-zigbee-human-presence-sensor-snzb-06p/126128/14?u=kkossev
-                [model:'SNZB-06P', manufacturer:'SONOFF']      // Depricated!
+                [manufacturer:'SONOFF']      // Depricated!
             ]   //  ,
             /*
             attributes:       [
@@ -1267,14 +1247,14 @@ String getProfileKey(final String valueStr) {
 Map getPreferencesMap(final String param, boolean debug=false) {
     Map foundMap = [:]
     if (!(param in DEVICE?.preferences)) {
-        if (debug) { log.warn "getPreferencesMap: preference ${param} not defined for this device!" }
+        if (debug) { logWarn "getPreferencesMap: preference ${param} not defined for this device!" }
         return [:]
     }
     /* groovylint-disable-next-line NoDef */
     def preference
     try {
         preference = DEVICE?.preferences["$param"]
-        if (debug) log.debug "getPreferencesMap: preference ${param} found. value is ${preference}"
+        if (debug) logDebug "getPreferencesMap: preference ${param} found. value is ${preference}"
         if (preference in [true, false]) {
             // find the preference in the tuyaDPs map
             logDebug "getPreferencesMap: preference ${param} is boolean"
@@ -1293,10 +1273,10 @@ Map getPreferencesMap(final String param, boolean debug=false) {
         }
     // TODO - could be also 'true' or 'false' ...
     } catch (Exception e) {
-        if (debug) log.warn "getPreferencesMap: exception ${e} caught when getting preference ${param} !"
+        if (debug) { logWarn "getPreferencesMap: exception ${e} caught when getting preference ${param} !" }
         return [:]
     }
-    if (debug) log.debug "getPreferencesMap: foundMap = ${foundMap}"
+    if (debug) { logDebug "getPreferencesMap: foundMap = ${foundMap}" }
     return foundMap
 }
 
@@ -1325,7 +1305,7 @@ void resetPreferencesToDefaults(boolean debug=false) {
         }
         // find the individual preference map
         parMap = getPreferencesMap(parName, false)
-        if (parMap?.isEmpty()) {
+        if (parMap == null || parMap?.isEmpty()) {
             logDebug "Preference ${parName} not found in tuyaDPs or attributes map!"
             return // continue
         }
@@ -3275,8 +3255,12 @@ def setStaticDetectionSensitivity(val) {
  * @param dpMap A map containing the type and scale of the preference.
  * @return The scaled value of the preference, or null if the preference is not found or has an unsupported type.
  */
-int getScaledPreferenceValue(String preference, Map dpMap) {
+Integer getScaledPreferenceValue(String preference, Map dpMap) {
     /* groovylint-disable-next-line NoDef */
+    if (dpMap == null || dpMap.isEmpty()) {
+        logDebug "getScaledPreferenceValue: preference ${preference} has no map defined!"
+        return null
+    }
     def value = settings."${preference}"
     int scaledValue
     if (value == null) {
@@ -3327,7 +3311,7 @@ List<String> updateAllPreferences() {
     Integer dpInt = 0
     /* groovylint-disable-next-line NoDef */
     def scaledValue    // int or String for enums
-    log.trace "(DEVICE?.preferences)=${(DEVICE?.preferences)}"
+    logDebug "(DEVICE?.preferences)=${(DEVICE?.preferences)}"
     (DEVICE?.preferences).each { name, dp ->
         dpInt = safeToInt(dp, -1)
         if (dpInt <= 0) {
@@ -3335,8 +3319,11 @@ List<String> updateAllPreferences() {
             logDebug "updateAllPreferences: preference ${name} has invalid Tuya dp value ${dp}"
             return []
         }
-        Map foundMap
-        foundMap = getPreferencesMap(name, true)
+        Map foundMap = getPreferencesMap(name, false)
+        if (foundMap == null) {
+            logDebug "updateAllPreferences: preference ${name} not found in tuyaDPs map!"
+            return []
+        }
         /* groovylint-disable-next-line InvertedIfElse */
         if (!foundMap?.isEmpty()) {
             scaledValue = getScaledPreferenceValue(name, foundMap)
@@ -3578,7 +3565,7 @@ void setPar(String par=null, val=null) {
         }
         // find the tuayDPs map for the par
         Map dpMap = getPreferencesMap(par, false)
-        if (dpMap?.isEmpty()) {
+        if (dpMap == null || dpMap?.isEmpty()) {
             log.warn "${device.displayName} setPar: tuyaDPs map not found for parameter <b>${par}</b>"
             return
         }
@@ -3715,9 +3702,13 @@ def getDeviceNameAndProfile(String model=null, String manufacturer=null) {
     String deviceProfile      = UNKNOWN
     String deviceModel        = model != null ? model : device.getDataValue('model') ?: UNKNOWN
     String deviceManufacturer = manufacturer != null ? manufacturer : device.getDataValue('manufacturer') ?: UNKNOWN
+    String groupModel   = ''
+    String fingerprintModel = ''
     deviceProfilesV2.each { profileName, profileMap ->
+        groupModel   = (profileMap?.models != null && !(profileMap?.models.isEmpty())) ? profileMap?.models.first() : UNKNOWN
         profileMap.fingerprints.each { fingerprint ->
-            if (fingerprint.model == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
+            fingerprintModel = fingerprint.model ?: groupModel
+            if (fingerprintModel == deviceModel && fingerprint.manufacturer == deviceManufacturer) {
                 deviceProfile = profileName
                 deviceName = fingerprint.deviceJoinName ?: deviceProfilesV2[deviceProfile]?.deviceJoinName ?: UNKNOWN
                 logDebug "<b>found exact match</b> for model ${deviceModel} manufacturer ${deviceManufacturer} : <b>profileName=${deviceProfile}</b> deviceName =${deviceName}"
@@ -3809,7 +3800,7 @@ Map inputIt(String paramPar, boolean debug = false) {
     //if (debug) log.debug "inputIt: preference ${param} found. value is ${preference} isTuyaDP=${isTuyaDP}"
     foundMap = getPreferencesMap(param)
     //if (debug) log.debug "foundMap = ${foundMap}"
-    if (foundMap?.isEmpty()) {
+    if (foundMap == null || foundMap?.isEmpty()) {
         if (debug) log.warn "inputIt: map not found for param '${param}'!"
         return [:]
     }
@@ -3914,7 +3905,7 @@ void validateAndFixPreferences() {
     String settingType
     DEVICE?.preferences.each {
         Map foundMap = getPreferencesMap(it.key)
-        if (foundMap?.isEmpty()) {
+        if (founMap == null || foundMap?.isEmpty()) {
             logDebug "validateAndFixPreferences: map not found for preference ${it.key}"    // 10/21/2023 - sevirity lowered to debug
             return
         }
@@ -3924,7 +3915,7 @@ void validateAndFixPreferences() {
             logDebug "validateAndFixPreferences: settingType not found for preference ${it.key}"
             return
         }
-        //logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
+        logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) oldSettingValue = ${oldSettingValue} mapType = ${foundMap.type} settingType=${settingType}"
         if (foundMap.type != settingType) {
             logDebug "validateAndFixPreferences: preference ${it.key} (dp=${it.value}) new mapType = ${foundMap.type} <b>differs</b> from the old settingType=${settingType} (oldSettingValue = ${oldSettingValue}) "
             validationFailures ++
@@ -3983,6 +3974,7 @@ void validateAndFixPreferences() {
 
 /* groovylint-disable-next-line UnusedMethodParameter */
 void test(String val) {
-    Map result = inputIt( val.trim(), debug=true )
-    logWarn "test inputIt(${val}) = ${result}"
+    //Map result = inputIt( val.trim(), debug=true )
+    //logWarn "test inputIt(${val}) = ${result}"
+    getDeviceNameAndProfile()
 }
