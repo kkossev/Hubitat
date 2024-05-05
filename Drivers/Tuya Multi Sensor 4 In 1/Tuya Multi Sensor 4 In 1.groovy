@@ -94,7 +94,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.8.2' }
-static String timeStamp() { '2024/05/05 9:49 AM' }
+static String timeStamp() { '2024/05/05 4:53 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -202,7 +202,7 @@ metadata {
         if (('ledEnable' in DEVICE?.preferences)) {            // 4in1()
             input(name: 'ledEnable', type: 'bool', title: '<b>Enable LED</b>', description: '<i>Enable LED blinking when motion is detected (4in1 only)</i>', defaultValue: true)
         }
-        if (advancedOptions == true || advancedOptions == false) {
+        if (device && !(DEVICE?.device.isDepricated == true)) {
             if ((DEVICE?.capabilities?.IlluminanceMeasurement == true) && (DEVICE?.preferences?.luxThreshold != false)) {
                 input('luxThreshold', 'number', title: '<b>Lux threshold</b>', description: 'Minimum change in the lux which will trigger an event', range: '0..999', defaultValue: 5)
                 input name: 'illuminanceCoeff', type: 'decimal', title: '<b>Illuminance Correction Coefficient</b>', description: '<i>Illuminance correction coefficient, range (0.10..10.00)</i>', range: '0.10..10.00', defaultValue: 1.00
@@ -2145,8 +2145,13 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
     }
     switch (dp) {
         case 0x01 : // motion for 2-in-1 TS0601 (_TZE200_3towulqd) and presence state for almost of the radars
-            logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
-            handleMotion(fncmd ? true : false)
+            if (DEVICE?.device.isDepricated == true) { 
+                logDebug "ignored depricated device 0x01 event" 
+            } 
+            else {
+                logDebug "(DP=0x01) motion event fncmd = ${fncmd}"
+                handleMotion(fncmd ? true : false)
+            }
             break
         case 0x04 :    // battery level for TS0202 and TS0601 2in1 ; battery1 for Fantem 4-in-1 (100% or 0% ) Battery level for _TZE200_3towulqd (2in1)
             logDebug "Tuya battery status report dp_id=${dp_id} dp=${dp} fncmd=${fncmd}"
@@ -2179,8 +2184,13 @@ void processTuyaDP(final Map descMap, final int dp, final int dp_id, final int f
             break
         case 0x65 :    // (101)
             //  Tuya 3 in 1 (101) -> motion (ocupancy) + TUYATEC
-            logDebug "motion event 0x65 fncmd = ${fncmd}"
-            handleMotion(fncmd ? true : false)
+            if (DEVICE?.device.isDepricated == true) { 
+                logDebug "ignored depricated device 0x65 event" 
+            } 
+            else {
+                logDebug "motion event 0x65 fncmd = ${fncmd}"
+                handleMotion(fncmd ? true : false)
+            }
             break
         case 0x66 :     // (102)
             if (is4in1()) {    // // case 102 //reporting time intervl for 4 in 1
