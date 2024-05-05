@@ -29,7 +29,7 @@ library(
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
- * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile() 
+ * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
  *
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
@@ -39,7 +39,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.2' }
-static String deviceProfileLibStamp() { '2024/05/05 7:58 PM' }
+static String deviceProfileLibStamp() { '2024/05/05 9:02 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -1104,7 +1104,7 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
         case 'enum' :       // [0:"inactive", 1:"active"]  foundItem.map=[75:0.75 meters, 150:1.50 meters, 225:2.25 meters, 300:3.00 meters, 375:3.75 meters, 450:4.50 meters]
             logTrace "compareAndConvertTuyaToHubitatEventValue: enum: foundItem.scale=${foundItem.scale}, fncmd=${fncmd}, device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))} map=${foundItem.map}"
             Object latestEvent = device.currentState(foundItem.name)
-            String dataType = latestEvent?.dataType 
+            String dataType = latestEvent?.dataType
             logTrace "latestEvent is dataType is ${dataType}"
             // if the attribute is of a type enum, the value is a string. Compare the string values!
             if (dataType == 'ENUM') {
@@ -1167,10 +1167,10 @@ public Integer preProc(final Map foundItem, int fncmd_orig) {
  * @param dp_len The length of the received DP.
  * @return true if the DP was processed successfully, false otherwise.
  */
+/* groovylint-disable-next-line UnusedMethodParameter */
 public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, final int dp_id, final int fncmd_orig, final int dp_len) {
     int fncmd = fncmd_orig
     if (state.deviceProfile == null)  { return false }
-    //if (!(DEVICE?.device?.type == "radar"))      { return false }   // enabled for all devices - 10/22/2023 !!!    // only these models are handled here for now ...
     if (isSpammyDPsToIgnore(descMap)) { return true  }       // do not perform any further processing, if this is a spammy report that is not needed for anyhting (such as the LED status)
 
     List<Map> tuyaDPsMap = deviceProfilesV3[state.deviceProfile]?.tuyaDPs
@@ -1185,12 +1185,11 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
     }
     if (foundItem == null || foundItem == [:]) {
         // DP was not found into the tuyaDPs list for this particular deviceProfile
-     //   updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)
+//      updateStateUnknownDPs(descMap, dp, dp_id, fncmd, dp_len)    // TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!
         // continue processing the DP report in the old code ...
         return false
     }
-
-    return processFoundItem(foundItem, fncmd_orig, isSpammyDPsToNotTrace(descMap))
+    return processFoundItem(foundItem, fncmd, isSpammyDPsToNotTrace(descMap))
 }
 
 // TODO: refactor!
@@ -1373,7 +1372,6 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
                     buttonEvent(valueScaled)
                     break
                 default :
-                    log.trace "wasChanged=${wasChanged} name=${name} value=${value} valueScaled=${valueScaled}"
                     sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
                         logTrace "event ${name} sent w/ value ${valueScaled}"
