@@ -20,7 +20,7 @@
  * ver. 3.0.8  2024-04-23 kkossev  - added detectionDelay for SNZB-06; refactored the refresh() method; added TS0601_BLACK_SQUARE_RADAR; TS0601_RADAR_MIR-HE200-TY; 
  * ver. 3.1.0  2024-04-28 kkossev  - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
  * ver. 3.1.1  2024-05-04 kkossev  - enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change; added 'switch' for the TuYa SZR07U; Linptech: added ledIndicator; radar attributes types changed to number (was enum)
- * ver. 3.1.2  2024-05-05 kkossev  - (dev.branch) added _TZ3218_t9ynfz4x as a new Linptech manufacturer;
+ * ver. 3.1.2  2024-05-05 kkossev  - (dev.branch) added _TZ3218_t9ynfz4x as a new Linptech manufacturer; fixed HL0SS9OA and 2AAELWXK wrong IAS illuminance reprots;
  *                                   
  *
  *                                   TODO: 
@@ -40,7 +40,7 @@
 */
 
 static String version() { "3.1.2" }
-static String timeStamp() {"2024/05/05 12:21 PM"}
+static String timeStamp() {"2024/05/05 8:36 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -142,7 +142,7 @@ metadata {
     'TS0601_TUYA_RADAR'   : [        // isZY_M100Radar()        // spammy devices!
             description   : 'Tuya Human Presence mmWave Radar ZY-M100',
             models        : ['TS0601'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, isSpammy:true],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, isSpammy:true, ignoreIAS:true], // sends all DPs periodically!
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             preferences   : ['radarSensitivity':'2', 'detectionDelay':'101', 'fadingTime':'102', 'minimumDistance':'3', 'maximumDistance':'4'],
             commands      : ['resetStats':'resetStats'],
@@ -400,7 +400,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     'TS0225_HL0SS9OA_RADAR'   : [
             description   : 'Tuya TS0225_HL0SS9OA Radar',        // https://www.aliexpress.com/item/1005005761971083.html
             models        : ['TS0225'],
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, ignoreIAS: true],    // ignore the illuminance reports from the IAS cluster
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
             preferences   : ['presenceKeepTime':'12', 'ledIndicator':'24', 'radarAlarmMode':'105', 'radarAlarmVolume':'102', 'radarAlarmTime':'101', \
                              'motionFalseDetection':'112', 'motionDetectionSensitivity':'15', 'motionMinimumDistance':'106', 'motionDetectionDistance':'13', \
@@ -453,7 +453,7 @@ SmartLife   radarSensitivity staticDetectionSensitivity
     'TS0225_2AAELWXK_RADAR'   : [                                     // https://github.com/Koenkk/zigbee2mqtt/issues/18612
             description   : 'Tuya TS0225_2AAELWXK 5.8 GHz Radar',        // https://community.hubitat.com/t/the-new-tuya-24ghz-human-presence-sensor-ts0225-tze200-hl0ss9oa-finally-a-good-one/122283/72?u=kkossev
             models        : ['TS0225'],                                // ZG-205Z   https://github.com/Koenkk/zigbee-herdsman-converters/blob/38bf79304292c380dc8366966aaefb71ca0b03da/src/devices/tuya.ts#L4793
-            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false, ignoreIAS: true],    // ignore the illuminance reports from the IAS cluster
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'HumanMotionState':true],
             // TODO - preferences and DPs !!!!!!!!!!!!!!!!!!!!
             preferences   : ['presenceKeepTime':'102', 'ledIndicator':'107', 'radarAlarmMode':'117', 'radarAlarmVolume':'116', 'radarAlarmTime':'115', \
@@ -974,6 +974,17 @@ void customParseTuyaCluster(final Map descMap) {
     else {
         logDebug "customParseTuyaCluster: received Tuya cluster <b>command ${descMap.command}</b>"
     }
+}
+
+// TODO - make this custom, and the illuminance.lib function - standard !!!  TODO !!!
+void customCustomParseIlluminanceCluster(final Map descMap) {
+    log.trace "customCustomParseIlluminanceCluster: zigbee received illuminance cluster 0x${descMap.clusterInt} attribute 0x${descMap.attrId} value ${descMap.value} (raw ${descMap.value})"
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    if (DEVICE?.device?.ignoreIAS == true) { 
+        logDebug "customCustomParseIlluminanceCluster: ignoring IAS reporting device"
+        return 
+    }    // ignore IAS devices
+    customParseIlluminanceCluster(descMap)  // illuminance.lib
 }
 
 void formatAttrib() {

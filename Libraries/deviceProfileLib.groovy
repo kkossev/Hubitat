@@ -29,7 +29,7 @@ library(
  * ver. 3.0.4  2024-03-30 kkossev  - (dev. branch) more Groovy Linting; processClusterAttributeFromDeviceProfile exception fix;
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
- * ver. 3.1.2  2024-05-04 kkossev  - (dev. branch) added isSpammyDeviceProfile() 
+ * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile() 
  *
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
@@ -39,7 +39,7 @@ library(
 */
 
 static String deviceProfileLibVersion()   { '3.1.2' }
-static String deviceProfileLibStamp() { '2024/05/04 12:45 PM' }
+static String deviceProfileLibStamp() { '2024/05/05 7:58 PM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -965,6 +965,7 @@ public boolean isSpammyDPsToNotTrace(Map descMap) {
     return (spammyList != null && (dp in spammyList))
 }
 
+// all DPs are spammy - sent periodically!
 public boolean isSpammyDeviceProfile() {
     Boolean isSpammy = deviceProfilesV3[getDeviceProfile()]?.device?.isSpammy ?: false
     return isSpammy
@@ -1116,6 +1117,7 @@ List<Object> compareAndConvertTuyaToHubitatEventValue(Map foundItem, int fncmd, 
             break
         case 'value' :      // depends on foundItem.scale
         case 'number' :
+            //logTrace "compareAndConvertTuyaToHubitatEventValue: foundItem.scale=${foundItem.scale} fncmd=${fncmd} device.currentValue(${foundItem.name})=${(device.currentValue(foundItem.name))}"
             (isEqual, hubitatEventValue) = compareAndConvertNumbers(foundItem, safeToInt(fncmd), safeToInt(device.currentValue(foundItem.name)))
             break
         case 'decimal' :
@@ -1261,7 +1263,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
     boolean isAttribute = device.hasAttribute(foundItem.name)    // check if there is such a attribute for this clusterAttribute
     boolean isEqual = false
     boolean wasChanged = false
-        if (!doNotTrace) {
+    if (!doNotTrace) {
         logTrace "processFoundItem: name=${foundItem.name}, isAttribute=${isAttribute}, preferenceExists=${preferenceExists}, existingPrefValue=${existingPrefValue} (type ${foundItem.type}, rw=${foundItem.rw}) value is ${value} (description: ${foundItem.description})"
     }
     // check if the clusterAttribute has the same value as the last one, or the value has changed
@@ -1287,9 +1289,12 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
     if (preferenceExists && !doNotTrace) {  // do not even try to automatically update the preference if it is in the spammy list! - added 04/23/2024
         // preference exists and its's value is extracted
         (isEqual, preferenceValue)  = compareAndConvertTuyaToHubitatPreferenceValue(foundItem, value, existingPrefValue)
-        //log.trace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
-        if (isEqual == true && !doNotTrace && !isSpammyDeviceProfile()) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
-            logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+        logTrace "processFoundItem: preference '${name}' exists with existingPrefValue ${existingPrefValue} (type ${foundItem.type}) -> <b>isEqual=${isEqual} preferenceValue=${preferenceValue}</b>"
+        if (isEqual == true) {
+            //log.trace "doNotTrace=${doNotTrace} isSpammyDeviceProfile=${isSpammyDeviceProfile()}"
+            if (!(doNotTrace || isSpammyDeviceProfile())) {                                 // the clusterAttribute value is the same as the preference value - no need to update the preference
+                logDebug "processFoundItem: no change: preference '${name}' existingPrefValue ${existingPrefValue} equals scaled value ${preferenceValue} (clusterAttribute raw value ${value})"
+            }
         }
         else {
             String scaledPreferenceValue = preferenceValue      //.toString() is not neccessary
@@ -1315,8 +1320,8 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
 
     // second, send an event if this is declared as an attribute!
     if (isAttribute) {                                         // this clusterAttribute has an attribute that must be sent in an Event
-        logTrace "attribute '${name}' exists (type ${foundItem.type})"
         (isEqual, valueScaled) = compareAndConvertTuyaToHubitatEventValue(foundItem, value, doNotTrace)
+        if (isEqual == false) { logTrace "attribute '${name}' exists (type ${foundItem.type}), value ${value} -> <b>isEqual=${isEqual} valueScaled=${valueScaled}</b> wasChanged=${wasChanged}" }
         descText  = "${name} is ${valueScaled} ${unitText}"
         if (settings?.logEnable == true) { descText += " (raw:${value})" }
         if (state.states != null && state.states['isRefresh'] == true) { descText += ' [refresh]' }
@@ -1340,7 +1345,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
         }
 
         // clusterAttribute value (value) is not equal to the attribute last value or was changed- we must send an event!
-
+        //log.trace 'sending event'
         int divider = safeToInt(foundItem.scale ?: 1) ?: 1
         float valueCorrected = value / divider
         if (!doNotTrace) { logTrace "value=${value} foundItem.scale=${foundItem.scale}  divider=${divider} valueCorrected=${valueCorrected}" }
@@ -1359,7 +1364,8 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
                     handleHumidityEvent(valueScaled)
                     break
                 case 'illuminance' :
-                case 'illuminance_lux' :
+                case 'illuminance_lux' :    // ignore the IAS Zone illuminance reports for HL0SS9OA and 2AAELWXK
+                    //log.trace "illuminance event received deviceProfile is ${getDeviceProfile()} value=${value} valueScaled=${valueScaled} valueCorrected=${valueCorrected}"
                     handleIlluminanceEvent(valueCorrected as int)
                     break
                 case 'pushed' :
@@ -1367,6 +1373,7 @@ boolean processFoundItem(final Map foundItem, int value, boolean doNotTrace = fa
                     buttonEvent(valueScaled)
                     break
                 default :
+                    log.trace "wasChanged=${wasChanged} name=${name} value=${value} valueScaled=${valueScaled}"
                     sendEvent(name : name, value : valueScaled, unit:unitText, descriptionText: descText, type: 'physical', isStateChange: true)    // attribute value is changed - send an event !
                     if (!doNotTrace) {
                         logTrace "event ${name} sent w/ value ${valueScaled}"
