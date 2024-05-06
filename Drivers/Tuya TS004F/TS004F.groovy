@@ -50,7 +50,7 @@
  * ver. 2.6.10 2023-12-01 kkossev    - added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
  * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo
  * ver. 2.7.1 2024-04-23 kkossev     - added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz;
- * ver. 2.7.2 2024-05-06 kkossev     - (dev. branch) Configure button reset the statistics
+ * ver. 2.7.2 2024-05-06 kkossev     - bug fix: TS0044 _TZ3000_vp6clf9d _TZ3000_ur5fpg7p _TZ3000_wkai4ga5 needed to be pushed twice to active a button; Configure button will reset the statistics; 
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -70,7 +70,7 @@
  */
 
 static String version() { '2.7.2' }
-static String timeStamp() { '2024/05/06 12:49 PM' }
+static String timeStamp() { '2024/05/06 11:24 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
@@ -437,7 +437,7 @@ void parse(String description) {
 
         if (event) {
             result = createEvent(event)
-            if (device.getDataValue('model') == 'TS004F' || device.getDataValue('manufacturer') == '_TZ3000_abci1hiu') {
+            if (needsDebouncing()) { // bug fixed 5/6/2024
                 runInMillis(DEBOUNCE_TIME, buttonDebounce, [overwrite: true])
             }
         }
