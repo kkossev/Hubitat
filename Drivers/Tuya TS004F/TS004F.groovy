@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, ImplementationAsType, ImplicitReturnStatement, InsecureRandom, MethodCount, MethodParameterTypeRequired, MethodReturnTypeRequired, NoDouble, UnnecessaryGetter, UnnecessaryTernaryExpression, VariableTypeRequired */
+/* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateMapLiteral, ImplementationAsType, ImplicitReturnStatement, InsecureRandom, MethodCount, MethodParameterTypeRequired, MethodReturnTypeRequired, NoDouble, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryPackageReference, UnnecessaryTernaryExpression, VariableTypeRequired */
 /**
  *  Tuya Scene Switch TS004F w/ healthStatus driver for Hubitat Elevation hub.
  *
@@ -48,8 +48,9 @@
  *
  * ver. 2.6.9 2023-10-14 kkossev     - REVERTED BACK TO VERSION 2.6.6 timeStamp 2023/05/30 1:51 PM
  * ver. 2.6.10 2023-12-01 kkossev    - added _TZ3000_ur5fpg7p in the needsDebouncing list; added Sonoff SNZB-01P
- * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo 
- * ver. 2.7.1 2024-04-23 kkossev     - (dev. branch) added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz ;
+ * ver. 2.7.0 2024-03-06 kkossev     - Groovy lint; added TS0021 _TZ3210_3ulg9kpo
+ * ver. 2.7.1 2024-04-23 kkossev     - added _TZ3000_wkai4ga5 to the needsDebouncing() list; added TS004F _TZ3000_b3mgfu0d and _TZ3000_czuyt8lz;
+ * ver. 2.7.2 2024-05-06 kkossev     - (dev. branch) Configure button reset the statistics
  *
  *                                   - TODO: debounce timer configuration (1000ms may be too low when repeaters are in use);
  *                                   - TODO: batteryReporting is not initialized!
@@ -68,15 +69,13 @@
  *                                   - TODO: add supports forZigbee identify cluster (0x0003) ( activate LEDs as feedback that HSM is armed/disarmed ..)
  */
 
-static String version() { '2.7.1' }
-static String timeStamp() { '2024/04/23 5:07 PM' }
+static String version() { '2.7.2' }
+static String timeStamp() { '2024/05/06 12:49 PM' }
 
 @Field static final Boolean DEBUG = false
 @Field static final Integer healthStatusCountTreshold = 4
 
 import groovy.transform.Field
-import hubitat.helper.HexUtils
-import hubitat.device.HubMultiAction
 import groovy.json.JsonOutput
 
 metadata {
@@ -468,7 +467,7 @@ void parse(String description) {
             if (logEnable) { log.debug "${device.displayName } did not parse descMap: $descMap" }
         }
     }
-    if (result != null && result != [:] ) {
+    if (result != null && result != [:]) {
         sendEvent(result)
     }
     return
@@ -606,7 +605,7 @@ void installed() {
 }
 
 void initialize() {
-    if (/*true*/ isTuya()) {
+    if (isTuya()) {
         tuyaMagic()
     }
     else if (isSonoff()) {
@@ -688,7 +687,7 @@ void initialize() {
     sendEvent(name: 'numberOfButtons', value: numberOfButtons, isStateChange: true)
     sendEvent(name: 'supportedButtonValues', value: JsonOutput.toJson(supportedValues), isStateChange: true)
     if (device.currentValue('healthStatus') == null) { setHealthStatusValue('unknown') }
-    if (device.currentValue('powerSource') == null) { 
+    if (device.currentValue('powerSource') == null) {
         if (isUSBpowered()) {
             sendEvent(name: 'powerSource', value: 'dc', isStateChange: true)
         }
@@ -696,8 +695,9 @@ void initialize() {
             sendEvent(name: 'powerSource', value: 'battery', isStateChange: true)
         }
     }
-
     state.lastButtonNumber = 0
+    if (state.stats == null) { state.stats = [:] }
+    state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0 ; state.stats['rejoinCtr'] = 0
     scheduleDeviceHealthCheck()
 }
 
@@ -706,6 +706,7 @@ void updated() {
     scheduleDeviceHealthCheck()
 }
 
+/* groovylint-disable-next-line UnusedMethodParameter */
 void buttonDebounce(button) {
     if (logEnable) { log.debug "${device.displayName} debouncing timer for button ${state.lastButtonNumber} expired." }
     state.lastButtonNumber = 0
