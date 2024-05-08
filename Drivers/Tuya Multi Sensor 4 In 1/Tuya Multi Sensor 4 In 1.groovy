@@ -94,7 +94,7 @@
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String version() { '1.9.0' }
-static String timeStamp() { '2024/05/05 6:33 PM' }
+static String timeStamp() { '2024/05/06 10:39 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -179,7 +179,7 @@ metadata {
     preferences {
         if (device) {
             if (DEVICE?.device.isDepricated == true) {
-                input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://htmlpreview.github.io/?https://github.com/kkossev/Hubitat/blob/development/Drivers/Tuya%20Multi%20Sensor%204%20In%201/Tuya_Multi_Sensor_4_In_1.html' target='_blank'>This driver is depricated for use with ${state.deviceProfile} device!<br><br>Please change to the new driver as per the instructions in this link!</a>")
+                input(name: 'depricated',  type: 'hidden', title: "$ttStyleStr<a href='https://github.com/kkossev/Hubitat/wiki/Tuya-Multi-Sensor-4-In-1' target='_blank'><b>This driver is depricated</b><br> for use with <b>${state.deviceProfile}</b> devices!<br><br><i>Please change to the new driver as per the instructions in this link!</i></a>")
             }
             input(name: 'txtEnable', type: 'bool',   title: '<b>Description text logging</b>', description: '<i>Display sensor states on HE log page. The recommended value is <b>true</b></i>', defaultValue: true)
             input(name: 'logEnable', type: 'bool',   title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. The recommended value is <b>false</b></i>', defaultValue: true)

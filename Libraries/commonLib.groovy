@@ -130,16 +130,13 @@ metadata {
 @Field static final Integer INFO_AUTO_CLEAR_PERIOD = 60      // automatically clear the Info attribute after 60 seconds
 
 @Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
-    defaultValue: 1,
-    options     : [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
-    defaultValue: 240,
-    options     : [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+    defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 @Field static final Map SwitchThreeStateOpts = [
-    defaultValue: 0,
-    options     : [0: 'off', 1: 'on', 2: 'switching_off', 3: 'switching_on', 4: 'switch_failure']
+    defaultValue: 0, options: [0: 'off', 1: 'on', 2: 'switching_off', 3: 'switching_on', 4: 'switch_failure']
 ]
 
 @Field static final Map ConfigureOpts = [
@@ -344,29 +341,16 @@ boolean isSpammyTuyaRadar() {
 }
 
 @Field static final Map<Integer, String> ZdoClusterEnum = [
-    0x0002: 'Node Descriptor Request',
-    0x0005: 'Active Endpoints Request',
-    0x0006: 'Match Descriptor Request',
-    0x0022: 'Unbind Request',
-    0x0013: 'Device announce',
-    0x0034: 'Management Leave Request',
-    0x8002: 'Node Descriptor Response',
-    0x8004: 'Simple Descriptor Response',
-    0x8005: 'Active Endpoints Response',
-    0x801D: 'Extended Simple Descriptor Response',
-    0x801E: 'Extended Active Endpoint Response',
-    0x8021: 'Bind Response',
-    0x8022: 'Unbind Response',
-    0x8023: 'Bind Register Response',
-    0x8034: 'Management Leave Response'
+    0x0002: 'Node Descriptor Request', 0x0005: 'Active Endpoints Request', 0x0006: 'Match Descriptor Request', 0x0022: 'Unbind Request', 0x0013: 'Device announce', 0x0034: 'Management Leave Request',
+    0x8002: 'Node Descriptor Response', 0x8004: 'Simple Descriptor Response', 0x8005: 'Active Endpoints Response', 0x801D: 'Extended Simple Descriptor Response', 0x801E: 'Extended Active Endpoint Response',
+    0x8021: 'Bind Response', 0x8022: 'Unbind Response', 0x8023: 'Bind Register Response', 0x8034: 'Management Leave Response'
 ]
 
 /**
  * ZDO (Zigbee Data Object) Clusters Parsing
- * @param descMap Zigbee message in parsed map format
  */
 void parseZdoClusters(final Map descMap) {
-    if (state.stats == null) { state.stats = [:] } 
+    if (state.stats == null) { state.stats = [:] }
     final Integer clusterId = descMap.clusterInt as Integer
     final String clusterName = ZdoClusterEnum[clusterId] ?: "UNKNOWN_CLUSTER (0x${descMap.clusterId})"
     final String statusHex = ((List)descMap.data)[1]
@@ -411,7 +395,6 @@ void parseZdoClusters(final Map descMap) {
 
 /**
  * Zigbee General Command Parsing
- * @param descMap Zigbee message in parsed map format
  */
 void parseGeneralCommandResponse(final Map descMap) {
     final int commandId = hexStrToUnsignedInt(descMap.command)
@@ -448,7 +431,6 @@ void parseGeneralCommandResponse(final Map descMap) {
 
 /**
  * Zigbee Read Attribute Response Parsing
- * @param descMap Zigbee message in parsed map format
  */
 void parseReadAttributeResponse(final Map descMap) {
     final List<String> data = descMap.data as List<String>
@@ -465,7 +447,6 @@ void parseReadAttributeResponse(final Map descMap) {
 
 /**
  * Zigbee Write Attribute Response Parsing
- * @param descMap Zigbee message in parsed map format
  */
 void parseWriteAttributeResponse(final Map descMap) {
     final String data = descMap.data in List ? ((List)descMap.data).first() : descMap.data
@@ -568,50 +549,15 @@ void parseDefaultCommandResponse(final Map descMap) {
 @Field static final int PING_ATTR_ID = 0x01
 
 @Field static final Map<Integer, String> ZigbeeStatusEnum = [
-    0x00: 'Success',
-    0x01: 'Failure',
-    0x02: 'Not Authorized',
-    0x80: 'Malformed Command',
-    0x81: 'Unsupported COMMAND',
-    0x85: 'Invalid Field',
-    0x86: 'Unsupported Attribute',
-    0x87: 'Invalid Value',
-    0x88: 'Read Only',
-    0x89: 'Insufficient Space',
-    0x8A: 'Duplicate Exists',
-    0x8B: 'Not Found',
-    0x8C: 'Unreportable Attribute',
-    0x8D: 'Invalid Data Type',
-    0x8E: 'Invalid Selector',
-    0x94: 'Time out',
-    0x9A: 'Notification Pending',
-    0xC3: 'Unsupported Cluster'
+    0x00: 'Success', 0x01: 'Failure', 0x02: 'Not Authorized', 0x80: 'Malformed Command', 0x81: 'Unsupported COMMAND', 0x85: 'Invalid Field', 0x86: 'Unsupported Attribute', 0x87: 'Invalid Value', 0x88: 'Read Only',
+    0x89: 'Insufficient Space', 0x8A: 'Duplicate Exists', 0x8B: 'Not Found', 0x8C: 'Unreportable Attribute', 0x8D: 'Invalid Data Type', 0x8E: 'Invalid Selector', 0x94: 'Time out', 0x9A: 'Notification Pending', 0xC3: 'Unsupported Cluster'
 ]
 
 @Field static final Map<Integer, String> ZigbeeGeneralCommandEnum = [
-    0x00: 'Read Attributes',
-    0x01: 'Read Attributes Response',
-    0x02: 'Write Attributes',
-    0x03: 'Write Attributes Undivided',
-    0x04: 'Write Attributes Response',
-    0x05: 'Write Attributes No Response',
-    0x06: 'Configure Reporting',
-    0x07: 'Configure Reporting Response',
-    0x08: 'Read Reporting Configuration',
-    0x09: 'Read Reporting Configuration Response',
-    0x0A: 'Report Attributes',
-    0x0B: 'Default Response',
-    0x0C: 'Discover Attributes',
-    0x0D: 'Discover Attributes Response',
-    0x0E: 'Read Attributes Structured',
-    0x0F: 'Write Attributes Structured',
-    0x10: 'Write Attributes Structured Response',
-    0x11: 'Discover Commands Received',
-    0x12: 'Discover Commands Received Response',
-    0x13: 'Discover Commands Generated',
-    0x14: 'Discover Commands Generated Response',
-    0x15: 'Discover Attributes Extended',
-    0x16: 'Discover Attributes Extended Response'
+    0x00: 'Read Attributes', 0x01: 'Read Attributes Response', 0x02: 'Write Attributes', 0x03: 'Write Attributes Undivided', 0x04: 'Write Attributes Response', 0x05: 'Write Attributes No Response', 0x06: 'Configure Reporting',
+    0x07: 'Configure Reporting Response', 0x08: 'Read Reporting Configuration', 0x09: 'Read Reporting Configuration Response', 0x0A: 'Report Attributes', 0x0B: 'Default Response', 0x0C: 'Discover Attributes', 0x0D: 'Discover Attributes Response',
+    0x0E: 'Read Attributes Structured', 0x0F: 'Write Attributes Structured', 0x10: 'Write Attributes Structured Response', 0x11: 'Discover Commands Received', 0x12: 'Discover Commands Received Response', 0x13: 'Discover Commands Generated',
+    0x14: 'Discover Commands Generated Response', 0x15: 'Discover Attributes Extended', 0x16: 'Discover Attributes Extended Response'
 ]
 
 void parseXiaomiCluster(final Map descMap) {
@@ -636,7 +582,6 @@ BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
 
 /**
  * Zigbee Basic Cluster Parsing  0x0000
- * @param descMap Zigbee message in parsed map format
  */
 void parseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
@@ -897,15 +842,11 @@ void sendSwitchEvent(int switchValuePar) {
 }
 
 @Field static final Map powerOnBehaviourOptions = [
-    '0': 'switch off',
-    '1': 'switch on',
-    '2': 'switch last state'
+    '0': 'switch off', '1': 'switch on', '2': 'switch last state'
 ]
 
 @Field static final Map switchTypeOptions = [
-    '0': 'toggle',
-    '1': 'state',
-    '2': 'momentary'
+    '0': 'toggle', '1': 'state', '2': 'momentary'
 ]
 
 Map myParseDescriptionAsMap(String description) {
@@ -1006,11 +947,8 @@ boolean otherTuyaOddities(final String description) {
     List attrData = [[cluster: descMap.cluster ,attrId: descMap.attrId, value: descMap.value, status: descMap.status]]
     descMap.additionalAttrs.each {
         attrData << [cluster: descMap.cluster, attrId: it.attrId, value: it.value, status: it.status]
-    //log.trace "Tuya oddity: filling in attrData ${attrData}"
     }
     attrData.each {
-        //log.trace "each it=${it}"
-        //def map = [:]
         if (it.status == '86') {
             logWarn "Tuya Cluster ${descMap.cluster} unsupported attrId ${it.attrId}"
         // TODO - skip parsing?
@@ -1131,8 +1069,8 @@ void parseColorControlCluster(final Map descMap, String description) {
 }
 
 void parseIlluminanceCluster(final Map descMap) {
-    if (this.respondsTo('customCustomParseIlluminanceCluster')) { customCustomParseIlluminanceCluster(descMap) } 
-    else if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) } 
+    if (this.respondsTo('customCustomParseIlluminanceCluster')) { customCustomParseIlluminanceCluster(descMap) }
+    else if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) }
     else { logWarn "unprocessed Illuminance attribute ${descMap.attrId}" }
 }
 
@@ -1263,17 +1201,16 @@ void syncTuyaDateTime() {
     long offset = 0
     int offsetHours = 0
     Calendar cal = Calendar.getInstance();    //it return same time as new Date()
-    def hour = cal.get(Calendar.HOUR_OF_DAY)
+    int hour = cal.get(Calendar.HOUR_OF_DAY)
     try {
         offset = location.getTimeZone().getOffset(new Date().getTime())
         offsetHours = (offset / 3600000) as int
         logDebug "timezone offset of current location is ${offset} (${offsetHours} hours), current hour is ${hour} h"
-    } catch(e) {
+    } catch (e) {
         log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
     }
     //
-    List<String> cmds
-    cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
+    List<String> cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
     String dateTimeNow = unix2formattedDate(now())
     logDebug "sending time data : ${dateTimeNow} (${cmds})"
     sendZigbeeCommands(cmds)
