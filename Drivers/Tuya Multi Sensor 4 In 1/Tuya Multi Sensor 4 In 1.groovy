@@ -69,7 +69,7 @@
  * ver. 1.7.0  2024-01-14 kkossev  - (dev.branch) Groovy linting; added TS0225_O7OE4N9A_RADAR TS0225 _TZFED8_o7oe4n9a for tests; TS0601 _TZE200_3towulqd new fingerprint @JdThomas24
  * ver. 1.8.0  2024-03-23 kkossev  - (dev.branch) more Groovy linting; fixed 'This driver requires HE version 2.2.7 (May 2021) or newer!' bug; device.latestState('battery') exception bug fixes;
  * ver. 1.8.1  2024-04-16 kkossev  - (dev.branch) tuyaDPs list of maps bug fixes; added _TZE204_kyhbrfyl; added smallMotionDetectionSensitivity;
- * ver. 1.9.0  2024-05-05 kkossev  - (dev.branch) depricated all radars except Linptech;
+ * ver. 1.9.0  2024-05-06 kkossev  - depricated all radars except Linptech;
  *
  *                                   TODO: Implement ping() for all devices
  *                                   TODO: W.I.P. TS0202_4IN1 refactoring
@@ -318,10 +318,8 @@ boolean isChattyRadarReport(final Map descMap) {
     }
     else if ((isYXZBRB58radar() || isSXM7L9XAradar()) && (settings?.ignoreDistance == true)) {
         return (descMap?.clusterId == 'EF00' && (descMap.command in ['01', '02']) && descMap.data?.size > 2  && descMap.data[2] == '6D')
-    } 
-    else {
-        return false
     }
+    return false
 }
 
 @Field static final Map deviceProfilesV2 = [
@@ -692,7 +690,7 @@ boolean isChattyRadarReport(final Map descMap) {
                 [dp:105, name:'motion',                 type:'enum',    rw: 'ro', min:0,   max:1,     defVal:'0', map:[0:'inactive', 1:'active'],  description:'Presence state'],
                 [dp:109, name:'distance',               type:'decimal', rw: 'ro', min:0.0, max:10.0,  scale:100,  unit:'meters',    description:'Distance']
             ],
-            spammyDPsToIgnore : [109],spammyDPsToNotTrace : [109]
+            spammyDPsToIgnore : [109], spammyDPsToNotTrace : [109]
     ],
 
     'TS0601_IJXVKHD0_RADAR'   : [
@@ -714,7 +712,7 @@ boolean isChattyRadarReport(final Map descMap) {
     'TS0601_YENSYA2C_RADAR'   : [
             description   : 'Tuya Human Presence Detector YENSYA2C',
             models        : ['TS0601'],
-            device        : [isDepricated: true,type: 'radar', powerSource: 'dc', isSleepy:false],
+            device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy: false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZE204_yensya2c'], [manufacturer:'_TZE204_mhxn2jso']],
             tuyaDPs:        [
@@ -768,7 +766,7 @@ boolean isChattyRadarReport(final Map descMap) {
                 [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0, max:10.0,  defVal:0.0,   scale:100,  unit:'meters',   description:'<i>detected distance</i>'],
                 [dp:104, name:'illuminance',        type:'number',  rw: 'ro', min:0,   max:2000,  defVal:0,     scale:10,   unit:'lx',       title:'<b>illuminance</b>',                description:'<i>illuminance</i>']
             ],
-            spammyDPsToIgnore : [9],spammyDPsToNotTrace : [9]
+            spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9]
     ],
 
     // isLINPTECHradar()
@@ -814,7 +812,7 @@ boolean isChattyRadarReport(final Map descMap) {
 
     'TS0225_O7OE4N9A_RADAR'   : [ // Aubess Zigbee-Human Presence Detector, Smart PIR Human Body Sensor, Wifi Radar, Microwave Motion Sensors, Tuya, 1/24/5G
             description   : 'Tuya Human Presence Detector YENSYA2C',
-            models        : ['TS0225'], 
+            models        : ['TS0225'],
             device        : [isDepricated: true, type: 'radar', powerSource: 'dc', isSleepy:false],
             capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true],
             fingerprints  : [[manufacturer:'_TZFED8_o7oe4n9a']],
