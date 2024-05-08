@@ -21,7 +21,7 @@
  * ver. 3.1.0  2024-04-28 kkossev  - commonLib 3.1.0 speed optimization; added TS0601_KAPVNNLK_RADAR, TS0225_HL0SS9OA_RADAR
  * ver. 3.1.1  2024-05-04 kkossev  - enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change; added 'switch' for the TuYa SZR07U; Linptech: added ledIndicator; radar attributes types changed to number (was enum)
  * ver. 3.1.2  2024-05-08 kkossev  - added _TZ3218_t9ynfz4x as a new Linptech manufacturer; fixed HL0SS9OA and 2AAELWXK wrong IAS illuminance reprots; existance_time reanmed to occupiedTime
- * ver. 3.1.3  2024-05-08 kkossev  - (dev. branch)
+ * ver. 3.1.3  2024-05-08 kkossev  - (dev. branch) added TS0601 _TZE204_7gclukjs for tests;
  *                                   
  *                                   TODO: cleanup the 4-in-1 state variables.
  *                                   TODO: enable the OWON radar configuration : ['0x0406':'bind']
@@ -38,7 +38,7 @@
 */
 
 static String version() { "3.1.3" }
-static String timeStamp() {"2024/05/08 7:03 AM"}
+static String timeStamp() {"2024/05/08 6:59 PM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -543,6 +543,34 @@ SmartLife   radarSensitivity staticDetectionSensitivity
             spammyDPsToIgnore : [9], spammyDPsToNotTrace : [9],
             deviceJoinName: 'Tuya Human Presence Detector SBYX0LM6'
     ],
+
+    // 
+    'TS0601_7GCLUKJS_RADAR'   : [           // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/ZM10224gNEW2.2.js       // https://github.com/wzwenzhi/Wenzhi-ZigBee2mqtt/blob/main/zmzn24g.NEW.js
+            description   : 'Tuya Human Presence Detector 7GCLUKJS',
+            models        : ['TS0601'],    // https://github.com/sprut/Hub/issues/3062 (default values)
+            device        : [type: 'radar', powerSource: 'dc', isSleepy:false],
+            capabilities  : ['MotionSensor': true, 'IlluminanceMeasurement': true, 'DistanceMeasurement':true, 'HumanMotionState':true],
+            preferences   : ['radarSensitivity':'2', 'staticDetectionSensitivity':'102', 'fadingTime':'105', 'minimumDistance':'3', 'maximumDistance':'4'],
+            commands      : ['resetStats':'resetStats'],
+            fingerprints  : [
+                [profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_7gclukjs', deviceJoinName: 'Tuya Human Presence Detector ZY-M100 24G']
+            ],
+            tuyaDPs:        [   
+                [dp:1,   name:'humanMotionState',   type:'enum',    rw: 'ro', min:0,    max:2,       defVal:'0', map:[0:'none', 1:'present', 2:'moving'], description:'Presence state'],
+                [dp:2,   name:'radarSensitivity',   type:'number',  rw: 'rw', min:1,    max:10,      defVal:2 ,  scale:1,   unit:'',           title:'<b>Motion sensitivity</b>',          description:'<i>Radar motion sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:3,   name:'minimumDistance',    type:'decimal', rw: 'rw', min:0.0,  max:8.25,    defVal:0.1,   step:75, scale:100,  unit:'meters',   title:'<b>Minimum distance</b>',      description:'<i>Shield range of the radar</i>'],         // was shieldRange
+                [dp:4,   name:'maximumDistance',    type:'decimal', rw: 'rw', min:0.75, max:8.25,    defVal:7.0,   step:75, scale:100,  unit:'meters',   title:'<b>Maximum distance</b>',      description:'<i>Detection range of the radar</i>'],      // was detectionRange
+                [dp:9,   name:'distance',           type:'decimal', rw: 'ro', min:0.0,  max:10.0,    defVal:0.0, scale:100, unit:'meters',             description:'Target distance'],
+                [dp:102, name:'staticDetectionSensitivity', type:'number',  rw: 'rw', min:1, max:10, defVal:3,   scale:1,   unit:'',      title:'<b>Static detection sensitivity</b>', description:'<i>Presence sensitivity<br>1 is highest, 9 is lowest!</i>'],
+                [dp:103, name:'illuminance',        type:'number',  rw: 'ro',                                    scale:1, unit:'lx',                  description:'illuminance'],
+                [dp:104, name:'motion',             type:'enum',    rw: 'ro', min:0,    max:1,       defVal:'0',   scale:1,    map:[0:'inactive', 1:'active'] ,   unit:'',     title:'<b>Presence state</b>', description:'<i>Presence state</i>'],
+                [dp:105, name:'fadingTime',         type:'decimal', rw: 'rw', min:0.5,  max:1500.0,  defVal:300,   scale:10,   unit:'seconds',   title:'<b<Delay time</b>',         description:'<i>Delay (fading) time</i>']
+            ],
+            spammyDPsToIgnore : [9],
+            spammyDPsToNotTrace : [9],
+            deviceJoinName: 'Tuya Human Presence Detector ZY-M100-24G'
+    ],
+        
     
     // isLINPTECHradar()
     'TS0225_LINPTECH_RADAR'   : [                                      // https://github.com/Koenkk/zigbee2mqtt/issues/18637
