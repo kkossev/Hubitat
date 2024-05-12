@@ -947,7 +947,7 @@ def pollContactStatus() {
         List<String> cmds = []
         cmds += zigbee.readAttribute(0x0500, 0x0000, [:], delay = 200)
         sendZigbeeCommands(cmds)
-        logWarn "pollContactStatus() called"
+        logDebug "pollContactStatus() called"
         lastTxMap.contactPoll = now()
         state.lastTx = mapToJsonString(lastTxMap)
 }
@@ -1121,7 +1121,7 @@ def sendBatteryPercentageEvent(rawValue) {
         result.value = Math.round(rawValue / 2)
         result.descriptionText = "${device.displayName} battery percentage is ${result.value}%"
         result.descriptionText += " (${device.currentValue("contact")})"
-        //result.isStateChange = true
+        result.isStateChange = true    // enabled 10/22/2023
         result.unit = "%"
         result.type = 'physical'
         sendEvent(result)
