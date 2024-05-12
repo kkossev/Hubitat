@@ -18,7 +18,7 @@
  * ver. 1.0.3  2023-02-25 kkossev  - added the missing illuminance event handler for _TZE200_pay2byax; open/close was reversed for _TZE200_pay2byax; 
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
- * ver. 1.1.2  2023-10-20 kkossev  - (dev. branch) added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
+ * ver. 1.1.2  2023-10-20 kkossev  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
  *
  *                                   TODO: 
  *                                   TODO: Add clearStats command
