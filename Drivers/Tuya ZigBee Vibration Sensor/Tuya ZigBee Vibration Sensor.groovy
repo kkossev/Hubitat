@@ -1,3 +1,4 @@
+/* groovylint-disable CompileStatic */
 /**
  *  Tuya ZigBee Vibration Sensor
  *  Device Driver for Hubitat Elevation hub
@@ -21,20 +22,22 @@
  * ver 1.0.6 2022-03-03 kkossev - Vibration Sensitivity
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
- * ver 1.1.0 2023-03-07 kkossev - (dev. branch) added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
+ * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
+ * ver 1.2.0 2024-05-14 kkossev - (dev. branch) add healthStatus and ping(); bug fixes;
  * 
- *                                TODO: healthStatus
  *                                TODO: Publish a new HE forum thread
  *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
-def version() { "1.1.0" }
-def timeStamp() {"2023/03/07 2:10 PM"}
+static String version() { "1.2.0" }
+static String timeStamp() { "2024/05/14 10:54 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
 import com.hubitat.zigbee.DataType
+import groovy.transform.CompileStatic
+
 
 metadata {
 	definition (name: "Tuya ZigBee Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy", singleThreaded: true ) {
@@ -43,11 +46,12 @@ metadata {
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
+        capability 'Health Check'
         
         attribute "batteryVoltage", "number"
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         
-		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"
+		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"     // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_cc3jzhlj"     // not tested 
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0500,0B05", outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_pbgpvhgx"     // Smart Vibration Sensor HS1VS
@@ -57,14 +61,32 @@ metadata {
 	}
 
 	preferences {
-		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until resetting to inactive state. Default = 3 seconds (Hardware resets at 2 seconds)", description: "", range: "1..7200", defaultValue: 3
-        input "batteryReportingHours", "number", title: "Report battery every ___ hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
-		
 		input name: "infoLogging", type: "bool", title: "Enable info message logging", description: ""
 		input name: "debugLogging", type: "bool", title: "Enable debug message logging", description: ""
         input name: "sensitivity", type: "enum", title: "Vibration Sensitivity", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until resetting to inactive state. Default = 3 seconds (Hardware resets at 2 seconds)", description: "", range: "1..7200", defaultValue: 3
+        if (device) {
+            input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
+            if (advancedOptions == true) {
+                input name: 'healthCheckMethod', type: 'enum', title: '<b>Healthcheck Method</b>', options: HealthcheckMethodOpts.options, defaultValue: HealthcheckMethodOpts.defaultValue, required: true, description: '<i>Method to check device online/offline status.</i>'
+                input name: 'healthCheckInterval', type: 'enum', title: '<b>Healthcheck Interval</b>', options: HealthcheckIntervalOpts.options, defaultValue: HealthcheckIntervalOpts.defaultValue, required: true, description: '<i>How often the hub will check the device health.<br>3 consecutive failures will result in status "offline"</i>'
+                input "batteryReportingHours", "number", title: "Report battery every ___ hours. Default = 12h (Minimum 2 h)", description: "", range: "2..12", defaultValue: 12
+            }
+        }
 	}
 }
+
+@Field static final Integer COMMAND_TIMEOUT = 10             // timeout time in seconds
+@Field static final Integer MAX_PING_MILISECONDS = 10000     // rtt more than 10 seconds will be ignored
+@Field static final Integer PRESENCE_COUNT_THRESHOLD = 3     // missing 3 checks will set the device healthStatus to offline
+@Field static final int PING_ATTR_ID = 0x01
+
+@Field static final Map HealthcheckMethodOpts = [            // used by healthCheckMethod
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Activity check', 2: 'Periodic polling']
+]
+@Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
+    defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+]
 
 @Field static final Map<Integer, String> ZONE_STATE = [
     0x00: 'Not Enrolled',
@@ -135,9 +157,14 @@ metadata {
 
 // Parse incoming device messages to generate events
 def parse(String description) {
+    checkDriverVersion(state)
+    updateRxStats(state)
+    unscheduleCommandTimeoutCheck(state)
+    setHealthStatusOnline(state)
+
     Map map = [:]
     logDebug("Parsing: $description")
-    def event = [:]
+    Map event = [:]
     try {
         event = zigbee.getEvent(description)
     }
@@ -214,7 +241,10 @@ def parse(String description) {
             }
         } 
         else if (descMap.profileId == "0000") {
-            // ignore routing table messages
+            logDebug "ignored ZDO messages "
+        } 
+        else if (descMap.clusterInt == zigbee.BASIC_CLUSTER && descMap.attrInt == PING_ATTR_ID) {
+            handlePingResponse(descMap)
         } 
         else {
             if (debugLogging) log.warn ("Description map not parsed: $descMap")            
@@ -233,8 +263,7 @@ def parse(String description) {
 
 def sendEnrollResponse() {
 	logDebug "Sending a scheduled IAS enroll response..."
-    List<String> cmds = []
-    cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+    List<String> cmds = zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
     sendZigbeeCommands(cmds)    
 }
 
@@ -344,16 +373,18 @@ private parseBattery(valueHex) {
 def installed() {
 	logInfo "Installing..."
     sendEvent(name: 'healthStatus', value: 'unknown')
-    return refresh()
+    initializeVars(fullInit = true)
+    updateTuyaVersion()
+    refresh()
 }
 
 // configure() runs after installed() when a sensor is paired or reconnected
-def configure() {
+void configure() {
 	logInfo("Configuring")
-    return configureReporting()
+    configureReporting()
 }
 
-def refresh() {
+void refresh() {
 	logInfo("Refreshing...")
     List<String> cmds = []
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
@@ -363,43 +394,311 @@ def refresh() {
 
 
 // updated() runs every time user saves preferences
-def updated() {
+void updated() {
 	logInfo("Updating preference settings")
-    return configureReporting()
+    configureReporting()
+}
+
+boolean isTuya() {
+    if (!device) { return true }
+    String model = device.getDataValue('model')
+    String manufacturer = device.getDataValue('manufacturer')
+    /* groovylint-disable-next-line UnnecessaryTernaryExpression */
+    return (model?.startsWith('TS') && manufacturer?.startsWith('_T')) ? true : false
+}
+
+void updateTuyaVersion() {
+    if (!isTuya()) { logDebug 'not Tuya' ; return }
+    final String application = device.getDataValue('application')
+    if (application != null) {
+        Integer ver
+        try {
+            ver = zigbee.convertHexToInt(application)
+        }
+        catch (e) {
+            logWarn "exception caught while converting application version ${application} to tuyaVersion"
+            return
+        }
+        final String str = ((ver & 0xC0) >> 6).toString() + '.' + ((ver & 0x30) >> 4).toString() + '.' + (ver & 0x0F).toString()
+        if (device.getDataValue('tuyaVersion') != str) {
+            device.updateDataValue('tuyaVersion', str)
+            logInfo "tuyaVersion set to $str"
+        }
+    }
+}
+
+public void ping() {
+    if (state.lastTx == null ) { state.lastTx = [:] } ; state.lastTx['pingTime'] = new Date().getTime()
+    if (state.states == null ) { state.states = [:] } ; state.states['isPing'] = true
+    scheduleCommandTimeoutCheck()
+    sendZigbeeCommands(zigbee.readAttribute(zigbee.BASIC_CLUSTER, 0x01, [:], 0) )
+    logDebug 'ping...'
+}
+
+void handlePingResponse(final Map descMap) {
+    boolean isPing = state.states['isPing'] ?: false
+    Long now = new Date().getTime()
+    if (state.lastRx == null) { state.lastRx = [:] }
+    state.lastRx['checkInTime'] = now
+    if (isPing) {
+        int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: '0').toInteger()
+        if (timeRunning > 0 && timeRunning < MAX_PING_MILISECONDS) {
+            state.stats['pingsOK'] = (state.stats['pingsOK'] ?: 0) + 1
+            if (timeRunning < (state.stats['pingsMin'] ?: 999)) { state.stats['pingsMin'] = timeRunning }
+            if (timeRunning > (state.stats['pingsMax'] ?: 0))   { state.stats['pingsMax'] = timeRunning }
+            state.stats['pingsAvg'] = approxRollingAverage(state.stats['pingsAvg'], timeRunning) as int
+            sendRttEvent()
+        }
+        else {
+            logWarn "unexpected ping timeRunning=${timeRunning} "
+        }
+        state.states['isPing'] = false
+    }
+    else {
+        logDebug "Tuya check-in message (attribute ${descMap.attrId} reported: ${descMap.value})"
+    }
+}
+
+@Field static final int ROLLING_AVERAGE_N = 10
+BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
+    BigDecimal avg = avgPar
+    if (avg == null || avg == 0) { avg = newSample }
+    avg -= avg / ROLLING_AVERAGE_N
+    avg += newSample / ROLLING_AVERAGE_N
+    return avg
 }
 
 // helpers -------------
 
-private def configureReporting() {
-    def seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
+static void updateRxStats(final Map state) {
+    if (state.stats != null) { state.stats['rxCtr'] = (state.stats['rxCtr'] ?: 0) + 1 } else { state.stats = [:] }
+}
+
+private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
+    if (state.states == null) { state.states = [:] }
+    state.states['isTimeoutCheck'] = true
+    runIn(delay, 'deviceCommandTimeout')
+}
+
+void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :( 
+    if (state.states == null) { state.states = [:] }
+    if (state.states['isTimeoutCheck'] == true) {
+        state.states['isTimeoutCheck'] = false
+        unschedule('deviceCommandTimeout')
+    }
+}
+
+void deviceCommandTimeout() {
+    logWarn 'no response received (sleepy device or offline?)'
+    sendRttEvent('timeout')
+    state.stats['pingsFail'] = (state.stats['pingsFail'] ?: 0) + 1
+}
+
+void sendRttEvent( String value=null) {
+    Long now = new Date().getTime()
+    if (state.lastTx == null ) { state.lastTx = [:] }
+    int timeRunning = now.toInteger() - (state.lastTx['pingTime'] ?: now).toInteger()
+    String descriptionText = "Round-trip time is ${timeRunning} ms (min=${state.stats['pingsMin']} max=${state.stats['pingsMax']} average=${state.stats['pingsAvg']})"
+    if (value == null) {
+        logInfo "${descriptionText}"
+        sendEvent(name: 'rtt', value: timeRunning, descriptionText: descriptionText, unit: 'ms', isDigital: true)
+    }
+    else {
+        descriptionText = "Round-trip time : ${value}"
+        logInfo "${descriptionText}"
+        sendEvent(name: 'rtt', value: value, descriptionText: descriptionText, isDigital: true)
+    }
+}
+
+/**
+ * Schedule a device health check
+ * @param intervalMins interval in minutes
+ */
+private void scheduleDeviceHealthCheck(final int intervalMins, final int healthMethod) {
+    if (healthMethod == 1 || healthMethod == 2)  {
+        String cron = getCron( intervalMins * 60 )
+        schedule(cron, 'deviceHealthCheck')
+        logDebug "deviceHealthCheck is scheduled every ${intervalMins} minutes"
+    }
+    else {
+        logWarn 'deviceHealthCheck is not scheduled!'
+        unschedule('deviceHealthCheck')
+    }
+}
+
+private void unScheduleDeviceHealthCheck() {
+    unschedule('deviceHealthCheck')
+    device.deleteCurrentState('healthStatus')
+    logWarn 'device health check is disabled!'
+}
+
+// called when any event was received from the Zigbee device in the parse() method.
+
+void setHealthStatusOnline(Map state) {
+    if (state.health == null) { state.health = [:] }
+    state.health['checkCtr3']  = 0
+    if (!((device.currentValue('healthStatus') ?: 'unknown') in ['online'])) {
+        sendHealthStatusEvent('online')
+        logInfo 'is now online!'
+    }
+}
+
+void deviceHealthCheck() {
+    checkDriverVersion(state)
+    if (state.health == null) { state.health = [:] }
+    int ctr = state.health['checkCtr3'] ?: 0
+    if (ctr  >= PRESENCE_COUNT_THRESHOLD) {
+        if ((device.currentValue('healthStatus') ?: 'unknown') != 'offline' ) {
+            logWarn 'not present!'
+            sendHealthStatusEvent('offline')
+        }
+    }
+    else {
+        logDebug "deviceHealthCheck - online (notPresentCounter=${ctr})"
+    }
+    state.health['checkCtr3'] = ctr + 1
+}
+
+void sendHealthStatusEvent(final String value) {
+    String descriptionText = "healthStatus changed to ${value}"
+    sendEvent(name: 'healthStatus', value: value, descriptionText: descriptionText, isStateChange: true, isDigital: true)
+    if (value == 'online') {
+        logInfo "${descriptionText}"
+    }
+    else {
+        if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" }
+    }
+}
+
+String driverVersionAndTimeStamp() { version() + ' ' + timeStamp() + ((_DEBUG) ? ' (debug version!) ' : ' ') + "(${device.getDataValue('model')} ${device.getDataValue('manufacturer')}) (${getModel()} ${location.hub.firmwareVersionString})" }
+
+String getDeviceInfo() {
+    return "model=${device.getDataValue('model')} manufacturer=${device.getDataValue('manufacturer')} destinationEP=${state.destinationEP ?: UNKNOWN} <b>deviceProfile=${state.deviceProfile ?: UNKNOWN}</b>"
+}
+
+// credits @thebearmay
+String getModel() {
+    try {
+        /* groovylint-disable-next-line UnnecessaryGetter, UnusedVariable */
+        String model = getHubVersion() // requires >=2.2.8.141
+    } catch (ignore) {
+        try {
+            httpGet("http://${location.hub.localIP}:8080/api/hubitat.xml") { res ->
+                model = res.data.device.modelName
+                return model
+            }
+        } catch (ignore_again) {
+            return ''
+        }
+    }
+}
+
+@CompileStatic
+void checkDriverVersion(final Map state) {
+    if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
+        logDebug "checkDriverVersion: updating the settings from the current driver version ${state.driverVersion} to the new version ${driverVersionAndTimeStamp()}"
+        state.driverVersion = driverVersionAndTimeStamp()
+        initializeVars(false)
+        updateTuyaVersion()
+    }
+    if (state.states == null) { state.states = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.stats  == null) { state.stats =  [:] }
+}
+
+void resetStats() {
+    logDebug 'resetStats...'
+    state.stats = [:] ; state.states = [:] ; state.lastRx = [:] ; state.lastTx = [:] ; state.health = [:]
+    state.stats['rxCtr'] = 0 ; state.stats['txCtr'] = 0
+    state.states['isDigital'] = false ; state.states['isRefresh'] = false ; state.states['isPing'] = false
+    state.health['offlineCtr'] = 0 ; state.health['checkCtr3'] = 0
+}
+
+void initializeVars( boolean fullInit = false ) {
+    logDebug "InitializeVars()... fullInit = ${fullInit}"
+    if (fullInit == true ) {
+        state.clear()
+        unschedule()
+        resetStats()
+        state.comment = 'Works with Tuya TS0210 Vibration Sensors'
+        logInfo 'all states and scheduled jobs cleared!'
+        state.driverVersion = driverVersionAndTimeStamp()
+    }
+
+    if (state.stats == null)  { state.stats  = [:] }
+    if (state.states == null) { state.states = [:] }
+    if (state.lastRx == null) { state.lastRx = [:] }
+    if (state.lastTx == null) { state.lastTx = [:] }
+    if (state.health == null) { state.health = [:] }
+
+    if (fullInit || settings?.txtEnable == null) { device.updateSetting('txtEnable', true) }
+    if (fullInit || settings?.logEnable == null) { device.updateSetting('logEnable', DEFAULT_DEBUG_LOGGING ?: false) }
+    if (fullInit || settings?.advancedOptions == null) { device.updateSetting('advancedOptions', [value:false, type:'bool']) }
+    if (fullInit || settings?.healthCheckMethod == null) { device.updateSetting('healthCheckMethod', [value: HealthcheckMethodOpts.defaultValue.toString(), type: 'enum']) }
+    if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
+    if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
+    if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
+
+    final String ep = device.getEndpointId()
+    if ( ep  != null) {
+        logDebug " destinationEP = ${ep}"
+    }
+    else {
+        logWarn ' Destination End Point not found, please re-pair the device!'
+    }
+}
+
+
+
+void configureReporting() {
+    int seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
     logInfo("Battery reporting frequency: ${seconds/3600}h")    
     
     List<String> cmds = []
     cmds += zigbee.readAttribute(0x0000, [0x0004, 0x000, 0x0001, 0x0005, 0x0007, 0xfffe], [:], delay=200) 
-    cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00)
-    cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20)
+    cmds += zigbee.configureReporting(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, DataType.UINT8, seconds-1, seconds, 0x00, [:], delay=200)
+    cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x20, [:], delay=200)
     // added 03/07/2023
-    cmds += zigbee.enrollResponse() + zigbee.readAttribute(0x0500, 0x0000)
+    cmds += zigbee.enrollResponse(200) + zigbee.readAttribute(0x0500, 0x0000, [:], delay=200)
     //
     if ( settings?.sensitivity != null ) {
     logDebug("Configuring vibration sensitivity to : ${settings?.sensitivity}")
-            def iSens = settings.sensitivity?.toInteger()
+            int iSens = settings.sensitivity?.toInteger()
             if (iSens>=0 && iSens<7)  {
-                cmds += sendZigbeeCommands(zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens))
+                cmds += zigbee.writeAttribute(0x0500, 0x0013,  DataType.UINT8, iSens, [:], delay=200)
             }    
     }
     sendZigbeeCommands(cmds)
 }
 
-void sendZigbeeCommands(List<String> cmds) {
-    if (debugLogging) {log.trace "${device.displayName} sendZigbeeCommands received : ${cmds}"}
-	sendHubCommand(new hubitat.device.HubMultiAction(cmds, hubitat.device.Protocol.ZIGBEE))
+void sendZigbeeCommands(List<String> cmd) {
+    if (cmd == null || cmd.isEmpty()) {
+        logWarn "sendZigbeeCommands: list is empty! cmd=${cmd}"
+        return
+    }
+    hubitat.device.HubMultiAction allActions = new hubitat.device.HubMultiAction()
+    cmd.each {
+        if (it == null || it.isEmpty() || it == 'null') {
+            logWarn "sendZigbeeCommands it: no commands to send! it=${it} (cmd=${cmd})"
+            return
+        }
+        allActions.add(new hubitat.device.HubAction(it, hubitat.device.Protocol.ZIGBEE))
+        if (state.stats != null) { state.stats['txCtr'] = (state.stats['txCtr'] ?: 0) + 1 } else { state.stats = [:] }
+    }
+    if (state.lastTx != null) { state.lastTx['cmdTime'] = now() } else { state.lastTx = [:] }
+    sendHubCommand(allActions)
+    logDebug "sendZigbeeCommands: sent cmd=${cmd}"
 }
 
 private def logDebug(message) {
-	if (debugLogging) log.debug "${device.displayName}: ${message}"
+	if (debugLogging) { log.debug "${device.displayName}: ${message}" }
 }
 
 private def logInfo(message) {
-	if (infoLogging) log.info "${device.displayName}: ${message}"
+	if (infoLogging) { log.info "${device.displayName}: ${message}" }
+}
+
+private def logWarn(message) {
+	if (debugLogging) { log.warn "${device.displayName}: ${message}" }
 }
