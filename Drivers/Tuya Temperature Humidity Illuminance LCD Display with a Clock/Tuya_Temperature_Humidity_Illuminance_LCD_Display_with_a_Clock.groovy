@@ -39,10 +39,11 @@
  * ver. 1.3.7  2023-08-02 vpjuslin -Yet another name for Tuya soil sensor: _TZE200_ga1maeof
  * ver. 1.3.8  2023-08-17 kkossev - added OWON THS317-ET for tests; added TS0201 _TZ3000_rdhukkmi; added TS0222 _TYZB01_ftdkanlj
  * ver. 1.3.9  2023-09-29 kkossev - added Sonoff SNZB-02P; added TS0201 _TZ3210_ncw88jfq; moved _TZE200_yjjdcqsq and _TZE200_cirvgep4 to a new group 'TS0601_Tuya_2'; added _TZE204_upagmta9, added battery state 'low', 'medium', 'high'
- * ver. 1.3.10 2023-11-28 kkossev - (dev. branch) added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
- * ver. 1.4.0  2023-11-28 kkossev - (dev. branch) bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
- * ver. 1.5.0  2024-01-27 kkossev - (dev. branch) Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
+ * ver. 1.3.10 2023-11-28 kkossev - added TS0222 _TYZB01_fi5yftwv; added temperature scale (C/F) and temperature sensitivity setting for TS0601_Tuya_2 group;
+ * ver. 1.4.0  2023-11-28 kkossev - bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
+ * ver. 1.5.0  2024-01-27 kkossev - Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
  * ver. 1.5.1  2024-02-13 kkossev - bugfix: battery reporting period for non-Tuya devices.
+ * ver. 1.5.2  2024-05-14 kkossev - (dev.branch) added _TZE204_upagmta9 and _TZE200_upagmta9 to TS0601_Tuya_2 group; healthStatus initialized as 'unknown';
  *
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
  *                                  TODO: add TS0601 _TZE200_khx7nnka in a new TUYA_LIGHT device profile : https://community.hubitat.com/t/simple-smart-light-sensor/110341/16?u=kkossev @Pradeep
@@ -51,8 +52,8 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-def version() { '1.5.1' }
-def timeStamp() { '2024/02/13 8:00 PM' }
+def version() { '1.5.2' }
+def timeStamp() { '2024/05/14 8:00 AM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -121,6 +122,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0001,0402,0405,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_znbl8dj5', deviceJoinName: 'Tuya Temperature Humidity'                                 // kk
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_yjjdcqsq', deviceJoinName: 'Tuya Temperature Humidity'                                 // kk
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_9yapgbuv', deviceJoinName: 'Tuya Temperature Humidity'
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_upagmta9', deviceJoinName: 'Tuya Temperature Humidity'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE204_upagmta9', deviceJoinName: 'Tuya Temperature Humidity'
         // kk
         //
@@ -231,6 +233,8 @@ metadata {
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
     '_TZE200_9yapgbuv'  : 'TS0601_Tuya_2',       // not tested
+    '_TZE204_upagmta9'  : 'TS0601_Tuya_2',       // not tested
+    '_TZE200_upagmta9'  : 'TS0601_Tuya_2',       // not tested
     '_TZE200_vvmbj46n'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
@@ -1291,6 +1295,7 @@ void initializeVars(boolean fullInit = true ) {
     if (fullInit == true || state.modelGroup == null)  { state.modelGroup = getModelGroup() }
     //if (fullInit == true || state.lastTemp == null) state.lastTemp = now() - defaultMinReportingTime * 1000
     //if (fullInit == true || state.lastHumi == null) state.lastHumi = now() - defaultMinReportingTime * 1000
+    sendHealthStatusEvent('unknown')
 }
 
 /**
