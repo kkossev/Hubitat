@@ -1,3 +1,4 @@
+/* groovylint-disable NglParseError */
 /**
  *  Tuya Zigbee Switch - Device Driver for Hubitat Elevation
  *
@@ -23,7 +24,7 @@
  * ver. 3.0.2  2023-12-12 kkossev  - (dev. branch) added ZBMINIL2
  * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
  * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
- * ver. 3.1.0  2024-04-29 kkossev  - (dev. branch) commonLib 3.1.0 allignment
+ * ver. 3.1.1  2024-05-15 kkossev  - commonLib 3.1.1 allignment
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -32,8 +33,8 @@
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { "3.1.0" }
-static String timeStamp() {"2024/04/29 10:51 AM"}
+static String version() { "3.1.1" }
+static String timeStamp() {"2024/05/15 4:52 PM"}
 
 @Field static final Boolean _DEBUG = false
 

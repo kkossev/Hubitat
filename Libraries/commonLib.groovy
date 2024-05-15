@@ -38,7 +38,7 @@ library(
   * ver. 3.0.6  2024-04-08 kkossev  - removed isZigUSB() dependency; removed aqaraCube() dependency; removed button code; removed lightSensor code; moved zigbeeGroups and level and battery methods to dedicated libs + setLevel bug fix;
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
-  * ver. 3.1.1  2024-05-05 kkossev  - (dev. branch) getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
+  * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
   *
   *                                   TODO: rename all custom handlers in the libs to statdndardParseXXX !! TODO
   *                                   TODO: MOVE ZDO counters to health state;
