@@ -23,15 +23,18 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-14 kkossev - (dev. branch) add healthStatus and ping(); bug fixes;
+ * ver 1.2.0 2024-05-14 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; 
  * 
+ *                                TODO: add capability.tamperAlert
+ *                                TODO: add sensitivity attribute
+ *                                TODO: make sensitivity range dependant on the device model
  *                                TODO: Publish a new HE forum thread
  *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/14 10:54 AM" }
+static String timeStamp() { "2024/05/14 7:49 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -43,6 +46,7 @@ metadata {
 	definition (name: "Tuya ZigBee Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "AccelerationSensor"
+        capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
@@ -50,6 +54,8 @@ metadata {
         
         attribute "batteryVoltage", "number"
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
+        attribute 'rtt', 'number'
+        attribute 'batteryStatus', 'enum', ["normal", "replace"]
         
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"     // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
@@ -88,11 +94,14 @@ metadata {
     defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
 ]
 
+// e8ZoneState is a mandatory attribute which indicates the membership status of the device in an IAS system (enrolled or not enrolled) - one of:
 @Field static final Map<Integer, String> ZONE_STATE = [
     0x00: 'Not Enrolled',
     0x01: 'Enrolled'
 ]
+// ‘Enrolled’ means that the cluster client will react to Zone State Change Notification commands from the cluster server. 
 
+// e16ZoneType is a mandatory attribute which indicates the zone type and the types of security detectors that can trigger the alarms, Alarm1 and Alarm2: 
 @Field static final Map<Integer, String> ZONE_TYPE = [
     0x0000: 'Standard CIE',
     0x000D: 'Motion Sensor',
@@ -111,17 +120,21 @@ metadata {
     0xFFFF: 'Invalid Zone Type'
 ]
 
+// b16ZoneStatus is a mandatory attribute which is a 16-bit bitmap indicating the status of each of the possible notification triggers from the device: 
 @Field static final Map<Integer, String> ZONE_STATUS = [
     0x0001: 'Alarm 1',                    // 0 - closed or not alarmed; 1 - opened or alarmed
     0x0002: 'Alarm 2',                    // 0 - closed or not alarmed; 1 - opened or alarmed
-    0x0004: 'Tamper',                     // 0 - not tampeted; 1 - tampered
+    0x0004: 'Tamper',                     // 0 - not tampered with; 1 - tampered with
     0x0008: 'Battery',                    // 0 - battery OK; 1 - Low battery
-    0x0010: 'Supervision reports',        // 0 - does not notify; 1 - notify
+    // Bit 4 indicates whether the Zone device issues periodic Zone Status Change Notification commands that may be used by the CIE device as evidence that the Zone device is operational    
+    0x0010: 'Supervision reports',        // 0 - does not notify; 1 - notify; 
+    // 2 Bit 5 indicates whether the Zone device issues a Zone Status Change Notification command to notify when an alarm is no longer present (some Zone devices do not have the ability to detect when the alarm condition has disappeared).    
     0x0020: 'Restore reports',            // 0 - does not notify on restore; 1 - notify restore
     0x0040: 'Trouble',                    // 0 - OK; 1 - Trouble/Failure
     0x0080: 'AC mains',                   // 0 - AC/Mains OK; 1 - AX/Mains Fault
     0x0100: 'Test',                       // 0 - Sensor is in operation mode; 1 - Sensor is in test mode
     0x0200: 'Battery Defect'              // 0 - Sensor battery is functioning normally; 1 - Sensor detects a defective battery
+    // bits 10..15 are reserved
 ]
 
 @Field static final Map<Integer, String> ENROLL_RESPOSNE_CODE = [
@@ -254,11 +267,12 @@ def parse(String description) {
         if (debugLogging) log.warn "Description not parsed: $description"
     }
     
-    if (map != [:]) {
+    if (map != null && map != [:]) {
 		logInfo(map?.descriptionText)
 		return createEvent(map)
-	} else
+	} else {
 		return [:]
+    }
 }
 
 def sendEnrollResponse() {
@@ -269,40 +283,42 @@ def sendEnrollResponse() {
 
 // helpers -------------------
 
-def parseIasMessage(ZoneStatus zs) {
-        if ((zs.alarm1 || zs.alarm2) && zs.battery == 0 && zs.trouble == 0) {
-            // Vibration detected
-	        return handleVibration(true)
+Map parseIasMessage(ZoneStatus zs) {
+    if ((zs.alarm1 || zs.alarm2) && zs.battery == 0 && zs.trouble == 0) {
+        // Vibration detected
+        return handleVibration(true)
+    }
+    else if (zs.tamper == 1 && zs.battery == 1 && zs.trouble == 1 && zs.ac == 1) {
+        logDebug "Device button pressed"
+        map = [
+            name: 'pushed',
+            value: 1,
+            isStateChange: true,
+            descriptionText: "Device button pushed"
+        ]
+        return map
+    }
+    else {
+        if (infoLogging) log.warn "Zone status message not parsed"
+        if (debugLogging) {
+            logDebug "zs.alarm1 = $zs.alarm1"
+            logDebug "zs.alarm2 = $zs.alarm2"
+            logDebug "zs.tamper = $zs.tamper"
+            logDebug "zs.battery = $zs.battery"
+            logDebug "zs.supervisionReports = $zs.supervisionReports"
+            logDebug "zs.restoreReports = $zs.restoreReports"
+            logDebug "zs.trouble = $zs.trouble"
+            logDebug "zs.ac = $zs.ac"
+            logDebug "zs.test = $zs.test"
+            logDebug "zs.batteryDefect = $zs.batteryDefect"
         }
-        else if (zs.tamper == 1 && zs.battery == 1 && zs.trouble == 1 && zs.ac == 1) {
-            logDebug "Device button pressed"
-            map = [
-		        name: 'pushed',
-		        value: 1,
-                isStateChange: true,
-                descriptionText: "Device button pushed"
-	        ]
-        }
-        else {
-            if (infoLogging) log.warn "Zone status message not parsed"
-            if (debugLogging) {
-                logDebug "zs.alarm1 = $zs.alarm1"
-                logDebug "zs.alarm2 = $zs.alarm2"
-                logDebug "zs.tamper = $zs.tamper"
-                logDebug "zs.battery = $zs.battery"
-                logDebug "zs.supervisionReports = $zs.supervisionReports"
-                logDebug "zs.restoreReports = $zs.restoreReports"
-                logDebug "zs.trouble = $zs.trouble"
-                logDebug "zs.ac = $zs.ac"
-                logDebug "zs.test = $zs.test"
-                logDebug "zs.batteryDefect = $zs.batteryDefect"
-            }
-        }
+        return [:]
+    }
 }
 
-private handleVibration(vibrationActive) {    
+private handleVibration(boolean vibrationActive) {    
     if (vibrationActive) {
-        def timeout = vibrationReset ?: 3
+        int timeout = vibrationReset ?: 3
         // The sensor only sends a vibration detected message so reset to vibration inactive is performed in code
         runIn(timeout, resetToVibrationInactive)        
         if (device.currentState('acceleration')?.value != "active") {
@@ -312,7 +328,7 @@ private handleVibration(vibrationActive) {
 	return getVibrationResult(vibrationActive)
 }
 
-def getVibrationResult(vibrationActive) {
+Map getVibrationResult(vibrationActive) {
 	def descriptionText = "Detected vibration"
     if (!vibrationActive) {
 		descriptionText = "Vibration reset to inactive after ${getSecondsInactive()}s"
@@ -324,9 +340,9 @@ def getVibrationResult(vibrationActive) {
 	]
 }
 
-def resetToVibrationInactive() {
+void resetToVibrationInactive() {
 	if (device.currentState('acceleration')?.value == "active") {
-		def descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
+		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
 		sendEvent(
 			name : "acceleration",
 			value : "inactive",
@@ -337,7 +353,7 @@ def resetToVibrationInactive() {
 	}
 }
 
-def getSecondsInactive() {
+int getSecondsInactive() {
     if (state.vibrationStarted) {
         return Math.round((now() - state.vibrationStarted)/1000)
     } else {
