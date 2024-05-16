@@ -23,7 +23,7 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-14 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; 
+ * ver 1.2.0 2024-05-16 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing;
  * 
  *                                TODO: add capability.tamperAlert
  *                                TODO: add sensitivity attribute
@@ -34,7 +34,7 @@
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/14 7:49 PM" }
+static String timeStamp() { "2024/05/14 11:59 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -51,6 +51,7 @@ metadata {
 		capability "Configuration"
         capability "Refresh"
         capability 'Health Check'
+        capability 'ThreeAxis'              // Attributes: threeAxis - VECTOR3
         
         attribute "batteryVoltage", "number"
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -64,6 +65,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_bmfw9ykl" // Moes https://community.hubitat.com/t/vibration-sensor/85203/14?u=kkossev       
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TYZB01_j9xxahcl" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics" // not tested
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"          // Third Reality vibration sensor   
 	}
 
 	preferences {
@@ -258,7 +260,10 @@ def parse(String description) {
         } 
         else if (descMap.clusterInt == zigbee.BASIC_CLUSTER && descMap.attrInt == PING_ATTR_ID) {
             handlePingResponse(descMap)
-        } 
+        }
+        else if (descMap.clusterInt == 0xFFF1 && descMap.command == '0A') {
+            handleThreeAxis(descMap)
+        }
         else {
             if (debugLogging) log.warn ("Description map not parsed: $descMap")            
         }
@@ -300,6 +305,7 @@ Map parseIasMessage(ZoneStatus zs) {
     }
     else {
         if (infoLogging) log.warn "Zone status message not parsed"
+        /*
         if (debugLogging) {
             logDebug "zs.alarm1 = $zs.alarm1"
             logDebug "zs.alarm2 = $zs.alarm2"
@@ -312,6 +318,7 @@ Map parseIasMessage(ZoneStatus zs) {
             logDebug "zs.test = $zs.test"
             logDebug "zs.batteryDefect = $zs.batteryDefect"
         }
+        */
         return [:]
     }
 }
@@ -381,6 +388,37 @@ private parseBattery(valueHex) {
 		descriptionText: descText
 	]
 	return result
+}
+
+String getDEGREE() { return String.valueOf((char)(176)) }
+
+void handleThreeAxis(final Map descMap) {
+    //  [raw:DEB701FFF12800002901000100297D0002002935FF030029E7FE, dni:DEB7, endpoint:01, 
+    //  cluster:FFF1, size:28, attrId:0000, encoding:29, command:0A, value:0001, clusterInt:65521, attrInt:0, 
+    //      additionalAttrs:[
+    //          [value:007D, encoding:29, attrId:0001, consumedBytes:5, attrInt:1], 
+    //          [value:FF35, encoding:29, attrId:0002, consumedBytes:5, attrInt:2], 
+    //          [value:FEE7, encoding:29, attrId:0003, consumedBytes:5, attrInt:3]
+    //      ]
+    //  ]
+    //
+    logDebug "ThreeAxis: cluster=${descMap.clusterInt} attr=${descMap.attrInt} value=${descMap.value}"
+    boolean isValid = descMap.value == "0001"
+    int x, y, z
+    descMap.additionalAttrs.each { attr ->
+        int axis = zigbee.convertHexToInt(attr.value)
+        if (axis > 0x7FFF) { axis = axis - 0x10000 }
+        if (attr.attrInt == 1) { x = axis } else if (attr.attrInt == 2) { y = axis } else if (attr.attrInt == 3) { z = axis }
+    }
+    logDebug "ThreeAxis: x=${x} y=${y} z=${z}"
+    if (isValid) {
+        /* Some parts borrowed from veeceeoh in this method */
+        BigDecimal psi = new BigDecimal(Math.atan(x.div(Math.sqrt(z * z + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+        BigDecimal phi = new BigDecimal(Math.atan(y.div(Math.sqrt(x * x + z * z))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+        BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+        
+        logInfo("Calculated angles are Psi = ${psi}$DEGREE, Phi = ${phi}$DEGREE, Theta = ${theta}$DEGREE   Raw accelerometer XYZ axis values = $x, $y, $z")    
+    }
 }
 
 // lifecycle methods -------------
