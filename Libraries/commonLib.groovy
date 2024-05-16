@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnusedImport, UnusedPrivateMethod, VariableName */
+/* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
     base: 'driver',
     author: 'Krassimir Kossev',
@@ -39,6 +39,7 @@ library(
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
+  * ver. 3.1.2  2024-05-15 kkossev  - (dev.branch)
   *
   *                                   TODO: rename all custom handlers in the libs to statdndardParseXXX !! TODO
   *                                   TODO: MOVE ZDO counters to health state;
@@ -49,8 +50,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.1.1' }
-String commonLibStamp() { '2024/05/05 8:24 PM' }
+String commonLibVersion() { '3.1.2' }
+String commonLibStamp() { '2024/05/15 7:46 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -194,7 +195,7 @@ void parse(final String description) {
     }
     final Map descMap = myParseDescriptionAsMap(description)    // +5 ms
 
-    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }  
+    if (!isChattyDeviceReport(descMap)) { logDebug "parse: descMap = ${descMap} description=${description }" }
     if (isSpammyDeviceReport(descMap)) { return }  // +20 mS (both)
 
     if (descMap.profileId == '0000') {
@@ -357,14 +358,20 @@ void parseZdoClusters(final Map descMap) {
     final Integer statusCode = hexStrToUnsignedInt(statusHex)
     final String statusName = ZigbeeStatusEnum[statusCode] ?: "0x${statusHex}"
     final String clusterInfo = "${device.displayName} Received ZDO ${clusterName} (0x${descMap.clusterId}) status ${statusName}"
+    List<String> cmds = []
     switch (clusterId) {
         case 0x0005 :
             state.stats['activeEpRqCtr'] = (state.stats['activeEpRqCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
+            // send the active endpoint response
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"] 
+            sendZigbeeCommands(cmds)
             break
         case 0x0006 :
             state.stats['matchDescCtr'] = (state.stats['matchDescCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"] 
+            sendZigbeeCommands(cmds)
             break
         case 0x0013 : // device announcement
             state.stats['rejoinCtr'] = (state.stats['rejoinCtr'] ?: 0) + 1
@@ -1200,7 +1207,7 @@ void syncTuyaDateTime() {
     // For example, local timestamp = standard timestamp + number of seconds between standard time and local time (including time zone and daylight saving time).  // Y2K = 946684800
     long offset = 0
     int offsetHours = 0
-    Calendar cal = Calendar.getInstance();    //it return same time as new Date()
+    Calendar cal = Calendar.getInstance()    //it return same time as new Date()
     int hour = cal.get(Calendar.HOUR_OF_DAY)
     try {
         offset = location.getTimeZone().getOffset(new Date().getTime())
@@ -1210,13 +1217,12 @@ void syncTuyaDateTime() {
         log.error "${device.displayName} cannot resolve current location. please set location in Hubitat location setting. Setting timezone offset to zero"
     }
     //
-    List<String> cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000),8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
+    List<String> cmds = zigbee.command(CLUSTER_TUYA, SETTIME, '0008' + zigbee.convertToHexString((int)(now() / 1000), 8) + zigbee.convertToHexString((int)((now() + offset) / 1000), 8))
     String dateTimeNow = unix2formattedDate(now())
     logDebug "sending time data : ${dateTimeNow} (${cmds})"
     sendZigbeeCommands(cmds)
     logInfo "Tuya device time synchronized to ${dateTimeNow}"
 }
-
 
 void parseTuyaCluster(final Map descMap) {
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '24') {        //getSETTIME
@@ -1521,7 +1527,7 @@ private void scheduleCommandTimeoutCheck(int delay = COMMAND_TIMEOUT) {
 }
 
 // unschedule() is a very time consuming operation : ~ 5 milliseconds per call !
-void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :( 
+void unscheduleCommandTimeoutCheck(final Map state) {   // can not be static :(
     if (state.states == null) { state.states = [:] }
     if (state.states['isTimeoutCheck'] == true) {
         state.states['isTimeoutCheck'] = false
@@ -1822,7 +1828,6 @@ void checkDriverVersion(final Map state) {
     if (state.lastTx == null) { state.lastTx = [:] }
     if (state.stats  == null) { state.stats =  [:] }
 }
-
 
 // credits @thebearmay
 String getModel() {
@@ -2148,4 +2153,3 @@ long formattedDate2unix(String formattedDate) {
         return now()
     }
 }
-

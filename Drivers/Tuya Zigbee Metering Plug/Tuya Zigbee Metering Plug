@@ -61,7 +61,8 @@
  *  ver. 1.9.1 2024-03-02 kkossev - currentEvent bug fix; reduced debug logging; debug logs raw value bug fixes;
  *  ver. 1.9.2 2024-03-30 kkossev - more Groovy Linting; added TS0001 _TZ3000_mkhkxx1p _TZ3000_tgddllx4 _TZ3000_x3ewpzyr _TZ3000_qnejhcsu _TZ3000_xkap8wtb Tuya switch modules w/ power monitoring;
  *  ver. 1.9.3 2024-04-07 kkossev - setEnergyPrice() bug fix;
- *  ver. 1.9.4 2024-04-14 kkossev - (dev. branch) added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
+ *  ver. 1.9.4 2024-04-14 kkossev - added for tests: TS0601 _TZE204_ves1ycwx _TZE200_ves1ycwx _TZE200_v9hkz2yn Zemismart Real-time Smart Energy Monitors - ONE CHANNEL ONLY!
+ *  ver. 1.9.5 2024-05-16 kkossev - (dev. branch) - added ThirdReality 3RSPE01044BZ Smart Plug E2 (European socket!)
  *
  *                                 TODO: add TS0601 _TZE200_qhlxve78 (no info on this device yet)
  *                                 TODO: update first post w/ TS0001 _TZ3000_kqvb5akv
@@ -85,8 +86,8 @@ import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
 import groovy.transform.CompileStatic
 
-static String version() { '1.9.4' }
-static String timeStamp() { '2024/04/14 10:11 AM' }
+static String version() { '1.9.5' }
+static String timeStamp() { '2024/05/16 9:26 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -209,7 +210,6 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0B05,FC01,FC08", outClusters:"0003,0019", model:"PLUG", manufacturer:"LEDVANCE", deviceJoinName: "Sylvania Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,1000,FC7C", outClusters:"0005,0019,0020,1000", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,0008,FC7C", outClusters:"0005,0019,0020", model:"TRADFRI control outlet", manufacturer:"IKEA of Sweden", deviceJoinName: "IKEA Tradfri Power Outlet"
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality smart plug"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"0000,0019,000A,0003,0406", model:"SMRZB-143", manufacturer:"Develco Products A/S", deviceJoinName: "Frient/Develco Smart Cable"
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-131", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-131"   // frient smart plug mini
         fingerprint profileId:"0104", endpointId:"02", inClusters:"0000,0702,0003,0009,0B04,0006,0004,0005,0002", outClusters:"000A,0019,0003,0406", model:"SPLZB-132", manufacturer:"frient A/S", deviceJoinName: "frient Outlet SPLZB-132"   // frient smart plug mini
@@ -251,6 +251,10 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'SONOFF', deviceJoinName: 'SONOFF smart plug' // https://community.hubitat.com/t/help-getting-started-with-a-smart-plug-driver/109480/5?u=kkossev           // https://community.hubitat.com/t/frient-energy-monitor-driver/89327/28?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0003,0004,0005,0006,FC57,FCA0', outClusters:'0019', model:'Z111PL0H-1JX', manufacturer:'Woolley', deviceJoinName: 'Woolley smart plug' // not tested
         fingerprint profileId:'C05E', endpointId:'0D', inClusters:'1000', outClusters:'1000', model:'unknown', manufacturer:'unknown', deviceJoinName: 'SONOFF smart plug'                                   // SONOFF Z111PL0H-1JX
+        // 
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0003,0004,0005,0006,1000,0B04", outClusters:"0019", model:"3RSP02028BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality Smart Plug US"                 // https://community.hubitat.com/t/request-to-add-support-for-new-device/110003/3?u=kkossev
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FF03,0003,0004,0005,0006,0B04,0702", outClusters:"0019", model:"3RSPE01044BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality Smart Plug US"           // https://community.hubitat.com/t/thirdreality-products-available-in-eu-uk-and-au/137539/1
+
     }
 
     preferences {
@@ -387,18 +391,19 @@ private boolean isHeiman() { device.getDataValue('manufacturer') == 'HEIMAN' }
 private boolean isDevelco() { device.getDataValue('model') == 'EMIZB-132' }
 private boolean isOsramPlug01() { (device.getDataValue('model') == 'Plug 01' && device.getDataValue('manufacturer') == 'OSRAM') }
 private boolean isSiHAS() { device.getDataValue('manufacturer') == 'ShinaSystem' }
-private boolean isThirdReality() { device.getDataValue('manufacturer') == 'Third Reality, Inc' }
-private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdReality() }
+private boolean isThirdRealityUS() { device.getDataValue('model') == '3RSP02028BZ' }
+private boolean isThirdRealityEU() { device.getDataValue('model') == '3RSPE01044BZ' }
+private boolean isReportingConfigurable() { isSmartThingsOutlet() || isSengledOutlet() || isJascoProductsOutlet() || isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSercomm() || isDevelco() || isSiHAS() || isThirdRealityUS() || isThirdRealityEU() }
 
 // Tuya : default powerDiv = 1
-private int getPowerDiv() { (isThirdReality() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker()))) ? 10 : 1 }
-// Tuya :  energyDiv = 100
-private int getEnergyDiv() { (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdReality() ? 1000 : 100 }
-// Tuya :  currentDiv = 1000
+private int getPowerDiv() { (isThirdRealityUS() || isThirdRealityEU() || isSengledOutlet() || isJascoProductsOutlet() || isSmartThingsOutlet() || (isTuyaSpecificCluster() || isPJ1203A() && !(isDinRail() || isRTXCircuitBreaker()))) ? 10 : 1 }
+// Tuya :  energyDiv = 100 ThirdReality: 3600000
+private int getEnergyDiv() { isThirdRealityEU() ? 3600000 : (isSengledOutlet() || isJascoProductsOutlet()) ? 10000 : (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isThirdRealityUS() ? 1000 : 100 }
+// Tuya :  currentDiv = 1000 ThirdReality: 1000
 private int getCurrentDiv() { (isHeiman() || isDevelco() || isSiHAS() || device.getDataValue('model') in ['3200-Sgb']) ? 100 : 1000 }
 // Tuya EF00 cluster voltage divider is 10 !
-private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdReality() || isPJ1203A() ? 10 : 1 }
-private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdReality() ? 1F : 10F }
+private int getVoltageDiv() { (isFrientOutlet() || isHeiman()) ? 100 : isSercomm() ? 125 : (isTuyaSpecificCluster() || isSmartThingsOutlet() || isSiHAS()) || isThirdRealityUS() || isThirdRealityEU() || isPJ1203A() ? 10 : 1 }
+private int getFrequencyDiv() { isFrientOutlet() ? 1000F : isTuyaSpecificCluster() ? 100F : isThirdRealityUS() || isThirdRealityEU() ? 1F : 10F }
 private int getPowerFactorDiv() { (isDinRail() || isRTXCircuitBreaker()) ? 1000 : 100 }
 
 static int getCLUSTER_TUYA()       { 0xEF00 }
@@ -2404,7 +2409,7 @@ void setPowerOnState(String mode) {
         if (settings?.logEnable) { log.warn "${device.displayName} Power On State not implemented for TS0601: ${mode}" }
     // continue anyway ..
     }
-    else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdReality()) {
+    else if (isSengledOutlet() || isJascoProductsOutlet() || (isFrientEnergyMonitor() || isFrientOutlet() || isCCM300() || isSiHAS()) || isSmartThingsOutlet() || isThirdRealityUS()) {
         value = mode == 'off' ? '00' : mode == 'on' ? '01' : mode == 'Last state' ? '02' : null
         attribute = 0x4003
     }
