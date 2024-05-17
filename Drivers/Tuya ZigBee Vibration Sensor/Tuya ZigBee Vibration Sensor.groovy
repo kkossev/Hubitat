@@ -23,7 +23,7 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-17 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing; added Samsung multisenor;
+ * ver 1.2.0 2024-05-17 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing; added Samsung multisensor;
  * 
  *                                TODO: 
  *                                TODO: add capability.tamperAlert
@@ -35,7 +35,7 @@
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/17 7:27 PM" }
+static String timeStamp() { "2024/05/17 8:25 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -294,35 +294,55 @@ def sendEnrollResponse() {
 // helpers -------------------
 
 Map parseIasMessage(ZoneStatus zs) {
-    if ((zs.alarm1 || zs.alarm2) && zs.battery == 0 && zs.trouble == 0) {
-        // Vibration detected
-        return handleVibration(true)
+    String currentAccel = device.currentState('acceleration')?.value
+    String zsStr = ''
+    zs.properties.sort().each { key, value ->  zsStr += "$key = $value, "}
+    if (debugLogging) log.debug "current acceleration = ${currentAccel}   new Zone status message zs = ${zsStr}"
+    // check for vibration active
+    if (zs.alarm1Set == true || zs.alarm2Set == true) {
+        if (currentAccel != "active") {
+            // Vibration detected
+            return handleVibration(true)
+        }
+        else {
+            logDebug "Vibration already active"
+            return [:]
+        }
     }
-    else if (zs.tamper == 1 && zs.battery == 1 && zs.trouble == 1 && zs.ac == 1) {
-        logDebug "Device button pressed"
-        map = [
-            name: 'pushed',
-            value: 1,
-            isStateChange: true,
-            descriptionText: "Device button pushed"
-        ]
-        return map
+    else if (zs.alarm1Set == false && zs.alarm2Set == false) {
+        if (currentAccel == "active") {
+            // Vibration reset to inactive
+            return handleVibration(false)
+        }
+        else {
+            logDebug "Vibration already inactive"
+            return [:]
+        }
     }
     else {
-        if (infoLogging) log.warn "Zone status message not parsed"
+        logWarn "Unsupported IAS Zone status: ${zsStr}"
         /*
-        if (debugLogging) {
-            logDebug "zs.alarm1 = $zs.alarm1"
-            logDebug "zs.alarm2 = $zs.alarm2"
-            logDebug "zs.tamper = $zs.tamper"
-            logDebug "zs.battery = $zs.battery"
-            logDebug "zs.supervisionReports = $zs.supervisionReports"
-            logDebug "zs.restoreReports = $zs.restoreReports"
-            logDebug "zs.trouble = $zs.trouble"
-            logDebug "zs.ac = $zs.ac"
-            logDebug "zs.test = $zs.test"
-            logDebug "zs.batteryDefect = $zs.batteryDefect"
-        }
+        ac = 0,
+        acSet = false,
+        alarm1 = 0,
+        alarm1Set = false,
+        alarm2 = 0,
+        alarm2Set = false,
+        battery = 0,
+        batteryDefect = 0,
+        batteryDefectSet = false,
+        batterySet = false,
+        class = class hubitat.zigbee.clusters.iaszone.ZoneStatus,
+        restoreReports = 1,
+        restoreReportsSet = true,
+        supervisionReports = 0,
+        supervisionReportsSet = false,
+        tamper = 0,
+        tamperSet = false,
+        test = 0,
+        testSet = false,
+        trouble = 0,
+        troubleSet = false,
         */
         return [:]
     }
