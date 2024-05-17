@@ -23,8 +23,9 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-16 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing;
+ * ver 1.2.0 2024-05-17 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing; added Samsung multisenor;
  * 
+ *                                TODO: 
  *                                TODO: add capability.tamperAlert
  *                                TODO: add sensitivity attribute
  *                                TODO: make sensitivity range dependant on the device model
@@ -34,7 +35,7 @@
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/14 11:59 PM" }
+static String timeStamp() { "2024/05/17 7:27 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -66,6 +67,7 @@ metadata {
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TYZB01_j9xxahcl" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0001,0500,0000",                outClusters:"0019,000A", model:"TS0210", manufacturer:"_TZ3000_fkxmyics" // not tested
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0500,FFF1",           outClusters:"0019", model:"3RVS01031Z", manufacturer:"Third Reality, Inc"          // Third Reality vibration sensor   
+        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,0001,0003,0020,0402,0500,0B05,FC02", outClusters:"0003,0019", model:"multi", manufacturer:"Samjin" // Samsung Multisensor
 	}
 
 	preferences {
@@ -262,7 +264,10 @@ def parse(String description) {
             handlePingResponse(descMap)
         }
         else if (descMap.clusterInt == 0xFFF1 && descMap.command == '0A') {
-            handleThreeAxis(descMap)
+            handleThreeAxisTR(descMap)
+        }
+        else if (descMap.clusterInt == 0xFC02 && descMap.command == '0A') {
+            handleThreeAxisSamsung(descMap)
         }
         else {
             if (debugLogging) log.warn ("Description map not parsed: $descMap")            
@@ -391,18 +396,21 @@ private parseBattery(valueHex) {
 }
 
 String getDEGREE() { return String.valueOf((char)(176)) }
+import groovy.json.JsonOutput
 
-void handleThreeAxis(final Map descMap) {
-    //  [raw:DEB701FFF12800002901000100297D0002002935FF030029E7FE, dni:DEB7, endpoint:01, 
-    //  cluster:FFF1, size:28, attrId:0000, encoding:29, command:0A, value:0001, clusterInt:65521, attrInt:0, 
-    //      additionalAttrs:[
-    //          [value:007D, encoding:29, attrId:0001, consumedBytes:5, attrInt:1], 
-    //          [value:FF35, encoding:29, attrId:0002, consumedBytes:5, attrInt:2], 
-    //          [value:FEE7, encoding:29, attrId:0003, consumedBytes:5, attrInt:3]
-    //      ]
-    //  ]
-    //
-    logDebug "ThreeAxis: cluster=${descMap.clusterInt} attr=${descMap.attrInt} value=${descMap.value}"
+/* Some parts borrowed from veeceeoh in this method */
+void convertXYZtoPsiPhiTheta(int x, int y, int z) {
+    BigDecimal psi = new BigDecimal(Math.atan(x.div(Math.sqrt(z * z + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+    BigDecimal phi = new BigDecimal(Math.atan(y.div(Math.sqrt(x * x + z * z))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+    BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
+    logDebug "Calculated angles are Psi = ${psi}$DEGREE, Phi = ${phi}$DEGREE, Theta = ${theta}$DEGREE   Raw accelerometer XYZ axis values = $x, $y, $z" 
+    String json  = JsonOutput.toJson([x:x, y:y, z:z, psi:psi, phi:phi, theta:theta])
+    log.info "threeAxis : ${json}"
+    sendEvent(name: 'threeAxis', value: json, isStateChange: true)
+}
+
+void handleThreeAxisTR(final Map descMap) {
+    logDebug "handleThreeAxisTR: descMap = ${descMap}"
     boolean isValid = descMap.value == "0001"
     int x, y, z
     descMap.additionalAttrs.each { attr ->
@@ -410,15 +418,39 @@ void handleThreeAxis(final Map descMap) {
         if (axis > 0x7FFF) { axis = axis - 0x10000 }
         if (attr.attrInt == 1) { x = axis } else if (attr.attrInt == 2) { y = axis } else if (attr.attrInt == 3) { z = axis }
     }
-    logDebug "ThreeAxis: x=${x} y=${y} z=${z}"
     if (isValid) {
-        /* Some parts borrowed from veeceeoh in this method */
-        BigDecimal psi = new BigDecimal(Math.atan(x.div(Math.sqrt(z * z + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
-        BigDecimal phi = new BigDecimal(Math.atan(y.div(Math.sqrt(x * x + z * z))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
-        BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
-        
-        logInfo("Calculated angles are Psi = ${psi}$DEGREE, Phi = ${phi}$DEGREE, Theta = ${theta}$DEGREE   Raw accelerometer XYZ axis values = $x, $y, $z")    
+        convertXYZtoPsiPhiTheta(x, y, z)
     }
+}
+
+void handleThreeAxisSamsung(final Map descMap) {
+    logDebug "handleThreeAxisSamsung: descMap = ${descMap}"
+    if (descMap.attrInt == 0x0010) {
+        //  read attr - raw: DC8401FC020810001801, dni: DC84, endpoint: 01, cluster: FC02, size: 08, attrId: 0010, encoding: 18, command: 0A, value: 01
+        Map event = handleVibration(descMap.value == "01")
+        if (event) {
+            sendEvent(event)
+            logInfo event.descriptionText
+        }
+        return
+    }
+    else if (descMap.attrInt == 0x0012) {
+        int x, y, z
+        x = zigbee.convertHexToInt(descMap.value)
+        if (x > 0x7FFF) { x = x - 0x10000 }
+        descMap.additionalAttrs.each { attr ->
+            int axis = zigbee.convertHexToInt(attr.value)
+            if (axis > 0x7FFF) { axis = axis - 0x10000 }
+            if (attr.attrInt == 19) { y = axis } else if (attr.attrInt == 20) { z = axis }
+        }
+        if ((x != null) && (y != null) && (z != null)) {
+            convertXYZtoPsiPhiTheta(x, y, z)
+        }        
+    }
+    else {
+        logWarn "handleThreeAxisSamsung: unsupported attrInt=${descMap.attrInt}"
+    }
+    return
 }
 
 // lifecycle methods -------------
