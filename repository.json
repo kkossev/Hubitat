@@ -285,6 +285,17 @@
       "tags":[
         "Zigbee", "Lights & Switches"
        ]
+    },
+	{
+      "id":"c08c4f41-3a84-49e0-8c67-37e847427a9b",
+      "name":"Moes ZigBee Wall Switch 1/2/3-Gang",
+      "category":"Control",
+      "location":"https://raw.githubusercontent.com/martinkura-svk/Hubitat/main/packageManifest.json",
+      "description":"Martin's popular Moes ZigBee Wall Switch 1/2/3-Gang driver. Works with Tuya switches model TS0601",
+      "tags":[
+        "Lights & Switches",
+        "Zigbee"
+       ]
     }	
   ]
 }
