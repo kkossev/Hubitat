@@ -23,19 +23,18 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-17 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability 'ThreeAxis'for testing; added Samsung multisensor;
+ * ver 1.2.0 2024-05-19 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler
  * 
- *                                TODO: 
- *                                TODO: add capability.tamperAlert
- *                                TODO: add sensitivity attribute
- *                                TODO: make sensitivity range dependant on the device model
  *                                TODO: Publish a new HE forum thread
+ *                                TODO: add sensitivity attribute, update when sensitivity is changed
+ *                                TODO: make sensitivity range dependant on the device model
  *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
+ *                                TODO: add capability.tamperAlert
  *                                TODO: handle tamper: (zoneStatus & 1<<2); handle battery_low: (zoneStatus & 1<<3); TODO: check const sens = {'high': 0, 'medium': 2, 'low': 6}[value];
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/17 8:25 PM" }
+static String timeStamp() { "2024/05/19 9:25 AM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -47,7 +46,7 @@ metadata {
 	definition (name: "Tuya ZigBee Vibration Sensor", namespace: "kkossev", author: "Krassimir Kossev", importUrl: "https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20ZigBee%20Vibration%20Sensor/Tuya%20ZigBee%20Vibration%20Sensor.groovy", singleThreaded: true ) {
         capability "Sensor"
         capability "AccelerationSensor"
-        capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
+        //capability "TamperAlert"            // tamper - ENUM ["clear", "detected"]
 		capability "Battery"
 		capability "Configuration"
         capability "Refresh"
@@ -71,10 +70,11 @@ metadata {
 	}
 
 	preferences {
-		input name: "infoLogging", type: "bool", title: "Enable info message logging", description: ""
-		input name: "debugLogging", type: "bool", title: "Enable debug message logging", description: ""
-        input name: "sensitivity", type: "enum", title: "Vibration Sensitivity", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
-		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until resetting to inactive state. Default = 3 seconds (Hardware resets at 2 seconds)", description: "", range: "1..7200", defaultValue: 3
+		input name: "txtEnable", type: "bool", title: "<b>Enable info message logging</b>", description: ""
+		input name: "logEnable", type: "bool", title: "<b>Enable debug message logging</b>", description: ""
+        input name: "sensitivity", type: "enum", title: "<b>Vibration Sensitivity</b>", description: "Select Vibration Sensitivity", defaultValue: "3", options:["0":"0 - Maximum", "1":"1", "2":"2", "3":"3 - Medium", "4":"4", "5":"5", "6":"6 - Minimum"]
+		input "vibrationReset", "number", title: "After vibration is detected, wait ___ second(s) until <b>resetting to inactive state</b>. Default = 3 seconds.", description: "", range: "1..7200", defaultValue: 3
+        input name: 'threeAxis', type: 'enum', title: '<b>Three Axis</b>', description: '<i>Enable or disable the Three Axis reporting<br>(ThirdReality and Samsung)</i>', defaultValue: ThreeAxisOpts.defaultValue, options: ThreeAxisOpts.options
         if (device) {
             input name: 'advancedOptions', type: 'bool', title: '<b>Advanced Options</b>', description: '<i>These advanced options should be already automatically set in an optimal way for your device...</i>', defaultValue: false
             if (advancedOptions == true) {
@@ -96,6 +96,9 @@ metadata {
 ]
 @Field static final Map HealthcheckIntervalOpts = [          // used by healthCheckInterval
     defaultValue: 240, options: [10: 'Every 10 Mins', 30: 'Every 30 Mins', 60: 'Every 1 Hour', 240: 'Every 4 Hours', 720: 'Every 12 Hours']
+]
+@Field static final Map ThreeAxisOpts = [
+    defaultValue: 1, options: [0: 'Disabled', 1: 'Enabled - Events only', 2: 'Enabled - Events and Logs']
 ]
 
 // e8ZoneState is a mandatory attribute which indicates the membership status of the device in an IAS system (enrolled or not enrolled) - one of:
@@ -186,8 +189,8 @@ def parse(String description) {
         event = zigbee.getEvent(description)
     }
     catch ( e ) {
-        if (debugLogging) log.warn "exception caught while parsing description:  ${description}"
-        return null
+        if (logEnable) log.warn "exception caught while decoding event description:  ${description}"
+        // return null // ignore and continue, changed 05/19/2024
     }
     //
     if (event) {
@@ -231,12 +234,12 @@ def parse(String description) {
                         logInfo("Battery reporting configured");                        
                         break
                     default:                    
-                        if (infoLogging) log.warn("Unknown reporting configured: ${descMap}");
+                        if (txtEnable) { log.warn("Unknown reporting configured: ${descMap}") }
                         break
                 }
             } 
             else {
-                if (infoLogging) log.warn "Reporting configuration failed: ${descMap}"
+                if (logEnable) { log.warn "Reporting configuration failed: ${descMap}" }
             }
         } 
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0002) {
@@ -263,18 +266,18 @@ def parse(String description) {
         else if (descMap.clusterInt == zigbee.BASIC_CLUSTER && descMap.attrInt == PING_ATTR_ID) {
             handlePingResponse(descMap)
         }
-        else if (descMap.clusterInt == 0xFFF1 && descMap.command == '0A') {
+        else if (descMap.clusterInt == 0xFFF1 && descMap.command in ['01', '0A']) {
             handleThreeAxisTR(descMap)
         }
-        else if (descMap.clusterInt == 0xFC02 && descMap.command == '0A') {
+        else if (descMap.clusterInt == 0xFC02 && descMap.command in ['01', '0A']) {
             handleThreeAxisSamsung(descMap)
         }
         else {
-            if (debugLogging) log.warn ("Description map not parsed: $descMap")            
+            if (logEnable) log.warn ("Description map not parsed: $descMap")            
         }
     }
     else {
-        if (debugLogging) log.warn "Description not parsed: $description"
+        if (logEnable) log.warn "Description not parsed: $description"
     }
     
     if (map != null && map != [:]) {
@@ -297,7 +300,7 @@ Map parseIasMessage(ZoneStatus zs) {
     String currentAccel = device.currentState('acceleration')?.value
     String zsStr = ''
     zs.properties.sort().each { key, value ->  zsStr += "$key = $value, "}
-    if (debugLogging) log.debug "current acceleration = ${currentAccel}   new Zone status message zs = ${zsStr}"
+    if (logEnable) log.debug "current acceleration = ${currentAccel}   new Zone status message zs = ${zsStr}"
     // check for vibration active
     if (zs.alarm1Set == true || zs.alarm2Set == true) {
         if (currentAccel != "active") {
@@ -425,8 +428,12 @@ void convertXYZtoPsiPhiTheta(int x, int y, int z) {
     BigDecimal theta = new BigDecimal(Math.atan(z.div(Math.sqrt(x * x + y * y))) * 180 / Math.PI).setScale(1, BigDecimal.ROUND_HALF_UP)
     logDebug "Calculated angles are Psi = ${psi}$DEGREE, Phi = ${phi}$DEGREE, Theta = ${theta}$DEGREE   Raw accelerometer XYZ axis values = $x, $y, $z" 
     String json  = JsonOutput.toJson([x:x, y:y, z:z, psi:psi, phi:phi, theta:theta])
-    log.info "threeAxis : ${json}"
-    sendEvent(name: 'threeAxis', value: json, isStateChange: true)
+    if ((settings.threeAxis as int) == 2) { // 2 - Enabled - Events and Logs
+        log.info "threeAxis : ${json}"
+    }
+    if ((settings.threeAxis as int) > 0) { // 1 - Enabled - Events only
+        sendEvent(name: 'threeAxis', value: json, isStateChange: true)
+    }
 }
 
 void handleThreeAxisTR(final Map descMap) {
@@ -495,13 +502,35 @@ void refresh() {
     List<String> cmds = []
     cmds += zigbee.readAttribute(zigbee.POWER_CONFIGURATION_CLUSTER, 0x0020, [:], delay=200) // battery voltage
     cmds += zigbee.readAttribute(0x0500, 0x0013, [:], delay=200)    // sensitivity
+    if (device?.getDataValue('manufacturer') == 'Samjin') {
+        cmds += zigbee.readAttribute(0xFC02, [0x0010, 0x0012], [:], delay=200) // vibration and three axis
+    }
+    else if (device?.getDataValue('manufacturer') == 'Third Reality, Inc') {
+        cmds += zigbee.readAttribute(0xFFF1, [0x0000, 0x0001, 0x0002, 0x0003], [:], delay=200) // vibration and three axis
+    }
     sendZigbeeCommands(cmds)
 }
 
 
 // updated() runs every time user saves preferences
 void updated() {
-	logInfo("Updating preference settings")
+    if (logEnable == true) {
+        runIn(86400, 'logsOff', [overwrite: true, misfire: 'ignore'])    // turn off debug logging after 30 minutes
+        if (settings?.txtEnable) { log.info "${device.displayName} Debug logging will be turned off after 24 hours" }
+    }
+    else {
+        unschedule('logsOff')
+    }
+
+    String currentTreeAxis = device.currentState('threeAxis')?.value
+	logInfo("Updating preference settings, sensitivity = ${settings.sensitivity}, threeAxisOpt = ${settings.threeAxis}, currentTreeAxis = $currentTreeAxis}")
+    if (settings.threeAxis as int == 0 && currentTreeAxis != null) {
+        logInfo "Three Axis reporting is now disabled"
+        device.deleteCurrentState('threeAxis')
+    }
+    else if (settings.threeAxis as int != 0 && currentTreeAxis == null) {
+        logInfo "Three Axis reporting is now enabled with option ${settings.threeAxis}"
+    }
     configureReporting()
 }
 
@@ -745,6 +774,8 @@ void initializeVars( boolean fullInit = false ) {
     if (fullInit || settings?.healthCheckInterval == null) { device.updateSetting('healthCheckInterval', [value: HealthcheckIntervalOpts.defaultValue.toString(), type: 'enum']) }
     if (device.currentValue('healthStatus') == null) { sendHealthStatusEvent('unknown') }
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', false) }
+    if (fullInit || settings?.threeAxis == null) { device.updateSetting('threeAxis', [value: ThreeAxisOpts.defaultValue.toString(), type: 'enum']) }
+    
 
     final String ep = device.getEndpointId()
     if ( ep  != null) {
@@ -755,7 +786,10 @@ void initializeVars( boolean fullInit = false ) {
     }
 }
 
-
+void logsOff() {
+    log.warn "${device.displayName} debug logging disabled..."
+    device.updateSetting('logEnable', [value: 'false', type: 'bool'])
+}
 
 void configureReporting() {
     int seconds = Math.round((settings?.batteryReportingHours ?: 12)*3600)
@@ -798,13 +832,13 @@ void sendZigbeeCommands(List<String> cmd) {
 }
 
 private def logDebug(message) {
-	if (debugLogging) { log.debug "${device.displayName}: ${message}" }
+	if (logEnable) { log.debug "${device.displayName}: ${message}" }
 }
 
 private def logInfo(message) {
-	if (infoLogging) { log.info "${device.displayName}: ${message}" }
+	if (txtEnable) { log.info "${device.displayName}: ${message}" }
 }
 
 private def logWarn(message) {
-	if (debugLogging) { log.warn "${device.displayName}: ${message}" }
+	if (logEnable) { log.warn "${device.displayName}: ${message}" }
 }
