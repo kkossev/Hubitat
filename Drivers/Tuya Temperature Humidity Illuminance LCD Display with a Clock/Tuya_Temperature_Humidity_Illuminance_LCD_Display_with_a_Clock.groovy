@@ -1,4 +1,4 @@
-/* groovylint-disable CompileStatic, ConsecutiveStringConcatenation, DuplicateMapLiteral, ImplementationAsType, MethodParameterTypeRequired, MethodReturnTypeRequired, MethodSize, NoDef, NoDouble, SpaceAfterClosingBrace, UnnecessaryObjectReferences, UnusedPrivateMethod, VariableName, VariableTypeRequired */
+/* groovylint-disable CompileStatic, ConsecutiveStringConcatenation, DuplicateMapLiteral, ImplementationAsType, MethodParameterTypeRequired, MethodReturnTypeRequired, MethodSize, NoDef, NoDouble, SpaceAfterClosingBrace, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnusedImport, UnusedPrivateMethod, VariableName, VariableTypeRequired */
 /**
  *  Tuya Temperature Humidity Illuminance LCD Display with a Clock
  *
@@ -43,7 +43,8 @@
  * ver. 1.4.0  2023-11-28 kkossev - bug fix - healthStatus periodic job was not started; _TZ3000_qaaysllp illuminance dp added;
  * ver. 1.5.0  2024-01-27 kkossev - Groovy lint; added TS0601 _TZE200_vvmbj46n to TS0601_Tuya_2 group; _TZE200_qyflbnbj fingerprint correction; added TS0201 _TZ3000_utwgoauk
  * ver. 1.5.1  2024-02-13 kkossev - bugfix: battery reporting period for non-Tuya devices.
- * ver. 1.5.2  2024-05-14 kkossev - (dev.branch) added _TZE204_upagmta9 and _TZE200_upagmta9 to TS0601_Tuya_2 group; healthStatus initialized as 'unknown'; added NOUS TS0601 _TZE200_nnrfa68v
+ * ver. 1.5.2  2024-05-14 kkossev - added _TZE204_upagmta9 and _TZE200_upagmta9 to TS0601_Tuya_2 group; healthStatus initialized as 'unknown'; 
+ * ver. 1.6.0  2024-05-19 kkossev - added the correct NOUS TS0601 _TZE200_nnrfa68v fingerprint to group 'TS0601_Tuya'; all Current States and Preferences are cleared on initialize command;
  *
  *                                  TODO: queryOnDeviceAnnounce for TS0601_Tuya_2 group
  *                                  TODO: TS0601 _TZE200_vvmbj46n - preferences changes are not accepted by the device!; add temperature and humidity max reporting interval settings for TS0601_Tuya_2 group;
@@ -53,15 +54,15 @@
  *                                  TODO: add Batteryreporting time configuration (like in the TS004F driver)
 */
 
-def version() { '1.5.2' }
-def timeStamp() { '2024/05/14 7:25 PM' }
+@Field static final String VERSION = '1.6.0'
+@Field static final String TIME_STAMP = '2024/05/19 9:42 PM'
 
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.zcl.DataType
+import hubitat.device.HubAction
+import hubitat.device.Protocol
 
-//import hubitat.device.HubAction
-//import hubitat.device.Protocol
 @Field static final Boolean _DEBUG = false
 
 metadata {
@@ -96,7 +97,7 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_c7emyjom', deviceJoinName: 'Tuya Temperature Humidity Illuminance LCD Display with a Clock'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_locansqn', deviceJoinName: 'Haozee Temperature Humidity Illuminance LCD Display with a Clock' // https://de.aliexpress.com/item/1005003634353180.html
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_bq5c8xfe', deviceJoinName: 'Haozee Temperature Humidity Illuminance LCD Display with a Clock'
-        fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0004,0005,EF00', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_nnrfa68v', deviceJoinName: 'NOUS Temperature Humidity Illuminance LCD Display with a Clock'   // https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764?u=kkossev
+        fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_nnrfa68v', deviceJoinName: 'NOUS Temperature Humidity Illuminance LCD Display with a Clock'   // https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764?u=kkossev
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0402,0405', outClusters:'0019',      model:'TS0201', manufacturer:'_TZ2000_hjsgdkfl', deviceJoinName: 'AVATTO S-H02'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0402,0405', outClusters:'0019',      model:'TS0201', manufacturer:'_TZ2000_a476raq2', deviceJoinName: 'Tuya Temperature Humidity LCD display'
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0000,0001,0400,E002', outClusters:'0019,000A', model:'TS0201', manufacturer:'_TZ3000_qaaysllp', deviceJoinName: 'NAS-TH02B LCZ030 T/H/I/LCD'  // Neo Coolcam ?  // NOT TESTED!
@@ -157,21 +158,18 @@ metadata {
         fingerprint profileId:'0104', endpointId:'01', inClusters:'0004,0005,EF00,0000', outClusters:'0019,000A', model:'TS0601', manufacturer:'_TZE200_vvmbj46n', deviceJoinName: 'Tuya Zigbee Temperature Humidity Sensor With Backlight'     // TODO - configuration options!  +onEventSetTime // https://github.com/Koenkk/zigbee2mqtt/issues/19731
     }
     preferences {
-        //input description: "Once you change values on this page, the attribute value \"needUpdate\" will show \"YES\" until all configuration parameters are updated.", title: "<b>Settings</b>", displayDuringSetup: false, type: "paragraph", element: "paragraph"
-        input(name: 'logEnable', type: 'bool', title: 'Debug logging', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
-        input(name: 'txtEnable', type: 'bool', title: 'Description text logging', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
-        input(name: 'modelGroupPreference', type: 'enum', title: 'Model Group', description:'Recommended value is <b>Auto detect</b></i>', defaultValue: 0, options:
+        input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
+        input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
+        input(name: 'modelGroupPreference', type: 'enum', title: '<b>Model Group</b>', description:'Recommended value is <b>Auto detect</b></i>', defaultValue: 0, options:
                ['Auto detect':'Auto detect', 'TS0601_Tuya':'TS0601_Tuya', 'TS0601_Tuya_2':'TS0601_Tuya_2', 'TS0601_Haozee':'TS0601_Haozee', 'TS0601_AUBESS':'TS0601_AUBESS', 'TS0201':'TS0201', 'TS0222':'TS0222', 'TS0201_LCZ030': 'TS0201_LCZ030',
                 'TS0222_2':'TS0222_2', 'TS0201_TH':'TS0201_TH', 'TS0601_Soil':'TS0601_Soil', 'Zigbee NON-Tuya':'Zigbee NON-Tuya', 'OWON':'OWON'])
-        input(name: 'advancedOptions', type: 'bool', title: 'Advanced options', description: 'May not be supported by all devices!', defaultValue: false)
+        input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', description: 'May not be supported by all devices!', defaultValue: false)
         if (advancedOptions == true) {
             if (isConfigurableSleepyDevice()) {
                 input(title: 'To configure a sleepy device, try any of the methods below :', description: '<b> * Rapidly change the temperature or the humidity<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
             }
             configParams.each {
-                //log.warn "it.value.input.limit = ${it.value.input.limit}"
                 if (it.value.input.limit == null || 'ALL' in it.value.input.limit || getModelGroup() in it.value.input.limit) {
-                    //log.trace "it = ${it.value.input.limit}"
                     input it.value.input
                 }
             }
@@ -181,49 +179,49 @@ metadata {
 
 @Field static Map configParams = [
 
-        0: [input: [name: 'temperatureOffset', type: 'decimal', title: 'Temperature offset', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0',
+        0: [input: [name: 'temperatureOffset', type: 'decimal', title: '<b>Temperature offset</b>', description: 'Select how many degrees to adjust the temperature.', defaultValue: 0.0, range: '-100.0..100.0',
                    limit:['ALL']]],
 
-        1: [input: [name: 'humidityOffset', type: 'decimal', title: 'Humidity offset', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0',
+        1: [input: [name: 'humidityOffset', type: 'decimal', title: '<b>Humidity offset</b>', description: 'Enter a percentage to adjust the humidity.', defaultValue: 0.0, range: '-100.0..100.0',
                    limit:['ALL']]],
 
-        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: 'Temperature Sensitivity', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..5.0',
+        2: [input: [name: 'temperatureSensitivity', type: 'decimal', title: '<b>Temperature Sensitivity</b>', description: 'Temperature change for reporting, ' + '\u00B0' + 'C', defaultValue: 0.5, range: '0.1..5.0',
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
-        3: [input: [name: 'humiditySensitivity', type: 'number', title: 'Humidity Sensitivity', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
+        3: [input: [name: 'humiditySensitivity', type: 'number', title: '<b>Humidity Sensitivity</b>', description: 'Humidity change for reporting, %', defaultValue: 5, range: '1..10',
                    limit:['TS0601_Tuya', 'TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya', 'TS0601_Tuya_2']]],
 
-        4: [input: [name: 'illuminanceSensitivity', type: 'number', title: 'Illuminance Sensitivity', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
+        4: [input: [name: 'illuminanceSensitivity', type: 'number', title: '<b>Illuminance Sensitivity</b>', description: 'Illuminance change for reporting, %', defaultValue: 12, range: '10..100',                // TS0222 "MOES ZSS-ZK-THL"
                    limit:['TS0222']]],
 
-        5: [input: [name: 'minTempAlarmPar', type: 'decimal', title: 'Minimum Temperature Alarm', description: 'Minimum Temperature Alarm, C', defaultValue: 0.0, range: '-20.0..60.0',
+        5: [input: [name: 'minTempAlarmPar', type: 'decimal', title: '<b>Minimum Temperature Alarm</b>', description: 'Minimum Temperature Alarm, C', defaultValue: 0.0, range: '-20.0..60.0',
                    limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
 
-        6: [input: [name: 'maxTempAlarmPar', type: 'decimal', title: 'Maximum Temperature Alarm', description: 'Maximum Temperature Alarm, C', defaultValue: 39.0, range: '-20.0..60.0',
+        6: [input: [name: 'maxTempAlarmPar', type: 'decimal', title: '<b>Maximum Temperature Alarm</b>', description: 'Maximum Temperature Alarm, C', defaultValue: 39.0, range: '-20.0..60.0',
                    limit:['TS0601_Tuya', /*'TS0601_Haozee',*/ 'TS0201_LCZ030']]],
 
-        7: [input: [name: 'minHumidityAlarmPar', type: 'number', title: 'Minimal Humidity Alarm', description: 'Minimum Humidity Alarm, %', defaultValue: 20, range: '0..100',           // 'TS0601_Haozee' only!
+        7: [input: [name: 'minHumidityAlarmPar', type: 'number', title: '<b>Minimal Humidity Alarm</b>', description: 'Minimum Humidity Alarm, %', defaultValue: 20, range: '0..100',           // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
 
-        8: [input: [name: 'maxHumidityAlarmPar', type: 'number', title: 'Maximum Humidity Alarm', description: 'Maximum Humidity Alarm, %', defaultValue: 60, range: '0..100',            // 'TS0601_Haozee' only!
+        8: [input: [name: 'maxHumidityAlarmPar', type: 'number', title: '<b>Maximum Humidity Alarm</b>', description: 'Maximum Humidity Alarm, %', defaultValue: 60, range: '0..100',            // 'TS0601_Haozee' only!
                    limit:[/*'TS0601_Haozee',*/ /*'TS0201_LCZ030'*/]]],
 
-        9: [input: [name: 'minReportingTimeTemp', type: 'number', title: 'Minimum time between temperature reports', description: 'Minimum time between temperature reporting, seconds', defaultValue: 10, range: '1..3600',
+        9: [input: [name: 'minReportingTimeTemp', type: 'number', title: '<b>Minimum time between temperature reports</b>', description: 'Minimum time between temperature reporting, seconds', defaultValue: 10, range: '1..3600',
                    limit:['ALL']]],
 
-       10: [input: [name: 'maxReportingTimeTemp', type: 'number', title: 'Maximum time between temperature reports', description: 'Maximum time between temperature reporting, seconds', defaultValue: 3600, range: '10..43200',
+       10: [input: [name: 'maxReportingTimeTemp', type: 'number', title: '<b>Maximum time between temperature reports</b>', description: 'Maximum time between temperature reporting, seconds', defaultValue: 3600, range: '10..43200',
                    limit:['TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya']]],
 
-       11: [input: [name: 'minReportingTimeHumidity', type: 'number', title: 'Minimum time between humidity reports', description: 'Minimum time between humidity reporting, seconds', defaultValue: 10, range: '1..3600',
+       11: [input: [name: 'minReportingTimeHumidity', type: 'number', title: '<b>Minimum time between humidity reports</b>', description: 'Minimum time between humidity reporting, seconds', defaultValue: 10, range: '1..3600',
                    limit:['ALL']]],
 
-       12: [input: [name: 'maxReportingTimeHumidity', type: 'number', title: 'Maximum time between humidity reports', description: 'Maximum time between humidity reporting, seconds', defaultValue: 3600, range: '10..43200',
+       12: [input: [name: 'maxReportingTimeHumidity', type: 'number', title: '<b>Maximum time between humidity reports</b>', description: 'Maximum time between humidity reporting, seconds', defaultValue: 3600, range: '10..43200',
                    limit:['TS0601_Haozee', 'TS0201_TH', 'Zigbee NON-Tuya']]],
 
-       13: [input: [name: 'alarmTempPar', type: 'enum', title: 'Temperature Alarm', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min temp', 1:'Over max temp', 2:'off'],
+       13: [input: [name: 'alarmTempPar', type: 'enum', title: '<b>Temperature Alarm</b>', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min temp', 1:'Over max temp', 2:'off'],
                    limit:[/*'TS0201_LCZ030'*/]]],
 
-       14: [input: [name: 'alarmHumidityPar', type: 'enum', title: 'Humidity Alarm', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min hum.', 1:'Over max hum', 2:'off'],
+       14: [input: [name: 'alarmHumidityPar', type: 'enum', title: '<b>Humidity Alarm</b>', description:'Temperature Alarm', defaultValue: 0, options: [0:'Below min hum.', 1:'Over max hum', 2:'off'],
                    limit:[/*'TS0201_LCZ030'*/]]]
 ]
 
@@ -236,6 +234,7 @@ metadata {
     '_TZE200_znbl8dj5'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005004116638127.html - TODO !
     '_TZE200_zl1kmjqx'  : 'TS0601_Tuya',         // https://www.aliexpress.com/item/1005002836127648.html
     '_TZE200_qyflbnbj'  : 'TS0601_Tuya',         // not tested
+    '_TZE200_nnrfa68v'  : 'TS0601_Tuya',         // NOUS E6 https://community.hubitat.com/t/nous-humidity-and-temp-sensor/137764/7?u=kkossev
     '_TZE200_cirvgep4'  : 'TS0601_Tuya_2',       // https://www.aliexpress.com/item/1005005198387789.html
     '_TZE200_yjjdcqsq'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/release-tuya-temperature-humidity-illuminance-lcd-display-with-a-clock-w-healthstatus/88093/446?u=kkossev
     '_TZE200_9yapgbuv'  : 'TS0601_Tuya_2',       // not tested
@@ -244,7 +243,6 @@ metadata {
     '_TZE200_vvmbj46n'  : 'TS0601_Tuya_2',       // https://community.hubitat.com/t/looking-for-a-zigbee-temperature-humidity-illumination-sensor-with-display/130896/14?u=kkossev
     '_TZE200_locansqn'  : 'TS0601_Haozee',       // Haozee Temperature Humidity Illuminance LCD Display with a Clock
     '_TZE200_bq5c8xfe'  : 'TS0601_Haozee',       //
-    '_TZE200_nnrfa68v'  : 'TS0601_Haozee',       // not tested NOUS E6 https://noussmart.pl/product/e6.html
     '_TZE200_pisltm67'  : 'TS0601_AUBESS',       // illuminance only sensor
     '_TZ2000_a476raq2'  : 'TS0201',              // KK
     '_TZ3000_lfa05ajd'  : 'TS0201',              // Zemismart ZXZTH
@@ -1208,7 +1206,7 @@ void deviceCommandTimeout() {
     sendEvent(name: 'rtt', value: 'timeout', descriptionText: 'no response received', unit: '', isDigital: true)
 }
 
-def driverVersionAndTimeStamp() { version() + ' ' + timeStamp() }
+def driverVersionAndTimeStamp() { VERSION + ' ' + TIME_STAMP }
 
 def checkDriverVersion() {
     if (state.driverVersion == null || driverVersionAndTimeStamp() != state.driverVersion) {
@@ -1266,14 +1264,61 @@ def resetStats() {
 
 def logInitializeRezults() {
     if (settings?.txtEnable) { log.info "${device.displayName} manufacturer  = ${device.getDataValue('manufacturer')} ModelGroup = ${getModelGroup()}" }
-    if (settings?.txtEnable) { log.info "${device.displayName} Initialization finished\r                          version=${version()} (Timestamp: ${timeStamp()})" }
+    if (settings?.txtEnable) { log.info "${device.displayName} Initialization finished\r                          version=${VERSION} (Timestamp: ${TIME_STAMP})" }
+}
+
+// delete all Preferences
+void deleteAllSettings() {
+    String preferencesDeleted = ''
+    settings.each { it ->
+        preferencesDeleted += "${it.key} (${it.value}), "
+        device.removeSetting("${it.key}")
+    }
+    logDebug "Deleted settings: ${preferencesDeleted}"
+    logInfo  'All settings (preferences) DELETED'
+}
+
+// delete all attributes
+void deleteAllCurrentStates() {
+    String attributesDeleted = ''
+    device.properties.supportedAttributes.each { it -> attributesDeleted += "${it}, " ; device.deleteCurrentState("$it") }
+    logDebug "Deleted attributes: ${attributesDeleted}" ; logInfo 'All current states (attributes) DELETED'
+}
+
+// delete all State Variables
+void deleteAllStates() {
+    String stateDeleted = ''
+    state.each { it -> stateDeleted += "${it.key}, " }
+    state.clear()
+    logDebug "Deleted states: ${stateDeleted}" ; logInfo 'All States DELETED'
+}
+
+void deleteAllScheduledJobs() {
+    unschedule() ; logInfo 'All scheduled jobs DELETED'
+}
+
+void deleteAllChildDevices() {
+    getChildDevices().each { child ->
+        log.info "${device.displayName} Deleting ${child.deviceNetworkId}"
+        deleteChildDevice(child.deviceNetworkId)
+    }
+    logDebug 'All child devices DELETED'
+}
+
+void loadAllDefaults() {
+    deleteAllSettings()
+    deleteAllCurrentStates()
+    deleteAllScheduledJobs()
+    deleteAllStates()
+    deleteAllChildDevices()
+    logWarn ('All Defaults Loaded! F5 to refresh')
 }
 
 // called by initialize() button
 void initializeVars(boolean fullInit = true ) {
     log.info "${device.displayName} InitializeVars()... fullInit = ${fullInit}"
     if (fullInit == true ) {
-        state.clear()
+        loadAllDefaults()
         resetStats()
         state.driverVersion = driverVersionAndTimeStamp()
     }
