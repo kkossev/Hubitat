@@ -23,10 +23,9 @@
  * ver 1.0.7 2022-05-12 kkossev - TS0210 _TYZB01_pbgpvhgx Smart Vibration Sensor HS1VS 
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
- * ver 1.2.0 2024-05-19 kkossev - (dev. branch) add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler
+ * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
  * 
  *                                TODO: Publish a new HE forum thread
- *                                TODO: add sensitivity attribute, update when sensitivity is changed
  *                                TODO: make sensitivity range dependant on the device model
  *                                TODO: minimum time filter : https://community.hubitat.com/t/tuya-vibration-sensor-better-laundry-monitor/113296/9?u=kkossev 
  *                                TODO: add capability.tamperAlert
@@ -34,7 +33,7 @@
  */
 
 static String version() { "1.2.0" }
-static String timeStamp() { "2024/05/19 9:25 AM" }
+static String timeStamp() { "2024/05/20 8:43 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -57,6 +56,7 @@ metadata {
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
         attribute 'rtt', 'number'
         attribute 'batteryStatus', 'enum', ["normal", "replace"]
+        attribute 'sensitivity', 'number'
         
 		fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_3zv6oleo"     // KK
         fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,000A,0001,0500",           outClusters:"0019", model:"TS0210", manufacturer:"_TYZB01_kulduhbj"     // not tested https://fr.aliexpress.com/item/1005002490419821.html
@@ -251,8 +251,10 @@ def parse(String description) {
             logInfo("IAS Zone ID: ${descMap.value}")
         } 
         else if (descMap.clusterInt == 0x0500 && descMap.attrInt == 0x0013) {
-            logInfo("vibration sensitivity : ${descMap.value}")
-            def iSens = descMap.value?.toInteger()
+            String descText = "IAS Zone Sensitivity: ${descMap.value}"
+            int iSens = descMap.value?.toInteger()
+            logInfo "vibration sensitivity : ${iSens}"
+            sendEvent(name: "sensitivity", value: iSens, descText: descText)
             if (iSens>=0 && iSens<7)  {
                 device.updateSetting("sensitivity",[value:iSens.toString(), type:"enum"])
             }
