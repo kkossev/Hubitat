@@ -24,7 +24,7 @@
  * ver 1.0.8 2022-11-08 kkossev - TS0210 _TZ3000_bmfw9ykl
  * ver 1.1.0 2023-03-07 kkossev - added Import URL; IAS enroll response is sent w/ 1 second delay; added _TYZB01_cc3jzhlj ; IAS is initialized on configure();
  * ver 1.2.0 2024-05-20 kkossev - add healthStatus and ping(); bug fixes; added ThirdReality 3RVS01031Z ; added capability and preference 'ThreeAxis'; added Samsung multisensor; logsOff scheduler; added sensitivity attribute,
- * ver 1.2.1 2024-05-21 kkossev - (dev. branch) - delete scheduled jobs on Save Preferences; added lastBattery attribute
+ * ver 1.2.1 2024-05-22 kkossev - (dev. branch) - delete scheduled jobs on Save Preferences; added lastBattery attribute; added setAccelarationInactive command;
  * 
  *                                TODO: bugFix: healthCheck is not started on installed()
  *                                TODO: add powerSource attribute
@@ -35,7 +35,7 @@
  */
 
 static String version() { "1.2.1" }
-static String timeStamp() { "2024/05/21 8:54 PM" }
+static String timeStamp() { "2024/05/22 9:12 PM" }
 
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -53,6 +53,8 @@ metadata {
         capability "Refresh"
         capability 'Health Check'
         capability 'ThreeAxis'              // Attributes: threeAxis - VECTOR3
+
+        command 'setAccelarationInactive', [[name: 'Reset the accelaration to inactive state']]
         
         attribute "batteryVoltage", "number"
         attribute 'healthStatus', 'enum', ['unknown', 'offline', 'online']
@@ -371,24 +373,31 @@ private handleVibration(boolean vibrationActive) {
 }
 
 Map getVibrationResult(vibrationActive) {
-	def descriptionText = "Detected vibration"
+	String descriptionText = "Detected vibration"
     if (!vibrationActive) {
 		descriptionText = "Vibration reset to inactive after ${getSecondsInactive()}s"
     }
 	return [
 			name			: 'acceleration',
 			value			: vibrationActive ? 'active' : 'inactive',
+            type            : 'physical',
 			descriptionText : descriptionText
 	]
 }
 
-void resetToVibrationInactive() {
+void setAccelarationInactive() {
+    resetToVibrationInactive(true)
+}
+
+void resetToVibrationInactive(boolean isDigital = false) {
 	if (device.currentState('acceleration')?.value == "active") {
-		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s"
+        String type = isDigital ? "digital" : "physical"
+		String descText = "Vibration reset to inactive after ${getSecondsInactive()}s [$type]"
 		sendEvent(
 			name : "acceleration",
 			value : "inactive",
 			isStateChange : true,
+            type : type,
 			descriptionText : descText
 		)
 		logInfo(descText)
