@@ -26,3 +26,6 @@ Drivers/Tuya Zigbee mmWave Sensor/ScratchPad.txt
 Drivers/Tuya Zigbee Valve/ScratchPad.txt
 Drivers/Tuya ZigBee Vibration Sensor/scratchPad.txt
 Libraries/scratchPad.txt
+Drivers/Aqara Cube T1 Pro/scratchPad.txt
+Drivers/Aqara LED Strip T1/scratchPad.txt
+Drivers/Tuya Contact Sensor/scratchPad.txt

@@ -20,20 +20,22 @@
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
  * ver. 1.1.2  2023-10-20 kkossev  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
- * ver. 1.2.0  2024-05-12 kkossev  - (dev. branch) Groovy linting; setDeviceName() bug fix;
+ * ver. 1.2.0  2024-05-22 kkossev  - (dev. branch) Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
+ *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests)
  *
- *                                   TODO: add ThirdReality 3RDS17BZ fingerprint; add Xfinity XHS2-UE fingerprint
+ *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
+ *                                   TODO: Add pollBatteryStatus option for devices that do not report the battery level automatically
  *                                   TODO: Add clearStats command
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
  *                                   TODO: deviceProfile is not recognized?? ver 1.0.3 20223/02/25; TODO - remove 'lastRx'on Initialize
  *                                   TODO: on Initialize() - remove the prior values for Temperature, Humidity, Contact if not supported by the device profile
  *                                   TODO:  extend the model in the profile to a list
- *                                   TODO: add state.Comment 'works with Tuya TS0601, TS0203, BlitzWolf, Sonoff'
+ *                                   TODO: refactor - use libraries !
  */
 
 static String version() { '1.2.0' }
-static String timeStamp() { '2024/05/12 12:35 PM' }
+static String timeStamp() { '2024/05/22 8:21 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -65,11 +67,14 @@ metadata {
             ]
             command 'test', [[name: 'test', type: 'STRING', description: 'test', constraints: ['STRING']]]
         }
+        command 'setClosed', [[name: 'Set contact state to closed (for tests)']]
+        command 'setOpen', [[name: 'Set contact state to open (for tests)']]
 
         attribute 'Info', 'string'
         // when defined as attributes, will be shown on top of the 'Current States' list ...
         attribute 'healthStatus', 'enum', ['offline', 'online', 'unknown']
         attribute 'batteryVoltage', 'number'
+        attribute 'lastBattery', 'date'         // last battery event time - added in 1.2.0 05/22/2024
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0004,0005,EF00', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_nvups4nh', deviceJoinName: 'Tuya Contact and T/H Sensor'
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0001,0500,0000', outClusters: '0019,000A', model: 'TS0601', manufacturer: '_TZE200_pay2byax', deviceJoinName: 'Tuya Contact and Illuminance Sensor'
@@ -90,15 +95,14 @@ metadata {
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,000A,0001,0500', outClusters: '0019', model: 'RH3001', manufacturer: 'TUYATEC-0l6xaqmi', deviceJoinName: 'BlitzWolf Contact Sensor'   // KK
 
         fingerprint profileId: '0104', endpointId: '01', inClusters: '0000,0003,0500,0001', outClusters: '0003', model: 'DS01', manufacturer: 'eWeLink', deviceJoinName: 'Sonoff Contact Sensor'
-        fingerprint profileId:"0104", endpointId:"01", inClusters:"0000,FF01,FF00,0001,0500", outClusters:"0019", model:"3RDS17BZ", manufacturer:"Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor" 
-    // for tests only
-    //fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor"             // application: 17 https://community.hubitat.com/t/best-motion-sensor-on-battery/40054/158?u=kkossev
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,FF01,FF00,0001,0500", outClusters: "0019", model: "3RDS17BZ", manufacturer: "Third Reality, Inc", deviceJoinName: "Third Reality Contact Sensor" 
+        fingerprint profileId: "0104", endpointId: "01", inClusters: "0000,0001,0003,0020,0402,0500,0B05", outClusters: "0019", model: "URC4460BC0-X-R", manufacturer: "Universal Electronics Inc", deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor'   
     }
     preferences {
         input(name: 'txtEnable', type: 'bool', title: '<b>Description text logging</b>', description: '<i>Display measured values in HE log page. Recommended value is <b>true</b></i>', defaultValue: true)
         input(name: 'logEnable', type: 'bool', title: '<b>Debug logging</b>', description: '<i>Debug information, useful for troubleshooting. Recommended value is <b>false</b></i>', defaultValue: true)
         if (isConfigurable()) {
-            input (title: 'To configure a sleepy device, try any of the methods below :', description: '<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
+            input(title: 'To configure a sleepy device, try any of the methods below :', description: '<b>* Change open/closed state<br> * Remove the battery for at least 1 minute<br> * Pair the device again to HE</b>', type: 'paragraph', element: 'paragraph')
             /*
             def model = getModelGroup()
             def modelProperties = deviceProfiles["$model"] as Map
@@ -114,7 +118,7 @@ metadata {
             }
             */
         }
-        input (name: 'advancedOptions', type: 'bool', title: 'Advanced options', defaultValue: false)
+        input(name: 'advancedOptions', type: 'bool', title: '<b>Advanced options</b>', defaultValue: false)
         if (advancedOptions == true) {
             input(name: 'offlineThreshold', type: 'number', title: '<b>HealthCheck Offline Threshold</b>', description: '<i>HealthCheck Offline Threshold, hours.<br> Zero value disables the Healtch Check</i>', range:'0..24', defaultValue: presenceCountDefaultThreshold)
             if (isBatteryConfigurable()) {
@@ -223,6 +227,19 @@ metadata {
         preferences   : ['minReportingTime': true],
         batteries     : '2xAAA'
     ],
+    'XFINITY_VISONIC_CONTACT_BATT' : [
+        model         : 'URC4460BC0-X-R',
+        manufacturers : ['Universal Electronics Inc"'],
+        deviceJoinName: 'Xfinity/Visonic MCT-350 Zigbee Contact Sensor',
+        inClusters    : '0000,0001,0003,0020,0402,0500,0B05"',
+        outClusters   : '0019',
+        capabilities  : ['contactSensor': true, 'battery': true],
+        configuration : ['battery': true],
+        attributes    : ['healthStatus'],
+        preferences   : ['minReportingTime': true],
+        batteries     : '2xAAA'
+    ],
+
     'UNKNOWN'             : [
         model         : '',
         manufacturers : [],
@@ -480,6 +497,8 @@ def parseZHAcommand(Map descMap) {
                 }
             } else {    // failure
                 if (logEnable == true) { log.info "${device.displayName} <b>Not Found (0x8b)</b> Read Reporting Configuration Response for cluster:${descMap.clusterId} attribite:${descMap.data[3] + descMap.data[2]}, data=${descMap.data} (Status: ${descMap.data[0] == '00' ? 'Success' : '<b>Failure</b>'})" }
+                // changed 05/22/2024 - in case of configuration failure, do NOT try to configure it again!
+                lastTxMap.battCfgOK = true
             }
             break
         case '0B': // ZCL Default Response
@@ -638,6 +657,16 @@ void parseIasMessage(String description) {
         log.error "${device.displayName} This driver requires HE version 2.2.7 (May 2021) or newer!"
         return
     }
+}
+
+void setOpen() {
+    checkDriverVersion()
+    sendContactEvent(contactActive = true, isDigital = true)
+}
+
+void setClosed() {
+    checkDriverVersion()
+    sendContactEvent(contactActive = false, isDigital = true)
 }
 
 void sendContactEvent(contactActive, isDigital = false) {
@@ -1115,6 +1144,7 @@ void sendBatteryPercentageEvent(rawValue) {
         result.unit = '%'
         result.type = 'physical'
         sendEvent(result)
+        sendLastBatteryEvent()
     } else {
         if (settings?.logEnable) { log.warn "${device.displayName} ignoring BatteryPercentageResult(${rawValue})" }
     }
@@ -1159,10 +1189,16 @@ void sendBatteryVoltageEvent(rawValue, Boolean convertToPercent=false) {
         result.isStateChange = true
         logInfo "${result.descriptionText}"
         sendEvent(result)
+        sendLastBatteryEvent()        
     }
     else {
         logWarn "ignoring BatteryResult(${rawValue})"
     }
+}
+
+void sendLastBatteryEvent() {
+    final Date lastBattery = new Date()
+    sendEvent(name: 'lastBattery', value: lastBattery, descriptionText: "Last battery event at ${lastBattery}")
 }
 
 // called when any event was received from the Zigbee device in parse() method..
