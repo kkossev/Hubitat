@@ -20,11 +20,11 @@
  * ver. 1.1.0  2023-04-24 kkossev  - added advancedOptions; added battery reporting configuration
  * ver. 1.1.1  2023-06-08 kkossev  - bug fix: batteryReporting configuration for Sonoff DS01
  * ver. 1.1.2  2023-10-20 kkossev  - added option 'Convert Battery Voltage to Percent'; added  pollContactStatus preference
- * ver. 1.2.0  2024-05-22 kkossev  - (dev. branch) Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
- *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests)
+ * ver. 1.2.0  2024-05-23 kkossev  - (dev. branch) Groovy linting; setDeviceName() bug fix; added lastBattery attribute; added ThirdReality 3RDS17BZ fingerprint; added Xfinity XHS2-UE fingerprint; 
+ *                                   the configuration attempts are not repeated, if error code is returned; added setOpen and setClosed commands (for tests); added pollBatteryStatus option for devices that do not report the battery level automatically
  *
+ *                                   TODO:
  *                                   TODO: filter duplicated open/close messages when 'Poll Contact Status' option is enabled
- *                                   TODO: Add pollBatteryStatus option for devices that do not report the battery level automatically
  *                                   TODO: Add clearStats command
  *                                   TODO: Add stat.stats for contact, battery, reJoin, ZDO
  *                                   TODO: Sonoff contact sensor is not reporting the battery - add an battery configuration option like in TS004F driver
@@ -35,7 +35,7 @@
  */
 
 static String version() { '1.2.0' }
-static String timeStamp() { '2024/05/22 8:21 PM' }
+static String timeStamp() { '2024/05/23 2:55 PM' }
 
 import groovy.json.*
 import groovy.transform.Field
@@ -127,7 +127,8 @@ metadata {
             }
             input name: 'voltageToPercent', type: 'bool', title: '<b>Battery Voltage to Percentage</b>', defaultValue: false, description: '<i>Convert battery voltage to battery Percentage remaining.</i>'
             input name: 'minReportingTime', type: 'number', title: '<b>Minimum time between non-contact reports</b>', description: '<i>Minimum time between non-contact reporting (humidity, illuminance), seconds</i>', defaultValue: 10, range: '1..3600'
-            input (name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: '<i>Poll the contact status when the device is awake</i>', defaultValue: false)
+            input name: 'pollContactStatus', type: 'bool', title: '<b>Poll Contact Status</b>', description: '<i>Poll the contact status when the device is awake</i>', defaultValue: false
+            input name: 'pollBatteryStatus', type: 'bool', title: '<b>Poll Battery Status</b>', description: '<i>Poll the battery status when the device is awake</i>', defaultValue: false
         }
     }
 }
@@ -423,7 +424,31 @@ def parse(String description) {
             pollContactStatus()
         }
     }
+    if (settings?.pollBatteryStatus == true) {          // added 5/23/2024
+        String lastBatteryString = device.currentValue('lastBattery') as String
+        long lastBatteryUnixTime = formattedDate2unix(lastBatteryString)
+        int diff = (now() - lastBatteryUnixTime) / 1000
+        //logDebug "lastBatteryString = ${lastBatteryString} lastBatteryUnixTime = ${lastBatteryUnixTime}  now() = ${now()} diff = ${diff} seconds"
+        //logDebug "offlineThreshold = ${settings.offlineThreshold * 3600} seconds"
+        if (lastBatteryString == null || (lastBatteryString != null && diff > settings.offlineThreshold * 3600)) {   // lastBattery was received more than offlineThreshold hours ago
+            pollBatteryStatus()
+        }
+    }
 }
+
+
+long formattedDate2unix(String formattedDate) {
+    try {
+        if (formattedDate == null) { return null }
+        //Date date = Date.parse('yyyy-MM-dd HH:mm:ss.SSS', formattedDate)
+        Date date = Date.parse('EEE MMM dd HH:mm:ss zzz yyyy', formattedDate)
+        return date.getTime()
+    } catch (e) {
+        logDebug "Error parsing formatted date: ${formattedDate}. Returning current time instead."
+        return now()
+    }
+}
+
 
 def parseZHAcommand(Map descMap) {
     Map lastRxMap = stringToJsonMap(state.lastRx)
@@ -951,14 +976,22 @@ void configTimer() {
     state.lastTx = mapToJsonString(lastTxMap)
 }
 
+void pollBatteryStatus() {
+    Map lastTxMap = stringToJsonMap(state.lastTx)
+    List<String> cmds = []
+    cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
+    cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
+    sendZigbeeCommands(cmds)
+    logDebug 'pollBatteryStatus() called'
+    lastTxMap.batteryPoll = now()
+    state.lastTx = mapToJsonString(lastTxMap)
+}
+
 void refresh() {
     checkDriverVersion()
     pollContactStatus()
     if (deviceProfiles[getModelGroup()]?.capabilities?.battery?.value == true) {
-        List<String> cmds = []
-        cmds += zigbee.readAttribute(0x001, 0x0021, [:], delay = 200)
-        cmds += zigbee.readAttribute(0x001, 0x0020, [:], delay = 100)
-        sendZigbeeCommands(cmds)
+        pollBatteryStatus()
     } else {
         logInfo 'refresh() is not implemented for this sleepy Zigbee device'
     }
@@ -1069,6 +1102,8 @@ void initializeVars(boolean fullInit = true) {
     if (fullInit == true || state.notPresentCounter == null) { state.notPresentCounter = 0 }
     if (fullInit == true || settings?.offlineThreshold == null) { device.updateSetting('offlineThreshold', [value: presenceCountDefaultThreshold, type: 'number']) }
     if (fullInit == true || settings?.batteryReporting == null) { device.updateSetting('batteryReporting', [value: batteryReportingOptions.defaultValue.toString(), type: 'enum']) }
+    if (fullInit == true || settings?.pollContactStatus == null) { device.updateSetting('pollContactStatus', false) }
+    if (fullInit == true || settings?.pollBatteryStatus == null) { device.updateSetting('pollBatteryStatus', false) }
 }
 
 def tuyaBlackMagic() {
