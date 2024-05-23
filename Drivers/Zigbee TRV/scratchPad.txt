@@ -386,3 +386,12 @@ BRT-100 : force temperature update on refresh : send off/heat command ?         
 HA Better Thermostat :  https://github.com/KartoffelToby/better_thermostat   
 
 Danfoss Ally - https://www.zigbee2mqtt.io/devices/014G2461.html 
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+catchall: 0104 0201 01 01 0040 00 194C 01 00 0000 00 01 06080100004006A4016C075802400658024006FC036C0764054006
+
+======>  dev:48352024-05-20 22:54:16.309warnSonof TRVZB parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0xnull (value null)
+dev:48352024-05-20 22:54:16.306warnSonof TRVZB processClusterAttributeFromDeviceProfile: exception org.codehaus.groovy.runtime.typehandling.GroovyCastException: Cannot cast object 'null' with class 'null' to class 'int'. Try 'java.lang.Integer' instead caught while converting hex value null to integer
+

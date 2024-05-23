@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, DuplicateListLiteral, DuplicateMapLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, InsecureRandom, LineLength, MethodCount, MethodReturnTypeRequired, MethodSize, NglParseError, NoDef, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryGetter, UnnecessaryGroovyImport, UnnecessaryObjectReferences, UnnecessaryPackageReference, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport, UnusedPrivateMethod, VariableName */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Common ZCL Library',
-    name: 'commonLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy',
-    version: '3.1.1',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Common ZCL Library', name: 'commonLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/commonLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
   *  Common ZCL Library
@@ -39,9 +33,10 @@ library(
   * ver. 3.0.7  2024-04-23 kkossev  - tuyaMagic() for Tuya devices only; added stats cfgCtr, instCtr rejoinCtr, matchDescCtr, activeEpRqCtr; trace ZDO commands; added 0x0406 OccupancyCluster; reduced debug for chatty devices;
   * ver. 3.1.0  2024-04-28 kkossev  - unnecesery unschedule() speed optimization; added syncTuyaDateTime(); tuyaBlackMagic() initialization bug fix.
   * ver. 3.1.1  2024-05-05 kkossev  - getTuyaAttributeValue bug fix; added customCustomParseIlluminanceCluster method
-  * ver. 3.1.2  2024-05-15 kkossev  - (dev.branch)
+  * ver. 3.2.0  2024-05-22 kkossev  - (dev.branch) W.I.P - standardParseXyzCluster and customParseXyzCluster methods;
   *
-  *                                   TODO: rename all custom handlers in the libs to statdndardParseXXX !! TODO
+  *                                   TODO: standardParseBasicCluster exception!
+  *                                   TODO: rename all custom handlers in the libs to statdndardParseXXX !! W.I.P.
   *                                   TODO: MOVE ZDO counters to health state;
   *                                   TODO: refresh() to bypass the duplicated events and minimim delta time between events checks
   *                                   TODO: remove the isAqaraTRV_OLD() dependency from the lib
@@ -50,8 +45,8 @@ library(
   *
 */
 
-String commonLibVersion() { '3.1.2' }
-String commonLibStamp() { '2024/05/15 7:46 PM' }
+String commonLibVersion() { '3.2.0' }
+String commonLibStamp() { '2024/05/22 9:45 PM' }
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -68,7 +63,7 @@ import java.math.BigDecimal
 metadata {
         if (_DEBUG) {
             command 'test', [[name: 'test', type: 'STRING', description: 'test', defaultValue : '']]
-            command 'parseTest', [[name: 'parseTest', type: 'STRING', description: 'parseTest', defaultValue : '']]
+            command 'testParse', [[name: 'testParse', type: 'STRING', description: 'testParse', defaultValue : '']]
             command 'tuyaTest', [
                 [name:'dpCommand', type: 'STRING', description: 'Tuya DP Command', constraints: ['STRING']],
                 [name:'dpValue',   type: 'STRING', description: 'Tuya DP value', constraints: ['STRING']],
@@ -89,7 +84,7 @@ metadata {
         // common commands for all device types
         command 'configure', [[name:'normally it is not needed to configure anything', type: 'ENUM',   constraints: /*['--- select ---'] +*/ ConfigureOpts.keySet() as List<String>]]
 
-        if (deviceType in  ['Switch', 'Dimmer', 'Bulb']) {
+        if (deviceType in  ['Switch', 'Dimmer']) {
             capability 'Switch'
             if (_THREE_STATE == true) {
                 attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
@@ -207,23 +202,9 @@ void parse(final String description) {
         return
     }
     //
-    //final String clusterName = clusterLookup(descMap.clusterInt)
-    //final String attribute = descMap.attrId ? " attribute 0x${descMap.attrId} (value ${descMap.value})" : ''
-    //if (settings.logEnable) { log.trace "zigbee received ${clusterName} message" + attribute }
-
+    if (standardAndCustomParseCluster(descMap, description)) { return }
+    //
     switch (descMap.clusterInt as Integer) {
-        case zigbee.BASIC_CLUSTER:                          // 0x0000
-            parseBasicCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseBasicCluster(descMap + map) }
-            break
-        case zigbee.POWER_CONFIGURATION_CLUSTER:            // 0x0001
-            parsePowerCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parsePowerCluster(descMap + map) }
-            break
-        case zigbee.IDENTIFY_CLUSTER:                      // 0x0003
-            parseIdentityCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseIdentityCluster(descMap + map) }
-            break
         case zigbee.GROUPS_CLUSTER:                        // 0x0004
             parseGroupsCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseGroupsCluster(descMap + map) }
@@ -232,48 +213,15 @@ void parse(final String description) {
             parseScenesCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseScenesCluster(descMap + map) }
             break
-        case zigbee.ON_OFF_CLUSTER:                         // 0x0006
-            parseOnOffCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseOnOffCluster(descMap + map) }
-            break
-        case zigbee.LEVEL_CONTROL_CLUSTER:                  // 0x0008
-            parseLevelControlCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseLevelControlCluster(descMap + map) }
-            break
-        case 0x000C :                                       // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
-            parseAnalogInputCluster(descMap, description)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseAnalogInputCluster(descMap + map, description) }
-            break
-        case 0x0012 :                                       // Aqara Cube - Multistate Input
-            parseMultistateInputCluster(descMap)
-            break
          case 0x0102 :                                      // window covering
             parseWindowCoveringCluster(descMap)
             break
-        case 0x0201 :                                       // Aqara E1 TRV
-            parseThermostatCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseThermostatCluster(descMap + map) }
-            break
+            /*
         case 0x0300 :                                       // Aqara LED Strip T1
             parseColorControlCluster(descMap, description)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseColorControlCluster(descMap + map, description) }
             break
-        case zigbee.ILLUMINANCE_MEASUREMENT_CLUSTER :       //0x0400
-            parseIlluminanceCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseIlluminanceCluster(descMap + map) }
-            break
-        case zigbee.TEMPERATURE_MEASUREMENT_CLUSTER :       //0x0402
-            parseTemperatureCluster(descMap)
-            break
-        case zigbee.RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER : //0x0405
-            parseHumidityCluster(descMap)
-            break
-        case 0x0406 : //OCCUPANCY_CLUSTER                   // Sonoff SNZB-06
-            parseOccupancyCluster(descMap)
-            break
-        case 0x042A :                                       // pm2.5
-            parsePm25Cluster(descMap)
-            break
+            */
         case zigbee.ELECTRICAL_MEASUREMENT_CLUSTER:
             parseElectricalMeasureCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseElectricalMeasureCluster(descMap + map) }
@@ -282,35 +230,67 @@ void parse(final String description) {
             parseMeteringCluster(descMap)
             descMap.remove('additionalAttrs')?.each { final Map map -> parseMeteringCluster(descMap + map) }
             break
-        case 0xE002 :
-            parseE002Cluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseE002Cluster(descMap + map) }
+        case 0x000C :  // special case : ZigUSB                                     // Aqara TVOC Air Monitor; Aqara Cube T1 Pro;
+            if (this.respondsTo('customParseAnalogInputClusterDescription')) {
+                customParseAnalogInputClusterDescription(descMap, description)                 // ZigUSB
+                descMap.remove('additionalAttrs')?.each { final Map map -> customParseAnalogInputClusterDescription(descMap + map, description) }
+            }
             break
-        case 0xEC03 :   // Linptech unknown cluster
-            parseEC03Cluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseEC03Cluster(descMap + map) }
-            break
-        case 0xEF00 :                                       // Tuya famous cluster
-            parseTuyaCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseTuyaCluster(descMap + map) }
-            break
-        case 0xFC11 :                                       // Sonoff
-            parseFC11Cluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map map -> parseFC11Cluster(descMap + map) }
-            break
-        case 0xfc7e :                                       // tVOC 'Sensirion VOC index' https://sensirion.com/media/documents/02232963/6294E043/Info_Note_VOC_Index.pdf
-            parseAirQualityIndexCluster(descMap)
-            break
-        case 0xFCC0 :                                       // XIAOMI_CLUSTER_ID Xiaomi cluster
-            parseXiaomiCluster(descMap)
-            descMap.remove('additionalAttrs')?.each { final Map m -> parseXiaomiCluster(descMap + m) }
-            break
+
         default:
             if (settings.logEnable) {
-                logWarn "zigbee received <b>unknown cluster:${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+                logWarn "parse: zigbee received <b>unknown cluster:${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
             }
             break
     }
+}
+
+@Field static final Map<Integer, String> ClustersMap = [
+    0x0000: 'Basic',
+    0x0001: 'Power',
+    0x0003: 'Identify',
+    0x000C: 'AnalogInput',
+    0x0006: 'OnOff',
+    0x0008: 'LevelControl',
+    0x0012: 'MultistateInput',
+    0x0201: 'Thermostat',
+    0x0300: 'ColorControl',
+    0x0400: 'Illuminance',
+    0x0402: 'Temperature',
+    0x0405: 'Humidity',
+    0x0406: 'Occupancy',
+    0x042A: 'Pm25',
+    0xE002: 'E002',
+    0xEC03: 'EC03',
+    0xEF00: 'Tuya',
+    0xFC11: 'FC11',
+    0xFC7E: 'AirQualityIndex', // Sensirion VOC index
+    0xFCC0: 'XiaomiFCC0',
+]
+
+boolean standardAndCustomParseCluster(Map descMap, final String description) {
+    Integer clusterInt = descMap.clusterInt as Integer
+    String  clusterName = ClustersMap[clusterInt] ?: UNKNOWN
+    if (clusterName == null || clusterName == UNKNOWN) {
+        logWarn "standardAndCustomParseCluster: zigbee received <b>unknown cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+        return false
+    }
+    String customParser = "customParse${clusterName}Cluster"
+    String standardParser = "standardParse${clusterName}Cluster"
+    // check if a custom parser is defined in the custom driver. If found there, the standard parser should  be called within that custom parser, if needed
+    if (this.respondsTo(customParser)) {
+        this."${customParser}"(descMap)
+        descMap.remove('additionalAttrs')?.each { final Map map -> this."${customParser}"(descMap + map) }
+        return true
+    }
+    // if no custom parser is defined, try the standard parser (if exists), eventually defined in the included library file
+    if (this.respondsTo(standardParser)) {
+        this."${standardParser}"(descMap)
+        descMap.remove('additionalAttrs')?.each { final Map map -> this."${standardParser}"(descMap + map) }
+        return true
+    }
+    logWarn "standardAndCustomParseCluster: <b>Missing</b> ${standardParser} or ${customParser} handler for <b>cluster:0x${descMap.cluster} (${descMap.clusterInt})</b> message (${descMap})"
+    return false
 }
 
 static void updateRxStats(final Map state) {
@@ -364,13 +344,13 @@ void parseZdoClusters(final Map descMap) {
             state.stats['activeEpRqCtr'] = (state.stats['activeEpRqCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, data:${descMap.data})" }
             // send the active endpoint response
-            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"] 
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8005 {00 00 00 00 01 01} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0006 :
             state.stats['matchDescCtr'] = (state.stats['matchDescCtr'] ?: 0) + 1
             if (settings?.logEnable) { log.info "${clusterInfo}, data=${descMap.data} (Sequence Number:${descMap.data[0]}, Input cluster count:${descMap.data[5]} Input cluster: 0x${descMap.data[7] + descMap.data[6]})" }
-            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"] 
+            cmds += ["he raw ${device.deviceNetworkId} 0 0 0x8006 {00 00 00 00 00} {0x0000}"]
             sendZigbeeCommands(cmds)
             break
         case 0x0013 : // device announcement
@@ -406,21 +386,11 @@ void parseZdoClusters(final Map descMap) {
 void parseGeneralCommandResponse(final Map descMap) {
     final int commandId = hexStrToUnsignedInt(descMap.command)
     switch (commandId) {
-        case 0x01: // read attribute response
-            parseReadAttributeResponse(descMap)
-            break
-        case 0x04: // write attribute response
-            parseWriteAttributeResponse(descMap)
-            break
-        case 0x07: // configure reporting response
-            parseConfigureResponse(descMap)
-            break
-        case 0x09: // read reporting configuration response
-            parseReadReportingConfigResponse(descMap)
-            break
-        case 0x0B: // default command response
-            parseDefaultCommandResponse(descMap)
-            break
+        case 0x01: parseReadAttributeResponse(descMap); break
+        case 0x04: parseWriteAttributeResponse(descMap); break
+        case 0x07: parseConfigureResponse(descMap); break
+        case 0x09: parseReadReportingConfigResponse(descMap); break
+        case 0x0B: parseDefaultCommandResponse(descMap); break
         default:
             final String commandName = ZigbeeGeneralCommandEnum[commandId] ?: "UNKNOWN_COMMAND (0x${descMap.command})"
             final String clusterName = clusterLookup(descMap.clusterInt)
@@ -567,10 +537,6 @@ void parseDefaultCommandResponse(final Map descMap) {
     0x14: 'Discover Commands Generated Response', 0x15: 'Discover Attributes Extended', 0x16: 'Discover Attributes Extended Response'
 ]
 
-void parseXiaomiCluster(final Map descMap) {
-    if (xiaomiLibVersion() != null) { parseXiaomiClusterLib(descMap) } else { logWarn 'Xiaomi cluster 0xFCC0' }
-}
-
 @Field static final int ROLLING_AVERAGE_N = 10
 BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
     BigDecimal avg = avgPar
@@ -590,7 +556,7 @@ BigDecimal approxRollingAverage(BigDecimal avgPar, BigDecimal newSample) {
 /**
  * Zigbee Basic Cluster Parsing  0x0000
  */
-void parseBasicCluster(final Map descMap) {
+void standardParseBasicCluster(final Map descMap) {
     Long now = new Date().getTime()
     if (state.lastRx == null) { state.lastRx = [:] }
     state.lastRx['checkInTime'] = now
@@ -664,43 +630,21 @@ void parseBasicCluster(final Map descMap) {
     }
 }
 
-// power cluster            0x0001
-void parsePowerCluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    if (descMap.attrId in ['0020', '0021']) {
-        state.lastRx['batteryTime'] = new Date().getTime()
-        state.stats['battCtr'] = (state.stats['battCtr'] ?: 0) + 1
-    }
-    if (this.respondsTo('customParsePowerCluster')) {
-        customParsePowerCluster(descMap)
-    }
-    else {
-        logDebug "zigbee received Power cluster attribute 0x${descMap.attrId} (value ${descMap.value})"
-    }
-}
 
-/* groovylint-disable-next-line UnusedMethodParameter */
-void parseIdentityCluster(final Map descMap) { logDebug 'unprocessed parseIdentityCluster' }
-
-void parseScenesCluster(final Map descMap) {
-    if (this.respondsTo('customParseScenesCluster')) { customParseScenesCluster(descMap) } else { logWarn "unprocessed ScenesCluster attribute ${descMap.attrId}" }
-}
-
-void parseGroupsCluster(final Map descMap) {
-    if (this.respondsTo('customParseGroupsCluster')) { customParseGroupsCluster(descMap) } else { logWarn "unprocessed GroupsCluster attribute ${descMap.attrId}" }
-}
+void standardParseIdentityCluster(final Map descMap) { logDebug "not implemented standardParseIdentityCluster attribute ${descMap.attrId}" }
 
 /*
  * -----------------------------------------------------------------------------
- * on/off cluster            0x0006
+ * on/off cluster            0x0006     TODO - move to a library !!!!!!!!!!!!!!!
  * -----------------------------------------------------------------------------
 */
-
-void parseOnOffCluster(final Map descMap) {
+void standardParseOnOffCluster(final Map descMap) {
+    /*
     if (this.respondsTo('customParseOnOffCluster')) {
         customParseOnOffCluster(descMap)
     }
-    else if (descMap.attrId == '0000') {
+    else */
+    if (descMap.attrId == '0000') {
         if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseOnOffCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
         int rawValue = hexStrToUnsignedInt(descMap.value)
         sendSwitchEvent(rawValue)
@@ -709,8 +653,8 @@ void parseOnOffCluster(final Map descMap) {
         parseOnOffAttributes(descMap)
     }
     else {
-        if (descMap.attrId != null) { logWarn "parseOnOffCluster: unprocessed attrId ${descMap.attrId}"  }
-        else { logDebug "parseOnOffCluster: skipped processing OnOIff cluster (attrId is ${descMap.attrId})" } // ZigUSB has its own interpretation of the Zigbee standards ... :(
+        if (descMap.attrId != null) { logWarn "standardParseOnOffCluster: unprocessed attrId ${descMap.attrId}"  }
+        else { logDebug "standardParseOnOffCluster: skipped processing OnOIff cluster (attrId is ${descMap.attrId})" } // ZigUSB has its own interpretation of the Zigbee standards ... :(
     }
 }
 
@@ -1040,17 +984,6 @@ void parseOnOffAttributes(final Map it) {
     if (settings?.logEnable) { logInfo "${attrName} is ${mode}" }
 }
 
-void parseLevelControlCluster(final Map descMap) {
-    if (this.respondsTo('customParseLevelControlCluster')) {
-        customParseLevelControlCluster(descMap)
-    }
-    else if (this.respondsTo('levelLibParseLevelControlCluster')) {
-        levelLibParseLevelControlCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
-    }
-}
 
 String intTo16bitUnsignedHex(int value) {
     String hexStr = zigbee.convertToHexString(value.toInteger(), 4)
@@ -1061,6 +994,7 @@ String intTo8bitUnsignedHex(int value) {
     return zigbee.convertToHexString(value.toInteger(), 2)
 }
 
+/*
 void parseColorControlCluster(final Map descMap, String description) {
     if (DEVICE_TYPE in ['Bulb']) {
         parseColorControlClusterBulb(descMap, description)
@@ -1074,42 +1008,7 @@ void parseColorControlCluster(final Map descMap, String description) {
         logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
     }
 }
-
-void parseIlluminanceCluster(final Map descMap) {
-    if (this.respondsTo('customCustomParseIlluminanceCluster')) { customCustomParseIlluminanceCluster(descMap) }
-    else if (this.respondsTo('customParseIlluminanceCluster')) { customParseIlluminanceCluster(descMap) }
-    else { logWarn "unprocessed Illuminance attribute ${descMap.attrId}" }
-}
-
-// Temperature Measurement Cluster 0x0402
-void parseTemperatureCluster(final Map descMap) {
-    if (this.respondsTo('customParseTemperatureCluster')) {
-        customParseTemperatureCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed Temperature attribute ${descMap.attrId}"
-    }
-}
-
-// Humidity Measurement Cluster 0x0405
-void parseHumidityCluster(final Map descMap) {
-    if (this.respondsTo('customParseHumidityCluster')) {
-        customParseHumidityCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed Humidity attribute ${descMap.attrId}"
-    }
-}
-
-// Occupancy Sensing Cluster 0x0406
-void parseOccupancyCluster(final Map descMap) {
-    if (this.respondsTo('customParseOccupancyCluster')) {
-        customParseOccupancyCluster(descMap)
-    }
-    else {
-        logWarn "unprocessed Occupancy attribute ${descMap.attrId}"
-    }
-}
+*/
 
 // Electrical Measurement Cluster 0x0702
 void parseElectricalMeasureCluster(final Map descMap) {
@@ -1121,61 +1020,9 @@ void parseMeteringCluster(final Map descMap) {
     if (!executeCustomHandler('customParseMeteringCluster', descMap)) { logWarn 'parseMeteringCluster is NOT implemented1' }
 }
 
-// pm2.5
-void parsePm25Cluster(final Map descMap) {
-    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
-    int value = hexStrToUnsignedInt(descMap.value)
-    /* groovylint-disable-next-line NoFloat */
-    float floatValue  = Float.intBitsToFloat(value.intValue())
-    if (this.respondsTo('handlePm25Event')) {
-        handlePm25Event(floatValue as Integer)
-    }
-    else {
-        logWarn "handlePm25Event: don't know how to handle descMap=${descMap}"
-    }
-}
-
-// Analog Input Cluster 0x000C
-void parseAnalogInputCluster(final Map descMap, String description=null) {
-    if (this.respondsTo('customParseAnalogInputCluster')) {
-        customParseAnalogInputCluster(descMap)
-    }
-    else if (this.respondsTo('customParseAnalogInputClusterDescription')) {
-        customParseAnalogInputClusterDescription(description)                   // ZigUSB
-    }
-    else if (DEVICE_TYPE in ['AirQuality']) {
-        parseAirQualityIndexCluster(descMap)
-    }
-    else {
-        logWarn "parseAnalogInputCluster: don't know how to handle descMap=${descMap}"
-    }
-}
-
-// Multistate Input Cluster 0x0012
-void parseMultistateInputCluster(final Map descMap) {
-    if (this.respondsTo('customParseMultistateInputCluster')) { customParseMultistateInputCluster(descMap) } else { logWarn "parseMultistateInputCluster: don't know how to handle descMap=${descMap}" }
-}
-
 // Window Covering Cluster 0x0102
 void parseWindowCoveringCluster(final Map descMap) {
     if (this.respondsTo('customParseWindowCoveringCluster')) { customParseWindowCoveringCluster(descMap) } else { logWarn "parseWindowCoveringCluster: don't know how to handle descMap=${descMap}" }
-}
-
-// thermostat cluster 0x0201
-void parseThermostatCluster(final Map descMap) {
-    if (this.respondsTo('customParseThermostatCluster')) { customParseThermostatCluster(descMap) } else { logWarn "parseThermostatCluster: don't know how to handle descMap=${descMap}" }
-}
-
-void parseFC11Cluster(final Map descMap) {
-    if (this.respondsTo('customParseFC11Cluster')) { customParseFC11Cluster(descMap) } else { logWarn "parseFC11Cluster: don't know how to handle descMap=${descMap}" }
-}
-
-void parseE002Cluster(final Map descMap) {
-    if (this.respondsTo('customParseE002Cluster')) { customParseE002Cluster(descMap) } else { logWarn "Unprocessed cluster 0xE002 command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }    // radars
-}
-
-void parseEC03Cluster(final Map descMap) {
-    if (this.respondsTo('customParseEC03Cluster')) { customParseEC03Cluster(descMap) } else { logWarn "Unprocessed cluster 0xEC03C command ${descMap.command} attrId ${descMap.attrId} value ${value} (0x${descMap.value})" }   // radars
 }
 
 /*
@@ -1224,7 +1071,7 @@ void syncTuyaDateTime() {
     logInfo "Tuya device time synchronized to ${dateTimeNow}"
 }
 
-void parseTuyaCluster(final Map descMap) {
+void standardParseTuyaCluster(final Map descMap) {
     if (descMap?.clusterInt == CLUSTER_TUYA && descMap?.command == '24') {        //getSETTIME
         syncTuyaDateTime()
     }
@@ -1244,25 +1091,21 @@ void parseTuyaCluster(final Map descMap) {
             logWarn "unprocessed short Tuya command response: dp_id=${descMap?.data[3]} dp=${descMap?.data[2]} fncmd_len=${fncmd_len} data=${descMap?.data})"
             return
         }
+        boolean isSpammyDeviceProfileDefined = this.respondsTo('isSpammyDeviceProfile') // check if the method exists 05/21/2024
         for (int i = 0; i < (dataLen - 4); ) {
             int dp = zigbee.convertHexToInt(descMap?.data[2 + i])          // "dp" field describes the action/message of a command frame
             int dp_id = zigbee.convertHexToInt(descMap?.data[3 + i])       // "dp_identifier" is device dependant
             int fncmd_len = zigbee.convertHexToInt(descMap?.data[5 + i])
             int fncmd = getTuyaAttributeValue(descMap?.data, i)          //
-            if (!isChattyDeviceReport(descMap) && !isSpammyDeviceProfile()) {
-                logDebug "parseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
+            if (!isChattyDeviceReport(descMap) && isSpammyDeviceProfileDefined && !isSpammyDeviceProfile()) {
+                logDebug "standardParseTuyaCluster: command=${descMap?.command} dp_id=${dp_id} dp=${dp} (0x${descMap?.data[2 + i]}) fncmd=${fncmd} fncmd_len=${fncmd_len} (index=${i})"
             }
             processTuyaDP(descMap, dp, dp_id, fncmd)
             i = i + fncmd_len + 4
         }
     }
     else {
-        if (this.respondsTo('customParseTuyaCluster')) {
-            customParseTuyaCluster(descMap)
-        }
-        else {
-            logWarn "unprocessed Tuya cluster command ${descMap?.command} data=${descMap?.data}"
-        }
+        logWarn "standardParseTuyaCluster: unprocessed Tuya cluster command ${descMap?.command} data=${descMap?.data}"
     }
 }
 
@@ -1383,7 +1226,6 @@ List<String> configureDevice() {
         List<String> customCmds = customConfigureDevice()
         if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
     }
-    else if (DEVICE_TYPE in  ['Bulb'])       { cmds += configureBulb() }
     // sendZigbeeCommands(cmds) changed 03/04/2024
     logDebug "configureDevice(): cmds=${cmds}"
     return cmds
@@ -1417,16 +1259,13 @@ void refresh() {
     List<String> customCmds = customHandlers(['batteryRefresh', 'groupsRefresh', 'customRefresh'])
     if (customCmds != null && !customCmds.isEmpty()) { cmds +=  customCmds }
 
-    if (DEVICE_TYPE in  ['Bulb'])       { cmds += refreshBulb() }
-    else {
-        if (DEVICE_TYPE in  ['Dimmer']) {
-            cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
-            cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
-        }
-        if (DEVICE_TYPE in  ['THSensor']) {
-            cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
-            cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
-        }
+    if (DEVICE_TYPE in  ['Dimmer']) {
+        cmds += zigbee.readAttribute(0x0006, 0x0000, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x0008, 0x0000, [:], delay = 200)
+    }
+    if (DEVICE_TYPE in  ['THSensor']) {
+        cmds += zigbee.readAttribute(0x0402, 0x0000, [:], delay = 200)
+        cmds += zigbee.readAttribute(0x0405, 0x0000, [:], delay = 200)
     }
 
     if (cmds != null && !cmds.isEmpty()) {
@@ -1598,22 +1437,6 @@ void sendHealthStatusEvent(final String value) {
     }
     else {
         if (settings?.txtEnable) { log.warn "${device.displayName}} <b>${descriptionText}</b>" }
-    }
-}
-
-/**
- * Scheduled job for polling device specific attribute(s)
- */
-void autoPoll() {
-    logDebug 'autoPoll()...'
-    checkDriverVersion(state)
-    List<String> cmds = []
-    if (DEVICE_TYPE in  ['AirQuality']) {
-        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
-    }
-
-    if (cmds != null && !cmds.isEmpty()) {
-        sendZigbeeCommands(cmds)
     }
 }
 
@@ -1926,7 +1749,6 @@ void initializeVars( boolean fullInit = false ) {
     executeCustomHandler('customInitializeVars', fullInit)
     executeCustomHandler('customCreateChildDevices', fullInit)
     executeCustomHandler('customInitEvents', fullInit)
-    if (DEVICE_TYPE in ['Bulb'])       { initVarsBulb(fullInit);     initEventsBulb(fullInit) }
 
     final String mm = device.getDataValue('model')
     if ( mm != null) {
@@ -2036,11 +1858,13 @@ void deleteAllChildDevices() {
     sendInfoEvent 'All child devices DELETED'
 }
 
-void parseTest(String par) {
+void testParse(String par) {
     //read attr - raw: DF8D0104020A000029280A, dni: DF8D, endpoint: 01, cluster: 0402, size: 0A, attrId: 0000, encoding: 29, command: 0A, value: 280A
-    log.warn "parseTest - <b>START</b> (${par})"
+    log.trace '------------------------------------------------------'
+    log.warn "testParse - <b>START</b> (${par})"
     parse(par)
-    log.warn "parseTest -   <b>END</b> (${par})"
+    log.warn "testParse -   <b>END</b> (${par})"
+    log.trace '------------------------------------------------------'
 }
 
 def testJob() {
@@ -2059,16 +1883,10 @@ String getCron(int timeInSeconds) {
     int  hours = (minutes / 60 ) as int
     if (hours > 23) { hours = 23 }
     String cron
-    if (timeInSeconds < 60) {
-        cron = "*/$timeInSeconds * * * * ? *"
-    }
+    if (timeInSeconds < 60) { cron = "*/$timeInSeconds * * * * ? *" }
     else {
-        if (minutes < 60) {
-            cron = "${rnd.nextInt(59)} ${rnd.nextInt(9)}/$minutes * ? * *"
-        }
-        else {
-            cron = "${rnd.nextInt(59)} ${rnd.nextInt(59)} */$hours ? * *"
-        }
+        if (minutes < 60) {   cron = "${rnd.nextInt(59)} ${rnd.nextInt(9)}/$minutes * ? * *" }
+        else {                cron = "${rnd.nextInt(59)} ${rnd.nextInt(59)} */$hours ? * *"  }
     }
     return cron
 }

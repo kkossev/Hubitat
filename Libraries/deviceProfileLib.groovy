@@ -7,7 +7,7 @@ library(
     name: 'deviceProfileLib',
     namespace: 'kkossev',
     importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/deviceProfileLib.groovy',
-    version: '3.1.2',
+    version: '3.1.3',
     documentationLink: ''
 )
 /*
@@ -30,6 +30,7 @@ library(
  * ver. 3.1.0  2024-04-03 kkossev  - (dev. branch) more Groovy Linting; deviceProfilesV3, enum pars bug fix;
  * ver. 3.1.1  2024-04-21 kkossev  - (dev. branch) deviceProfilesV3 bug fix; tuyaDPs list of maps bug fix; resetPreferencesToDefaults bug fix;
  * ver. 3.1.2  2024-05-05 kkossev  - (dev. branch) added isSpammyDeviceProfile()
+ * ver. 3.1.3  2024-05-21 kkossev  - (dev. branch) skip processClusterAttributeFromDeviceProfile if cluster or attribute or value is missing
  *
  *                                   TODO - updateStateUnknownDPs !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  *                                   TODO - send info log only if the value has changed?   // TODO - check whether Info log will be sent also for spammy clusterAttribute ?
@@ -38,8 +39,8 @@ library(
  *
 */
 
-static String deviceProfileLibVersion()   { '3.1.2' }
-static String deviceProfileLibStamp() { '2024/05/05 9:02 PM' }
+static String deviceProfileLibVersion()   { '3.1.3' }
+static String deviceProfileLibStamp() { '2024/05/21 10:53 AM' }
 import groovy.json.*
 import groovy.transform.Field
 import hubitat.zigbee.clusters.iaszone.ZoneStatus
@@ -967,6 +968,7 @@ public boolean isSpammyDPsToNotTrace(Map descMap) {
 
 // all DPs are spammy - sent periodically!
 public boolean isSpammyDeviceProfile() {
+    if (deviceProfilesV3 == null || deviceProfilesV3[getDeviceProfile()] == null) { return false }
     Boolean isSpammy = deviceProfilesV3[getDeviceProfile()]?.device?.isSpammy ?: false
     return isSpammy
 }
@@ -1196,6 +1198,7 @@ public boolean processTuyaDPfromDeviceProfile(final Map descMap, final int dp, f
 public boolean processClusterAttributeFromDeviceProfile(final Map descMap) {
     logTrace "processClusterAttributeFromDeviceProfile: descMap = ${descMap}"
     if (state.deviceProfile == null)  { logTrace '<b>state.deviceProfile is missing!<b>'; return false }
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return false }
 
     List<Map> attribMap = deviceProfilesV3[state.deviceProfile]?.attributes
     if (attribMap == null || attribMap.isEmpty()) { return false }    // no any attributes are defined in the Device Profile

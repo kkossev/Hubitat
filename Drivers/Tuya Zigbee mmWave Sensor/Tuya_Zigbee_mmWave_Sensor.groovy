@@ -22,7 +22,8 @@
  * ver. 3.1.1  2024-05-04 kkossev  - enabled all radars; add TS0601 _TZE204_muvkrjr5 @iEnam; added the code for forcedProfile change; added 'switch' for the TuYa SZR07U; Linptech: added ledIndicator; radar attributes types changed to number (was enum)
  * ver. 3.1.2  2024-05-08 kkossev  - added _TZ3218_t9ynfz4x as a new Linptech manufacturer; fixed HL0SS9OA and 2AAELWXK wrong IAS illuminance reprots; existance_time reanmed to occupiedTime
  * ver. 3.1.3  2024-05-11 kkossev  - added TS0601 _TZE204_7gclukjs; fixed debug trace logging;
- * ver. 3.1.4  2024-05-14 kkossev  - (dev.branch) added TS0601_24GHZ_PIR_RADAR profile TS0601 _TZE200_2aaelwxk and TS0601 _TZE200_kb5noeto for tests; added TS0601 _TZE204_fwondbzy; 
+ * ver. 3.1.4  2024-05-14 kkossev  - added TS0601_24GHZ_PIR_RADAR profile TS0601 _TZE200_2aaelwxk and TS0601 _TZE200_kb5noeto for tests; added TS0601 _TZE204_fwondbzy; 
+ * ver. 3.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 2.0
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
@@ -39,8 +40,8 @@
  *                                   TODO: humanMotionState - add preference: enum "disabled", "enabled", "enabled w/ timing" ...; add delayed event
 */
 
-static String version() { "3.1.3" }
-static String timeStamp() {"2024/05/14 5:00 PM"}
+static String version() { "3.2.0" }
+static String timeStamp() {"2024/05/21 8:33 AM"}
 
 @Field static final Boolean _DEBUG = false
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -1003,15 +1004,13 @@ void customParseTuyaCluster(final Map descMap) {
     }
 }
 
-// TODO - make this custom, and the illuminance.lib function - standard !!!  TODO !!!
-void customCustomParseIlluminanceCluster(final Map descMap) {
-    //log.trace "customCustomParseIlluminanceCluster: zigbee received illuminance cluster 0x${descMap.clusterInt} attribute 0x${descMap.attrId} value ${descMap.value} (raw ${descMap.value})"
+void customParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     if (DEVICE?.device?.ignoreIAS == true) { 
         logDebug "customCustomParseIlluminanceCluster: ignoring IAS reporting device"
         return 
     }    // ignore IAS devices
-    customParseIlluminanceCluster(descMap)  // illuminance.lib
+    standardParseIlluminanceCluster(descMap)  // illuminance.lib
 }
 
 void formatAttrib() {

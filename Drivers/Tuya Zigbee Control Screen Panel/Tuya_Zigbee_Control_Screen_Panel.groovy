@@ -20,14 +20,14 @@
  * ver. 1.0.0  2024-04-13 kkossev  - first release version
  * ver. 1.0.1  2024-04-27 kkossev  - commonLib 3.1.0 update; sync the time automatically on device power up; 
  * ver. 1.1.0  2024-04-28 kkossev  - relays child devices are created automatically; if a child device exist, send a switch event, otherwise send a button event;
- * ver. 1.1.1  2024-04-28 kkossev  - (dev.branch)
+ * ver. 1.2.0  2024-05-21 kkossev  - (dev.branch) commonLib 3.2.0 allignment;
  *
  *                                   TODO:  configure the number of the physical switches (relays) in the Preferences
  *                                   TODO:  enable/disable the virtual switches 1,2,3 in the Preferences (also create child devices)
  */
 
-static String version() { "1.1.0" }
-static String timeStamp() {"2024/04/28 7:03 PM"}
+static String version() { "1.2.0" }
+static String timeStamp() {"2024/05/21 9:58 AM"}
 
 @Field static final Boolean _DEBUG = true
 @Field static final Boolean _TRACE_ALL = false      // trace all messages, including the spammy ones
@@ -316,6 +316,9 @@ void customParseTuyaCluster(final Map descMap) {
     logDebug "customParseTuyaCluster(${descMap})"
     if (descMap.cluster == CLUSTER_TUYA && descMap.command == '11') {
         syncTuyaDateTime()
+    }
+    else {
+        standardParseTuyaCluster(descMap)       // from commonLib
     }
 }
 

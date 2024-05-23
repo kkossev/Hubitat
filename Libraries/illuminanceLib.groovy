@@ -1,14 +1,9 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Illuminance Library',
-    name: 'illuminanceLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy',
-    version: '3.0.1',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Illuminance Library', name: 'illuminanceLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/illuminanceLib.groovy', documentationLink: '',
+    version: '3.2.0'
+    
 )
 /*
  *  Zigbee Illuminance Library
@@ -23,13 +18,14 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added illuminanceLib.groovy
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment;
  *
  *                                   TODO: illum threshold not working!
  *                                   TODO: check illuminanceInitializeVars() and illuminanceProcessTuyaDP() usage
 */
 
-static String illuminanceLibVersion()   { '3.0.1' }
-static String illuminanceLibStamp() { '2024/04/26 8:06 AM' }
+static String illuminanceLibVersion()   { '3.2.0' }
+static String illuminanceLibStamp() { '2024/05/21 9:03 PM' }
 
 metadata {
     // no capabilities
@@ -42,7 +38,7 @@ metadata {
 
 @Field static final Integer DEFAULT_ILLUMINANCE_THRESHOLD = 10
 
-void customParseIlluminanceCluster(final Map descMap) {
+void standardParseIlluminanceCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int value = hexStrToUnsignedInt(descMap.value)
     int lux = value > 0 ? Math.round(Math.pow(10, (value / 10000))) : 0

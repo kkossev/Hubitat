@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Temperature Library',
-    name: 'temperatureLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy',
-    version: '3.0.1',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Temperature Library', name: 'temperatureLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/temperatureLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Temperature Library
@@ -24,12 +18,13 @@ library(
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added temperatureLib.groovy
  * ver. 3.0.1  2024-04-19 kkossev  - temperature rounding fix
+ * ver. 3.2.0  2024-05-21 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
-static String temperatureLibVersion()   { '3.0.1' }
-static String temperatureLibStamp() { '2024/04/19 9:17 PM' }
+static String temperatureLibVersion()   { '3.2.0' }
+static String temperatureLibStamp() { '2024/05/21 5:04 PM' }
 
 metadata {
     capability 'TemperatureMeasurement'
@@ -48,7 +43,7 @@ metadata {
     }
 }
 
-void customParseTemperatureCluster(final Map descMap) {
+void standardParseTemperatureCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToSignedInt(descMap.value)
     handleTemperatureEvent(value / 100.0F as BigDecimal)

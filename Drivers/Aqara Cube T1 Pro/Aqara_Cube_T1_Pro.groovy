@@ -19,12 +19,13 @@
  * ver. 2.1.0  2023-07-15 kkossev  - Libraries first introduction for the Aqara Cube T1 Pro driver; Fingerbot driver; Aqara devices: store NWK in states; aqaraVersion bug fix;
  * ver. 2.1.1  2023-07-16 kkossev  - Aqara Cube T1 Pro fixes and improvements; implemented configure() and loadAllDefaults commands;
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
+ * ver. 3.2.0  2024-05-21 kkossev  - (dev. branch) commonLib 3.2.0
  *
  *                                   TODO: 
  */
 
-static String version() { "3.0.6" }
-static String timeStamp() {"2024/04/06 11:55 PM"}
+static String version() { "3.2.0" }
+static String timeStamp() {"2024/05/21 4:10 PM"}
 
 @Field static final Boolean _DEBUG = false
 
@@ -343,6 +344,7 @@ def sendAqaraCubeOperationModeEvent(final Integer mode)
     }    
 }
 
+// 0x000C - Analog Input Cluster
 void customParseAnalogInputCluster(final Map descMap) {
     logDebug "customParseAnalogInputCluster: (0x000C) attribute 0x${descMap.attrId} (value ${descMap.value})"
     if (descMap.value == null || descMap.value == 'FFFF') { logWarn "invalid or unknown value"; return } // invalid or unknown value
@@ -377,98 +379,4 @@ void sendAqaraCubeRotateEvent(final Integer degrees) {
     }
 }
 
-/*
-  ## Endpoint 3: 
-
-  | Cluster   | Data                                  | Desc                                       |
-  | --------- | ------------------------------------- | ------------------------------------------ |
-  | genAnalog | {267: 500, 329: 3, presentValue: -51} | 267: NA, 329: side up, presentValue: angle |
-
-
-*/
-
-/*
-        zigbeeModel: ['lumi.sensor_cube', 'lumi.sensor_cube.aqgl01', 'lumi.remote.cagl02'],
-        model: 'MFKZQ01LM',
-        vendor: 'Xiaomi',
-        description: 'Mi/Aqara smart home cube',
-        meta: {battery: {voltageToPercentage: '3V_2850_3000'}},
-        fromZigbee: [fz.xiaomi_basic, fz.MFKZQ01LM_action_multistate, fz.MFKZQ01LM_action_analog],
-        exposes: [e.battery(), e.battery_voltage(), e.angle('action_angle'), e.device_temperature(), e.power_outage_count(false),
-            e.cube_side('action_from_side'), e.cube_side('action_side'), e.cube_side('action_to_side'), e.cube_side('side'),
-            e.action(['shake', 'wakeup', 'fall', 'tap', 'slide', 'flip180', 'flip90', 'rotate_left', 'rotate_right'])],
-        toZigbee: [],
-*/
-
-/*
-const definition = {
-    zigbeeModel: ['lumi.remote.cagl02'],
-    model: 'CTP-R01',
-    vendor: 'Lumi',
-    description: 'Aqara cube T1 Pro',
-    meta: { battery: { voltageToPercentage: '3V_2850_3000' } },
-    configure: async (device, coordinatorEndpoint, logger) => {
-        const endpoint = device.getEndpoint(1);
-        await endpoint.write('aqaraOpple', {'mode': 1}, {manufacturerCode: 0x115f});
-        await reporting.bind(endpoint, coordinatorEndpoint, ['genOnOff','genPowerCfg','genMultistateInput']);
-    },
-    fromZigbee: [aqara_opple, action_multistate, fz.MFKZQ01LM_action_analog],
-
-
- convert: (model, msg, publish, options, meta) => {
-   const value = msg.data['presentValue'];
-   let result;
-   if (value === 0) result = { action: 'shake' };
-   else if (value === 2) result = { action: 'wakeup' };
-   else if (value === 4) result = { action: 'hold' };
-   else if (value >= 512) result = { action: 'tap', side: value - 511 };
-   else if (value >= 256) result = { action: 'slide', side: value - 255 };
-   else if (value >= 128) result = { action: 'flip180', side: value - 127 };
-   else if (value >= 64) result = { action: 'flip90', action_from_side: Math.floor((value - 64) / 8) + 1, action_to_side: (value % 8) + 1, action_side: (value % 8) + 1, from_side: Math.floor((value - 64) / 8) + 1, to_side: (value % 8) + 1, side: (value % 8) + 1 };
-   else if (value >= 1024) result = { action: 'side_up', side_up: value - 1023 };
-   if (result && !utils.isLegacyEnabled(options)) { delete result.to_side, delete result.from_side };
-   return result ? result : null;
- },
-*/
-
-
-/*
-Manufacturer:    LUMI
-Endpoint 01 application:    19
-Endpoint 01 endpointId:    01
-Endpoint 01 idAsInt:    1
-Endpoint 01 inClusters:    0000,0003,0001,0012,0006
-Endpoint 01 initialized:    true
-Endpoint 01 manufacturer:    LUMI
-Endpoint 01 model:    lumi.remote.cagl02
-Endpoint 01 outClusters:    0000,0003,0019
-Endpoint 01 profileId:    0104
-Endpoint 01 stage:    4
-
-Endpoint 02 application:    unknown
-Endpoint 02 endpointId:    02
-Endpoint 02 idAsInt:    2
-Endpoint 02 inClusters:    0012
-Endpoint 02 initialized:    true
-Endpoint 02 manufacturer:    unknown
-Endpoint 02 model:    unknown
-Endpoint 02 outClusters:    0012
-Endpoint 02 profileId:    0104
-Endpoint 02 stage:    4
-
-Endpoint 03 application:    unknown
-Endpoint 03 endpointId:    03
-Endpoint 03 idAsInt:    3
-Endpoint 03 inClusters:    000C
-Endpoint 03 initialized:    true
-Endpoint 03 manufacturer:    unknown
-Endpoint 03 model:    unknown
-Endpoint 03 outClusters:    000C
-Endpoint 03 profileId:    0104
-Endpoint 03 stage:    4
-
-*/
-
-
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
-

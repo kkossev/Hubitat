@@ -30,6 +30,8 @@ static String timeStamp() {"2024/04/25 11:53 PM"}
 
 #include kkossev.commonLib
 #include kkossev.xiaomiLib
+#include kkossev.temperatureLib
+#include kkossev.humidityLib
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -228,6 +230,23 @@ List<String> pollAirQualityCluster() {
 }
 
 /**
+ * Scheduled job for polling device specific attribute(s) - not used ??
+ */
+void autoPoll() {
+    logDebug 'autoPoll()...'
+    checkDriverVersion(state)
+    List<String> cmds = []
+    if (DEVICE_TYPE in  ['AirQuality']) {
+        cmds += zigbee.readAttribute(0xfc7e, 0x0000, [mfgCode: 0x117c], delay = 200)      // tVOC   !! mfcode = "0x117c" !! attributes: (float) 0: Measured Value; 1: Min Measured Value; 2:Max Measured Value;
+    }
+
+    if (cmds != null && !cmds.isEmpty()) {
+        sendZigbeeCommands(cmds)
+    }
+}
+
+
+/**
  * Scheduled job for polling device specific attribute(s)
  */
 void autoPollAirQuality() {
@@ -278,6 +297,20 @@ void customUpdated() {
  * handlePm25Event
  * -----------------------------------------------------------------------------
 */
+// pm2.5
+void customParsePm25Cluster(final Map descMap) {
+    if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
+    int value = hexStrToUnsignedInt(descMap.value)
+    /* groovylint-disable-next-line NoFloat */
+    float floatValue  = Float.intBitsToFloat(value.intValue())
+    if (this.respondsTo('handlePm25Event')) {
+        handlePm25Event(floatValue as Integer)
+    }
+    else {
+        logWarn "handlePm25Event: don't know how to handle descMap=${descMap}"
+    }
+}
+
 void handlePm25Event( Integer pm25, Boolean isDigital=false ) {
     Map eventMap = [:]
     if (state.stats != null) { state.stats['pm25Ctr'] = (state.stats['pm25Ctr'] ?: 0) + 1 } else { state.stats = [:] }
@@ -327,7 +360,7 @@ private void sendDelayedPm25Event(Map eventMap) {
  * airQualityIndex
  * -----------------------------------------------------------------------------
 */
-void parseAirQualityIndexCluster(final Map descMap) {
+void customParseAirQualityIndexCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)

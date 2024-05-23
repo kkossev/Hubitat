@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryObjectReferences, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Battery Library',
-    name: 'batteryLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy',
-    version: '3.0.2',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Battery Library', name: 'batteryLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/batteryLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Level Library
@@ -25,16 +19,19 @@ library(
  * ver. 3.0.0  2024-04-06 kkossev  - added batteryLib.groovy
  * ver. 3.0.1  2024-04-06 kkossev  - customParsePowerCluster bug fix
  * ver. 3.0.2  2024-04-14 kkossev  - batteryPercentage bug fix (was x2); added bVoltCtr; added battertRefresh
+ * ver. 3.2.0  2024-04-14 kkossev  - (dev. branch) commonLib 3.2.0 allignment; added lastBattery
  *
+ *                                   TODO:
  *                                   TODO: battery voltage low/high limits configuration
 */
 
-static String batteryLibVersion()   { '3.0.2' }
-static String batteryLibStamp() { '2024/04/15 8:07 AM' }
+static String batteryLibVersion()   { '3.2.0' }
+static String batteryLibStamp() { '2024/05/21 5:57 PM' }
 
 metadata {
     capability 'Battery'
-    attribute 'batteryVoltage', 'number'
+    attribute  'batteryVoltage', 'number'
+    attribute  'lastBattery', 'date'         // last battery event time - added in 3.2.0 05/21/2024
     // no commands
     preferences {
         if (device && advancedOptions == true) {
@@ -43,7 +40,7 @@ metadata {
     }
 }
 
-void customParsePowerCluster(final Map descMap) {
+void standardParsePowerCluster(final Map descMap) {
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     final int rawValue = hexStrToUnsignedInt(descMap.value)
     if (descMap.attrId == '0020') { // battery voltage
@@ -71,6 +68,7 @@ void customParsePowerCluster(final Map descMap) {
 
 void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false) {
     logDebug "batteryVoltage = ${(double)rawValue / 10.0} V"
+    final Date lastBattery = new Date()
     Map result = [:]
     BigDecimal volts = safeToBigDecimal(rawValue) / 10G
     if (rawValue != 0 && rawValue != 255) {
@@ -96,6 +94,7 @@ void sendBatteryVoltageEvent(final int rawValue, boolean convertToPercent=false)
         result.isStateChange = true
         logInfo "${result.descriptionText}"
         sendEvent(result)
+        sendEvent(name: 'lastBattery', value: lastBattery)
     }
     else {
         logWarn "ignoring BatteryResult(${rawValue})"
@@ -107,6 +106,7 @@ void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=fals
         logWarn "ignoring battery report raw=${batteryPercent}"
         return
     }
+    final Date lastBattery = new Date()
     Map map = [:]
     map.name = 'battery'
     map.timeStamp = now()
@@ -123,11 +123,13 @@ void sendBatteryPercentageEvent(final int batteryPercent, boolean isDigital=fals
     if (settings?.batteryDelay == null || (settings?.batteryDelay as int) == 0 || timeDiff > (settings?.batteryDelay as int)) {
         // send it now!
         sendDelayedBatteryPercentageEvent(map)
+        sendEvent(name: 'lastBattery', value: lastBattery)
     }
     else {
         int delayedTime = (settings?.batteryDelay as int) - timeDiff
         map.delayed = delayedTime
         map.descriptionText += " [delayed ${map.delayed} seconds]"
+        map.lastBattery = lastBattery
         logDebug "this  battery event (${map.value}%) will be delayed ${delayedTime} seconds"
         runIn(delayedTime, 'sendDelayedBatteryEvent', [overwrite: true, data: map])
     }
@@ -137,6 +139,7 @@ private void sendDelayedBatteryPercentageEvent(Map map) {
     logInfo "${map.descriptionText}"
     //map.each {log.trace "$it"}
     sendEvent(map)
+    sendEvent(name: 'lastBattery', value: map.lastBattery)
 }
 
 /* groovylint-disable-next-line UnusedPrivateMethod */
@@ -144,6 +147,7 @@ private void sendDelayedBatteryVoltageEvent(Map map) {
     logInfo "${map.descriptionText}"
     //map.each {log.trace "$it"}
     sendEvent(map)
+    sendEvent(name: 'lastBattery', value: map.lastBattery)
 }
 
 List<String> batteryRefresh() {

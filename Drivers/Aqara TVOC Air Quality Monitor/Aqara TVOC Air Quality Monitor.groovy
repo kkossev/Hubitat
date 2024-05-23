@@ -17,6 +17,7 @@
  * ver. 3.0.0  2023-12-03 kkossev  - transfer kkossev.airQualityLib into the refactored driver
  * ver. 3.0.5  2024-03-05 kkossev  - (dev. branch) commonLib 3.0.5 check; Groovy lint;
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
+ * ver. 3.2.0  2024-05-21 kkossev  - (dev. branch) commonLib 3.2.0
  *
  *                                   TODO: move autoPoll() from the commonLib here ?
  *                                   TODO: code cleanup
@@ -24,14 +25,16 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.0.6' }
+static String version() { '3.2.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/04/05 11:55 PM' }
+static String timeStamp() { '2024/05/21 5:27 PM' }
 
 @Field static final boolean _DEBUG = false
 
 #include kkossev.commonLib
 #include kkossev.xiaomiLib
+#include kkossev.temperatureLib
+#include kkossev.humidityLib
 #include kkossev.batteryLib
 
 import groovy.transform.Field
@@ -326,10 +329,10 @@ private void sendDelayedPm25Event(Map eventMap) {
 
 /*
  * -----------------------------------------------------------------------------
- * airQualityIndex
+ * airQualityIndex      // Analog Input Cluster 0x000C
  * -----------------------------------------------------------------------------
 */
-void parseAirQualityIndexCluster(final Map descMap) {
+void customParseAnalogInputCluster(final Map descMap) {
     if (state.lastRx == null) { state.lastRx = [:] }
     if (descMap.value == null || descMap.value == 'FFFF') { return } // invalid or unknown value
     int value = hexStrToUnsignedInt(descMap.value)

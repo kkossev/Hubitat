@@ -1,14 +1,8 @@
 /* groovylint-disable CompileStatic, CouldBeSwitchStatement, DuplicateListLiteral, DuplicateNumberLiteral, DuplicateStringLiteral, ImplicitClosureParameter, ImplicitReturnStatement, Instanceof, LineLength, MethodCount, MethodSize, NoDouble, NoFloat, NoWildcardImports, ParameterCount, ParameterName, PublicMethodsBeforeNonPublicMethods, StaticMethodsBeforeInstanceMethods, UnnecessaryElseStatement, UnnecessaryGetter, UnnecessaryPublicModifier, UnnecessarySetter, UnusedImport */
 library(
-    base: 'driver',
-    author: 'Krassimir Kossev',
-    category: 'zigbee',
-    description: 'Zigbee Level Library',
-    name: 'levelLib',
-    namespace: 'kkossev',
-    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/levelLib.groovy',
-    version: '3.0.0',
-    documentationLink: ''
+    base: 'driver', author: 'Krassimir Kossev', category: 'zigbee', description: 'Zigbee Level Library', name: 'levelLib', namespace: 'kkossev',
+    importUrl: 'https://raw.githubusercontent.com/kkossev/hubitat/development/libraries/levelLib.groovy', documentationLink: '',
+    version: '3.2.0'
 )
 /*
  *  Zigbee Level Library
@@ -23,38 +17,67 @@ library(
  *  for the specific language governing permissions and limitations under the License.
  *
  * ver. 3.0.0  2024-04-06 kkossev  - added levelLib.groovy
+ * ver. 3.2.0  2024-05-22 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
-static String levelLibVersion()   { '3.0.0' }
-static String levelLibStamp() { '2024/04/06 9:07 PM' }
+static String levelLibVersion()   { '3.2.0' }
+static String levelLibStamp() { '2024/05/22 10:00 PM' }
 
 metadata {
-    // no capabilities
+    capability 'Switch'             // TODO - move to a new library
+    capability 'Switch Level'       // Attributes: level - NUMBER, unit:%; Commands:setLevel(level, duration) level required (NUMBER) - Level to set (0 to 100); duration optional (NUMBER) - Transition duration in seconds
+    capability 'ChangeLevel'        // Commands : startLevelChange(direction);  direction required (ENUM) - Direction for level change request; stopLevelChange()
     // no attributes
     // no commands
     preferences {
-        // no prefrences
+        input name: 'levelUpTransition', type: 'enum', title: '<b>Dim up transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims up. Increasing the value slows down the transition.</i>'
+        input name: 'levelDownTransition', type: 'enum', title: '<b>Dim down transition length</b>', options: TransitionOpts.options, defaultValue: TransitionOpts.defaultValue, required: true, description: '<i>Changes the speed the light dims down. Increasing the value slows down the transition.</i>'
+        input name: 'levelChangeRate', type: 'enum', title: '<b>Level change rate</b>', options: LevelRateOpts.options, defaultValue: LevelRateOpts.defaultValue, required: true, description: '<i>Changes the speed that the light changes when using <b>start level change</b> until <b>stop level change</b> is sent.</i>'
     }
 }
 
 import groovy.transform.Field
 
-void levelLibParseLevelControlCluster(final Map descMap) {
-    if (this.respondsTo('customParseLevelControlCluster')) {
-        customParseLevelControlCluster(descMap)
-    }
-    else if (DEVICE_TYPE in ['Bulb']) {
-        parseLevelControlClusterBulb(descMap)
-    }
-    else if (descMap.attrId == '0000') {
-        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "parseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
-        final int rawValue = hexStrToUnsignedInt(descMap.value)
-        sendLevelControlEvent(rawValue)
+@Field static final Map TransitionOpts = [
+    defaultValue: 0x0004,
+    options: [
+        0x0000: 'No Delay',
+        0x0002: '200ms',
+        0x0004: '400ms',
+        0x000A: '1s',
+        0x000F: '1.5s',
+        0x0014: '2s',
+        0x001E: '3s',
+        0x0028: '4s',
+        0x0032: '5s',
+        0x0064: '10s'
+    ]
+]
+
+@Field static final Map LevelRateOpts = [
+    defaultValue: 0x64,
+    options: [ 0xFF: 'Device Default', 0x16: 'Very Slow', 0x32: 'Slow', 0x64: 'Medium', 0x96: 'Medium Fast', 0xC8: 'Fast' ]
+]
+
+
+/*
+ * -----------------------------------------------------------------------------
+ * Level Control Cluster            0x0008
+ * -----------------------------------------------------------------------------
+*/
+void standardParseLevelControlCluster(final Map descMap) {
+    logDebug "standardParseLevelControlCluster: 0x${descMap.value}"
+    if (descMap.attrId == '0000') {
+        if (descMap.value == null || descMap.value == 'FFFF') { logDebug "standardParseLevelControlCluster: invalid value: ${descMap.value}"; return } // invalid or unknown value
+        final long rawValue = hexStrToUnsignedInt(descMap.value)
+        // Aqara LED Strip T1 sends the level in the range 0..255
+        int scaledValue = ((rawValue as double) / 2.55F + 0.5) as int
+        sendLevelControlEvent(scaledValue)
     }
     else {
-        logWarn "unprocessed LevelControl attribute ${descMap.attrId}"
+        logWarn "standardParseLevelControlCluster: unprocessed LevelControl attribute ${descMap.attrId}"
     }
 }
 
@@ -81,6 +104,59 @@ void sendLevelControlEvent(final int rawValue) {
     sendEvent(map)
     clearIsDigital()
 }
+
+/**
+ * Set Level Command
+ * @param value level percent (0-100)
+ * @param transitionTime transition time in seconds
+ * @return List of zigbee commands
+ */
+void setLevel(final BigDecimal value, final BigDecimal transitionTime = null) {
+    logInfo "setLevel (${value}, ${transitionTime})"
+/*    
+    if (this.respondsTo('customSetLevel')) {
+        logDebug "calling customSetLevel: ${value}, ${transitionTime}"
+        customSetLevel(value.intValue(), transitionTime.intValue())
+        return
+    }
+*/    
+    //if (DEVICE_TYPE in  ['Bulb']) { 
+    setLevelBulb(value.intValue(), transitionTime ? transitionTime.intValue() : null)
+    return 
+    //}
+    /*
+    final Integer rate = getLevelTransitionRate(value.intValue(), transitionTime.intValue())
+    scheduleCommandTimeoutCheck()
+    sendZigbeeCommands(setLevelPrivate(value.intValue(), rate as int))
+    */
+}
+
+void setLevelBulb(value, rate=null) {
+    logDebug "setLevelBulb: $value, $rate"
+
+    state.pendingLevelChange = value
+    if (state.cmds == null) {
+        state.cmds = []
+    }
+    if (rate == null) {
+        state.cmds += zigbee.setLevel(value)
+    } else {
+        state.cmds += zigbee.setLevel(value, rate * 10)
+    }
+
+    unschedule(sendLevelZigbeeCommandsDelayed)
+    runInMillis(100, sendLevelZigbeeCommandsDelayed)
+}
+
+void sendLevelZigbeeCommandsDelayed() {
+    List cmds = state.cmds
+    if (cmds != null) {
+        state.cmds = []
+        sendZigbeeCommands(cmds)
+    }
+}
+
+
 
 /**
  * Send 'switchLevel' attribute event
@@ -111,23 +187,6 @@ private List<String> setLevelPrivate(final BigDecimal value, final int rate = 0,
     return cmds
 }
 
-/**
- * Set Level Command
- * @param value level percent (0-100)
- * @param transitionTime transition time in seconds
- * @return List of zigbee commands
- */
-void setLevel(final BigDecimal value, final BigDecimal transitionTime = null) {
-    logInfo "setLevel (${value}, ${transitionTime})"
-    if (this.respondsTo('customSetLevel')) {
-        customSetLevel(value.intValue(), transitionTime.intValue())
-        return
-    }
-    if (DEVICE_TYPE in  ['Bulb']) { setLevelBulb(value.intValue(), transitionTime.intValue()); return }
-    final Integer rate = getLevelTransitionRate(value.intValue(), transitionTime.intValue())
-    scheduleCommandTimeoutCheck()
-    sendZigbeeCommands(setLevelPrivate(value.intValue(), rate as int))
-}
 
 /**
  * Get the level transition rate
@@ -161,6 +220,23 @@ private Integer getLevelTransitionRate(final Integer desiredLevel, final Integer
     logDebug "using level transition rate ${rate}"
     return rate
 }
+
+List<String> startLevelChange(String direction) {
+    if (settings.txtEnable) { log.info "startLevelChange (${direction})" }
+    String upDown = direction == 'down' ? '01' : '00'
+    String rateHex = intToHexStr(settings.levelChangeRate as Integer)
+    scheduleCommandTimeoutCheck()
+    return zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x05, [:], 0, "${upDown} ${rateHex}")
+}
+
+
+List<String> stopLevelChange() {
+    if (settings.txtEnable) { log.info 'stopLevelChange' }
+    scheduleCommandTimeoutCheck()
+    return zigbee.command(zigbee.LEVEL_CONTROL_CLUSTER, 0x03, [:], 0) +
+        ifPolling { zigbee.levelRefresh(0) + zigbee.onOffRefresh(0) }
+}
+
 
 // Delay before reading attribute (when using polling)
 @Field static final int POLL_DELAY_MS = 1000
@@ -208,4 +284,14 @@ private static Integer constrain(final Object value, final Integer min = 0, fina
         return value as Integer
     }
     return value != null ? Math.min(Math.max(value as Integer, min) as Integer, max) : nullValue
+}
+
+void updatedLevel() {
+    logDebug "updatedLevel: ${device.currentValue('level')}"
+}
+
+List<String> refreshLevel() {
+    List<String> cmds = []
+    cmds = zigbee.onOffRefresh(100) + zigbee.levelRefresh(101)
+    return cmds
 }

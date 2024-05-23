@@ -75,7 +75,7 @@ static String version() { '3.1.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
 static String timeStamp() { '2024/04/19 8:46 PM' }
 
-@Field static final Boolean _DEBUG = false
+@Field static final Boolean _DEBUG = true
 
 import groovy.transform.Field
 import hubitat.device.HubMultiAction
@@ -699,6 +699,8 @@ void parseXiaomiClusterThermostatTags(final Map<Integer, Object> tags) {
 void customParseThermostatCluster(final Map descMap) {
     final Integer value = safeToInt(hexStrToUnsignedInt(descMap.value))
     logTrace "customParseThermostatCluster: zigbee received Thermostat cluster (0x0201) attribute 0x${descMap.attrId} value ${value} (raw ${descMap.value})"
+    if (descMap == null || descMap == [:] || descMap.cluster == null || descMap.attrId == null || descMap.value == null) { logTrace '<b>descMap is missing cluster, attribute or value!<b>'; return }
+    
     boolean result = processClusterAttributeFromDeviceProfile(descMap)
     if ( result == false ) {
         logWarn "parseThermostatClusterThermostat: received unknown Thermostat cluster (0x0201) attribute 0x${descMap.attrId} (value ${descMap.value})"
@@ -1425,3 +1427,4 @@ void testT(String par) {
 }
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
+
