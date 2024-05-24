@@ -16,12 +16,13 @@
  * ver. 1.0.0  2024-02-25 kkossev  - first test version - decoding success! refresh() and configure();
  * ver. 1.0.1  2024-04-01 kkossev  - commonLib 3.0.4 alligned
  * ver. 1.0.2  2024-04-06 kkossev  - (dev. branch) more GroovyLint fixes; created energyLib.groovy library;
+ * ver. 3.2.0  2024-05-23 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: individual thresholds for each attribute
  */
 
-static String version() { '1.0.2' }
-static String timeStamp() { '2024/04/06 10:57 AM' }
+static String version() { '3.2.0' }
+static String timeStamp() { '2024/05/23 10:57 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -32,8 +33,10 @@ deviceType = 'Plug'
 @Field static final String DEVICE_TYPE = 'Plug'
 
 /* groovylint-disable-next-line NglParseError */
-#include kkossev.energyLib
 #include kkossev.commonLib
+#include kkossev.onOffLib
+#include kkossev.energyLib
+#include kkossev.temperatureLib
 
 metadata {
     definition(
@@ -108,7 +111,7 @@ metadata {
  */
 void customParseDefaultCommandResponse(final Map descMap) {
     logDebug "ZigUSB:  parseDefaultCommandResponse: ${descMap}"
-    parseOnOffCluster([attrId: '0000', value: descMap.data[0]])
+    standardParseOnOffCluster([attrId: '0000', value: descMap.data[0]])
 }
 
 List<String> customRefresh() {
@@ -163,7 +166,7 @@ void customUpdated() {
     }
 }
 
-void customParseAnalogInputClusterDescription(String description) {
+void customParseAnalogInputClusterDescription(final Map descMapDummy, String description) {
     Map descMap = myParseDescriptionAsMap(description)
     if (descMap == null) {
         logWarn 'customParseAnalogInputClusterDescription: descMap is null'

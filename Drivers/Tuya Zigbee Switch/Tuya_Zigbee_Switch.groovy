@@ -25,6 +25,7 @@
  * ver. 3.0.3  2024-02-24 kkossev  - (dev. branch) commonLib 3.0.3 allignment
  * ver. 3.0.7  2024-04-18 kkossev  - (dev. branch) commonLib 3.0.7 and groupsLib allignment
  * ver. 3.1.1  2024-05-15 kkossev  - added SONOFF ZBMicro; commonLib 3.1.1 allignment; Groovy linting;
+ * ver. 3.2.0  2024-05-23 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: Sonof ZBMINIL2 :zigbee read BASIC_CLUSTER attribute 0x0001 error: Unsupported Attribute
  *                                   TODO: add toggle() command; initialize 'switch' to unknown
@@ -33,8 +34,8 @@
  *                                   TODO: add Info dummy preference w/ link to Hubitat forum page
  */
 
-static String version() { '3.1.1' }
-static String timeStamp() { '2024/05/15 8:12 PM' }
+static String version() { '3.2.0' }
+static String timeStamp() { '2024/05/23 11:04 PM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -50,6 +51,7 @@ deviceType = 'Switch'
 @Field static final String DEVICE_TYPE = 'Switch'
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
 #include kkossev.groupsLib
 
 metadata {

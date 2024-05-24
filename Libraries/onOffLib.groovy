@@ -16,25 +16,28 @@ library(
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- * ver. 3.2.0  2024-05-23 kkossev  - commonLib 3.2.0 allignment
+ * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
  *
  *                                   TODO:
 */
 
 static String onOffLibVersion()   { '3.2.0' }
-static String onOffLibStamp() { '2024/05/23 11:27 PM' }
+static String onOffLibStamp() { '2024/05/24 10:44 AM' }
 
 @Field static final Boolean _THREE_STATE = true
 
 metadata {
+    capability 'Actuator'
     capability 'Switch'
     if (_THREE_STATE == true) {
         attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
     }
     // no commands
     preferences {
-        if (_THREE_STATE == true) {
-            input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+        if (advancedOptions == true) {
+            if (_THREE_STATE == true) {
+                input name: 'threeStateEnable', type: 'bool', title: '<b>Enable three-states events</b>', description: '<i>Experimental multi-state switch events</i>', defaultValue: false
+            }
         }
     }
 }

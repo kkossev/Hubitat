@@ -46,7 +46,7 @@
       "filepath": "/c:/Work/Hubitat/Libraries/commonLib.groovy",
       "id": 144,
       "codeType": "library",
-      "version": 479
+      "version": 488
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/groupsLib.groovy",
@@ -64,13 +64,13 @@
       "filepath": "/c:/Work/Hubitat/Libraries/buttonLib.groovy",
       "id": 167,
       "codeType": "library",
-      "version": 7
+      "version": 20
     },
     {
       "filepath": "/c:/Work/Hubitat/Libraries/batteryLib.groovy",
       "id": 171,
       "codeType": "library",
-      "version": 13
+      "version": 14
     },
     {
       "filepath": "/C:/Work/Hubitat/Libraries/temperatureLib.groovy",
@@ -107,6 +107,12 @@
       "id": 175,
       "codeType": "library",
       "version": 8
+    },
+    {
+      "filepath": "/c:/Work/Hubitat/Libraries/onOffLib.groovy",
+      "id": 176,
+      "codeType": "library",
+      "version": 10
     }
   ]
 }

@@ -41,6 +41,7 @@ deviceType = "AqaraCube"
 @Field static final String DEVICE_TYPE = "AqaraCube"
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
 #include kkossev.xiaomiLib
 #include kkossev.buttonLib
 #include kkossev.batteryLib

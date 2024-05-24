@@ -53,6 +53,7 @@ deviceType = "multiEpSwitch"
 @Field static final int    NUMBER_OF_BUTTONS = 141
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
 
 metadata {
     definition (

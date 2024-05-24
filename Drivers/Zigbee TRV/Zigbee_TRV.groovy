@@ -27,6 +27,7 @@
  * ver. 3.0.7  2024-03-04 kkossev  - (dev. branch) commonLib 3.0.3 check; more Groovy lint;
  * ver. 3.0.8  2024-04-01 kkossev  - (dev. branch) commonLib 3.0.4 check; more Groovy lint; tested w/ Sonoff TRVZB;
  * ver. 3.1.0  2024-04-19 kkossev  - commonLib 3.1.0 check; deviceProfilesV3; enum attributes bug fix
+ * ver. 3.2.0  2024-05-24 kkossev  - (dev. branch) commonLib 3.2.0 allignment
  *
  *                                   TODO: Test VRT-100
  *                                   TODO: Test Aqara TRV
@@ -71,9 +72,9 @@
  */
 
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String version() { '3.1.0' }
+static String version() { '3.2.0' }
 /* groovylint-disable-next-line ImplicitReturnStatement */
-static String timeStamp() { '2024/04/19 8:46 PM' }
+static String timeStamp() { '2024/05/24 12:58 PM' }
 
 @Field static final Boolean _DEBUG = true
 
@@ -85,6 +86,7 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
 #include kkossev.batteryLib
 #include kkossev.temperatureLib
 #include kkossev.xiaomiLib

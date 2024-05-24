@@ -27,6 +27,7 @@ static String timeStamp() {"2024/04/06 10:53 PM"}
 @Field static final Boolean _DEBUG = true
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
 #include kkossev.groupsLib
 #include kkossev.buttonLib
 #include kkossev.energyLib
