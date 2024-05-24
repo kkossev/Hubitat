@@ -23,7 +23,7 @@
  * ver. 3.1.2  2024-05-08 kkossev  - added _TZ3218_t9ynfz4x as a new Linptech manufacturer; fixed HL0SS9OA and 2AAELWXK wrong IAS illuminance reprots; existance_time reanmed to occupiedTime
  * ver. 3.1.3  2024-05-11 kkossev  - added TS0601 _TZE204_7gclukjs; fixed debug trace logging;
  * ver. 3.1.4  2024-05-14 kkossev  - added TS0601_24GHZ_PIR_RADAR profile TS0601 _TZE200_2aaelwxk and TS0601 _TZE200_kb5noeto for tests; added TS0601 _TZE204_fwondbzy; 
- * ver. 3.2.0  2024-05-24 kkossev  - commonLib 2.0 allignment
+ * ver. 3.2.0  2024-05-24 kkossev  - commonLib 3.2.0 allignment
  *                                   
  *                                   TODO: add the state tuyaDps as in the 4-in-1 driver!
  *                                   TODO: cleanup the 4-in-1 state variables.
