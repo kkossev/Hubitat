@@ -25,12 +25,14 @@
  * ver. 3.0.4  2024-03-29 kkossev  - Groovy Lint; new driver format and allignment w/commonLib ver 3.0.4; fingerBot mode setting bug fix; added touchButton attribute;
  *                                   push() toggles on/off;
  * ver. 3.0.6  2024-04-06 kkossev  - (dev. branch) commonLib 3.0.6
+ * ver. 3.2.0  2024-04-06 kkossev  - (dev. branch) commonLib 3.2.0 allignment
+ * 
  *
  *                                   TODO:
  */
 
-static String version() { '3.0.6' }
-static String timeStamp() { '2024/04/06 11:55 PM' }
+static String version() { '3.2.0' }
+static String timeStamp() { '2024/05/24 11:43 AM' }
 
 @Field static final Boolean _DEBUG = false
 
@@ -43,6 +45,8 @@ import java.util.concurrent.ConcurrentHashMap
 import groovy.json.JsonOutput
 
 #include kkossev.commonLib
+#include kkossev.onOffLib
+#include kkossev.buttonLib
 #include kkossev.batteryLib
 
 deviceType = 'Fingerbot'
@@ -54,16 +58,18 @@ metadata {
         importUrl: 'https://raw.githubusercontent.com/kkossev/Hubitat/development/Drivers/Tuya%20Zigbee%20Fingerbot/Tuya_Zigbee_Fingerbot_lib_included.groovy',
         namespace: 'kkossev', author: 'Krassimir Kossev', singleThreaded: true)
     {
-        capability 'Actuator'
-        capability 'Battery'
-        capability 'Switch'
-        capability "PushableButton"
-        capability 'Momentary'
+       // capability 'Actuator'
+       // capability 'Battery'
+        //capability 'Switch'
+       // capability "PushableButton"
+       // capability 'Momentary'
 
-        attribute 'batteryVoltage', 'number'
+        //attribute 'batteryVoltage', 'number'
+        /*
         if (_THREE_STATE == true) {
             attribute 'switch', 'enum', SwitchThreeStateOpts.options.values() as List<String>
         }
+        */
 
         attribute 'fingerbotMode', 'enum', FingerbotModeOpts.options.values() as List<String>
         attribute 'direction', 'enum', FingerbotDirectionOpts.options.values() as List<String>
@@ -229,12 +235,10 @@ void customInitializeVars(boolean fullInit=false) {
     if (fullInit || settings?.voltageToPercent == null) { device.updateSetting('voltageToPercent', true) }
 }
 
-/* groovylint-disable-next-line EmptyMethod, UnusedMethodParameter */
 void customInitEvents(boolean fullInit=false) {
-/*  not needed?
-    sendNumberOfButtonsEvent(1)
-    sendSupportedButtonValuesEvent("pushed")
-*/
+    logDebug "customInitEvents(${fullInit})"
+    sendNumberOfButtonsEvent(1)     // defind in buttonLib
+    sendSupportedButtonValuesEvent(['pushed'])     // defind in buttonLib
 }
 
 /*
@@ -330,11 +334,13 @@ boolean customProcessTuyaDp(final Map descMap, int dp, int dp_id, int fncmd, fin
     }
     return true
 }
-
+/*
 List<String> customRefresh() {
     List<String> cmds = []
+    //cmds = zigbee.command(0xEF00, 0x02)
     logDebug "customRefresh() (n/a) : ${cmds} "
     return cmds
 }
+*/
 
 // /////////////////////////////////////////////////////////////////// Libraries //////////////////////////////////////////////////////////////////////
